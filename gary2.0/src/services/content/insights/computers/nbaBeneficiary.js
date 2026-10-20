@@ -19,8 +19,10 @@
 //
 // Data path / field names (verified live against the BDL surface):
 //   * getInjuriesGeneric('basketball_nba', { team_ids:[...] }) -> Array of:
-//       { player:{ id, full_name, position, team:{ id, abbreviation, full_name } },
-//         status, description, return_date, date }.
+//       { player:{ id, first_name, last_name, position, team_id },
+//         status, description, return_date }.
+//     (Re-checked Oct 20 2026: no team object and no full_name on the player;
+//      reading those matched nobody, so the opener wrote no injury rows.)
 //     `status` is free text ("Out", "Day-To-Day", "Questionable", ...).
 //
 // Defensive contract: never throws; returns [] when data is missing; emits a
@@ -92,7 +94,7 @@ export async function computeNbaBeneficiary(ctx) {
       if (playerId == null) continue;
 
       // Attribute to a slate team; skip injuries for teams not on tonight's slate.
-      const teamId = player?.team?.id ?? inj?.team?.id;
+      const teamId = player?.team?.id ?? player?.team_id ?? inj?.team?.id;
       const game = teamId != null ? teamToGame.get(teamId) : null;
       if (!game) continue;
       examined++;
@@ -100,8 +102,9 @@ export async function computeNbaBeneficiary(ctx) {
       const kind = classifyStatus(inj?.status);
       if (kind === 'skip') continue;
 
-      const name = player?.full_name || 'A rotation player';
-      const teamAbbr = player?.team?.abbreviation || game?.home_team?.abbreviation || '';
+      const name = player?.full_name || [player?.first_name, player?.last_name].filter(Boolean).join(' ') || 'A rotation player';
+      const side = [game?.home_team, game?.visitor_team].find((t) => t?.id === teamId);
+      const teamAbbr = player?.team?.abbreviation || side?.abbreviation || '';
       const label = helpers.gameLabel(game);
       const desc = trimDesc(inj?.description);
       const statusText = String(inj?.status || '').trim();

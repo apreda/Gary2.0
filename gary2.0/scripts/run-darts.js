@@ -4,7 +4,8 @@
  * Never game picks, never prop picks, never graded, never on any record.
  *
  * Each run (com.gary.darts, every 20 minutes):
- *  1. From DARTS_START_ET (09:15) on, for each league with games still to
+ *  1. From DARTS_START_ET (05:30; 09:15 until Oct 20 2026, founder: "Do 5am for all of
+ *     them so if I'm up at 6am I see it all there") on, for each league with games still to
  *     start: fill every category to five from the day's real markets. The
  *     first run of the day throws the board; later runs only fill categories
  *     that were short because their markets had not posted yet, at most once
@@ -58,7 +59,7 @@ const fresh = dry && !!args.fresh;
 const asOfArg = argAfter('as-of') || args['as-of'];
 const asOf = dry && asOfArg && Number.isFinite(Date.parse(asOfArg)) ? Date.parse(asOfArg) : undefined;
 
-const START = String(process.env.DARTS_START_ET || '09:15').split(':').map(Number);
+const START = String(process.env.DARTS_START_ET || '05:30').split(':').map(Number);
 const START_MIN = START[0] * 60 + (START[1] || 0);
 const REFILL_GAP_MS = 55 * 60 * 1000;
 

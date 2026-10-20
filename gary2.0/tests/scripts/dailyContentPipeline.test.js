@@ -15,14 +15,14 @@ async function until(predicate, timeoutMs = 10_000) {
 function alive(pid) { try { process.kill(pid, 0); return true; } catch { return false; } }
 
 describe('daily content orchestration', () => {
-  it('leaves the 6AM launch slot free even when overnight storage recovery or a late start consumes time', () => {
-    expect(collegeCardRunBudgetMs(new Date('2026-09-06T06:30:00Z'))).toBe(195 * 60_000);
-    expect(collegeCardRunBudgetMs(new Date('2026-09-06T09:15:00Z'))).toBe(30 * 60_000);
-    expect(collegeCardRunBudgetMs(new Date('2026-09-06T09:45:00Z'))).toBe(0);
+  it('leaves the 5AM launch slot free even when overnight storage recovery or a late start consumes time', () => {
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T06:30:00Z'))).toBe(135 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T08:15:00Z'))).toBe(30 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-09-06T08:45:00Z'))).toBe(0);
   });
   it('preserves the overnight cutoff through the spring and fall Eastern clock changes', () => {
-    expect(collegeCardRunBudgetMs(new Date('2026-03-08T07:30:00Z'))).toBe(135 * 60_000);
-    expect(collegeCardRunBudgetMs(new Date('2026-11-01T07:30:00Z'))).toBe(195 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-03-08T07:30:00Z'))).toBe(75 * 60_000);
+    expect(collegeCardRunBudgetMs(new Date('2026-11-01T07:30:00Z'))).toBe(135 * 60_000);
   });
   it('selects only explicitly requested recovery stages in normal order and rejects typos or duplicates', () => {
     const all = dailyContentStages('2026-09-05', {});

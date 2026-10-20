@@ -1,6 +1,7 @@
 // gary2.0/src/services/insights/computers/nbaRestFatigue.js
 //
-// LANE: restFatigue (NBA)
+// LANE: rest (NBA; category 'rest', the app's situational lane. It was
+// 'restFatigue', which the app has no lane for, so every row was dropped.)
 // "How much rest does each side of tonight's slate have, and is there a
 //  schedule mismatch (one team on a back-to-back, one team rested)?"
 //
@@ -80,6 +81,16 @@ async function lastGameRest(teamId, slateDate, bdl) {
   return null;
 }
 
+/** Has the team played a game this season before `slateDate`? (The opener has no last game.) */
+async function playedThisSeason(teamId, season, slateDate, bdl) {
+  try {
+    const games = (await bdl.getGames('basketball_nba', { seasons: [season], team_ids: [teamId], postseason: false, per_page: 100 })) || [];
+    return games.some((g) => isFinal(g) && String(g?.date || '').slice(0, 10) < slateDate);
+  } catch {
+    return true; // unknown: say nothing rather than call it an opener
+  }
+}
+
 /** Plain-English rest descriptor for a daysSince value. */
 function restPhrase(daysSince) {
   if (daysSince === 1) return 'a back-to-back (played yesterday)';
@@ -88,7 +99,7 @@ function restPhrase(daysSince) {
 }
 
 export async function computeNbaRestFatigue(ctx) {
-  const { games, bdl, helpers, date } = ctx;
+  const { games, bdl, helpers, date, season } = ctx;
   const rows = [];
   let examined = 0;
 
@@ -106,6 +117,27 @@ export async function computeNbaRestFatigue(ctx) {
         lastGameRest(home.id, date, bdl),
         lastGameRest(away.id, date, bdl),
       ]);
+
+      // A side with no game this season is opening it (Oct 20 2026: the opener's
+      // game pages had no rest row at all).
+      const [homeOpens, awayOpens] = await Promise.all([
+        homeRest ? false : playedThisSeason(home.id, season, date, bdl).then((p) => !p),
+        awayRest ? false : playedThisSeason(away.id, season, date, bdl).then((p) => !p),
+      ]);
+      if (homeOpens || awayOpens) {
+        const opener = homeOpens && awayOpens
+          ? { headline: 'Season opener for both teams', detail: `${away.full_name || away.abbreviation} and ${home.full_name || home.abbreviation} both open their season tonight.`, value: 'OPENER' }
+          : (() => {
+            const opens = homeOpens ? home : away, other = homeOpens ? away : home, otherRest = homeOpens ? awayRest : homeRest;
+            return {
+              headline: `${opens.abbreviation} opens its season`,
+              detail: `${opens.full_name || opens.abbreviation} plays its first game tonight${otherRest ? `; ${other.abbreviation} comes in on ${restPhrase(otherRest.daysSince)}` : ''}.`,
+              value: 'OPENER',
+            };
+          })();
+        rows.push(makeRow({ category: 'rest', ...opener, game: label, tone: TONES.NEUTRAL, relevance_score: SHARED_RELEVANCE, game_id: gameId }));
+        continue;
+      }
 
       // Need at least one side's rest to say anything.
       if (!homeRest && !awayRest) continue;
@@ -129,7 +161,7 @@ export async function computeNbaRestFatigue(ctx) {
           `Schedule gap: ${tiredTeam.abbreviation} on no rest, ${restedTeam.abbreviation} on ${restPhrase(restedDays)}.`,
         ];
         rows.push(makeRow({
-          category: 'restFatigue',
+          category: 'rest',
           headline: `${tiredTeam.abbreviation} on a back-to-back, ${restedTeam.abbreviation} rested`,
           detail: pickVariant(variants, tiredKey),
           game: label,
@@ -152,7 +184,7 @@ export async function computeNbaRestFatigue(ctx) {
           `No rest gap here, both sides on ${both}.`,
         ];
         rows.push(makeRow({
-          category: 'restFatigue',
+          category: 'rest',
           headline: `Both sides on ${both}`,
           detail: pickVariant(variants, String(gameId)),
           game: label,
@@ -172,7 +204,7 @@ export async function computeNbaRestFatigue(ctx) {
         const moreDays = Math.max(homeDays, awayDays);
         const lessDays = Math.min(homeDays, awayDays);
         rows.push(makeRow({
-          category: 'restFatigue',
+          category: 'rest',
           headline: `${moreRested.abbreviation} on ${moreDays}d, ${lessRested.abbreviation} on ${lessDays}d`,
           detail: `${moreRested.abbreviation} comes in on ${restPhrase(moreDays)} to ${lessRested.abbreviation}'s ${restPhrase(lessDays)}, a ${gap}-day difference on the schedule.`,
           game: label,

@@ -1,8 +1,11 @@
 // gary2.0/src/services/insights/computers/nbaOwned.js
 //
-// LANE: owned (NBA — head-to-head lane)
+// LANE: head_to_head (NBA; the app's season-series lane, GameH2HSection)
 // "How has this season's series between tonight's two teams gone — who leads,
-//  and by how much per game (Finals meetings included)?"
+//  and by how much per game (Finals meetings included)?" Until they have met
+// twice this season, last season's series, labeled as last season (Oct 20 2026:
+// the opener's game pages had no series at all). It was category 'owned', which
+// the app reads as baseball's batter-vs-pitcher lane.
 //
 // Approach (all data from documented BDL methods only):
 //   - For the two slate teams we pull this season's completed games for ONE of
@@ -123,7 +126,9 @@ export async function computeNbaOwned(ctx) {
       examined++;
 
       const label = helpers.gameLabel(game);
-      const meetings = await seriesMeetings(home.id, away.id, season, date, bdl);
+      let meetings = await seriesMeetings(home.id, away.id, season, date, bdl);
+      const lastSeason = meetings.length < MIN_MEETINGS;
+      if (lastSeason) meetings = await seriesMeetings(home.id, away.id, season - 1, date, bdl);
       if (meetings.length < MIN_MEETINGS) continue;
 
       // Tally from the home team's perspective; track absolute margin per game.
@@ -142,7 +147,20 @@ export async function computeNbaOwned(ctx) {
       const total = meetings.length;
       const awayWins = total - homeWins;
       const winDiff = homeWins - awayWins;
-      if (winDiff === 0) continue; // a split series isn't an "owned" angle
+      if (winDiff === 0) {
+        if (!lastSeason) continue; // a split this season isn't an angle yet
+        rows.push(makeRow({
+          category: 'head_to_head',
+          headline: `${away.abbreviation} and ${home.abbreviation} split last season ${homeWins}-${awayWins}`,
+          detail: `${away.full_name || away.abbreviation} and ${home.full_name || home.abbreviation} split last season's series ${homeWins}-${awayWins}. Tonight is their first meeting this season.`,
+          game: label,
+          value: `${homeWins}-${awayWins}`,
+          tone: TONES.NEUTRAL,
+          relevance_score: BASE_RELEVANCE - 5,
+          game_id: gameId,
+        }));
+        continue;
+      }
 
       const leader = winDiff > 0 ? home : away;
       const trailer = winDiff > 0 ? away : home;
@@ -153,15 +171,19 @@ export async function computeNbaOwned(ctx) {
       const marginAbs = round(Math.abs(leaderMargin), 1);
       const key = `${leader.id}-${trailer.id}-${total}`;
 
-      const variants = [
+      const variants = lastSeason ? [
+        `${leader.full_name || leader.abbreviation} won last season's series ${leaderWins}-${trailerWins}, by ${marginAbs} a game across ${total} meetings. Tonight is their first meeting this season.`,
+      ] : [
         `${leader.full_name || leader.abbreviation} leads the season series ${leaderWins}-${trailerWins}, ${leaderMargin >= 0 ? 'winning' : 'losing'} by ${marginAbs} a game across ${total} meetings.`,
         `${leader.abbreviation} is ${leaderWins}-${trailerWins} against ${trailer.abbreviation} this season with a ${marginAbs}-point average ${leaderMargin >= 0 ? 'margin' : 'deficit'} over ${total} games.`,
         `Series edge: ${leader.abbreviation} holds a ${leaderWins}-${trailerWins} mark on ${trailer.abbreviation} (avg ${marginAbs}-point ${leaderMargin >= 0 ? 'win' : 'loss'} margin, ${total} prior meetings).`,
       ];
 
       rows.push(makeRow({
-        category: 'owned',
-        headline: `${leader.abbreviation} leads the series ${leaderWins}-${trailerWins}`,
+        category: 'head_to_head',
+        headline: lastSeason
+          ? `${leader.abbreviation} won last season's series ${leaderWins}-${trailerWins}`
+          : `${leader.abbreviation} leads the series ${leaderWins}-${trailerWins}`,
         detail: pickVariant(variants, key),
         game: label,
         value: `${leaderWins}-${trailerWins}`,

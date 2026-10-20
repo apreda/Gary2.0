@@ -1025,7 +1025,9 @@ struct PlayerIntelSection: View {
     }
 
     var body: some View {
-        Group {
+        // A stack, not a Group: a Group's modifiers ride its children, so with no
+        // rows yet the loading task below had nothing to attach to and never ran.
+        VStack(spacing: 0) {
             if !visibleRows.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("PLAYER INTEL")

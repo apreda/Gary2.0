@@ -63,7 +63,7 @@ if (args.includes('--plan')) {
   // Explicit dated backfills keep their per-stage caps. The scheduled overnight
   // phase must release this LaunchAgent before its 6AM daily publication.
   const overnightTimer = phase === 'college-cards' && !args.includes('--date')
-    ? setTimeout(() => controller.abort(new Error('Overnight cards reached the 05:45 ET cutoff before daily publication')), collegeCardRunBudgetMs())
+    ? setTimeout(() => controller.abort(new Error('Overnight cards reached the 04:45 ET cutoff before daily publication')), collegeCardRunBudgetMs())
     : undefined;
   onEvent({ event: 'run-start', at: new Date().toISOString(), stages: stages.map(stage => stage.id), ...(fresh.size ? { skipped_fresh: [...fresh].filter(id => !ALWAYS.has(id)) } : {}) });
   try {

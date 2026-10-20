@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Comment</key>
-	<string>Marquee: the MLB game of the day the way the public sees it (Darts featured row), chosen once each morning from standings, national TV and the probable starters, then locked. Hourly 7:05 to 10:05 AM; a day that already has its game exits at once. Never touches picks, darts or Winners.</string>
+	<string>Marquee: the MLB game of the day the way the public sees it (Darts featured row), chosen once each morning from standings, national TV and the probable starters, then locked. Hourly 5:05 to 10:05 AM (from 7:05 until Oct 20 2026, when the day moved to 5 AM); a day that already has its game exits at once. Never touches picks, darts or Winners.</string>
 	<key>Label</key>
 	<string>com.gary.marquee</string>
 	<key>ProgramArguments</key>
@@ -24,6 +24,8 @@
 	<false/>
 	<key>StartCalendarInterval</key>
 	<array>
+		<dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>5</integer></dict>
+		<dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>5</integer></dict>
 		<dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>5</integer></dict>
 		<dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>5</integer></dict>
 		<dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>5</integer></dict>

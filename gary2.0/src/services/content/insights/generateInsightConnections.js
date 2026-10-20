@@ -196,9 +196,12 @@ export async function generateInsightConnections({ date, league = 'mlb', options
   // Football powers every scheduled game's detail page. Global popularity
   // caps were deleting ordinary QB rows and later kickoffs from the app.
   // The slate bounds the data; keep each game's completed observations.
-  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : (isFootball ? Number.MAX_SAFE_INTEGER : 120);
+  // The NBA game page reads the same way (Oct 20 2026: the opener's cap of 8
+  // injury rows dropped Celtics-Pistons, the first game, entirely).
+  const perGame = isFootball || leagueKey === 'nba';
+  const maxRows = Number.isFinite(options.maxRows) ? options.maxRows : (perGame ? Number.MAX_SAFE_INTEGER : 120);
   const minRelevance = Number.isFinite(options.minRelevance) ? options.minRelevance : 35;
-  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (isFootball ? Number.MAX_SAFE_INTEGER : 8);
+  const maxPerCategory = Number.isFinite(options.maxPerCategory) ? options.maxPerCategory : (perGame ? Number.MAX_SAFE_INTEGER : 8);
 
   let computers = COMPUTERS_BY_LEAGUE[leagueKey];
   // A scoped refresh runs only the named lanes (the hourly football
