@@ -349,7 +349,27 @@ final class SwapMeta: Codable {
     /// Tonight's 1st-inning O/U 0.5 price, snapshotted at write time — the
     /// NRFI Watch card's money line (N10, founder pick Aug 6).
     let price: NrfiPrice?
+    /// THE STARS on the NBA game page (nba_stars rows, Oct 20 2026): each
+    /// team's lead player tonight and his line, away then home.
+    let stars: OptionalResearchField<[NbaStarMeta]>?
 
+}
+
+/// One side of THE STARS: the books' highest points line on that team tonight.
+struct NbaStarMeta: Codable {
+    let side: String?
+    let team: String?
+    let player_id: String?
+    let name: String?
+    let position: String?
+    let line: Double?
+    let pts: Double?
+    let reb: Double?
+    let ast: Double?
+    let fg3m: Double?
+    let min: Double?
+    let games: Int?
+    let scope: String?
 }
 
 /// A new research field cannot invalidate an otherwise readable Connection.

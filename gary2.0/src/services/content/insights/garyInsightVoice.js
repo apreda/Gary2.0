@@ -20,6 +20,8 @@ const SKIP_CATEGORIES = new Set([
   // Dated workload/performance facts must not become inferred availability.
   'bullpen_fatigue',
   'first_inning', 'regression_watch',
+  // The NBA game page's side-by-side numbers: the sentence is the number.
+  'nba_tape',
 ]);
 
 // Football Hub rows are deliberately written as literal, provider-grounded

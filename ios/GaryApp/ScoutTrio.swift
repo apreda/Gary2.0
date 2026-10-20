@@ -862,6 +862,7 @@ struct PicksGamePage: View {
     /// MLB games swap the flat GAME INTEL list for the modular MLB dashboard.
     private var isMLB: Bool { pageLeague == "MLB" }
     private var isFootball: Bool { pageLeague == "NFL" || pageLeague == "NCAAF" }
+    private var isNBA: Bool { pageLeague == "NBA" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -934,6 +935,19 @@ struct PicksGamePage: View {
                     scheduledGameID: bdlGameId,
                     scheduledKickoff: group.commence
                 )
+            } else if isNBA {
+                // The NBA page mounts MLB's and football's modules with the NBA's
+                // words and numbers (founder, Oct 20 2026).
+                NBAGameIntelView(
+                    matchup: group.matchup,
+                    picks: entries.map(\.pick),
+                    row: scoutRow,
+                    edges: edges,
+                    wire: scopedScoutWire,
+                    gameDate: slateDate,
+                    scheduledGameID: bdlGameId,
+                    scheduledTip: group.commence
+                )
             } else {
             // The Scout Trio (founder, Jul 22): the three approved mocks
             // stacked in his order — THE TUG, THE NOTEBOOK, THE BIG NUMBERS.
@@ -958,7 +972,7 @@ struct PicksGamePage: View {
                 // remains unavailable rather than borrowing another lineup.
                 MLBGameIntelView(gameID: bdlGameId, gameDate: ExactGameIdentity.easternDate(of: group.commence) ?? slateDate,
                                  playerIntelDate: slateDate, matchup: group.matchup, edges: edges, showHeader: false)
-            } else if !isFootball && !entries.contains(where: { ($0.pick.type ?? "") == "special" }),
+            } else if !isFootball && !isNBA && !entries.contains(where: { ($0.pick.type ?? "") == "special" }),
                       // A league with no intel lane (NHL) has nothing to promise:
                       // its empty section would say more intel is coming.
                       !edges.isEmpty || AppFlags.insightLeagues.contains(pageLeague.uppercased()) {

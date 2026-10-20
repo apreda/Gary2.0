@@ -48,6 +48,7 @@ enum LineSport {
         case "NFL": return "americanfootball_nfl"
         case "NCAAF": return "americanfootball_ncaaf"
         case "MLB": return "baseball_mlb"
+        case "NBA": return "basketball_nba"
         default: return nil
         }
     }

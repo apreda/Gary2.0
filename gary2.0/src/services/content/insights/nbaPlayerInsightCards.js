@@ -81,7 +81,7 @@ function gameLog(games) {
 }
 
 /** The main over/under line of each market, per player, from BDL's raw prop rows. */
-function mainLines(rows) {
+export function mainLines(rows) {
   const by = new Map();
   for (const r of rows || []) {
     if (r?.market?.type !== 'over_under' || !PROP_LABEL[r.prop_type]) continue;

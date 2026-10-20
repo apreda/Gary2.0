@@ -109,6 +109,8 @@ extension SignalKind {
         case "fantasy_red_zone", "red_zone_role", "goal_line_role": return .fantasyRedZone
         case "fantasy_matchup", "player_matchup": return .fantasyMatchup
         case "fantasy_trend", "recent_usage", "recent_trend": return .fantasyTrend
+        case "nba_stars": return .nbaStars
+        case "nba_tape": return .nbaTape
         default: return nil
         }
     }

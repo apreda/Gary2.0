@@ -21,7 +21,8 @@ import { filterBlockedVendors } from '../providers/oddsService.js';
 import { resolveNflKickoff } from '../sports/nfl/nflGamePolicy.js';
 import { classifyNcaafCoveredGames, resolveNcaafKickoff } from '../sports/ncaaf/ncaafGamePolicy.js';
 
-export const LINE_WATCH_SPORTS = ['americanfootball_nfl', 'americanfootball_ncaaf'];
+// The NBA joined Oct 20 2026 so THE LINE under an NBA pick has rungs too.
+export const LINE_WATCH_SPORTS = ['americanfootball_nfl', 'americanfootball_ncaaf', 'basketball_nba'];
 export const BASE_INTERVAL_MS = 30 * 60_000;
 export const NEAR_KICKOFF_INTERVAL_MS = 10 * 60_000;
 export const NEAR_KICKOFF_WINDOW_MS = 3 * 3600_000;
@@ -31,7 +32,7 @@ export const WEEK_DAYS = 7;
 // rung is recorded even when the poll lands a few minutes late.
 const KICKOFF_GRACE_MS = 20 * 60_000;
 
-const LABELS = { americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF' };
+const LABELS = { americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA' };
 export const sportLabel = (sport) => LABELS[sport] || sport;
 
 export function etHour(now = new Date()) {
@@ -68,6 +69,10 @@ export function pollDue({ now = new Date(), lastPollAt = null, nextKickoffAt = n
 }
 
 export function kickoffOf(sport, game) {
+  if (sport === 'basketball_nba') {
+    const t = Date.parse(game?.datetime || '');
+    return Number.isFinite(t) && !/final/i.test(String(game?.status || '')) ? new Date(t) : null;
+  }
   const k = sport === 'americanfootball_nfl' ? resolveNflKickoff(game) : resolveNcaafKickoff(game);
   const iso = k?.iso;
   if (!iso) return null;

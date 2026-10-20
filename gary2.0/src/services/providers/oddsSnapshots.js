@@ -19,8 +19,9 @@ async function db() {
   }
   return _db;
 }
-// MLB and both football lanes keep price history (Sep 1 2026).
-const SNAPSHOT_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
+// MLB and both football lanes keep price history (Sep 1 2026); the NBA from its
+// Oct 20 2026 opener, for THE LINE under the NBA pick (display only).
+const SNAPSHOT_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf', 'basketball_nba']);
 const num = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const etDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null);
 

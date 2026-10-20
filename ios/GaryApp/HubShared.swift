@@ -85,6 +85,9 @@ enum SignalKind {
     // Football season-long fantasy lanes: current role, scoring-area work,
     // opponent, and movement over recent games for both NFL and NCAAF.
     case fantasyUsage, fantasyRedZone, fantasyMatchup, fantasyTrend
+    // NBA game page lanes (Oct 20 2026): THE STARS (each team's lead player and
+    // Gary's take) and the two teams' side-by-side numbers for THE BIG NUMBERS.
+    case nbaStars, nbaTape
     var icon: String {
         switch self {
         case .streak: return "flame.fill"
@@ -132,6 +135,8 @@ enum SignalKind {
         case .fantasyRedZone: return "scope"
         case .fantasyMatchup: return "person.2.fill"
         case .fantasyTrend: return "chart.line.uptrend.xyaxis"
+        case .nbaStars: return "star.fill"
+        case .nbaTape: return "chart.bar.xaxis"
         }
     }
     var tint: Color {
@@ -199,6 +204,8 @@ enum SignalKind {
         case .fantasyRedZone: return "RED-ZONE ROLE"
         case .fantasyMatchup: return "MATCHUP"
         case .fantasyTrend: return "RECENT TREND"
+        case .nbaStars: return "THE STARS"
+        case .nbaTape: return "THE NUMBERS"
         }
     }
 }

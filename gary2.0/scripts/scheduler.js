@@ -279,7 +279,7 @@ async function fireOnDelayHold(livePending, entry, now) {
 // read has a real close instead of the last pick tier's board.
 // ─────────────────────────────────────────────────────────────────────────
 const closingWatch = new Map(); // `${sport.key}:${gameId}` → { sport, dateStr, gameId, startTime, matchup, done }
-const CLOSING_CAPTURE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf']);
+const CLOSING_CAPTURE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'americanfootball_ncaaf', 'basketball_nba']);
 let closingTimer = null;
 
 function registerClosingCapture(entries) {
@@ -317,7 +317,7 @@ function startClosingCapture() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// THE LINE WATCH (founder, Sep 9 2026): the week's NFL/NCAAF boards, polled
+// THE LINE WATCH (founder, Sep 9 2026): the week's NFL/NCAAF (and from Oct 20 2026 NBA) boards, polled
 // through the week so the ladder under the pick card and The Hub's movers
 // board have real rungs. Cadence and sources: src/services/lineWatch.js.
 // GARY_LINE_WATCH=off disables it without a code change.

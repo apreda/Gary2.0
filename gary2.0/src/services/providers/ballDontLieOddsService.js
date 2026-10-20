@@ -196,6 +196,36 @@ function dedupeNcaafOddsRows(rows) {
   return [...byIdentity.values()];
 }
 
+/** The NBA line watch's boards (Oct 20 2026): game-id-scoped v2 odds, one book per row, in the unified
+ * bookmakers shape the odds ledger records. Display only (THE LINE under an NBA pick). */
+async function nbaGamesWithOddsByIds(games) {
+  const list = (Array.isArray(games) ? games : []).filter((g) => g?.id != null);
+  if (!list.length) return [];
+  const ids = [...new Set(list.map((g) => g.id))];
+  const rows = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const page = await ballDontLieService.getOddsV2({ game_ids: ids.slice(i, i + 100), per_page: 100 }, 'nba');
+    if (Array.isArray(page)) rows.push(...page);
+  }
+  const num = (v) => toNumber(v);
+  return list.map((g) => {
+    const home = g.home_team?.full_name || '', away = g.visitor_team?.full_name || '';
+    const bookmakers = rows.filter((r) => String(r?.game_id) === String(g.id)).map((v) => {
+      const markets = [];
+      const h2h = [[home, num(v.moneyline_home_odds)], [away, num(v.moneyline_away_odds)]].filter(([, p]) => p !== null).map(([name, price]) => ({ name, price }));
+      const spreads = [[home, num(v.spread_home_value), num(v.spread_home_odds)], [away, num(v.spread_away_value), num(v.spread_away_odds)]]
+        .filter(([, pt, pr]) => pt !== null && pr !== null).map(([name, point, price]) => ({ name, point, price }));
+      const totals = [['Over', num(v.total_over_odds)], ['Under', num(v.total_under_odds)]]
+        .filter(([, pr]) => pr !== null && num(v.total_value) !== null).map(([name, price]) => ({ name, point: num(v.total_value), price }));
+      if (h2h.length) markets.push({ key: 'h2h', outcomes: h2h });
+      if (spreads.length) markets.push({ key: 'spreads', outcomes: spreads });
+      if (totals.length) markets.push({ key: 'totals', outcomes: totals });
+      return { key: v.vendor, title: v.vendor, markets };
+    }).filter((b) => b.key && b.markets.length);
+    return { id: g.id, bdl_game_id: g.id, home_team: home, away_team: away, commence_time: g.datetime || null, bookmakers };
+  });
+}
+
 export const ballDontLieOddsService = {
   /**
    * Scheduler-only NFL fast path: one exact game transport and one exact odds
@@ -228,6 +258,7 @@ export const ballDontLieOddsService = {
   async getGamesWithOddsByIds(sportKey, games) {
     const isNfl = sportKey === 'americanfootball_nfl';
     const isNcaaf = sportKey === 'americanfootball_ncaaf';
+    if (sportKey === 'basketball_nba') return nbaGamesWithOddsByIds(games);
     if (!isNfl && !isNcaaf) throw new Error(`getGamesWithOddsByIds: unsupported sport ${sportKey}`);
     const list = (Array.isArray(games) ? games : []).filter((g) => g?.id != null);
     if (list.length === 0) return [];

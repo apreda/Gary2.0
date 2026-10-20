@@ -53,6 +53,8 @@ import { computeNbaRestFatigue } from './computers/nbaRestFatigue.js';
 import { computeNbaStreak } from './computers/nbaStreak.js';
 import { computeNbaBeneficiary } from './computers/nbaBeneficiary.js';
 import { computeNbaOwned } from './computers/nbaOwned.js';
+import { computeNbaTeamTape } from './computers/nbaTeamTape.js';
+import { computeNbaStars } from './computers/nbaStars.js';
 
 // NFL/NCAAF computers. These consume only BDL team-game boxes and BDL odds;
 // unsupported football concepts remain absent instead of being synthesized.
@@ -104,6 +106,9 @@ const MLB_COMPUTERS = [
 ];
 
 const NBA_COMPUTERS = [
+  // THE STARS and THE BIG NUMBERS on the NBA game page (Oct 20 2026).
+  computeNbaStars,
+  computeNbaTeamTape,
   computeNbaRestFatigue,
   computeNbaStreak,
   computeNbaBeneficiary,

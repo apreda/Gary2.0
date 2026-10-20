@@ -112,6 +112,20 @@ async function seriesMeetings(aId, bId, season, slateDate, bdl) {
   );
 }
 
+/** The app's HEAD-TO-HEAD ledger (meta.kind 'h2h'): the series from `dom`'s side, meetings oldest first. */
+function ledger(meetings, dom, opp, domWins, oppWins) {
+  const rows = [...meetings].sort((x, y) => String(x?.date || '').localeCompare(String(y?.date || ''))).map((g) => {
+    const h = Number(g?.home_team_score), v = Number(g?.visitor_team_score);
+    const domHome = g?.home_team?.id === dom.id;
+    return { date: String(g?.date || '').slice(0, 10), away: g?.visitor_team?.abbreviation || null, home: g?.home_team?.abbreviation || null,
+      away_runs: Number.isFinite(v) ? v : null, home_runs: Number.isFinite(h) ? h : null, dom_won: domHome ? h > v : v > h };
+  });
+  const last = rows[rows.length - 1];
+  return { kind: 'h2h', dominant: dom.abbreviation, opponent: opp.abbreviation, dominant_name: dom.full_name || dom.abbreviation,
+    opponent_name: opp.full_name || opp.abbreviation, wins: domWins, losses: oppWins, games: rows.length, meetings: rows,
+    last_meeting: last ? { score: `${last.away_runs}-${last.home_runs}`, winner: last.dom_won ? dom.abbreviation : opp.abbreviation } : null };
+}
+
 export async function computeNbaOwned(ctx) {
   const { games, season, bdl, helpers, date } = ctx;
   const rows = [];
@@ -158,6 +172,7 @@ export async function computeNbaOwned(ctx) {
           tone: TONES.NEUTRAL,
           relevance_score: BASE_RELEVANCE - 5,
           game_id: gameId,
+          meta: ledger(meetings, away, home, homeWins, awayWins),
         }));
         continue;
       }
@@ -191,6 +206,7 @@ export async function computeNbaOwned(ctx) {
         relevance_score: Math.min(RELEVANCE_CAP, BASE_RELEVANCE + PER_WIN_DIFF * Math.abs(winDiff)),
         team_id: leader.id,
         game_id: gameId,
+        meta: ledger(meetings, leader, trailer, leaderWins, trailerWins),
       }));
     } catch (err) {
       console.error('[nbaOwned] game error:', err?.message || err);
