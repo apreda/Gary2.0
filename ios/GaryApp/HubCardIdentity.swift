@@ -16,13 +16,30 @@ enum HubCardIdentity {
     static func abbreviation(_ stored: String?, name: String, league: String) -> String? {
         let supplied = stored?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (supplied?.isEmpty == false ? supplied : nil)
-            ?? (league.uppercased() == "NCAAF" ? NCAAFTeams.providerAbbreviation(name) : nil)
+            ?? (league.uppercased() == "NCAAF" ? NCAAFTeams.providerAbbreviation(name) : knownAbbreviation(name, league: league))
         guard let value else { return nil }
         let upper = value.uppercased()
         if league.uppercased() == "MLB" {
             return ["AZ": "ARI", "CWS": "CHW", "ATH": "OAK"][upper] ?? upper
         }
         return upper
+    }
+
+    /// A pro club's code from its full name, only when a league keyword names it
+    /// (Oct 20 2026: NBA and NFL board rows carry no code, so their team cards
+    /// could not find the club's player cards). Never a guessed three letters.
+    static func knownAbbreviation(_ name: String, league: String) -> String? {
+        let map: [String: [String]]
+        switch league.uppercased() {
+        case "MLB": map = mlbTeamKeywords
+        case "NBA": map = nbaTeamKeywords
+        case "NFL": map = nflTeamKeywords
+        default: return nil
+        }
+        let lower = name.lowercased()
+        guard !lower.isEmpty else { return nil }
+        let hits = map.filter { _, words in words.contains { lower.contains($0) } }.map(\.key)
+        return hits.count == 1 ? hits[0] : nil
     }
 
     static func matchesTeam(_ query: String, name: String?, abbr: String?, league: String) -> Bool {

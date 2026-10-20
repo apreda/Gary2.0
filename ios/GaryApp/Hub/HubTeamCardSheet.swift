@@ -123,10 +123,24 @@ struct HubTeamCardSheet: View {
     }
     /// The day's player cards wearing this team's abbreviation — the bats and
     /// arms with a full breakdown behind them. Tap one, get the player card.
+    /// The club's player cards, the books' order of who matters most (the
+    /// highest line on each card first, the Darts rule; Oct 20 2026: the Chiefs'
+    /// six were the alphabet's first six and Mahomes was not among them).
     private var teamIntel: [PlayerInsightCardRow] {
-        intel.filter {
+        // The points line when the card has one (the NBA; a PRA line is not on
+        // every card), else the card's highest line.
+        func top(_ row: PlayerInsightCardRow) -> Double {
+            let props = row.payload?.props ?? []
+            if let points = props.first(where: { ($0.label ?? "").uppercased() == "POINTS" }), let v = Double(points.line ?? "") { return v }
+            return props.compactMap { Double($0.line ?? "") }.max() ?? 0
+        }
+        return intel.filter {
             $0.payload != nil && HubCardIdentity.cardBelongsToTeam(cardLeague: $0.league, cardAbbr: $0.team_abbr,
                 league: signal.league.label, team: resolved.name, abbr: resolved.abbr)
+        }
+        .sorted { a, b in
+            let ta = top(a), tb = top(b)
+            return ta != tb ? ta > tb : (a.player_name ?? "") < (b.player_name ?? "")
         }
     }
     private var ls: LiveScore? {
@@ -667,7 +681,7 @@ struct HubTeamCardSheet: View {
                                         Text(pos).hubDataFont(9.5).foregroundStyle(PCV4.mut2)
                                     }
                                 }
-                                if let line = row.payload?.strengths?.first ?? row.payload?.weaknesses?.first {
+                                if let line = row.payload?.strengths?.first ?? row.payload?.weaknesses?.first ?? row.payload?.season?.line1 {
                                     Text(line).hubBodyFont(11.5).foregroundStyle(PCV4.mut)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .multilineTextAlignment(.leading)
