@@ -44,7 +44,9 @@ export function researchConcurrencyForSport(sport, provider) {
   // The subscription researcher otherwise spends its entire game budget on
   // the first two or three of eight factors. Each worker has its own chat and
   // the complete original desk; bound the pool without dropping any factors.
-  if (['codex-cli', 'claude-cli'].includes(provider) && ['baseball_mlb', 'MLB'].includes(sport)) {
+  // The NBA too (Oct 20 2026): the opener's eleven factors ran one at a time,
+  // nine finished, and the budget discarded the briefing before Gary read it.
+  if (['codex-cli', 'claude-cli'].includes(provider) && ['baseball_mlb', 'MLB', 'basketball_nba', 'NBA'].includes(sport)) {
     return MLB_CODEX_RESEARCH_CONCURRENCY;
   }
   return NFL_KEYS.has(sport) ? NFL_RESEARCH_CONCURRENCY : 1;

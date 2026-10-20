@@ -16,7 +16,8 @@ describe('football research policy', () => {
     expect(researchConcurrencyForSport('baseball_mlb', 'codex-cli')).toBe(3);
     expect(researchConcurrencyForSport('MLB', 'codex-cli')).toBe(3);
     expect(researchConcurrencyForSport('baseball_mlb', 'anthropic')).toBe(1);
-    expect(researchConcurrencyForSport('basketball_nba', 'codex-cli')).toBe(1);
+    expect(researchConcurrencyForSport('basketball_nba', 'claude-cli')).toBe(3);
+    expect(researchConcurrencyForSport('basketball_nba', 'anthropic')).toBe(1);
   });
 
   it('finishes all eight MLB factors in ordered results using at most three simultaneous workers', async () => {

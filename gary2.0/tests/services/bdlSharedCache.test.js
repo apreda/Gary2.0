@@ -65,4 +65,13 @@ describe('shared BDL cache eligibility', () => {
     expect(await readSharedBdlCache(key, now + 1)).toMatchObject({ hit: true, data: [{ id: 3 }] });
     expect(await readSharedBdlCache(key, now + 5 * 60_000 + 1)).toEqual({ hit: false });
   });
+
+  it('rejects a record whose writer ran on a shifted clock once its real lifetime has passed', async () => {
+    isolatedDir = await mkdtemp(join(tmpdir(), 'gary-bdl-cache-test-'));
+    process.env.GARY_BDL_SHARED_CACHE_DIR = isolatedDir;
+    const key = 'odds_nba_{"game_ids":[21717855]}';
+    const realNow = Date.now();
+    expect(await writeSharedBdlCache(key, [{ vendor: 'caesars' }], 1, realNow + 23 * 3_600_000)).toBe(true);
+    expect(await readSharedBdlCache(key, realNow + 2 * 60_000)).toEqual({ hit: false });
+  });
 });

@@ -726,9 +726,13 @@ async function main() {
               // preseason audit showed election-after-compose made 11/16
               // cards argue a different number than their ticket; the desk's
               // posted line is the ticket. Gary’s wording is published as written.
+              // NBA joined Oct 20 2026: the opener's "Celtics -1.5" was
+              // re-booked as Caesars "+1" (a day-old quote), turning Gary's
+              // favorite into an underdog his write-up never argued.
               const electionExempt = config.key === 'baseball_mlb'
                 || config.key === 'americanfootball_nfl'
-                || config.key === 'americanfootball_ncaaf';
+                || config.key === 'americanfootball_ncaaf'
+                || config.key === 'basketball_nba';
               if (!electionExempt && sportsbookOdds && sportsbookOdds.length > 0 && result.type === 'spread') {
                 const validOdds = sportsbookOdds.filter(o => typeof o.spread === 'number' && !isNaN(o.spread));
                 if (validOdds.length > 0) {
@@ -788,8 +792,10 @@ async function main() {
               { ...result, spread: finalSpread, spreadOdds: finalSpreadOdds }, game.line_vendor)
             : null;
           // NHL quotes one book: the league's partner board (or the backup that replaced it).
+          // NBA quotes the book whose line was on Gary's desk.
+          const quotesDeskBook = config.key === 'icehockey_nhl' || config.key === 'basketball_nba';
           const bestLineBook = isFootballPick ? exactFootballBook
-            : (bestLine?.book ?? result.book ?? (config.key === 'icehockey_nhl' ? game.line_vendor ?? null : null));
+            : (bestLine?.book ?? result.book ?? (quotesDeskBook ? game.line_vendor ?? null : null));
           // AFTER GARY receipt: seal the exact elected football market beside
           // the pick. First-writer-wins storage makes this immutable; later
           // proof refreshes compare only this vendor to that same vendor.

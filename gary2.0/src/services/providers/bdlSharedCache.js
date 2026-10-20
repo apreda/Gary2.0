@@ -18,7 +18,7 @@
  * Every other established lane retains its existing cache behavior.
  */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -73,8 +73,16 @@ function cachePath(key) {
 export async function readSharedBdlCache(key, now = Date.now()) {
   if (disabled() || !isSharedBdlCacheKey(key)) return { hit: false };
   try {
-    const record = JSON.parse(await readFile(cachePath(key), 'utf8'));
+    const path = cachePath(key);
+    const record = JSON.parse(await readFile(path, 'utf8'));
     if (record?.key !== key || !Number.isFinite(record?.expiry) || record.expiry <= now) {
+      return { hit: false };
+    }
+    // The file's own write time (the system clock) bounds the record too. A
+    // writer running on a shifted test clock stamps a far-future expiry; on
+    // Oct 20 2026 a game-day test from the day before left the opener's odds
+    // "fresh" until 1:31 PM, and the 1:30 PM pick read yesterday's lines.
+    if (Number.isFinite(record.ttlMs) && now >= (await stat(path)).mtimeMs + record.ttlMs) {
       return { hit: false };
     }
     if (!isSubstantiveSharedCacheValue(record.data)) return { hit: false };
@@ -93,7 +101,7 @@ export async function writeSharedBdlCache(key, data, ttlMinutes, now = Date.now(
     await mkdir(root, { recursive: true });
     const target = cachePath(key);
     const temporary = join(root, `.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`);
-    await writeFile(temporary, JSON.stringify({ version: 1, key, expiry: now + ttlMs, data }), 'utf8');
+    await writeFile(temporary, JSON.stringify({ version: 1, key, expiry: now + ttlMs, ttlMs, data }), 'utf8');
     await rename(temporary, target);
     return true;
   } catch {
