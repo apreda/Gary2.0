@@ -120,11 +120,8 @@ const SPORTS = [
   // this entry deliberately carries no propsScript; the scheduler's props slot
   // skips sports without one. NFL keeps its full desk below.
   { key: 'americanfootball_ncaaf', flag: '--ncaaf', label: 'NCAAF' },
-  // NBA PROPS: no lane until the relaunch builds one on the props desk
-  // (Sep 2 2026 — the orchestrator props brain it used was deleted with the
-  // old props system; the scheduler's props slot skips sports without a
-  // propsScript). Game picks unchanged.
-  { key: 'basketball_nba', flag: '--nba', label: 'NBA' },
+  // NBA PROPS (Oct 19 2026, for the Oct 20 opener): the NBA props desk (nbaPropsDesk.js), two a game.
+  { key: 'basketball_nba', flag: '--nba', label: 'NBA', propsScript: 'run-agentic-nba-props.js' },
   // NHL is off the scheduler (founder, Oct 15 2026: "no more running NHL"): no schedule fetch, no tiers, no holds.
   { key: 'baseball_mlb', flag: '--mlb', label: 'MLB', propsScript: 'run-agentic-mlb-props.js' },
 ];

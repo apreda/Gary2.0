@@ -31,6 +31,7 @@ const { propOddsService } = await import('../src/services/providers/propOddsServ
 const { applyPropsPerGameConstraint, isExplicitPropsPass, normalizePropBetDirection, stripInternalFields } = await import('../src/services/gary/agentic/propsSharedUtils.js');
 const { analyzeMlbPropsDesk, PROPS_PROMPT_SHA } = await import('../src/services/gary/pickdesk/propsBrain.js');
 const { analyzeFootballPropsDesk, FOOTBALL_PROPS_PROMPT_SHA } = await import('../src/services/gary/pickdesk/footballPropsDesk.js');
+const { analyzeNbaPropsDesk, NBA_PROPS_PROMPT_SHA } = await import('../src/services/gary/pickdesk/nbaPropsDesk.js');
 
 // ERA LIVE — fresh process, module cache == disk truth. Ledger append feeds
 // the grading-side drift check (see scripts/lib/eraTruth.js). Fail-open.
@@ -106,9 +107,10 @@ export async function runAgenticPropsCli({
   // one, never a fallback to old parts.
   // College props ended for good (founder, Oct 9 2026: "I'm done with college
   // props forever"); props already published stay up.
-  const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl']);
+  // NBA joined Oct 19 2026 for the Oct 20 opener (nbaPropsDesk.js: two props a game on the Picks page).
+  const DESK_LANE_SPORTS = new Set(['baseball_mlb', 'americanfootball_nfl', 'basketball_nba']);
   if (!sportKey || !DESK_LANE_SPORTS.has(sportKey)) {
-    throw new Error(`runAgenticPropsCli: ${sportKey || 'no sport'} has no props desk lane (MLB and NFL only)`);
+    throw new Error(`runAgenticPropsCli: ${sportKey || 'no sport'} has no props desk lane (MLB, NFL and NBA only)`);
   }
 
   const args = parseArgs();
@@ -162,6 +164,13 @@ export async function runAgenticPropsCli({
       console.log(`🧬 ERA LIVE (football props desk): ${FOOTBALL_PROPS_PROMPT_SHA}`);
       recordEraRun('props', getESTDate(), FOOTBALL_PROPS_PROMPT_SHA);
     } catch (e) { console.log(`🧬 ERA LIVE (football props desk): unavailable — ${e.message}`); }
+  }
+  if (sportKey === 'basketball_nba') {
+    try {
+      const { recordEraRun } = await import('./lib/eraTruth.js');
+      console.log(`🧬 ERA LIVE (NBA props desk): ${NBA_PROPS_PROMPT_SHA}`);
+      recordEraRun('props', getESTDate(), NBA_PROPS_PROMPT_SHA);
+    } catch (e) { console.log(`🧬 ERA LIVE (NBA props desk): unavailable — ${e.message}`); }
   }
 
   console.log(`\n🏈 Agentic ${leagueLabel} Props Runner Starting...`);
@@ -359,6 +368,16 @@ export async function runAgenticPropsCli({
           };
           validatedPlayerNames = deskRes.validatedPlayers || new Set();
           if (Array.isArray(deskRes.boardProps)) playerProps = deskRes.boardProps;
+        } else if (sportKey === 'basketball_nba') {
+          const deskRes = await analyzeNbaPropsDesk(game, playerProps, { nocache });
+          if (deskRes.error) throw new Error(`NBA props desk failed: ${deskRes.error}`);
+          result = {
+            picks: deskRes.picks || [],
+            explicitPass: deskRes.explicitPass === true,
+            winnersEvidence: deskRes.winnersEvidence,
+          };
+          validatedPlayerNames = deskRes.validatedPlayers || new Set();
+          if (Array.isArray(deskRes.boardProps) && deskRes.boardProps.length) playerProps = deskRes.boardProps;
         } else if (FOOTBALL_PROP_LEAGUES.has(leagueLabel)) {
           const deskRes = await analyzeFootballPropsDesk(game, playerProps, {
             league: leagueLabel,
