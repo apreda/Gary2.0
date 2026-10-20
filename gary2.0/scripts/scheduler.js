@@ -516,7 +516,7 @@ async function buildPlanResilient(dateStr, { maxWaitMs = 90 * 60 * 1000 } = {}) 
       }
       // Plan built (or genuinely no games) — snapshot the public slate for the app.
       await writeDailySlateNonFatal(dateStr);
-      // Refresh TODAY's board at the 5 AM plan build too. The snapshot was
+      // Refresh TODAY's board at the 4:45 AM plan build too. The snapshot was
       // first written the prior evening, before many MLB probable starters,
       // series results and weather fields had landed; without this refresh a
       // thin evening row stayed thin all day even though the sources improved.
@@ -1464,19 +1464,22 @@ async function sleepUntilWallClock(targetDate, { wakeSeq = null } = {}) {
   }
 }
 
+// The day's plan, slate and board are written at 4:45 AM ET, before the app turns
+// to the new day at 5 (founder, Oct 20 2026: "Do 5am for all of them so if I'm up
+// at 6am I see it all there"). Early enough that no game trigger is missed.
+const PLAN_TIME_ET = { hour: 4, minute: 45 };
+
 async function sleepUntilPlanTime() {
-  // Build each day's plan at 5:00 AM ET — early enough that no game trigger
-  // is missed (earliest MLB triggers are ~10:30 AM ET for 12 PM games).
   const todayET = getTodayETDateStr();
-  let target = instantForETDate(todayET, 5, 0); // 5:00 AM ET today
-  // If 5 AM today has already passed, aim for 5 AM tomorrow
+  let target = instantForETDate(todayET, PLAN_TIME_ET.hour, PLAN_TIME_ET.minute);
+  // If today's plan time has already passed, aim for tomorrow's
   if (target.getTime() <= Date.now()) {
     const tomorrowET = getTomorrowETDateStr();
-    target = instantForETDate(tomorrowET, 5, 0);
+    target = instantForETDate(tomorrowET, PLAN_TIME_ET.hour, PLAN_TIME_ET.minute);
   }
   const waitMs = Math.max(target.getTime() - Date.now(), 60_000);
   const waitHrs = (waitMs / 1000 / 60 / 60).toFixed(2);
-  log(`\n💤 Sleeping ${waitHrs} hours until 5:00 AM ET (${target.toISOString()})`);
+  log(`\n💤 Sleeping ${waitHrs} hours until 4:45 AM ET (${target.toISOString()})`);
   await sleepUntilWallClock(target);
 }
 

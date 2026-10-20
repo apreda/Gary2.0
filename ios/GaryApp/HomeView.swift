@@ -71,7 +71,7 @@ struct HomeView: View {
     @State private var recentGameResultsLastGood: [GameResult] = []
     @State private var recentPropResultsLastGood: [PropResult] = []
     /// A foreground app may remain open across the cutoff. Check cheaply once a
-    /// minute so the new board loads at 6am ET without requiring a relaunch.
+    /// minute so the new board loads at 5am ET without requiring a relaunch.
     private let slateRolloverTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     /// Picks, grades and recap rows can land while Home stays open. This pulse
     /// refreshes only those rolling records while Home is the active tab; live

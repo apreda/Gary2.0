@@ -66,8 +66,8 @@ enum BookDates {
     /// The Book's day rolls with the pick slate, not at midnight: NFL and MLB
     /// games often finish after midnight, and a fan still watching stays on the
     /// day (and the week) that game belongs to (founder, Sep 9). The app passes
-    /// its slate rollover hour (SupabaseAPI.slateRolloverHourET, 6 AM ET).
-    static func today(now: Date = Date(), rolloverHour: Int = 6) -> String {
+    /// its slate rollover hour (SupabaseAPI.slateRolloverHourET, 5 AM ET).
+    static func today(now: Date = Date(), rolloverHour: Int = SupabaseAPI.slateRolloverHourET) -> String {
         let hour = calendar.component(.hour, from: now)
         return hour < rolloverHour ? shift(string(now), days: -1) : string(now)
     }

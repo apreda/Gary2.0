@@ -110,13 +110,15 @@ enum SupabaseAPI {
     
     /// Current betting-slate date in Eastern time (YYYY-MM-DD format).
     /// The completed board, including its CASHED/LOST grades, remains the active
-    /// day until 6:00 AM ET. At 6 the app advances every date-keyed surface to
-    /// the new slate together instead of exposing a half-rolled board overnight.
-    static let slateRolloverHourET = 6
+    /// day until 5:00 AM ET. At 5 the app advances every date-keyed surface to
+    /// the new slate together instead of exposing a half-rolled board overnight
+    /// (founder, Oct 20 2026: "Do 5am for all of them so if I'm up at 6am I see
+    /// it all there"; it was 6). The scheduler writes the day's board at 4:45.
+    static let slateRolloverHourET = 5
 
     static func todayEST(now: Date = Date()) -> String {
         // Views ask for the slate day many times per redraw. The answer only
-        // changes at 6 AM ET, so one calendar computation serves each second.
+        // changes at 5 AM ET, so one calendar computation serves each second.
         enum Memo {
             static let lock = NSLock()
             static var second = -1
@@ -141,7 +143,7 @@ enum SupabaseAPI {
 
             let hour = cal.component(.hour, from: now)
 
-            // Before 6am ET, keep the completed prior slate and its grades visible.
+            // Before 5am ET, keep the completed prior slate and its grades visible.
             if hour < slateRolloverHourET {
                 if let yesterday = cal.date(byAdding: .day, value: -1, to: now) {
                     return formatDateEST(yesterday)
@@ -189,7 +191,7 @@ enum SupabaseAPI {
         return formatDateEST(Date())
     }
 
-    /// Billfold rolls over after the daily 7:00 AM EST results ingest.
+    /// Billfold's caches roll with the slate (5 AM ET); results land as games finish.
     static func billfoldSnapshotWindowKey(for date: Date = Date()) -> String {
         guard let tz = TimeZone(identifier: "America/New_York") else {
             return formatDateEST(date)
@@ -198,9 +200,8 @@ enum SupabaseAPI {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = tz
 
-        // Seven elapsed hours from midnight is 8 AM/6 AM on DST changes.
-        // This boundary is a wall-clock hour, just like the slate rollover.
-        if cal.component(.hour, from: date) >= 7 { return formatDateEST(date) }
+        // A wall-clock hour, the slate rollover's own.
+        if cal.component(.hour, from: date) >= slateRolloverHourET { return formatDateEST(date) }
         return formatDateEST(cal.date(byAdding: .day, value: -1, to: date) ?? date)
     }
     
