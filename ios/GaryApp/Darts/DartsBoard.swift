@@ -441,7 +441,12 @@ struct StreakColumnSpec {
     /// Per league, the two columns (mock 03): MLB sets hitting against
     /// hitless; the NFL sets touchdown runs beside 100-yard runs.
     static func pair(for league: String) -> (StreakColumnSpec, StreakColumnSpec) {
-        league == "NFL"
+        // NBA (Oct 19 2026): 20-point games in a row beside double-doubles in a row.
+        if league == "NBA" {
+            return (StreakColumnSpec(title: "20+ POINTS", kinds: ["pts20"], good: true),
+                    StreakColumnSpec(title: "DOUBLE-DOUBLES", kinds: ["dd"], good: true))
+        }
+        return league == "NFL"
             ? (StreakColumnSpec(title: "TD STREAK", kinds: ["td"], good: true),
                StreakColumnSpec(title: "100 YARDS", kinds: ["rec100", "rush100"], good: true))
             : (StreakColumnSpec(title: "HIT STREAK", kinds: ["hit"], good: true),

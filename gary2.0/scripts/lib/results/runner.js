@@ -4,6 +4,7 @@ import { buildFootballSettlementOutcome, assertFootballSettlementCoverage } from
 import { easternDateOffset as estDate } from '../../../supabase/functions/_shared/dateKeys.js';
 import { writeStreaks as defaultWriteStreaks } from '../../../src/services/content/streaksService.js';
 import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/sports/nfl/nflStreaksService.js';
+import { writeNbaStreaks as defaultWriteNbaStreaks } from '../../../src/services/sports/nba/nbaStreaksService.js';
 import { gradeDarts as defaultGradeDarts } from '../../../src/services/gary/darts/dartsGrade.js';
 
 const defaultLoaders = {
@@ -15,7 +16,7 @@ const defaultLoaders = {
 
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
   processPropBets, processGenericGames, dateAtOffset = estDate,
-  writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks,
+  writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks, writeNbaStreaks = defaultWriteNbaStreaks,
   gradeDarts = defaultGradeDarts,
   loaders = defaultLoaders, console = globalThis.console }) {
   // Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
@@ -103,6 +104,12 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       await writeNflStreaks({ supabase, date: targetDate });
     } catch (e) {
       console.warn(`  ⚠️ NFL streaks failed (non-fatal): ${e.message}`);
+    }
+    // NBA player streaks and Hot & Cold for the Darts page (Oct 19 2026): BDL box scores; never fatal to grading.
+    try {
+      await writeNbaStreaks({ supabase, date: targetDate });
+    } catch (e) {
+      console.warn(`  ⚠️ NBA streaks failed (non-fatal): ${e.message}`);
     }
     // Darts results (Sep 23 2026): each lean marked hit, miss or void from the
     // box score for the Darts page's "yesterday" hits. Never the Billfold,
