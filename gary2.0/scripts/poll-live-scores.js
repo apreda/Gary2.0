@@ -52,6 +52,7 @@ import {
   queueExactGradeRequest,
 } from './lib/liveGradeQueue.js';
 import { loadIncompleteFinalFootballGames } from './lib/footballFinalReconciliation.js';
+import { syncNbaTeamGames } from '../src/services/sports/nba/nbaTeamGames.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
@@ -183,7 +184,14 @@ async function mlbRows() {
 }
 
 function nbaRows() {
-  return bdl.getNbaGamesForDate(targetDate).then((games) => (games || []).map((g) => {
+  return bdl.getNbaGamesForDate(targetDate).then(async (games) => {
+    // The day's finals go to team_games and the NBA runs (nbaTeamGames.js): the team card and the streak board.
+    if (!dryRun) {
+      const synced = await syncNbaTeamGames(games).catch((e) => ({ error: e.message }));
+      if (synced?.error) console.warn(`[live-scores] NBA team games: ${synced.error}`);
+    }
+    return games;
+  }).then((games) => (games || []).map((g) => {
     const status = normStatus(g.status);
     let detail = null;
     if (status === 'live') {
