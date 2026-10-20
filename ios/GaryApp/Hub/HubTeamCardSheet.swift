@@ -20,6 +20,9 @@ struct HubTeamCardSheet: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var shapeExpanded = false   // MORE STATS expander (player-card parity)
+    /// The club's own season from team_games (Oct 19 2026: one team card wherever it opens, never bare on a day
+    /// the club doesn't play).
+    @State private var seasonGames: [TeamGame] = []
     @State private var bullpenExpanded = false
 
     // ── identity: the tapped string (name OR abbr) → full name + abbr ──
@@ -139,7 +142,7 @@ struct HubTeamCardSheet: View {
     private var deskIsQuiet: Bool {
         tonight == nil && formStat == nil && runProfile == nil && starter == nil
             && teamStreaks.isEmpty && teamIntel.isEmpty && related.isEmpty
-            && edgeContent == nil
+            && edgeContent == nil && seasonGames.isEmpty
     }
 
     // ── body: shared player/team research surface ──
@@ -148,6 +151,7 @@ struct HubTeamCardSheet: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if !seasonGames.isEmpty { seasonSection }
                 if let e = edgeContent { edgeHero(e) }
                 if let ledger = bullpenResearch { bullpenSection(ledger) }
                 if let t = tonight { tonightSection(t) }
@@ -177,6 +181,39 @@ struct HubTeamCardSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .task(id: resolved.name) {
+            guard ["MLB", "NFL", "NBA"].contains(signal.league.label) else { return }
+            let games = await SupabaseAPI.fetchTeamGames(league: signal.league.label, team: resolved.name)
+            seasonGames = games.filter { $0.cur ?? true }
+        }
+    }
+
+    // ── THIS SEASON: the record, the last ten, the last five games ──
+
+    private func record(_ games: [TeamGame]) -> String {
+        let w = games.filter { $0.f > $0.a }.count, l = games.filter { $0.f < $0.a }.count, t = games.count - w - l
+        return t > 0 ? "\(w)-\(l)-\(t)" : "\(w)-\(l)"
+    }
+    private var seasonSection: some View {
+        section("This season") {
+            VStack(alignment: .leading, spacing: 10) {
+                // MLB's log carries the postseason too, so baseball shows the last ten instead of a season record.
+                if signal.league != .mlb { splitLikeRow("RECORD", record(seasonGames)) }
+                if seasonGames.count >= 5 { splitLikeRow("LAST \(min(10, seasonGames.count))", record(Array(seasonGames.prefix(10)))) }
+                ForEach(Array(seasonGames.prefix(5).enumerated()), id: \.offset) { _, g in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(g.f > g.a ? "W" : g.f < g.a ? "L" : "T").hubTitleFont(16)
+                            .foregroundStyle(g.f > g.a ? PCV4.gold : PCV4.mut2)
+                            .frame(width: 22, alignment: .leading)
+                        Text("\(g.f)-\(g.a)").hubBodyFont(13, .semibold).foregroundStyle(PCV4.ink).monospacedDigit()
+                            .frame(width: 64, alignment: .leading)
+                        Text(g.axis).hubDataFont(11, .bold).foregroundStyle(PCV4.mut)
+                        Spacer(minLength: 8)
+                        if let d = g.shortDate { Text(d).hubDataFont(11, .bold).foregroundStyle(PCV4.mut2).monospacedDigit() }
+                    }
+                }
+            }
+        }
     }
 
     // ── header: context, identity, then a quiet observed streak ──

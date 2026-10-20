@@ -296,12 +296,10 @@ struct GaryRuler: View {
 
     private var position: Double { shown ?? Double(value) }
     private var step: CGFloat { pitch(for: width) }
-    /// The whole range fits the line at a readable spacing: it spans it, and
-    /// the needle moves.
-    private var spread: Bool {
-        guard spacing == nil, width > 0 else { return false }
-        return (width - Self.lead * 2) / CGFloat(max(range.count - 1, 1)) >= 40
-    }
+    /// Every ruler moves one way (Oct 19 2026, founder: "all the yard sticks should work the way this one does ... by
+    /// the actual motion"): the tape slides under a needle fixed in the middle, whatever the range. A short range used
+    /// to spread across the line and move its needle instead, a second motion on the same ruler.
+    private var spread: Bool { false }
 
     var body: some View {
         GeometryReader { geo in
