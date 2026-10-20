@@ -236,6 +236,12 @@ struct DartsView: View {
                 else { UserDefaults.standard.set(day, forKey: GaryTour.dartsDayKey) }
                 return
             }
+            // `darts team MLB Milwaukee Brewers` opens that club's team card.
+            if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("team ") {
+                let parts = arg.dropFirst(5).split(separator: " ", maxSplits: 1).map(String.init)
+                if parts.count == 2 { teamCard = TeamCardSel(name: parts[1], league: parts[0].uppercased()) }
+                return
+            }
             // `darts card Pete Alonso` opens that player's card.
             if let arg = note.userInfo?["arg"] as? String, arg.hasPrefix("card ") {
                 streakCard = StreakCardSel(name: String(arg.dropFirst(5)), league: league)
