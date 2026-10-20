@@ -12,6 +12,7 @@ import { runBigGameStakes } from '../src/services/winners/garyBigGameStake.js';
 import { placeOnCard } from '../src/services/winners/garyCard.js';
 import { runLateNewsChecks } from '../src/services/winners/lateNews.js';
 import { runNflBoard } from '../src/services/winners/nflBoard.js';
+import { runNbaBoard } from '../src/services/winners/nbaBoard.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 // Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is
@@ -141,6 +142,9 @@ async function main() {
     await runNflBoard(supabase,todayET());
     const boardSeated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
     if(boardSeated)console.log(`[Winners] NFL board seated ${boardSeated}`);
+    await runNbaBoard(supabase,todayET());
+    const nbaSeated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
+    if(nbaSeated)console.log(`[Winners] NBA board seated ${nbaSeated}`);
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     await runBigGameStakes(supabase,todayET());
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
@@ -206,6 +210,20 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
+  // GARY'S NBA BOARD (Oct 19 2026, from Oct 21, nbaBoard.js): about 50 minutes before the first tip he hasn't boarded
+  // he picks his bets from the picked games still to tip; his bets on the pick's side seat 28 minutes out after the
+  // late-news check (SQL seat_nba_board).
+  const nbaBoard=async()=>{
+    while(true) {
+      try {
+        const did=await runNbaBoard(supabase,todayET());
+        if(did && !['no_games','nothing_open','waiting','busy','opening_night'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NBA board: ${did}`);
+        const seated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
+        if(seated)console.log(`[Winners] ${new Date().toISOString()} NBA board seated ${seated}`);
+      } catch(e){logFailure('NBA board',e);}
+      await sleep(LOOP_MS);
+    }
+  };
   // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
   const bigGames=async()=>{
     while(true) {
@@ -214,6 +232,6 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),bigGames()]);
+  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),bigGames()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});
