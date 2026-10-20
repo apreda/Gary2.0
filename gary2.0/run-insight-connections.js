@@ -25,6 +25,7 @@
  */
 
 // MUST load env vars FIRST before any other imports
+import { buildNbaPlayerInsightCards } from './src/services/content/insights/nbaPlayerInsightCards.js';
 import './src/loadEnv.js';
 import { insightRefreshOldIds, insightResetScopeParams } from './scripts/lib/insightRefreshScope.js';
 import { insightRunJudgmentsEnabled } from './scripts/lib/insightRunPolicy.js';
@@ -674,6 +675,27 @@ async function buildAndStoreCards({ date, league, connections }) {
     } catch (err) {
       const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
       console.warn(`   ⚠️  [${league}] player insight cards skipped: ${detail}`);
+      return false;
+    }
+    return;
+  }
+  // NBA packs (Oct 19 2026, for the opener): the same table and contract; nbaPlayerInsightCards.js.
+  if (league === 'NBA') {
+    try {
+      const games = (await ballDontLieService.getGames('basketball_nba', { dates: [date] })) || [];
+      const picked = onlyGames.length ? games.filter((g) => onlyGames.includes(String(g?.id))) : games;
+      const packs = await buildNbaPlayerInsightCards({ date, games: picked, bdl: ballDontLieService });
+      if (!packs.length) { console.log(`   ℹ️  No player insight cards built for NBA (${date}).`); return; }
+      const rows = cardStorageRows(packs);
+      if (dryRun) {
+        console.log(`   🧪 Would write ${rows.length} NBA player insight card(s). Sample payload:`);
+        console.log(JSON.stringify(rows[0]?.payload, null, 2));
+        return;
+      }
+      const stored = await insertCards(rows);
+      console.log(`   ✅ Stored ${stored} NBA player insight card(s) (${date}).`);
+    } catch (err) {
+      console.warn(`   ⚠️  [NBA] player insight cards skipped: ${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
       return false;
     }
     return;

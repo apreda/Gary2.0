@@ -40,9 +40,19 @@ struct LogStat: Hashable, Identifiable {
     ]
     static let nflTypes: Set<String> = ["quarterback", "skill"]
 
+    /// The NBA's stats (Oct 19 2026, opening night), read from the card's log of his last 20 games.
+    static let nba: [LogStat] = [
+        LogStat(key: "pts", title: "POINTS", pitcher: false, start: 20, roles: ["nba"]),
+        LogStat(key: "reb", title: "REBOUNDS", pitcher: false, start: 6, roles: ["nba"]),
+        LogStat(key: "ast", title: "ASSISTS", pitcher: false, start: 5, roles: ["nba"]),
+        LogStat(key: "fg3m", title: "THREES", pitcher: false, start: 2, roles: ["nba"]),
+        LogStat(key: "pra", title: "PTS+REB+AST", pitcher: false, start: 30, roles: ["nba"]),
+    ]
+
     /// The stats a player card's log reads, by the card's type.
     static func forCard(type: String?) -> [LogStat] {
         if let type, nflTypes.contains(type) { return nfl.filter { $0.roles.contains(type) } }
+        if type == "nba" { return nba }
         return all(pitcher: type == "pitcher")
     }
     /// Whether a card of this type is who the stat is about.
@@ -74,6 +84,7 @@ struct LogStat: Hashable, Identifiable {
     /// A prop label read for the card's type: the NFL's markets for a
     /// football card, MLB's otherwise.
     static func reading(_ raw: String?, type: String?) -> LogStat? {
+        if type == "nba" { return readingNba(raw) }
         guard let type, nflTypes.contains(type) else { return reading(raw, pitcher: type == "pitcher") }
         guard var m = raw?.lowercased() else { return nil }
         m = m.replacingOccurrences(of: #"\s*[0-9]+(\.[0-9]+)?$"#, with: "", options: .regularExpression)
@@ -94,6 +105,25 @@ struct LogStat: Hashable, Identifiable {
         }
         guard let key, let stat = nfl.first(where: { $0.key == key }), stat.roles.contains(type) else { return nil }
         return stat
+    }
+
+    /// An NBA prop label or market ("POINTS", "points 26.5", "PTS+REB+AST", "points_rebounds_assists").
+    static func readingNba(_ raw: String?) -> LogStat? {
+        guard var m = raw?.lowercased() else { return nil }
+        m = m.replacingOccurrences(of: #"\s*[0-9]+(\.[0-9]+)?$"#, with: "", options: .regularExpression)
+        m = m.replacingOccurrences(of: "player_", with: "").replacingOccurrences(of: "_", with: " ")
+        m = m.split(separator: " ").joined(separator: " ")
+        let key: String?
+        switch m {
+        case "points", "pts": key = "pts"
+        case "rebounds", "reb": key = "reb"
+        case "assists", "ast": key = "ast"
+        case "threes", "threes made", "3pm", "3pt made", "three pointers made": key = "fg3m"
+        case "pts+reb+ast", "points rebounds assists", "pra": key = "pra"
+        default: key = nil
+        }
+        guard let key else { return nil }
+        return nba.first { $0.key == key }
     }
 
     static func reading(_ raw: String?, pitcher: Bool) -> LogStat? {
