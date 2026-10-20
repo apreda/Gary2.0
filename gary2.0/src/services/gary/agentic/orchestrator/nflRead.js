@@ -70,7 +70,7 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
   const situation = [where.text, (desk.match(/^Kickoff: [^\n]*/m) || [])[0], (desk.match(/^Kickoff weather[^\n]*/m) || [])[0]].filter(Boolean).join('\n');
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam, line)],
+    ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS', quarterbacks(data, sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK'), homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', injuriesAsReported(desk)],
     ['HOW GOOD THEY ARE', `${strength(data, awayTeam, before)}\n${strength(data, homeTeam, before)}`],
@@ -90,7 +90,7 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   const where = spot(data, homeTeam, awayTeam, gameDate || before);
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}${where.neutral ? ` · ${where.neutral}` : ''}`,
-    lineStory(lines, homeTeam, awayTeam, lineOf(desk)), '',
+    lineStory(lines, homeTeam, awayTeam), '',
     'Quarterbacks:', quarterbacks(data, sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK'), homeTeam, awayTeam, before), '',
     'Injury report:', injuriesAsReported(desk), '',
     'How good they are:', `${strength(data, awayTeam, before)}\n${strength(data, homeTeam, before)}`, '',

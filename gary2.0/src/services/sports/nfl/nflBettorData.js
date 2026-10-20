@@ -135,14 +135,21 @@ export function spot(d, homeTeam, awayTeam, gameDate) {
 const median = (xs) => { const s = xs.filter((x) => x != null && Number.isFinite(Number(x))).map(Number).sort((a, b) => a - b); if (!s.length) return null; const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const half = (x) => (x == null ? null : Math.round(x * 2) / 2);
 
-/** The line's path from the line watch: the six-book median at each poll, from the first board to `until`. */
+// The ticket's book: the first of these the line watch has for the game, the order oddsService walks to price a pick.
+const TICKET_BOOKS = ['fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm', 'fanatics', 'betway', 'ballybet', 'betparx', 'rebet'];
+
+/** The line's path from the line watch, from the first board to `until`, at the ticket's own book, so the path ends on
+ * the number Gary bets (a six-book median beside the ticket gave him two numbers half a point apart, and he argued the
+ * half point). Falls back to the median of the books when none of the ticket's books is on file. */
 export async function linePath(db, gameId, until = new Date()) {
   if (!db || gameId == null) return null;
-  const { data, error } = await db.from('odds_snapshots')
+  const { data: rows, error } = await db.from('odds_snapshots')
     .select('seen_at,line_vendor,spread_home,moneyline_home,moneyline_away,total')
     .eq('sport', 'americanfootball_nfl').eq('game_id', String(gameId)).lte('seen_at', new Date(until).toISOString())
     .order('seen_at').limit(5000);
-  if (error || !data?.length) return null;
+  if (error || !rows?.length) return null;
+  const book = TICKET_BOOKS.find((b) => rows.some((r) => r.line_vendor === b));
+  const data = book ? rows.filter((r) => r.line_vendor === book) : rows;
   const latest = new Map(); const path = []; let last = null;
   const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)), books: rs.length }; };
   for (const r of data) {
@@ -152,19 +159,10 @@ export async function linePath(db, gameId, until = new Date()) {
   return { path, now: board(new Date(until).toISOString()) };
 }
 
-/** The ticket's own spread from THE LINE ("Spread: A +3.0 (-105) | B -3.0 (-115)"), as the favorite and points. */
-export function ticketSpread(line, homeTeam, awayTeam) {
-  const m = String(line || '').match(/^Spread: (.+?) ([+-]?\d+(?:\.\d+)?|PK) \([^)]*\) \| (.+?) ([+-]?\d+(?:\.\d+)?|PK) \(/m);
-  if (!m) return null;
-  const pts = (x) => (x === 'PK' ? 0 : Number(x));
-  const a = { team: m[1].trim(), pts: pts(m[2]) }, b = { team: m[3].trim(), pts: pts(m[4]) };
-  const home = [a, b].find((x) => x.team === homeTeam) || (a.team === awayTeam ? b : a);
-  return { home: home.pts };
-}
-
-/** The path in words: where it opened, each spread move (one per poll), where it is now, and the ticket's number when
- * its book differs from the median (Oct 19 2026: Saints @ Lions, the card said 6.5 and the path said 7). */
-export function lineStory(lines, homeTeam, awayTeam, ticketLine = null) {
+/** The path in words: where it opened, each spread move (one per poll) and where it is now. The ticket's own book is
+ * not set against the median: a note that it was half a point better became the main reason for 8 of 23 test board
+ * bets, and half a point decides only the games that land on the number. */
+export function lineStory(lines, homeTeam, awayTeam) {
   if (!lines?.now || !lines.path?.length) return 'No line history on file for this game.';
   const side = (h) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}` : `${awayTeam} -${h}`);
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -177,7 +175,6 @@ export function lineStory(lines, homeTeam, awayTeam, ticketLine = null) {
   for (const { p } of polls) { if (p.spread_home !== prev) { moves.push(`  ${when(p.at)}: ${side(p.spread_home)}`); prev = p.spread_home; } }
   const kept = moves.length > 12 ? [...moves.slice(0, 4), `  … ${moves.length - 8} more moves …`, ...moves.slice(-4)] : moves;
   return [`Opened (${when(open.at)}): ${side(open.spread_home)}, total ${open.total}`,
-    kept.length ? `Spread moves since (median of the books we watch):\n${kept.join('\n')}` : 'The spread has not moved since it opened.',
-    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (opened ${open.total}) · moneylines ${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}`,
-    ...(() => { const t = ticketSpread(ticketLine, homeTeam, awayTeam); return t && t.home !== lines.now.spread_home ? [`The ticket on this game is ${side(t.home)}: its book's number, not the median of the books.`] : []; })()].join('\n');
+    kept.length ? `Spread moves since:\n${kept.join('\n')}` : 'The spread has not moved since it opened.',
+    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (opened ${open.total}) · moneylines ${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}`].join('\n');
 }

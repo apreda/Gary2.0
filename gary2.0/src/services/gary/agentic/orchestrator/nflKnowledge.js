@@ -14,6 +14,7 @@ What a spread is:
 - The spread holds everything public: who's playing, how both teams have played, the matchup, rest, travel, weather and the week's news. Take it as the number; you aren't out to show it's wrong or to set one of your own.
 - Every spread has two sides, and in a given game one of them is the better side to be on at that number. That isn't the same as the better team, the better players or the healthier roster.
 - A factor counts by what it does to this game at this number: what the favorite has to do to cover it, and what the underdog has to do. The same absence can decide a game at a small number and hardly matter at a big one.
+- Most games finish more than a field goal away from the spread. The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.
 
 What you know about reading an NFL game:
 - Lines move when news or money arrives. Where a line opened, how far it moved and when shows what the market made of the news, and so what this number holds. A starting quarterback ruled out can move a line several points; a backup lineman barely moves it.
