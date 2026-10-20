@@ -16,6 +16,8 @@ struct TaleOfTapeSection: View {
     let statsData: [StatData]
     let injuries: TeamInjuries?
     let garyPickedHome: Bool  // True if Gary picked the home team
+    /// The game's league: each club's name opens its team card.
+    var league: String? = nil
     
     @State private var isExpanded: Bool = false
     private let maxCollapsedStats = 8  // Show only first 8 stats when collapsed
@@ -343,6 +345,7 @@ struct TaleOfTapeSection: View {
                         .foregroundStyle(greenAccent)
                         .fitsOneLine()
                         .frame(width: 90, alignment: .leading)
+                        .opensTeamCard(leftTeam, league: league)
                     
                     Spacer()
                     
@@ -351,6 +354,7 @@ struct TaleOfTapeSection: View {
                         .foregroundStyle(.white.opacity(0.7))
                         .fitsOneLine()
                         .frame(width: 110, alignment: .trailing)
+                        .opensTeamCard(rightTeam, league: league)
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)

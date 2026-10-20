@@ -272,7 +272,7 @@ struct DartsView: View {
         .background(Color.clear.sheet(item: $cardFor) { dart in DartPlayerCard(dart: dart) })
         .background(Color.clear.sheet(item: $streakCard) { sel in PlayerCardByName(name: sel.name, league: sel.league) })
         .background(Color.clear.sheet(item: $teamCard) { sel in
-            DartsTeamCard(sel: sel, streaks: board?.streaks ?? []) { row in
+            TeamCardByName(name: sel.name, league: sel.league, streaks: board?.streaks ?? []) { row in
                 // Card to card: close the team card, then open the player's.
                 teamCard = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { handoffCard = row }
@@ -695,27 +695,35 @@ struct DartPlayerCard: View {
     }
 }
 
-/// The standard team card (the Hub's), opened from any team name on Darts:
-/// the day board, the league's streaks and the day's player cards come
-/// with it, the same inputs the Hub hands it.
-struct DartsTeamCard: View {
-    let sel: DartsView.TeamCardSel
-    let streaks: [StreakRow]
-    let onPlayer: (PlayerInsightCardRow) -> Void
+/// The standard team card (the Hub's) by name, from any page: the founder's
+/// law (Aug 4 2026) is that a tapped team name opens the team card
+/// everywhere. The Hub's retirement (Sep 24 2026) took its taps with it and
+/// left only Darts; Oct 20 2026 they came back to the Picks game pages and
+/// Winners. The day board, the league's streaks and the day's player cards
+/// come with it, the same inputs the Hub handed it.
+struct TeamCardByName: View {
+    let name: String
+    let league: String
+    /// The page's own streak rows (Darts); nil fetches the day's.
+    var streaks: [StreakRow]? = nil
+    /// A page that hands a player off itself (Darts); nil opens his card over this one.
+    var onPlayer: ((PlayerInsightCardRow) -> Void)? = nil
     @State private var board: TomorrowBoard?
     @State private var intel: [PlayerInsightCardRow] = []
+    @State private var dayStreaks: [StreakRow] = []
+    @State private var playerCard: PlayerInsightCardRow?
     @State private var loaded = false
 
-    private var hubLeague: HubLeagueSel { HubLeagueSel.from(sel.league) ?? .mlb }
+    private var hubLeague: HubLeagueSel { HubLeagueSel.from(league) ?? .mlb }
     private var signal: Signal {
-        Signal(league: hubLeague, kind: .teamRecord, headline: sel.name, detail: "", game: "", value: "", tone: .neutral)
+        Signal(league: hubLeague, kind: .teamRecord, headline: name, detail: "", game: "", value: "", tone: .neutral)
     }
     /// Tonight's row: the one game this club plays in the league today.
     private var tonight: TomorrowBoardRow? {
         let rows = (board?.board ?? []).filter { r in
-            guard HubCardIdentity.sameLeague(r.league, sel.league) else { return false }
-            let away = HubCardIdentity.matchesTeam(sel.name, name: r.away_team, abbr: r.away_abbr, league: sel.league)
-            let home = HubCardIdentity.matchesTeam(sel.name, name: r.home_team, abbr: r.home_abbr, league: sel.league)
+            guard HubCardIdentity.sameLeague(r.league, league) else { return false }
+            let away = HubCardIdentity.matchesTeam(name, name: r.away_team, abbr: r.away_abbr, league: league)
+            let home = HubCardIdentity.matchesTeam(name, name: r.home_team, abbr: r.home_abbr, league: league)
             return away != home
         }
         return rows.first
@@ -726,15 +734,18 @@ struct DartsTeamCard: View {
             if loaded {
                 HubTeamCardSheet(
                     signal: signal, related: [], tonight: tonight, board: board,
-                    streaks: streaks.filter { HubCardIdentity.sameLeague($0.league, sel.league) },
+                    streaks: (streaks ?? dayStreaks).filter { HubCardIdentity.sameLeague($0.league, league) },
                     intel: intel,
                     cardFor: { name in
                         guard let name else { return nil }
                         let names = intel.map { $0.player_name ?? $0.payload?.name ?? "" }
                         return HubCardIdentity.uniquePlayerIndex(name, names: names).map { intel[$0] }
                     },
-                    onPlayer: onPlayer,
+                    onPlayer: { row in
+                        if let onPlayer { onPlayer(row) } else { playerCard = row }
+                    },
                     onSignal: { _ in })
+                    .sheet(item: $playerCard) { PlayerInsightSheet(signal: nil, prefetched: $0) }
             } else {
                 ProgressView().tint(GaryColors.gold).frame(maxWidth: .infinity, maxHeight: .infinity).background(GaryColors.darkBg.ignoresSafeArea())
             }
@@ -743,10 +754,52 @@ struct DartsTeamCard: View {
             let today = SupabaseAPI.todayEST()
             async let b = SupabaseAPI.fetchTodayBoard(date: today)
             async let rows = SupabaseAPI.fetchPlayerIntelRows(date: today)
+            async let s = fetchedStreaks(today)
             board = await b
-            intel = await rows.filter { HubCardIdentity.sameLeague($0.league, sel.league) && $0.payload != nil }
+            intel = await rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
+            dayStreaks = await s
             loaded = true
         }
+    }
+
+    /// The day's streak rows when the page didn't bring its own.
+    private func fetchedStreaks(_ day: String) async -> [StreakRow] {
+        guard streaks == nil else { return [] }
+        return (try? await SupabaseAPI.fetchDarts(date: day))?.streaks ?? []
+    }
+}
+
+/// A team name that opens its team card. MLB, NFL and NBA have the card; a
+/// name from any other league stays plain text.
+struct TeamCardLink: ViewModifier {
+    let name: String?
+    let league: String?
+    @State private var open = false
+
+    static let leagues: Set<String> = ["MLB", "NFL", "NBA"]
+
+    private var target: (name: String, league: String)? {
+        guard let n = name?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty,
+              let lg = league?.uppercased(), Self.leagues.contains(lg) else { return nil }
+        return (n, lg)
+    }
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let t = target {
+            Button { open = true } label: { content.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the team card")
+                .background(Color.clear.sheet(isPresented: $open) { TeamCardByName(name: t.name, league: t.league) })
+                .onGaryTour { verb, arg in if verb == "teamtap", arg.caseInsensitiveCompare(t.name) == .orderedSame { open = true } }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func opensTeamCard(_ name: String?, league: String?) -> some View {
+        modifier(TeamCardLink(name: name, league: league))
     }
 }
 

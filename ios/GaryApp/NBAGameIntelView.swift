@@ -116,7 +116,7 @@ struct NBAGameIntelView: View {
                plate(side: "away") != nil || plate(side: "home") != nil {
                 ScoutArmsLayout(title: "THE STARS", take: take,
                                 left: plate(side: "away"), right: plate(side: "home"),
-                                onName: { starCard = $0 })
+                                onName: { starCard = $0 }, league: "NBA")
                     .background(Color.clear.sheet(item: $starCard) { p in
                         if let id = p.playerId.flatMap({ Int($0) }) {
                             PlayerInsightSheet(signal: nil, directPlayerId: id, directName: p.fullName ?? p.name,
@@ -133,6 +133,7 @@ struct NBAGameIntelView: View {
             GameH2HSection(edges: mine)
             PlayerIntelSection(matchup: matchup, league: "NBA", gameId: exactGameID, gameDate: gameDate)
             NBAAvailabilityCard(awayLabel: awayAbbr, homeLabel: homeAbbr,
+                                awayName: sides.away, homeName: sides.home,
                                 away: injuries(abbr: awayAbbr), home: injuries(abbr: homeAbbr))
             if let gameID = exactGameID, let date = ExactGameIdentity.easternDate(of: scheduledTip) ?? gameDate {
                 LineLadderCard(sportKey: "basketball_nba", gameDate: date, gameID: gameID, league: "NBA",
@@ -151,6 +152,8 @@ struct NBAGameIntelView: View {
 private struct NBAAvailabilityCard: View {
     let awayLabel: String
     let homeLabel: String
+    var awayName: String? = nil
+    var homeName: String? = nil
     let away: [Signal]
     let home: [Signal]
     @State private var open: Set<UUID> = []
@@ -159,12 +162,13 @@ private struct NBAAvailabilityCard: View {
         s.headline.components(separatedBy: " is ").first ?? s.headline
     }
 
-    @ViewBuilder private func column(_ label: String, _ rows: [Signal]) -> some View {
+    @ViewBuilder private func column(_ label: String, _ team: String?, _ rows: [Signal]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(label)
                 .font(GaryFonts.data(10, .semibold)).tracking(1.1)
                 .foregroundStyle(.white.opacity(0.5))
                 .padding(.bottom, 6)
+                .opensTeamCard(team ?? label, league: "NBA")
             if rows.isEmpty {
                 Text("None listed")
                     .font(.system(size: 13))
@@ -209,8 +213,8 @@ private struct NBAAvailabilityCard: View {
                     .font(GaryFonts.display(13)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                 HStack(alignment: .top, spacing: 16) {
-                    column(awayLabel, away)
-                    column(homeLabel, home)
+                    column(awayLabel, awayName, away)
+                    column(homeLabel, homeName, home)
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 12)

@@ -417,7 +417,7 @@ struct FootballGameIntelView: View {
             if let take = quarterbackTake, quarterbackPlate(home: false) != nil || quarterbackPlate(home: true) != nil {
                 ScoutArmsLayout(title: "THE QUARTERBACKS", take: take,
                                 left: quarterbackPlate(home: false), right: quarterbackPlate(home: true),
-                                onName: { qbCard = $0 })
+                                onName: { qbCard = $0 }, league: league)
                     .background(Color.clear.sheet(item: $qbCard) { p in
                         if let id = p.playerId.flatMap({ Int($0) }) {
                             PlayerInsightSheet(signal: nil, directPlayerId: id, directName: p.fullName ?? p.name, directLeague: isCollege ? "NCAAF" : "NFL")

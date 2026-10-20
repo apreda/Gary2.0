@@ -345,8 +345,10 @@ struct LabPlayView: View {
         if !play.isProp, let game = play.game, before.count >= 5 {
             let open = GameLogPanel.opening(for: game)
             VStack(alignment: .leading, spacing: 12) {
-                Text(((play.pickedHome ? game.homeTeam : game.awayTeam) ?? "").uppercased())
+                let club = (play.pickedHome ? game.homeTeam : game.awayTeam) ?? ""
+                Text(club.uppercased())
                     .font(GaryFonts.display(15)).tracking(1.4).foregroundStyle(GaryColors.gold)
+                    .opensTeamCard(club, league: play.candidate.league)
                 GameLogPanel(games: before, measure: open.0, league: play.candidate.league,
                              opening: open.1, price: LabFormat.price(play.candidate.odds))
                     .id(candidateID)
@@ -391,21 +393,41 @@ struct LabPlayView: View {
         return ScoutTrioData(matchup: matchup, row: row, board: board, wire: [], commence: LabFormat.parseISO(play.candidate.commence_time), gameDate: play.candidate.game_date)
     }
 
+    /// AWAY @ HOME, each club's name opening its team card; one line when it
+    /// fits, the clubs stacked when it doesn't.
+    @ViewBuilder private func matchupTitle(_ play: WinnersPlay) -> some View {
+        if let g = play.game, let away = g.awayTeam, let home = g.homeTeam {
+            let lg = play.candidate.league
+            let club = { (name: String) in
+                Text(name.uppercased()).font(GaryFonts.display(17)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opensTeamCard(name, league: lg)
+            }
+            let at = Text("@").font(GaryFonts.display(14)).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) { club(away); at; club(home) }
+                VStack(alignment: .leading, spacing: 2) { club(away); at; club(home) }
+            }
+        } else {
+            Text(matchupLine(play).uppercased()).font(GaryFonts.display(17)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     @ViewBuilder private func matchupPlate(_ play: WinnersPlay) -> some View {
         let tabs = matchupTabs
         if !tabs.isEmpty {
             let current = tabs.contains(matchupTab) ? matchupTab : tabs[0]
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(matchupLine(play).uppercased()).font(GaryFonts.display(17)).tracking(0.6).foregroundStyle(GaryColors.warmWhite)
-                        .fixedSize(horizontal: false, vertical: true)
+                    matchupTitle(play)
                     Spacer()
                 }
                 if tabs.count > 1 { LabTextTabs(items: tabs, selected: Binding(get: { current }, set: { matchupTab = $0 }), size: 13) }
                 switch current {
                 case "TEAMS":
                     if let game = play.game, let home = game.homeTeam, let away = game.awayTeam {
-                        TaleOfTapeSection(homeTeam: home, awayTeam: away, statsData: game.statsData ?? [], injuries: game.injuries, garyPickedHome: play.pickedHome)
+                        TaleOfTapeSection(homeTeam: home, awayTeam: away, statsData: game.statsData ?? [], injuries: game.injuries, garyPickedHome: play.pickedHome, league: play.candidate.league)
                     }
                 case "PITCHERS":
                     if let d = scoutData(play) { ScoutArmsSection(d: d).padding(.horizontal, -16) }

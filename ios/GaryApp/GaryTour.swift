@@ -39,6 +39,8 @@ import UIKit
 //   darts day 2026-09-24 | off   Darts reads that day's darts (relaunch to load)
 //   darts primetime|form|all     open that featured-row page
 //   darts card Pete Alonso       open that player's card
+//   teamtap Boston Celtics       tap that team name wherever it shows (opens its team card)
+//   h2htap                       tap the game page's head-to-head (the series owner's team card)
 //
 // The observer is only registered in DEBUG (`start()` is a no-op in Release),
 // so nothing can post these commands in a shipping binary.

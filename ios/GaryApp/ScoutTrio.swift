@@ -240,7 +240,7 @@ struct ScoutArmsSection: View {
            !take.isEmpty,
            d.awayStarter != nil || d.homeStarter != nil {
             ScoutArmsLayout(title: "THE ARMS", take: take, left: plate(d.awayStarter), right: plate(d.homeStarter),
-                            onName: { card = $0 })
+                            onName: { card = $0 }, league: "MLB")
                 .background(Color.clear.sheet(item: $card) { p in
                     PlayerCardByName(name: p.fullName ?? p.name, league: "MLB")
                 })
@@ -281,6 +281,8 @@ struct ScoutArmsLayout: View {
     let right: ScoutArmsPlate?
     /// A tapped name opens the player card when the page supplies this.
     var onName: ((ScoutArmsPlate) -> Void)? = nil
+    /// The page's league: each plate's club opens its team card.
+    var league: String? = nil
 
     @ViewBuilder private func stack(_ st: ScoutArmsStack) -> some View {
         if let value = st.value {
@@ -322,6 +324,7 @@ struct ScoutArmsLayout: View {
                 if let team = p.team {
                     ScoutMock.kicker(team, size: 11.5, wraps: true)
                         .fixedSize(horizontal: false, vertical: true)
+                        .opensTeamCard(team, league: league)
                 }
                 // Identity by position — two stacks may share a label (a debut
                 // arm prints "Season" twice; two passing rows can share a unit).
@@ -434,9 +437,16 @@ struct ScoutNewsCard: View {
 /// payload, so a thin day simply drops the section instead of showing a stub.
 struct GameH2HSection: View {
     let edges: [Signal]
+    @State private var ownerCard = false
 
     private var row: Signal? {
         edges.first { $0.kind == .h2h && !($0.h2h?.meetings ?? []).isEmpty }
+    }
+    /// The club that owns the series: the ledger opens its team card, as it
+    /// did on the Hub (a dead tap here from Sep 24 to Oct 20 2026).
+    private var owner: String? {
+        guard let h = row?.h2h else { return nil }
+        return [h.dominant_name, h.dominant].compactMap { $0 }.first { !$0.isEmpty }
     }
 
     var body: some View {
@@ -446,11 +456,17 @@ struct GameH2HSection: View {
                     .font(GaryFonts.display(13)).tracking(0.8)
                     .foregroundStyle(GaryColors.gold)
                     .padding(.horizontal, 14).padding(.top, 12)
-                HeadToHeadRow(s: row) { _ in }
+                HeadToHeadRow(s: row) { _ in
+                    if owner != nil, TeamCardLink.leagues.contains(row.league.label) { ownerCard = true }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(ScoutMock.cardShape)
             .padding(.horizontal, 16)
+            .background(Color.clear.sheet(isPresented: $ownerCard) {
+                TeamCardByName(name: owner ?? "", league: row.league.label)
+            })
+            .onGaryTour { verb, _ in if verb == "h2htap", owner != nil { ownerCard = true } }
         }
     }
 }
