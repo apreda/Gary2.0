@@ -220,18 +220,6 @@ describe('scheduler reliability policy', () => {
     expect(budget.limitingReason).toBe('game_start');
   });
 
-  it('fails fast when another still-live trigger is already due', () => {
-    const now = new Date('2026-08-15T18:00:00Z');
-    const current = entry({ id: 1, start: '2026-08-15T20:00:00Z' });
-    const overdue = {
-      ...entry({ id: 2, start: '2026-08-15T21:00:00Z' }),
-      triggerTime: new Date('2026-08-15T17:59:00Z'),
-    };
-    const budget = childExecutionBudget({ entry: current, pendingEntries: [overdue], now });
-    expect(budget.timeoutMs).toBe(0);
-    expect(budget.limitingReason).toBe('next_trigger');
-  });
-
   it('keeps independent NFL and shared clocks from terminating each other', () => {
     const now = new Date('2026-08-15T18:29:00Z'); // 2:29 PM ET
     const yankeesT60 = {
@@ -323,6 +311,14 @@ describe('scheduler reliability policy', () => {
     expect(pending).toEqual([]);
     expect(budget.limitingReason).toBe('hard_cap');
     expect(budget.timeoutMs).toBe(45 * 60_000);
+  });
+
+  it('never budgets a run against a game already due and waiting for a worker (Oct 21 2026)', () => {
+    const now = new Date('2026-10-21T22:00:00Z');
+    const game = (id, lead) => entry({ sport: 'basketball_wnba', id, start: '2026-10-21T23:30:00Z', lead });
+    const budget = childExecutionBudget({ entry: game(1, 90), pendingEntries: [game(2, 90), game(3, 90), game(1, 60)], now });
+    expect(budget.timeoutMs).toBe(28 * 60_000);
+    expect(budget.nextTriggerAt.toISOString()).toBe('2026-10-21T22:30:00.000Z');
   });
 
   it('never stops an NFL child because another game in its rolling pool comes due', () => {

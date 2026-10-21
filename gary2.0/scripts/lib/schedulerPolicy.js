@@ -407,7 +407,9 @@ export function childExecutionBudget({
     .filter((candidate) => !isScheduleEntryHeld(candidate) && !isScheduleEntryRetired(candidate))
     .filter((candidate) => isSportFetchRetryEntry(candidate) || !gameHasStarted(candidate, clock))
     .map((candidate) => asMillis(candidate?.triggerTime))
-    .filter(Number.isFinite)
+    // A trigger already due is a game waiting for a free worker, not a later
+    // clock. Counting it gave every run ahead of it a zero budget (Oct 21 2026).
+    .filter((trigger) => Number.isFinite(trigger) && trigger > clock)
     .reduce((earliest, trigger) => Math.min(earliest, trigger), Infinity);
   if (Number.isFinite(nextTrigger)) {
     candidates.push({ reason: 'next_trigger', at: nextTrigger - safety });
