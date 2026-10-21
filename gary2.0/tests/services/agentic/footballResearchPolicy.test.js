@@ -17,6 +17,8 @@ describe('football research policy', () => {
     expect(researchConcurrencyForSport('MLB', 'codex-cli')).toBe(3);
     expect(researchConcurrencyForSport('baseball_mlb', 'anthropic')).toBe(1);
     expect(researchConcurrencyForSport('basketball_nba', 'claude-cli')).toBe(3);
+    // The live research session is the subscription cascade (Claude CLI first).
+    expect(researchConcurrencyForSport('basketball_nba', 'subscription-cascade')).toBe(3);
     expect(researchConcurrencyForSport('basketball_nba', 'anthropic')).toBe(1);
   });
 
