@@ -4,8 +4,9 @@
 // commit of the 152-106 run) word for word. The fixtures under
 // tests/fixtures/nba-april/ are April's prompts rendered from that tree;
 // the only differences allowed are the tool sentences of a brain that no
-// longer carries tools, listed here one by one. Anything else that drifts
-// fails this file.
+// longer carries tools, listed here one by one, and the Oct 21 2026 lines
+// that leaned toward the underdog, rewritten to read both ways (founder).
+// Anything else that drifts fails this file.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -33,6 +34,8 @@ describe('NBA reads the Apr 8 2026 prompts (the winning era)', () => {
     const expected = adapt(fixture('pass1.txt'), [
       ['Use the scout report + research briefing as your starting point, then investigate with fetch_stats where you need deeper evidence.',
        'Use the scout report + research briefing as your starting point — they are your evidence.'],
+      ['whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.',
+       'whether the spread has accounted for them correctly for THIS game: too much, too little, or about right. Records and rankings describe what has happened — they are evidence about both teams, not a verdict on the spread by themselves.'],
     ]);
     const rendered = trim(buildPass1Message('[DESK]', home, away, today, 'basketball_nba', spread, { game: {} }));
     expect(rendered).toBe(expected);
@@ -42,6 +45,7 @@ describe('NBA reads the Apr 8 2026 prompts (the winning era)', () => {
     const expected = adapt(fixture('pass25.txt'), [
       ['Only call more tools if a critical factual gap blocks your decision.', 'The desk you have already read is your complete evidence.'],
       ['every number from scout report, tools, or grounding.', 'every number from the scout report or other provided data.'],
+      ['2. RECORDS: Records describe what happened, not what will happen.', "2. RECORDS: Records describe what happened — they are evidence about both teams, not a prediction of tonight's result."],
     ]);
     const rendered = trim(buildNbaPass25Message(home, away, spread, ''));
     // The season label is computed (April hard-coded 2025-2026); compare on April's season.
@@ -76,11 +80,12 @@ describe('NBA reads the Apr 8 2026 prompts (the winning era)', () => {
       ['- Use ONLY the provided Scout Report and BDL API data for current rosters', '- Use ONLY the provided Scout Report for current rosters'],
       ['only cite H2H if it exists in scout report or fetched data for this game', 'only cite H2H if it exists in the scout report or other provided data for this game'],
       ['USE ONLY: Scout Report (rosters, injuries, standings), BDL API stats, and Google Search Grounding.', 'USE ONLY: the Scout Report (rosters, injuries, standings) and the materials provided in this conversation.'],
+      ['Risk-taking is in your DNA as a gambler. Your 30 years', 'Risk-taking is in your DNA as a gambler, and the risk can sit on either side — laying points or taking them. Your 30 years'],
     ]);
     const rendered = trim(buildNbaSystemPrompt(getConstitution('basketball_nba')));
     expect(rendered).toBe(expected);
     expect(rendered).toContain('You are a sharp NBA gambler');
-    expect(rendered).toContain('Risk-taking is in your DNA as a gambler.');
+    expect(rendered).toContain('Risk-taking is in your DNA as a gambler,');
     expect(rendered).toContain('<core_principles>');
     expect(rendered).toContain('<formatting_rules>');
     expect(rendered).toContain('[CRITICAL] NO SPECULATIVE PLAYER IMPACT PREDICTIONS');

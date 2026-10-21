@@ -79,7 +79,7 @@ ${scoutReport}
 
 Tonight's spread: ${favoriteLabel} -${absSpread} / ${underdogLabel} +${absSpread}
 
-The spread number you see tonight was set AFTER the schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game. Records and rankings describe what has happened — they are not reasons for or against a spread.
+The spread number you see tonight was set AFTER the schedule, injuries, and rest situation were known. The question is not whether these factors exist — everyone can see them — but whether the spread has accounted for them correctly for THIS game: too much, too little, or about right. Records and rankings describe what has happened — they are evidence about both teams, not a verdict on the spread by themselves.
 
 ${NBA_PASS1_INVESTIGATE_LINES}
 

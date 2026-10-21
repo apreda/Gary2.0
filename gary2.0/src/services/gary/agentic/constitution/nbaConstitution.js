@@ -3,6 +3,8 @@
  * constitution (commit 57e5ddd4), the last regular-season tree of the
  * 152-106 run — verbatim. The May 26-27 playoff batch (playoff bullets,
  * the deleted THE SPREAD section) never reaches it. See nbaWinningEra.js.
+ * Oct 21 2026 (founder): the lines that leaned toward the underdog now read
+ * both ways; every awareness point in them stays.
  */
 /**
  * NBA Constitution - NBA-Specific Context for Gary
@@ -42,7 +44,7 @@ export const NBA_CONSTITUTION = {
 - Star player availability, minute restrictions, and rest decisions can materially change game context
 - Back-to-backs, travel burden, and schedule density are widely known and often priced quickly
 - NBA outcomes are volatile game-to-game — separate stable team baseline from short-window noise
-- Public attention concentrates on marquee teams and nationally televised games — narrative pressure can affect how numbers are set
+- Public attention concentrates on marquee teams and nationally televised games — narrative pressure can affect how numbers are set, in either direction
 - Roster depth matters more than casual observers realize — when stars sit, the gap between bench units often determines outcomes
 - Mid-season trades and buyout additions take time to integrate — new players need to learn systems and build chemistry before the addition translates to results
 
@@ -59,7 +61,7 @@ Use the exact tag shown in the scout report for this game.
 
 ### THE SPREAD
 - NBA spreads move quickly once injury news breaks — by tip-off, most absences are fully reflected in the number
-- Public betting volume in the NBA gravitates toward big-market teams, nationally televised games, and teams on winning streaks — lines for those games reflect different market dynamics than under-the-radar matchups
+- Public betting volume in the NBA gravitates toward big-market teams, nationally televised games, and teams on winning streaks — lines for those games reflect different market dynamics than under-the-radar matchups, and a team's popularity alone doesn't make it the wrong side or the right one
 - Rest advantages (opponent on a back-to-back, long road trip) are widely known and typically priced — the edge is in HOW a team performs in those spots, not that the spot exists
 - Home court advantage in the NBA is real but varies significantly by arena and team
 
@@ -91,7 +93,7 @@ Use the exact tag shown in the scout report for this game.
     `Before outputting INVESTIGATION COMPLETE, include both sections in your Pass 1 synthesis:
 Case for ${homeTeam}
 Case for ${awayTeam}
-(Each case should be 2-3 paragraphs explaining why that side is the right bet at this spread number tonight. Even for heavy underdogs, there is always a case — the spread may be too large, the matchup may favor them in specific ways, or situational factors may close the gap.)`
+(Each case should be 2-3 paragraphs explaining why that side is the right bet at this spread number tonight. There is always a case for either side — the spread may be too large or too small, the matchup may favor either team in specific ways, and situational factors may close the gap or widen it.)`
 };
 
 
