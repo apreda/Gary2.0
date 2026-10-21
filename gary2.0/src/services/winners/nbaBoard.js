@@ -3,8 +3,9 @@
 // His bets are a separate look: about 50 minutes before the first tip he hasn't boarded (the picks run 90 minutes out),
 // he sees every picked game still to tip, fresh, without his write-ups: the line, who's out, the lineups, rest, the
 // last game, the season series. He names the games he would put his own money on, in his order, any number or none.
-// Saved per game (winners_nba_board); SQL seat_nba_board seats a bet whose pick is on the same side, his top five a
-// day, 28 minutes before tip, after the late-news check. Oct 20 is opening night (every NBA pick goes on Winners).
+// Saved per game (winners_nba_board); SQL seat_nba_board seats a bet whose pick is on the same side, five a night
+// spread over it (two from the first third of tip times, four through the second; Oct 21 2026), 28 minutes before tip,
+// after the late-news check. Oct 20 is opening night (every NBA pick goes on Winners).
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 import { parseBoardBets, boardDecisions } from './nflBoard.js';

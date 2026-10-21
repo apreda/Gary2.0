@@ -7,13 +7,14 @@ Gary picks every game for the Picks page; Winners holds the ones he bets. The wo
   picked game still to start, fresh, and names the ones he would bet, in order. `seat_nfl_board` (SQL) seats his top
   five whose pick is on the same side, 75 minutes before kickoff, after late news.
 - **NBA** (`nbaBoard.js`, from Oct 21 2026): the same look about 50 minutes before the first tip he hasn't boarded;
-  `seat_nba_board` seats his top five a day, 28 minutes before tip. (Oct 20, opening night, seated every NBA pick.)
+  `seat_nba_board` seats five a night, 28 minutes before tip, spread over the night (Oct 21 2026): the first third of
+  tip times can take two, the first two thirds four, the late games the rest. (Oct 20, opening night, seated every NBA pick.)
 - **The other game picks**: `garyBet.js` (play or pass, the amount) and `garyCard.js` (he places each pick on today's
   card and names his book); `seat_the_card` (SQL) seats the book 75 minutes before a start. Big games: the sweep.
 - `lateNews.js`: before a pick seats, availability is compared with what it was at the pick; Gary stands or
   scratches. A scratch keeps the pick in the app, faded, with his reason, and never grades it.
-- `winnersRules.js`, `winnersAdmissions.js`, `winnersBook.js`, `winnersProps.js` (props: the reader selects the clear
-  and lean ones with its own stake), `winnersScore.js`, `winnersBigGames.json`, `ticketIdentity.js`,
+- `winnersRules.js`, `winnersAdmissions.js`, `winnersBook.js`, `winnersProps.js` (props: clear only since Oct 21
+  2026, a lean only when nothing else would make it that day; six a day for MLB/NFL/college, three a night for the NBA), `winnersScore.js`, `winnersBigGames.json`, `ticketIdentity.js`,
   `garyBigGameStake.js`, `winnersDatabaseCall.js`. Darts are not on Winners.
 - The database does the gating: `supabase/migrations/` (`admit_winners_candidate`, `seat_the_card`, `seat_nfl_board`,
   `seat_nba_board`, `winners_daily_floor` waits for late news, `scratch_game_pick`).

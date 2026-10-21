@@ -1,8 +1,9 @@
 /** Prospective core prop comparison. No quota and no rewritten public picks.
  * PROPS ON WINNERS (restored Oct 8 2026, founder: "props under this system" — the Sep 16-24 selection that went
  * 25-17, +$1,045): Gary makes every prop pick; the reader compares a game window's published props, grades each,
- * and only clear or lean can enter, at the reader's stake ($100 to $1,000). At most six a day, one per player,
- * two per game (SQL finish_winners_props). Gary's own bet step is not asked for props. */
+ * and only clear can enter (Oct 21 2026; a lean only when nothing else would that day), at the reader's stake ($100
+ * to $1,000). At most six a day for MLB/NFL/college and three a night for the NBA, one per player, two per game
+ * (SQL finish_winners_props). Gary's own bet step is not asked for props. */
 import { cascadeRead } from '../gary/agentic/orchestrator/modelCascade.js';
 import { canonicalProp, winnersCandidate } from './winnersAdmissions.js';
 import { readModelJson } from '../gary/pickdesk/modelJson.js';
@@ -89,16 +90,24 @@ export function readPropSelection(raw,candidates,now) {
   return {value,reason:null};
 }
 export const parsePropSelection=(raw,candidates,now)=>readPropSelection(raw,candidates,now).value;
+// Clear only (founder, Oct 21 2026): a lean goes on only in the pool's last window of the day, when nothing else is
+// on. Each pool has its own cap: MLB/NFL/college six (two in the first third of start times, four through the
+// second), the NBA three (one, two). SQL finish_winners_props holds the same rules.
+const PROP_CAPS = { main: { total: 6, early: 2, middle: 4 }, NBA: { total: 3, early: 1, middle: 2 } };
 export function chooseProps(assessment,run) {
-  const prior=run.input_snapshot.prior || [], candidates=run.input_snapshot.candidates;
+  const snap=run.input_snapshot, prior=snap.prior || [], candidates=snap.candidates;
+  const cap=PROP_CAPS[snap.pool==='NBA'?'NBA':'main'];
+  const lastStart=Math.max(...(snap.plan || []).map(p=>Date.parse(p.start)));
+  const lastWindow=candidates.some(c=>Date.parse(c.commence_time)===lastStart);
   let used=prior.length, early=prior.filter(p=>p.cohort===1).length, middle=prior.filter(p=>p.cohort<=2).length;
   const players=new Set(prior.map(p=>`${p.league}|${canonicalProp(p.pick_snapshot).player}`));
   const games=new Map();
   for(const p of prior) {const key=`${p.league}|${p.game_id}`; games.set(key,(games.get(key)||0)+1);}
   return {...assessment,ranked_candidates:assessment.ranked_candidates.map(row=>{
     const c=candidates.find(c=>c.id===row.candidate_id),player=`${c.league}|${canonicalProp(c.pick_snapshot).player}`,game=`${c.league}|${c.game_id}`;
-    const selected=['clear','lean'].includes(row.assessment) && used<6 && !players.has(player) && (games.get(game)||0)<2
-      && (c.cohort!==1 || early<2) && (c.cohort>2 || middle<4);
+    const grade=row.assessment==='clear' || (row.assessment==='lean' && lastWindow && used===0);
+    const selected=grade && used<cap.total && !players.has(player) && (games.get(game)||0)<2
+      && (c.cohort!==1 || early<cap.early) && (c.cohort>2 || middle<cap.middle);
     if(selected) {used++;if(c.cohort===1)early++;if(c.cohort<=2)middle++;players.add(player);games.set(game,(games.get(game)||0)+1);}
     return {...row,selected};
   })};

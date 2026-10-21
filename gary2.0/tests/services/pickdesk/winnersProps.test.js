@@ -7,7 +7,8 @@ import {hitterDistribution,probOver} from '../../../src/services/gary/pickdesk/p
 const now=Date.parse('2026-09-17T15:00:00Z');
 const candidate=(id,extra={})=>({...winnersCandidate({date:'2026-09-17',league:'MLB',kind:'prop',pick:{game_id:String(id),player:`Player ${id}`,prop:'hits 0.5',line:.5,bet:'over',odds:110,commence_time:'2026-09-17T16:00:00Z',rationale:'Gary relies on the verified matchup evidence.'},evidence:{observedAt:'2026-09-17T14:00:00Z',deskText:'The verified matchup evidence comes from the full original player history.'}}),id,cohort:3,...extra});
 const row=(id,rank=1,assessment='lean')=>({candidate_id:id,rank,assessment,reason:'A supported preference with normal uncertainty.',opposing_case:'The opposing pitcher can still prevent a hit.',price_reason:'The offered +110 price is considered against that uncertainty.',stake_dollars:250,stake_reason:'A supported preference at a fair price merits a modest amount.',source_quote:'verified matchup evidence',rationale_quote:'verified matchup evidence'});
-const reading=(cs,grade='lean')=>({summary:'Compare the original supported prop arguments.',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grade))});
+// Clear by default: Winners takes clear props only since Oct 21 2026.
+const reading=(cs,grade='clear')=>({summary:'Compare the original supported prop arguments.',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grade))});
 describe('daily prop Winners',()=>{
  it('ends a stalled database claim without issuing a duplicate claim',async()=>{
   vi.useFakeTimers();
@@ -113,6 +114,19 @@ describe('daily prop Winners',()=>{
   const cs=Array.from({length:8},(_,i)=>candidate(i+1,{cohort:i<4?1:3}));
   const picked=chooseProps(reading(cs),{input_snapshot:{candidates:cs}}).ranked_candidates.filter(r=>r.selected);
   expect(picked.map(r=>r.candidate_id)).toEqual([1,2,5,6,7,8]);
+ });
+ it('takes clear props only; a lean only in the last window when nothing else is on; the NBA takes three a night (Oct 21 2026)',()=>{
+  const early='2026-09-17T16:00:00Z',last='2026-09-17T23:00:00Z',plan=[{start:early,cohort:1},{start:last,cohort:3}];
+  const picks=(cs,grades,snap={})=>chooseProps({summary:'compared',ranked_candidates:cs.map((c,i)=>row(c.id,i+1,grades[i]))},{input_snapshot:{candidates:cs,prior:[],plan,...snap}})
+   .ranked_candidates.filter(r=>r.selected).map(r=>r.candidate_id);
+  const atEarly=[candidate(1,{cohort:1}),candidate(2,{cohort:1})];
+  const atLast=[candidate(3,{commence_time:last}),candidate(4,{commence_time:last})];
+  expect(picks(atEarly,['lean','lean'])).toEqual([]);
+  expect(picks(atLast,['lean','lean'])).toEqual([3]);
+  expect(picks(atLast,['clear','lean'])).toEqual([3]);
+  expect(picks(atLast,['lean','lean'],{prior:[{league:'MLB',game_id:'9',pick_snapshot:{player:'Someone Else'},cohort:1}]})).toEqual([]);
+  const nba=[1,1,2,2,3,3].map((cohort,i)=>candidate(i+1,{league:'NBA',cohort}));
+  expect(picks(nba,nba.map(()=>'clear'),{pool:'NBA'})).toEqual([1,3,5]);
  });
  it('never truncates a record, uses external data or publishes on model failure',async()=>{
   const c=candidate(1),run={input_snapshot:{candidates:[c]}};

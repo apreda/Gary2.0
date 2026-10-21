@@ -351,4 +351,56 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
       expect(() => sql(`SET ROLE anon; SELECT ${call}`), call).toThrow(/permission denied/);
     }
   });
+
+  // Oct 18-21 2026 on top: the card caps, the NFL and NBA boards, then clear-only props, the NBA's own three props
+  // a night and his five NBA bets spread over the night (20261021200000).
+  describe('Oct 21 2026: clear-only props, NBA props, the NBA five spread over the night', () => {
+    beforeAll(() => {
+      for (const name of ['20261018013000_winners_card_cap.sql', '20261018020000_winners_card_cap_by_league.sql', '20261019230000_winners_nfl_board.sql',
+        '20261019240000_winners_candidate_delete.sql', '20261019250000_winners_nba_opening_night.sql', '20261019300000_winners_nba_board.sql',
+        '20261021200000_winners_nba_props_and_spread.sql']) migration(name);
+    });
+    const game = (league, gameId, minutes) => sql(`INSERT INTO public.daily_slate(date,league,away_team,home_team,commence_time,bdl_game_id,game_status) VALUES('${day}','${league}','Away','Home',date_trunc('minute',now())+interval '${minutes} minutes',${gameId},'')`);
+    const prop = (id, league, gameId, player) => sql(`INSERT INTO public.winners_candidates(id,game_date,league,kind,game_id,ticket_key,market_key,pick_text,odds,commence_time,pick_snapshot,evidence_snapshot,policy_version,status,created_at)
+      OVERRIDING SYSTEM VALUE SELECT ${id},'${day}','${league}','prop','${gameId}','t${id}','m${id}','${player} over points 20.5 @ -115',-115,s.commence_time,
+       jsonb_build_object('player','${player}','bet','over','prop','points 20.5','line','20.5','rationale','${player} has gone 18 outs or more in nine straight starts.'),
+       jsonb_build_object('deskText','${player} has gone 18 outs or more in nine straight starts, the record shows it.','observedAt',now()-interval '1 hour'),
+       'exact-ticket-v2','pending',now()-interval '2 minutes' FROM public.daily_slate s WHERE s.bdl_game_id=${gameId}`);
+    const graded = (id, assessment) => reading(id, { assessment });
+    const trimmed = (id) => sql(`SELECT detail->>'trimmed' FROM public.winners_decision_events WHERE candidate_id=${id} AND event='curated'`);
+
+    it('NBA props run as their own pool: one in the first third of the night, clear only', () => {
+      game('NBA', 401, 50); game('NBA', 402, 50); game('NBA', 403, 200);
+      prop(41, 'NBA', 401, 'Trae Young'); prop(42, 'NBA', 402, 'Paolo Banchero'); prop(43, 'NBA', 401, 'Jalen Johnson');
+      const run = claimProps();
+      expect(run.input_snapshot).toMatchObject({ pool: 'NBA', capacity: 3, used: 0 });
+      expect(finishProps(run, [graded(41, 'clear'), graded(42, 'clear'), graded(43, 'lean')])).toMatchObject({ completed: true, admitted: 1 });
+      expect(board(41)).toMatchObject({ league: 'NBA', kind: 'prop' });
+      expect(board(42)).toBeNull(); expect(trimmed(42)).toBe('past the daily cap');
+      expect(board(43)).toBeNull(); expect(trimmed(43)).toBe('lean: Winners takes clear props only');
+    });
+    it('a lean goes on only in the last window when nothing else is on that day', () => {
+      game('MLB', 501, 50);
+      prop(51, 'MLB', 501, 'Tarik Skubal'); prop(52, 'MLB', 501, 'Riley Greene');
+      expect(finishProps(claimProps(), [graded(51, 'lean'), graded(52, 'lean')])).toMatchObject({ completed: true, admitted: 1 });
+      expect(board(51)).toMatchObject({ league: 'MLB' }); expect(trimmed(52)).toBe('lean: Winners takes clear props only');
+      prop(53, 'MLB', 501, 'Kerry Carpenter');
+      expect(finishProps(claimProps(), [graded(53, 'lean')])).toMatchObject({ completed: true, admitted: 0 });
+      prop(54, 'MLB', 501, 'Spencer Torkelson');
+      expect(finishProps(claimProps(), [graded(54, 'clear')])).toMatchObject({ completed: true, admitted: 1 });
+    });
+    it('his five NBA bets: two from the first third of tip times, so a late game still gets its place', () => {
+      for (const [id, minutes] of [[61, 15], [62, 15], [63, 15], [64, 15], [65, 20], [66, 25]]) {
+        game('NBA', 600 + id, minutes);
+        seed(id, play(300), { league: 'NBA', minutes, gameId: String(600 + id) });
+        sql(`UPDATE public.winners_candidates SET commence_time=(SELECT commence_time FROM public.daily_slate WHERE bdl_game_id=${600 + id}) WHERE id=${id}`);
+      }
+      for (const [id, rank] of [[61, 1], [62, 2], [63, 3], [64, 4], [66, 5]]) {
+        sql(`INSERT INTO public.winners_nba_board(game_date,game_id,matchup,decision,side,rank,bets,games) VALUES('${day}','${600 + id}','Away @ Home','bet','Tigers',${rank},5,6)`);
+      }
+      clearNews();
+      expect(Number(svc(`SELECT public.seat_nba_board('${day}')`))).toBe(3);
+      expect([61, 62, 63, 64, 66].map((id) => !!board(id))).toEqual([true, true, false, false, true]);
+    });
+  });
 });
