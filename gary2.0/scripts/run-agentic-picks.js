@@ -695,8 +695,9 @@ async function main() {
 
             // Per-sport expected row counts — drift is a silent iOS rendering bug
             // MLB = 16 since Jul 22 2026 (team-stats block restored after the
-            // gp<100 date-bomb fix; 15 when BDL lacks batting_r for Runs/Game).
-            const expectedRowCount = { 'NBA': 15, 'MLB': 16, 'NFL': 6, 'NCAAF': 7 }[sportLabel];
+            // gp<100 date-bomb fix; 15 when BDL lacks batting_r for Runs/Game). NBA = 18 (stored
+            // that way all of last season; the 15 here was stale).
+            const expectedRowCount = { 'NBA': 18, 'MLB': 16, 'NFL': 6, 'NCAAF': 7 }[sportLabel];
             if (expectedRowCount && statsData.length !== expectedRowCount) {
               console.warn(`   ⚠️ ${sportLabel}: Expected ${expectedRowCount} Tale of Tape rows, got ${statsData.length} — check scout report builder`);
             }
