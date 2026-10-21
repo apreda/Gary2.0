@@ -315,6 +315,16 @@ describe('scheduler reliability policy', () => {
     expect(budget.deadlineAt.toISOString()).toBe('2026-08-15T18:45:00.000Z');
   });
 
+  it('gives each NBA game that shares a trigger its own time to run (Oct 21 2026)', () => {
+    const now = new Date('2026-10-21T22:00:00Z');
+    const game = (id) => entry({ sport: 'basketball_nba', id, start: '2026-10-21T23:30:00Z', lead: 90 });
+    const pending = pendingEntriesForChildBudget(game(21717858), [game(21717924), game(21717926)], new Set(['shared']));
+    const budget = childExecutionBudget({ entry: game(21717858), pendingEntries: pending, now });
+    expect(pending).toEqual([]);
+    expect(budget.limitingReason).toBe('hard_cap');
+    expect(budget.timeoutMs).toBe(45 * 60_000);
+  });
+
   it('never stops an NFL child because another game in its rolling pool comes due', () => {
     const now = new Date('2026-08-15T18:00:00Z');
     const nfl = entry({ sport: 'americanfootball_nfl', id: 10, start: '2026-08-15T20:00:00Z' });

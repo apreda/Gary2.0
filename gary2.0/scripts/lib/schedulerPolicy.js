@@ -452,6 +452,10 @@ export function pendingEntriesForChildBudget(entry, pendingEntries = [], activeB
   // trigger as a deadline, every game but the last was given a zero budget
   // (Oct 3 2026: six of seven 7 PM games failed at T-90 before running).
   if (entry?.sport?.key === 'icehockey_nhl') return [];
+  // The NBA has the same shape: its 7:30 games share a trigger (Oct 21 2026:
+  // three 6 PM runs got a 5:58 PM deadline from games still waiting for a
+  // worker, and Minnesota-Miami failed at T-90 without running).
+  if (entry?.sport?.key === 'basketball_nba') return [];
   // A retry is for failed work, not a deadline that kills healthy research.
   // The NFL and college rolling pools already dispatch other games.
   if (entry?.sport?.key === 'americanfootball_ncaaf' || entry?.sport?.key === 'americanfootball_nfl') return [];
