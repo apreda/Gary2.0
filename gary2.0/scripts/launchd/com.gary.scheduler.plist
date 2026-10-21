@@ -10,6 +10,8 @@
 		<string>/Users/adam.preda/.local/bin/claude</string>
 		<key>GARY_GROUNDING_VIA_CLAUDE</key>
 		<string>1</string>
+		<key>GARY_METERED_SEARCH_CAP</key>
+		<string>0</string>
 		<key>GARY_MLB_BRAIN_MODEL</key>
 		<string>claude-opus-5-5</string>
 		<key>GARY_MODEL_OVERRIDE</key>

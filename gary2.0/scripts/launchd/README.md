@@ -11,13 +11,19 @@ Backup `.bak` files are not additional jobs.
 | `com.gary.keepawake` | AC/idle sleep inhibition | Continuous; KeepAlive |
 | `com.gary.scheduler-watchdog` | Heartbeat recovery, morning health, disk and coverage observations | Every 120 seconds; coverage/disk every 10 minutes; morning check during 07:00–08:00 |
 | `com.gary.operational-alerts` | Report pick/prop/data failures and heartbeat to ordinary cloud email monitoring | Every 60 seconds; no AI calls |
-| `com.gary2.daily-insights` | Content pipeline (a college pick fills its own game's cards at pick time) | 06:00, 12:00 |
+| `com.gary2.daily-insights` | Content pipeline (a college pick fills its own game's cards at pick time) | 05:00, 12:00 (the day turns at 5 AM) |
 | `com.gary2.daily-results` | Results, football proof, insight grading, pulse | 02:00, 06:45, 11:30, 16:45, 20:00 |
 | `com.gary2.live-scores` | Local score polling | Every 120 seconds |
 | `com.gary2.live-scores-watchdog` | Recover stalled score polling | Every 120 seconds |
 | `com.gary2.recap-backfill` | Fill missing game recaps | 08:30, 10:30, 17:00, 20:15 |
 | `com.gary.darts` | Darts: throw the day's leans from 09:15 ET, fill short categories hourly, scratch players who sit | Every 20 minutes |
-| `com.gary.marquee` | Marquee: choose and lock the MLB game of the day (Darts featured row) from standings, national TV and the probable starters | 7:05, 8:05, 9:05, 10:05 AM ET |
+| `com.gary.marquee` | Marquee: choose and lock the MLB game of the day (Darts featured row) from standings, national TV and the probable starters | 5:05 through 10:05 AM, hourly |
+| `com.gary2.football-availability` | NFL availability and practice report lanes (`../../run-insight-connections.js`) | 5:05 AM through 11:05 PM, hourly |
+| `com.gary.subscription-model-worker` | Model calls for edge functions on the subscription | Continuous; KeepAlive |
+| `com.gary.log-rotate` | Rotate Gary's logs | 04:15 |
+
+`com.gary.ig-post` (every 5 minutes) and `com.gary.free-pick-video` (every 2 minutes) run scripts in
+`../../../GaryMarketing/`; their plists are installed in `~/Library/LaunchAgents/` only, not kept here.
 
 The canonical checkout is `/Users/adam.preda/Gary2.0`. These are exact
 machine configurations with absolute paths, not portable cloud templates.

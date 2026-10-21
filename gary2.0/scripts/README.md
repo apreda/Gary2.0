@@ -1,17 +1,17 @@
 # Scripts — the jobs
 
-## At a glance (launchd, Oct 13 2026)
+## At a glance (launchd, refreshed Oct 21 2026; full inventory in `launchd/README.md`)
 
 | Job | Runs | When |
 |---|---|---|
-| `com.gary.scheduler` | `scheduler.js` (spawns each game's pick run, `run-agentic-picks.js`, at T-90 with later tiers) | always on; restart after code changes it imports |
-| `com.gary.winners` | `run-winners-board.js --watch` (late news, seating Gary's card, the daily floor) | always on, every 2 minutes |
-| `com.gary.darts` | `run-darts.js` | :00, :20, :40 |
-| `com.gary2.daily-insights` | `run-daily-content.js` (slate, board, wire, insights) | 6 AM and noon |
-| `com.gary2.daily-results` | grading (`run-all-results.js`) and insight grading | 2 AM, 6:45 AM and through the day |
-| `com.gary.marquee` | `run-marquee.js` | mornings, hourly |
-| `com.gary2.football-availability` | `../run-insight-connections.js` (NFL availability and practice report) | mornings, hourly |
-| `com.gary2.live-scores` (+ watchdog) | `poll-live-scores.js` | every 2 minutes |
+| `com.gary.scheduler` | `scheduler.js`: writes the day's plan, slate and board at 4:45 AM ET, then spawns each game's pick (`run-agentic-picks.js`) at T-90 with retries at T-60/T-30/T-15, and the props runner for MLB, NFL and NBA games | always on; restart after code changes it imports (each pick is a fresh process) |
+| `com.gary.winners` | `run-winners-board.js --watch` (the NFL and NBA boards, Gary's card, late news, seating, the daily floor) | always on |
+| `com.gary.darts` | `run-darts.js` (MLB, NFL, NBA) | :00, :20, :40 |
+| `com.gary2.daily-insights` | `run-daily-content.js` (slate, board, wire, insights, cards) | 5 AM and noon |
+| `com.gary2.daily-results` | grading (`run-all-results.js`), football proof, insight grading | 2:00, 6:45, 11:30, 16:45, 20:00 |
+| `com.gary.marquee` | `run-marquee.js` | 5:05 through 10:05 AM, hourly |
+| `com.gary2.football-availability` | `../run-insight-connections.js` (NFL availability and practice report) | 5:05 AM through 11:05 PM, hourly |
+| `com.gary2.live-scores` (+ watchdog) | `poll-live-scores.js` (also writes NBA finals into team_games) | every 2 minutes |
 | `com.gary.operational-alerts` | `run-operational-alerts.js` | every minute |
 | `com.gary.subscription-model-worker` | `run-subscription-model-worker.js` (model calls for edge functions) | always on |
 | `com.gary.ig-post`, `com.gary.free-pick-video` | Instagram posting and the free-pick video (in `../../GaryMarketing/`) | every 5 / 2 minutes |
@@ -35,8 +35,8 @@ once only after storage was observed unavailable and then recovered; completed
 stages are not replayed. Invalid credentials fail immediately. Waiting,
 recovery, and stage outcomes are recorded in
 `~/Library/Logs/Gary2.0/daily-content-stages.jsonl`.
-The scheduled overnight card phase has a 05:45 Eastern cutoff covering work,
-waits, and retries so it releases the LaunchAgent before the 6 AM daily run.
+The scheduled overnight card phase has a 04:45 Eastern cutoff covering work,
+waits, and retries so it releases the LaunchAgent before the 5 AM daily run.
 Explicit dated card backfills retain their individual stage caps.
 
 The daily pipeline repairs `daily_slate` before BOARD, Wire, insights, and
@@ -53,57 +53,40 @@ An outage that outlasts the recovery budget remains a failure. Neither component
 restarts Supabase or treats a live scheduler PID as proof of fresh content.
 
 ### `run-agentic-picks.js`
-Runs current MLB, NFL and NCAAF game lanes; NBA remains seasonal. NHL and
-NCAAB are retired. MLB uses the frozen June engine; college uses Sol.
+One game pick run per sport flag; the scheduler runs one game at a time by its BDL id. `--test` writes to the test
+tables (`test_daily_picks`); never re-run a pick that is already published.
 ```bash
-node scripts/run-agentic-picks.js --nba
-node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1
-node scripts/run-agentic-picks.js --ncaaf --matchup "Alabama" --limit 1
+node scripts/run-agentic-picks.js --nba --game-id 21717855 --test
+node scripts/run-agentic-picks.js --nfl --matchup "Patriots" --limit 1 --test
+node scripts/run-agentic-picks.js --ncaaf --matchup "Alabama" --limit 1 --test
 ```
+After Gary decides, the pick is published at his own line for MLB, the NFL, college and the NBA (no "best line"
+swap); see `../src/services/README.md` for where each sport's decision lives.
 
-### Props runners (`run-agentic-mlb-props.js`, `run-agentic-nfl-props.js`)
-One props system: the props desk brain (`src/services/pickdesk/propsBrain.js`
-over the game desk + THE PROP BOARD + THE PROP SHEETS). The old multi-pass
-orchestrator props pipeline (NBA/NHL runners) was deleted Sep 2 2026.
-```bash
-node scripts/run-agentic-mlb-props.js --store=1
-```
-
-### `run-agentic-nfl-props.js`
-Runs the agentic pipeline for NFL player props, including the supported TD
-markets in the same atomic per-game pass.
-```bash
-node scripts/run-agentic-nfl-props.js --store=1
-```
+### Props runners (`run-agentic-mlb-props.js`, `run-agentic-nfl-props.js`, `run-agentic-nba-props.js`)
+One props system: the props desk brain (`../src/services/gary/pickdesk/propsBrain.js`; the NBA's desk is
+`nbaPropsDesk.js`). These runners store by default: a test run passes `--test` where the runner has it, or stays off
+production. No college props, ever.
 
 ### `run-agentic-props-cli.js`
-Interactive CLI for running props pipelines with custom options.
+Interactive CLI for the props desks (MLB, NFL and NBA). It stores by default.
 
-### `run-all-results.js` / `run-results-for-date.js`
-Grade picks against final scores and update results in Supabase.
-The main CLI composes provider, storage, grading and recap modules under
-[`lib/results/`](lib/results/README.md); import those modules for fixture tests.
-```bash
-node scripts/run-all-results.js
-node scripts/run-results-for-date.js --date 2025-02-20
-```
+### `run-all-results.js`
+Grades picks against final scores and updates results in Supabase. It composes provider, storage, grading and
+recap modules under [`lib/results/`](lib/results/README.md); import those modules for fixture tests.
+
+### Tests that move the clock
+A test that shifts `Date.now()` must set `GARY_BDL_SHARED_CACHE_DIR` to a scratch folder (the shared BDL cache is
+on disk and read by the live jobs) and must not probe the official NBA injury report in loops (its CDN blocks this
+host).
 
 ## Environment Variables
 
 Set the variables required by the lane being run in its local environment;
 never copy production credentials into fixture previews or tests:
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- Existing Claude/GPT subscription bridge configuration — see
-  `src/services/agentic/orchestrator/modelCascade.js`; metered Anthropic/OpenAI
-  routes and Gemini are disabled. College decisions use Sol.
-- `BALLDONTLIE_API_KEY` — odds, stats, and player data
-- `NCAAF_THE_ODDS_API_KEY` — active server-side The Odds API key for current NCAAF player props
-- `TANK01_RAPIDAPI_KEY` — DFS salaries and projections
-
-## Pick Generation Flow
-
-1. **Data Collection** — Fetch games, stats, and odds from BallDontLie
-2. **AI Analysis** — Approved sport desk and subscription model routing; MLB
-   retains the frozen June engine, and college uses Sol.
-3. **Storage** — Save picks to Supabase
-4. **Results** — Nightly grading via `run-all-results.js`
+- The Claude/GPT subscription bridge: `../src/services/gary/agentic/orchestrator/subscriptionRoutes.js` (the order)
+  and `modelCascade.js`; metered Anthropic/OpenAI routes and Gemini are disabled. Gary is Opus.
+- `BALLDONTLIE_API_KEY` — games, odds, stats, props and injuries
+- `THE_ODDS_API_KEY` (college prop odds also read `NCAAF_THE_ODDS_API_KEY`) — The Odds API backup (500-credit plan, metered by `oddsApiBudget.js`)
+- `GARY_JEV_*` — Jev prop assessments
