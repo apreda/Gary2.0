@@ -34,7 +34,7 @@ describe('ONE props system (Sep 2 2026): the orchestrator props mode is gone', (
   it('the props CLI runs desk lanes only — no context builder, no orchestrator fallback', () => {
     const cli = src('scripts/run-agentic-props-cli.js');
     expect(cli).not.toMatch(/buildContext|analyzeGame|getPropsConstitution/);
-    expect(cli).toContain("has no props desk lane (MLB and NFL only)");
+    expect(cli).toContain("has no props desk lane (MLB, NFL and NBA only)");
   });
   it('isExplicitPropsPass detects a real pass and nothing else', () => {
     expect(isExplicitPropsPass({ picks: [], no_play: true })).toBe(true);
