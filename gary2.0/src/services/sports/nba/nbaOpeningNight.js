@@ -2,8 +2,9 @@
  * BEFORE THE FIRST GAME (founder, Oct 13 2026). Until a team has played this season there are no numbers for it,
  * as there are none for any fan: "we have to try to come up with a solution so Gary still has context of the teams
  * and the matchup without having stats". For each team, last season in one line (record, conference finish, how the
- * playoffs ended) and this season's roster, newcomers marked. No last-season stats, and no list of who left ("I also
- * don't really want Gary worried about who's not on the team").
+ * playoffs ended), this season's roster with newcomers marked, and who left. No last-season stats. Who left joined
+ * Oct 21 2026 (founder, after the opener's Celtics read never weighed Jaylen Brown's trade: "this is important but
+ * only really for night one").
  *
  * Last season's rosters come from BDL box scores (scripts/build-nba-season-rosters.js writes
  * data/nba/season-rosters-<season>.json); without that file the roster prints unmarked.
@@ -47,6 +48,29 @@ export function playoffStory(games, teamId) {
   });
 }
 
+/**
+ * Last season's players missing from this season's roster, most minutes with the team first. A player who moved on
+ * to another team during last season left before it ended, so he is not listed.
+ */
+export function departures(data, teamId, roster) {
+  const now = new Set(roster.map((p) => String(p.id)));
+  const teams = data?.teams || {};
+  return Object.entries(teams[teamId]?.players || {})
+    .filter(([id, p]) => !now.has(id) && !Object.entries(teams).some(([t, other]) => t !== String(teamId) && other.players[id]?.first > p.last))
+    .sort((a, b) => b[1].minutes - a[1].minutes)
+    .map(([id, p]) => ({ id: Number(id), name: p.name }));
+}
+
+async function departuresLine(data, teamId, roster) {
+  const left = departures(data, teamId, roster);
+  if (!left.length) return 'Left since last season: none';
+  const active = await ballDontLieService.getPlayersActive('basketball_nba', { 'player_ids[]': left.map((p) => p.id), per_page: 100 })
+    .then((r) => Object.fromEntries((r?.data || []).map((p) => [p.id, p.team?.full_name])))
+    .catch(() => null);
+  const where = (p) => (!active ? '' : active[p.id] ? ` (now with the ${active[p.id]})` : ' (not on an NBA roster)');
+  return `Left since last season: ${left.map((p) => `${p.name}${where(p)}`).join(', ')}`;
+}
+
 async function lastSeasonLine(team, season) {
   const standings = await ballDontLieService.getNbaStandings(season).catch(() => []);
   const row = (standings || []).find((r) => r.team?.id === team.id);
@@ -81,9 +105,11 @@ export async function nbaOpeningNightSection(homeTeam, awayTeam, season) {
     const team = findTeam(teams, teamName);
     if (!team) { blocks.push(`${tag} ${teamName}: unavailable`); continue; }
     const roster = await ballDontLieService.getActivePlayersComplete('basketball_nba', team.id).catch(() => []);
-    blocks.push([`${tag} ${teamName}`, `  ${await lastSeasonLine(team, season - 1)}`,
-      `  ${roster.length ? rosterLine(roster, data, team.id, season - 1) : 'This season\'s roster: unavailable'}`].join('\n'));
+    const lines = [`${tag} ${teamName}`, `  ${await lastSeasonLine(team, season - 1)}`,
+      `  ${roster.length ? rosterLine(roster, data, team.id, season - 1) : 'This season\'s roster: unavailable'}`];
+    if (data && roster.length) lines.push(`  ${await departuresLine(data, team.id, roster)}`);
+    blocks.push(lines.join('\n'));
   }
   const rule = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-  return `BEFORE THE FIRST GAME — LAST SEASON'S FINISH AND THIS SEASON'S ROSTER\n${rule}\n${blocks.join('\n\n')}\n${rule}`;
+  return `BEFORE THE FIRST GAME — LAST SEASON'S FINISH, THIS SEASON'S ROSTER AND WHO LEFT\n${rule}\n${blocks.join('\n\n')}\n${rule}`;
 }
