@@ -3,7 +3,11 @@ import { isPublishedGamePick } from '../../src/services/gary/gamePickPublication
 import { ncaafSpreadExcluded } from '../../src/services/sports/ncaaf/ncaafGamePolicy.js';
 
 const HOUR = 3_600_000;
-const leagueOf = row => String(row?.league || ({ baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', icehockey_nhl: 'NHL' })[row?.sport] || '').toUpperCase();
+const SPORT_LEAGUE = { baseball_mlb: 'MLB', americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', icehockey_nhl: 'NHL' };
+const leagueOf = row => String(row?.league || SPORT_LEAGUE[row?.sport] || '').toUpperCase();
+// Leagues whose game picks sit on the scheduler's manual hold (GARY_MANUAL_GAME_PICKS, sport keys) publish no picks on
+// purpose, so there is no pick coverage to check (Oct 22 2026: NHL, held since Oct 6, mailed a failure every evening).
+export const heldPickLeagues = (env = process.env) => new Set(String(env.GARY_MANUAL_GAME_PICKS || '').split(',').map(s => SPORT_LEAGUE[s.trim()]).filter(Boolean));
 const idOf = row => row?.bdl_game_id ?? row?.game_id;
 const keyOf = row => `${leagueOf(row)}|${idOf(row)}`;
 const rowsOf = value => Array.isArray(value) ? value : [];
@@ -186,7 +190,7 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
  */
 // College picks make their first attempt four hours before kickoff (scheduler FOOTBALL_RETRY_LEAD_TIMES_MINUTES).
 const FOOTBALL_FIRST_ATTEMPT_MS = 240 * 60 * 1000;
-export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [] }) {
+export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [], heldLeagues = heldPickLeagues() }) {
   const nowMs = new Date(now).getTime();
   // The first ordinary content run starts at 06:00 ET; overnight is cards only.
   // Before its completion window, absent content is pending, not a failed feed.
@@ -308,7 +312,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       // legitimate outcome from a failed generation; never fabricate content.
       add(`wire:${league}`, wire.some(fresh) ? 'ok' : 'warn', `${wire.length} current-date items; ${wire.length ? 'check freshness' : 'empty feed: inspect Wire stage status before diagnosing provider failure'}`);
     }
-    if (!errors.picks && !invalidPickSources.has('picks') && (league !== 'NFL' || (!errors.weekly && !invalidPickSources.has('weekly')))) {
+    if (!heldLeagues.has(league) && !errors.picks && !invalidPickSources.has('picks') && (league !== 'NFL' || (!errors.weekly && !invalidPickSources.has('weekly')))) {
       const picked = games.filter(game => allPicks.some(pick => keyOf(pick) === keyOf(game) && (pick.saved_date === date || (pick.commence_time && etDate(pick.commence_time) === date))));
       // A college game the spread rule (23+) sets aside gets no pick on purpose; it is not missing (Oct 10 2026).
       const setAside = league === 'NCAAF' ? games.filter(game => !picked.includes(game) && ncaafSpreadExcluded(game)) : [];

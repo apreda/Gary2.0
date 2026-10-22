@@ -18,6 +18,12 @@ function snapshot(games = [game(1)]) {
 const check = (report, id) => report.checks.find(c => c.id === id);
 
 describe('morning output health', () => {
+  it('skips a league on the game-pick hold (Oct 22 2026: NHL held since Oct 6 still mailed coverage failures)', () => {
+    const data = snapshot([game(1), game(2, 'NHL', '2026-09-05T10:00:00Z')]);
+    expect(check(evaluateMorningHealth({ date, now, data, heldLeagues: new Set() }), 'picks:NHL').status).toBe('fail');
+    expect(check(evaluateMorningHealth({ date, now, data, heldLeagues: new Set(['NHL']) }), 'picks:NHL')).toBeUndefined();
+    expect(check(evaluateMorningHealth({ date, now, data, heldLeagues: new Set(['NHL']) }), 'picks:MLB')).toBeDefined();
+  });
   it('retains valid pregame college evidence after kickoff while refreshing future games', () => {
     const day = '2026-09-19';
     const data = snapshot([{...game(1,'NCAAF','2026-09-19T16:00:00Z'),date:day}]);
