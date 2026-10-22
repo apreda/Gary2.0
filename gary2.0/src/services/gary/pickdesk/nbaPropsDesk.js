@@ -1,8 +1,8 @@
 /**
  * THE NBA PROPS DESK (Oct 19 2026, for the Oct 20 opener; founder: "picks page is just for people wanting picks for
- * each game with 2 props"). The NFL props desk's shape: the game as the game pick read it, Gary's published side as
- * data, the props people bet for each team's main players, each player's own recent games, and the question. No
- * formula, no projection, no hit rates.
+ * each game with 2 props"). The NFL props desk's shape: the game as the game pick reads it (nbaRead.js, from Oct 22)
+ * with the day's news, Gary's published side as data, the props people bet for each team's main players, each
+ * player's own recent games, and the question. No formula, no projection, no hit rates.
  *
  * The menu: points, rebounds, assists, threes and points + rebounds + assists, the main over/under line of each.
  * A player is on it when the books price him as a main player (a points line of 12.5 or more, rebounds 7.5 or
@@ -17,6 +17,7 @@ import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
+import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
@@ -140,11 +141,16 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   const boardMarkets = board.markets || menu;
 
   // givenDesk: a test's stand-in when the game's desk can't be built yet (the night before, lineups don't exist).
-  const deskText = givenDesk || (!nocache && await publishedDesk(game)) || await (async () => {
+  const scoutText = givenDesk || (!nocache && await publishedDesk(game)) || await (async () => {
     const scout = await buildScoutReport(game, 'basketball_nba', { nocache });
     return scout?.garyText || scout?.text || '';
   })();
-  if (!deskText) throw new Error('NBA props desk: scout report rendered empty');
+  if (!scoutText) throw new Error('NBA props desk: scout report rendered empty');
+  // The game as the side pick reads it (nbaRead.js, Oct 22 2026), built from the same desk, with the day's news; the
+  // full desk if that fails.
+  const read = await buildNbaReadStory(scoutText, { homeTeam, awayTeam, gameId: game.bdl_game_id ?? game.id, book: game.line_vendor })
+    .catch((e) => { console.warn(`   [NBA Props] NBA story unavailable (${e.message}); the full desk`); return null; });
+  const deskText = read ? `${read.story}${read.news ? `\n\nTODAY'S NEWS\n${read.news}` : ''}` : scoutText;
   console.log(`   [NBA Props] desk ${deskText.length} chars · board ${board.players.size} players, ${boardMarkets.length} markets`);
 
   await snapshotPropMenu({ markets: boardMarkets, matchup, gameId: game.bdl_game_id ?? game.id, gameDate: etDate(game.commence_time), league: 'NBA' });

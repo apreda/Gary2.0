@@ -37,14 +37,15 @@ export function nbaLineOf(desk) {
 
 // The injury report as reported, in plain facts. The desk's labels steer ("PRICED IN", "ESTABLISHED ABSENCES (already
 // reflected in line + all stats above — do NOT cite these players by name as reasons for your pick)"); the read keeps
-// what each label stood on: since when, and how many games the team has played without him.
+// what each label stood on: since when, and how many games the team has played without him. Before a team's first
+// game its entries carry no tag ("[out for the opener]" read as Out beside a Questionable status).
 export function injuriesAsReported(desk) {
   return sectionOf(desk, 'INJURY REPORT').split('\n')
     .filter((l) => !/^TODAY'S DATE/.test(l))
     .map((l) => l
       .replace(/^ACTIVE INJURIES$/, 'NEW, UNCERTAIN OR PROBABLE')
       .replace(/^ESTABLISHED ABSENCES.*$/, 'ALREADY OUT (the team has played its recent games without them)')
-      .replace(/\[SEASON OPENER — no regular-season games played yet\]/, '[out for the opener]')
+      .replace(/ ?\[SEASON OPENER — no regular-season games played yet\]/, '')
       .replace(/\[SEASON-LONG\]/, '[has not played in any of the team\'s recent games]')
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[since ${since.trim()}, ${days} days${missed ? `, ${missed}` : ''}]`)
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) \(([^)]+)\)\]/, '[$1]')
@@ -103,6 +104,26 @@ export function deskNews(desk) {
   return withoutBettingLines(body).replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,
+// the desk's BEFORE THE FIRST GAME block.
+function howGood(desk, ratings, homeTeam, awayTeam) {
+  return [standings(desk), ...[awayTeam, homeTeam].map((team) => {
+    const before = ratings[team] ? '' : beforeFirstGame(desk, team);
+    return before ? `${team}: no games yet this season. Before the first game:\n${before}` : strengthLine(ratings, team);
+  })].filter(Boolean).join('\n\n');
+}
+
+/** One game on Gary's NBA board (winners/nbaBoard.js), read the way the pick reads it, without his write-up: the line
+ * and how it got here, who's playing, how good both teams are and the situation. */
+export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
+  const lines = await linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba').catch(() => null);
+  return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
+    lineStory(lines, homeTeam, awayTeam), '',
+    'Who is playing:', [sectionOf(desk, 'STARTING LINEUPS'), injuriesAsReported(desk)].filter(Boolean).join('\n\n'), '',
+    'How good they are:', howGood(desk, ratings, homeTeam, awayTeam), '',
+    'The situation:', sectionOf(desk, 'REST & SCHEDULE SITUATION') || 'Nothing unusual.'].join('\n');
+}
+
 /** The game as Gary reads it. `asOf` cuts the line's path and the season at the moment of the pick; `book` is the
  * ticket's book; `league` (tests only) stands in for the league's ratings. */
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
@@ -111,10 +132,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     league ? Promise.resolve(league) : leagueRatings().catch(() => ({})),
   ]);
   const line = nbaLineOf(desk);
-  const how = [standings(desk), ...[awayTeam, homeTeam].map((team) => {
-    const before = ratings[team] ? '' : beforeFirstGame(desk, team);
-    return before ? `${team}: no games yet this season. Before the first game:\n${before}` : strengthLine(ratings, team);
-  })].filter(Boolean).join('\n\n');
+  const how = howGood(desk, ratings, homeTeam, awayTeam);
   const [awayGames, homeGames] = await Promise.all([awayTeam, homeTeam].map((team) => (ratings[team]
     ? gameByGame(team, ratings, asOf).catch(() => `${team}: games not on file.`)
     : Promise.resolve(`${team}: no games played yet this season.`))));

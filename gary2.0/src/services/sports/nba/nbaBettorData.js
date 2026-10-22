@@ -1,6 +1,6 @@
 /**
  * THE NBA BETTOR'S DATA (Oct 21 2026, the NBA read): how good each team is per possession with its rank among the
- * league, and its season game by game, each cut at the moment of the pick. This season only (founder, Oct 13 2026: no
+ * league (from its fifth game), and its season game by game, each cut at the moment of the pick. This season only (founder, Oct 13 2026: no
  * last-season numbers for the NBA; a team before its first game reads the desk's BEFORE THE FIRST GAME section).
  * Facts only: nothing here weighs, scores or projects anything; what they mean is Gary's read. Source: BDL
  * team_season_averages (one call for the whole league) and games.
@@ -34,12 +34,19 @@ const rankOf = (league, team, key, high) => {
   return order.findIndex(([name]) => name === team) + 1;
 };
 
-/** HOW GOOD THEY ARE for one team: its record and per-possession numbers with ranks among the teams that have played. */
+// A rank among the league means little before a team has played this many games (Oct 22 2026: after one game the
+// read quoted "14th in the league" for a single night's offense), so the numbers stand alone until then.
+const RANKED_FROM_GAMES = 5;
+
+/** HOW GOOD THEY ARE for one team: its record and per-possession numbers, with ranks among the teams that have played
+ * once it has played RANKED_FROM_GAMES games. */
 export function strengthLine(league, team) {
   const t = league[team];
   if (!t) return `${team}: no games yet this season.`;
   const teams = Object.keys(league).length;
-  return `${team} (${t.w}-${t.l}), ${t.gp} game${t.gp === 1 ? '' : 's'}: offense ${one(t.off)} points per 100 possessions (${ord(rankOf(league, team, 'off', true))} of ${teams}), defense ${one(t.def)} allowed (${ord(rankOf(league, team, 'def', false))}), net ${signed(t.net)} (${ord(rankOf(league, team, 'net', true))}), pace ${one(t.pace)}`;
+  const ranked = t.gp >= RANKED_FROM_GAMES;
+  const rank = (key, high, ofAll = false) => (ranked ? ` (${ord(rankOf(league, team, key, high))}${ofAll ? ` of ${teams}` : ''})` : '');
+  return `${team} (${t.w}-${t.l}), ${t.gp} game${t.gp === 1 ? '' : 's'}: offense ${one(t.off)} points per 100 possessions${rank('off', true, true)}, defense ${one(t.def)} allowed${rank('def', false)}, net ${signed(t.net)}${rank('net', true)}, pace ${one(t.pace)}`;
 }
 
 /** THIS SEASON GAME BY GAME: each finished game before `before`, newest first, with the opponent's record now. */

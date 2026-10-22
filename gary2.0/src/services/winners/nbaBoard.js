@@ -1,70 +1,23 @@
 // GARY'S NBA BOARD (Oct 19 2026, from Oct 21; founder: "winners picks are Gary's real bets while picks page is just for
 // people wanting picks for each game with 2 props"). Gary picks every NBA game for the Picks page; that is his lean.
 // His bets are a separate look: about 50 minutes before the first tip he hasn't boarded (the picks run 90 minutes out),
-// he sees every picked game still to tip, fresh, without his write-ups: the line, who's out, the lineups, rest, the
-// last game, the season series. He names the games he would put his own money on, in his order, any number or none.
+// he sees every picked game still to tip, fresh, without his write-ups, read the way the pick reads it (nbaRead.js,
+// Oct 22 2026): the line and how it got here, who's playing, how good both teams are, the situation. He names the
+// games he would put his own money on, in his order, any number or none.
 // Saved per game (winners_nba_board); SQL seat_nba_board seats a bet whose pick is on the same side, five a night
 // spread over it (two from the first third of tip times, four through the second; Oct 21 2026), 28 minutes before tip,
 // after the late-news check. Oct 20 is opening night (every NBA pick goes on Winners).
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
+import { nbaSystemPrompt, nbaBoardMessage, NBA_BOARD_FORMAT_ONLY } from '../gary/agentic/orchestrator/nbaKnowledge.js';
+import { buildNbaBoardEntry } from '../gary/agentic/orchestrator/nbaRead.js';
+import { leagueRatings } from '../sports/nba/nbaBettorData.js';
 import { parseBoardBets, boardDecisions } from './nflBoard.js';
 
 export const NBA_BOARD_LEAD_MS = 50 * 60_000;   // board the next tips this long before the first one
 const LAST_CALL_MS = 15 * 60_000;               // a game this close to tip is past boarding
 const FIRST_BOARD_DATE = '2026-10-21';
 let running = false;
-
-// The desk's facts for the board, never its write-ups: the sections a bettor scans before he bets.
-const KEEP = [/^INJURY REPORT/, /^STARTING LINEUPS/, /^BEFORE THE FIRST GAME/, /^REST & SCHEDULE/, /^LAST GAME/, /^HEAD-TO-HEAD/, /^BETTING CONTEXT/,
-  /TEAM (STATS|NUMBERS|PROFILE)/, /SEASON (STATS|NUMBERS)/, /EFFICIENCY/];
-const SKIP = [/AS WRITTEN/, /^CURRENT STATE/];
-const RULE = /^━{8,}/;
-
-/** The desk cut to its fact sections, each capped, the odds dump left out. */
-export function nbaBoardFacts(desk) {
-  const lines = String(desk || '').split('\n');
-  const out = [];
-  let cur = null;
-  const flush = () => { if (cur && cur.body.length) out.push(`${cur.head}\n${cur.body.join('\n').trim().slice(0, 1600)}`); };
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (RULE.test(line)) continue;
-    if (/^[A-Z][A-Z0-9 '’&/:,()—+.-]{5,}$/.test(line.trim()) && (RULE.test(lines[i + 1] || '') || RULE.test(lines[i - 1] || ''))) {
-      flush();
-      const head = line.trim();
-      cur = KEEP.some((r) => r.test(head)) && !SKIP.some((r) => r.test(head)) ? { head, body: [] } : null;
-      continue;
-    }
-    if (!cur) continue;
-    if (/^RAW ODDS VALUES/.test(line.trim())) { flush(); cur = null; continue; }
-    cur.body.push(line);
-  }
-  flush();
-  return out.join('\n\n');
-}
-
-export const nbaBoardSystemPrompt = (today) => `You are Gary. You read NBA games the way a sharp bettor does before putting money down.
-
-What a spread is:
-- The spread holds everything public: who's playing, how both teams have played, rest, travel and the day's news. Take it as the number; you aren't out to show it's wrong or to set one of your own.
-- Every spread has two sides, and in a given game one of them is the better side to be on at that number. That isn't the same as the better team or the healthier roster.
-- A factor counts by what it does to this game at this number: what the favorite has to do to cover it, and what the underdog has to do.
-
-Today is ${today}. The board is current on rosters, injuries and every number; your memory of those may be out of date. Only mention players the board names, and never write a number that isn't on the board.`;
-
-export const nbaBoardMessage = (entries, today) => `## TODAY'S NBA BOARD — ${today}
-
-${entries.join('\n\n')}
-
-You'll give your lean on every one of these games for the Picks page; that's separate. This is your betting card: which of these games would you actually put your own money on, and on which side? A lean isn't a bet. Bet only the games you'd really back with your own money: any number of them, including none.
-
-For each game you'd bet, say why in a sentence or two. Then end with this JSON block, listing the games you'd bet from the one you like most:
-\`\`\`json
-{"bets": [{"game": "Away Team at Home Team", "side": "the team you're backing", "why": "one sentence"}]}
-\`\`\``;
-
-const FORMAT_ONLY = 'Your answer did not end with the JSON block. Add it now, the same bets in the same order: {"bets": [{"game": "Away Team at Home Team", "side": "the team you\'re backing", "why": "one sentence"}]}, or {"bets": []} if you would bet none.';
 
 /** Board the next NBA tips when the first unboarded one is near. Returns what it did; never throws. */
 export async function runNbaBoard(client, date, { now = new Date(), log = console } = {}) {
@@ -86,20 +39,21 @@ export async function runNbaBoard(client, date, { now = new Date(), log = consol
     const first = Math.min(...games.map((c) => Date.parse(c.commence_time)));
     if (first > now.getTime() + NBA_BOARD_LEAD_MS) return 'waiting';
 
+    const ratings = await leagueRatings().catch(() => ({}));
     const entries = [];
     for (const c of games.sort((a, b) => Date.parse(a.commence_time) - Date.parse(b.commence_time))) {
       const { data: ev, error: e3 } = await client.from('winners_candidates').select('desk:evidence_snapshot->>deskText').eq('id', c.id).single();
       if (e3 || !ev?.desk) { log.warn(`[NBA Board] ${c.away} @ ${c.home}: no desk on the candidate; left off the board`); continue; }
       const tip = new Date(c.commence_time).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' });
-      entries.push({ c, text: `### ${c.away} at ${c.home} · ${tip} ET\n${nbaBoardFacts(ev.desk)}` });
+      entries.push({ c, text: await buildNbaBoardEntry(ev.desk, { homeTeam: c.home, awayTeam: c.away, gameId: c.game_id, tip, asOf: now, ratings }) });
     }
     if (!entries.length) return 'no_desks';
 
     const today = new Date(`${date}T16:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const session = await createModelSession({ modelName: GAME_PICK_MODEL, systemPrompt: nbaBoardSystemPrompt(today), tools: null, browse: false, thinkingLevel: process.env.GARY_BRAIN_EFFORT || 'xhigh', enableCache: true });
+    const session = await createModelSession({ modelName: GAME_PICK_MODEL, systemPrompt: nbaSystemPrompt(today), tools: null, browse: false, thinkingLevel: process.env.GARY_BRAIN_EFFORT || 'xhigh', enableCache: true });
     let answer = (await sendToSessionWithRetry(session, nbaBoardMessage(entries.map((e) => e.text), today))).content || '';
     let bets = parseBoardBets(answer);
-    if (!bets) { answer = (await sendToSessionWithRetry(session, FORMAT_ONLY)).content || ''; bets = parseBoardBets(answer); }
+    if (!bets) { answer = (await sendToSessionWithRetry(session, NBA_BOARD_FORMAT_ONLY)).content || ''; bets = parseBoardBets(answer); }
     if (!bets) log.warn('[NBA Board] no readable bets after the format ask; every game on this board is a pass');
     const decided = boardDecisions(entries.map((e) => ({ id: e.c.id, gameId: String(e.c.game_id), home: e.c.home, away: e.c.away })), bets || []);
     const nBets = decided.filter((d) => d.decision === 'bet').length;
