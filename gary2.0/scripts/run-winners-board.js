@@ -2,6 +2,7 @@
 /** Durable Winners review worker. Never generates or replaces a public pick. */
 import '../src/loadEnv.js';
 import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { supabaseAdmin as supabase } from '../src/supabaseClient.js';
 import { enqueueWinnersCandidate, coreProp, winnersCandidate, winnersPickIsHome } from '../src/services/winners/winnersAdmissions.js';
@@ -20,6 +21,16 @@ const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/N
 // again at once.
 const LOOP_MS = 2 * 60_000;
 const check = result => { if(result.error) throw result.error; return result.data; };
+// NEW CODE, NEW WORKER (Oct 22 2026, founder: "why do i have to keep doing ! launchctl kickstart"). The worker loads
+// its code once, so a pushed change used to wait for a hand restart. When a commit touches src/ or scripts/, the
+// worker finishes the work in hand, starts nothing new and exits; launchd (KeepAlive) starts it again on the new code.
+const git = (...a) => { try { return execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return null; } };
+const STARTED_ON = git('rev-parse', 'HEAD');
+export const codeChangedSince = (from, to) => Boolean(from && to && from !== to && git('diff', '--name-only', from, to, '--', 'src', 'scripts'));
+let draining = false;
+let inFlight = 0;
+/** One pass of a loop, unless the worker is draining for new code; the restart waits for every pass in hand. */
+const pass = async (fn) => { if (draining) return undefined; inFlight++; try { return await fn(); } finally { inFlight--; } };
 const logFailure = (lane, error) => console.error(`[Winners] ${new Date().toISOString()} ${lane}: ${String(error?.message || error).slice(0,1600)}`);
 // Mirror for existing game-only clients/records. New clients read immutable
 // winners_board snapshots. Empty/error never means use confidence as admission.
@@ -132,7 +143,7 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid}; games=winners-card-v1 + big games; props=daily-props-v1; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=winners-card-v1 + big games; props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await runPropsSelection(supabase,todayET());
@@ -153,7 +164,7 @@ async function main() {
   }
   const reconcile=async()=>{
     while(true) {
-      try {await reconcilePublished(supabase,todayET());}
+      try {await pass(()=>reconcilePublished(supabase,todayET()));}
       catch(e){logFailure('reconciliation',e);}
       await sleep(LOOP_MS);
     }
@@ -162,7 +173,7 @@ async function main() {
   const props=async()=>{
     while(true) {
       let run=null;
-      try {run=await runPropsSelection(supabase,todayET());}
+      try {run=await pass(()=>runPropsSelection(supabase,todayET()));}
       catch(e){logFailure('props selection',e);}
       await sleep(run?5_000:LOOP_MS);
     }
@@ -172,9 +183,11 @@ async function main() {
   const sweep=async()=>{
     while(true) {
       try {
-        const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
-        if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
-        await mirrorGames(supabase,todayET());
+        await pass(async()=>{
+          const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
+          if(swept)console.log(`[Winners] ${new Date().toISOString()} sweep admitted ${swept}`);
+          await mirrorGames(supabase,todayET());
+        });
       } catch(e){logFailure('sweep',e);}
       await sleep(LOOP_MS);
     }
@@ -184,14 +197,16 @@ async function main() {
   const card=async()=>{
     while(true) {
       try {
-        const backstopped=await placeUnplacedOnCard(supabase,todayET());
-        if(backstopped)console.log(`[Winners] ${new Date().toISOString()} card backstop placed ${backstopped}`);
-        try {
-          const checked=await runLateNewsChecks(supabase,todayET());
-          if(checked)console.log(`[Winners] ${new Date().toISOString()} late news checked ${checked}`);
-        } catch(e){logFailure('late news',e);}
-        const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
-        if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
+        await pass(async()=>{
+          const backstopped=await placeUnplacedOnCard(supabase,todayET());
+          if(backstopped)console.log(`[Winners] ${new Date().toISOString()} card backstop placed ${backstopped}`);
+          try {
+            const checked=await runLateNewsChecks(supabase,todayET());
+            if(checked)console.log(`[Winners] ${new Date().toISOString()} late news checked ${checked}`);
+          } catch(e){logFailure('late news',e);}
+          const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
+          if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
+        });
       } catch(e){logFailure('card',e);}
       await sleep(LOOP_MS);
     }
@@ -202,10 +217,12 @@ async function main() {
   const nflBoard=async()=>{
     while(true) {
       try {
-        const did=await runNflBoard(supabase,todayET());
-        if(did && !['no_games','nothing_open','waiting','busy'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NFL board: ${did}`);
-        const seated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
-        if(seated)console.log(`[Winners] ${new Date().toISOString()} NFL board seated ${seated}`);
+        await pass(async()=>{
+          const did=await runNflBoard(supabase,todayET());
+          if(did && !['no_games','nothing_open','waiting','busy'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NFL board: ${did}`);
+          const seated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
+          if(seated)console.log(`[Winners] ${new Date().toISOString()} NFL board seated ${seated}`);
+        });
       } catch(e){logFailure('NFL board',e);}
       await sleep(LOOP_MS);
     }
@@ -216,10 +233,12 @@ async function main() {
   const nbaBoard=async()=>{
     while(true) {
       try {
-        const did=await runNbaBoard(supabase,todayET());
-        if(did && !['no_games','nothing_open','waiting','busy','opening_night'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NBA board: ${did}`);
-        const seated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
-        if(seated)console.log(`[Winners] ${new Date().toISOString()} NBA board seated ${seated}`);
+        await pass(async()=>{
+          const did=await runNbaBoard(supabase,todayET());
+          if(did && !['no_games','nothing_open','waiting','busy','opening_night'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NBA board: ${did}`);
+          const seated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
+          if(seated)console.log(`[Winners] ${new Date().toISOString()} NBA board seated ${seated}`);
+        });
       } catch(e){logFailure('NBA board',e);}
       await sleep(LOOP_MS);
     }
@@ -227,11 +246,25 @@ async function main() {
   // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
   const bigGames=async()=>{
     while(true) {
-      try {await runBigGameStakes(supabase,todayET());}
+      try {await pass(()=>runBigGameStakes(supabase,todayET()));}
       catch(e){logFailure('big game stake',e);}
       await sleep(LOOP_MS);
     }
   };
-  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),bigGames()]);
+  // New code on main: drain, then exit for launchd to start the worker again on it.
+  const newCode=async()=>{
+    while(true) {
+      await sleep(draining?5_000:LOOP_MS);
+      if(!draining && codeChangedSince(STARTED_ON, git('rev-parse','HEAD'))) {
+        draining=true;
+        console.log(`[Winners] ${new Date().toISOString()} new code on main (${STARTED_ON?.slice(0,8)} → ${git('rev-parse','--short','HEAD')}); finishing the work in hand, then restarting`);
+      }
+      if(draining && inFlight===0) {
+        console.log(`[Winners] ${new Date().toISOString()} restarting on the new code`);
+        process.exit(0);
+      }
+    }
+  };
+  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),bigGames(),newCode()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

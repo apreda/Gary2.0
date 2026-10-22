@@ -1469,6 +1469,17 @@ async function sleepUntilWallClock(targetDate, { wakeSeq = null } = {}) {
 // at 6am I see it all there"). Early enough that no game trigger is missed.
 const PLAN_TIME_ET = { hour: 4, minute: 45 };
 
+// NEW CODE AT THE MORNING PLAN (Oct 22 2026, founder: "why do i have to keep doing ! launchctl kickstart"). Node keeps
+// the code it started with; pick and props children load fresh, the scheduler itself does not. When a commit since
+// start touches src/ or scripts/, the scheduler exits at the 4:45 AM wake, before planning the day, and launchd
+// (KeepAlive) starts it again on the new code, which plans the day at once. The day's games are done by then.
+const gitOut = (cmd) => { try { return execSync(cmd, { cwd: PROJECT_DIR, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return null; } };
+const STARTED_ON = gitOut('git rev-parse HEAD');
+function newCodeSinceStart() {
+  const now = gitOut('git rev-parse HEAD');
+  return Boolean(STARTED_ON && now && now !== STARTED_ON && gitOut(`git diff --name-only ${STARTED_ON} ${now} -- src scripts`));
+}
+
 async function sleepUntilPlanTime() {
   const todayET = getTodayETDateStr();
   let target = instantForETDate(todayET, PLAN_TIME_ET.hour, PLAN_TIME_ET.minute);
@@ -1519,7 +1530,7 @@ async function main() {
   try {
     const sha = execSync('git rev-parse --short HEAD', { cwd: PROJECT_DIR }).toString().trim();
     const dirty = execSync('git status --porcelain', { cwd: PROJECT_DIR }).toString().trim() ? ' (+uncommitted changes)' : '';
-    log(`🔖 Running commit: ${sha}${dirty} — restart the scheduler after pulling/committing to pick up code changes`);
+    log(`🔖 Running commit: ${sha}${dirty} — new commits to src/ or scripts/ load at the next 4:45 AM plan (the scheduler restarts itself)`);
   } catch { log('🔖 Running commit: (unavailable — not a git checkout)'); }
   // ERA LIVE — the folder this daemon launches picks from, and the prompt eras
   // a fresh run from it will stamp. Jul 29 – Aug 12 2026 the daemon ran a
@@ -1568,6 +1579,10 @@ async function main() {
 
     const planDateBefore = getTodayETDateStr();
     await sleepUntilPlanTime();
+    if (newCodeSinceStart()) {
+      log(`🔁 New code on main since this scheduler started (${STARTED_ON.slice(0, 8)} → ${gitOut('git rev-parse --short HEAD')}) — restarting on it before planning the day`);
+      process.exit(0);
+    }
     const schedule = await buildCurrentPlanResilient(getTodayETDateStr());
     await executeSchedule(schedule);
 
