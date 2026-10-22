@@ -182,7 +182,8 @@ struct FootballGameIntelView: View {
     // "I really shouldn't be able to see hardly any visible differences": the
     // football page mounts the SAME components the MLB page does, in the same
     // order — THE ARMS layout (the passing games), THE NEWS card, THE BIG
-    // NUMBERS rail, THE HEAD-TO-HEAD, the player intel, the lineup-style
+    // NUMBERS rail, THE HEAD-TO-HEAD, the player intel (college only since
+    // Oct 22 2026), the lineup-style
     // availability container, MORE INTEL. Only the words and numbers are
     // football's. Every module still hides itself when its evidence is
     // missing — an empty lane is an absent module, never a placeholder.
@@ -432,7 +433,11 @@ struct FootballGameIntelView: View {
             ScoutBigNumbersRail(rows: bigNumberRows)
             // The series lives HERE and only here — the same section as MLB.
             GameH2HSection(edges: edges.filter { matchesThisGame($0) })
-            PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID, gameDate: gameDate)
+            // NFL pages carry no PLAYER INTEL list (founder, Oct 22 2026: "i dont think we
+            // need that"); the quarterback plates above still open a player's sheet.
+            if isCollege {
+                PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID, gameDate: gameDate)
+            }
             FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
