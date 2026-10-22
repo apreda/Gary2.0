@@ -31,7 +31,8 @@ export const NCAAF_CONSTITUTION = {
   // SECTION B: PASS 1 CONTEXT — shown during investigation stage
   // ═══════════════════════════════════════════════════════════════════════════
   // COLLEGE'S OWN AWARENESS (Oct 18 2026, founder: "fix it ... improve all the logic"; buy-low dropped: "I'm not sure
-  // 'buy low' applies like it does for nfl"). Gary reads it as his instructions in the college question (ncaafQuestion.js).
+  // 'buy low' applies like it does for nfl"). Not read by the live college pick since Oct 21 2026: the college read
+  // (ncaafRead.js) reads college's knowledge (ncaafKnowledge.js). Only the agent-loop path still appends it.
   pass1Context: `
 ### COLLEGE FOOTBALL AWARENESS
 

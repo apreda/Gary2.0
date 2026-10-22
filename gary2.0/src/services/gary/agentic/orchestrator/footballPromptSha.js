@@ -106,6 +106,9 @@ const SPORT_SURFACE = {
     '../tools/ncaafTokenContract.js',
     '../../../providers/jev/client.js',
     '../constitution/ncaafConstitution.js',
+    // College's own read (Oct 21 2026): what Gary reads, knows and is asked for a college game.
+    './ncaafRead.js',
+    './ncaafKnowledge.js',
     '../scoutReport/sports/ncaaf.js',
     '../scoutReport/sports/ncaafFcsGap.js',
     '../scoutReport/sports/ncaafPlayerEvidence.js',

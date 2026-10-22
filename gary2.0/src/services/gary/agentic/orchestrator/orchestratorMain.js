@@ -6,7 +6,8 @@ import { buildSystemPrompt } from './garySystemPrompt.js';
 import { buildNbaSystemPrompt, isNbaSport } from './nbaWinningEra.js';
 import { buildNflSystemPrompt, isNflSport, isFootballLane } from './nflPrompts.js';
 import { runNflRead } from './nflRead.js';
-import { runNcaafQuestion } from './ncaafQuestion.js';
+import { runNcaafRead } from './ncaafRead.js';
+import { runNbaRead } from './nbaRead.js';
 import { buildScoutReport } from '../scoutReport/scoutReportBuilder.js';
 import { shouldReuseScoutReport } from '../statsSubstance.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, readdirSync, unlinkSync } from 'fs';
@@ -309,14 +310,19 @@ async function analyzeGameWithData(game, sport, options = {}) {
       // (a false "N of last M games" tally is fabrication; Jul 22 2026).
       recentScores: (typeof scoutReportData === 'object' && scoutReportData?.recentScores) || null
     };
-    // THE NFL READ (nflRead.js, Oct 19 2026) is every NFL game pick; THE COLLEGE QUESTION (ncaafQuestion.js, Oct 15
-    // 2026) is every college game pick. The loop below serves the other sports.
+    // THE NFL READ (nflRead.js, Oct 19 2026) is every NFL game pick; THE COLLEGE READ (ncaafRead.js) and THE NBA READ
+    // (nbaRead.js) are every college and NBA game pick (Oct 21 2026, founder: the NFL treatment for both). The NBA's
+    // April 2026 prompts still run through the loop with GARY_NBA_SYSTEM=april ("we can always go back to the old NBA
+    // if needed"). The loop below serves the other sports.
     const isNcaafGame = sport === 'americanfootball_ncaaf' || sport === 'NCAAF';
+    const nbaRead = isNbaSport(sport) && String(process.env.GARY_NBA_SYSTEM || '').toLowerCase() !== 'april';
     const result = isNflSport(sport)
       ? await runNflRead({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
       : isNcaafGame
-        ? await runNcaafQuestion({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
-        : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
+        ? await runNcaafRead({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
+        : nbaRead
+          ? await runNbaRead({ desk: garyText, today }, sport, homeTeam, awayTeam, enrichedOptions)
+          : await runAgentLoop(systemPrompt, userMessage, sport, homeTeam, awayTeam, enrichedOptions);
     
     // Add injuries to result for storage
     if (injuries) {

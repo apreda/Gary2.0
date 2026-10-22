@@ -140,16 +140,17 @@ const TICKET_BOOKS = ['fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm',
 
 /** The line's path from the line watch, from the first board to `until`, at the ticket's own book, so the path ends on
  * the number Gary bets (a six-book median beside the ticket gave him two numbers half a point apart, and he argued the
- * half point). Falls back to the median of the books when none of the ticket's books is on file. */
-export async function linePath(db, gameId, until = new Date()) {
+ * half point). Falls back to the median of the books when none of the ticket's books is on file. College and the NBA
+ * read their own games' paths through `sport`, at the ticket's own `book` when the game names it (Oct 21 2026). */
+export async function linePath(db, gameId, until = new Date(), sport = 'americanfootball_nfl', book = null) {
   if (!db || gameId == null) return null;
   const { data: rows, error } = await db.from('odds_snapshots')
     .select('seen_at,line_vendor,spread_home,moneyline_home,moneyline_away,total')
-    .eq('sport', 'americanfootball_nfl').eq('game_id', String(gameId)).lte('seen_at', new Date(until).toISOString())
+    .eq('sport', sport).eq('game_id', String(gameId)).lte('seen_at', new Date(until).toISOString())
     .order('seen_at').limit(5000);
   if (error || !rows?.length) return null;
-  const book = TICKET_BOOKS.find((b) => rows.some((r) => r.line_vendor === b));
-  const data = book ? rows.filter((r) => r.line_vendor === book) : rows;
+  const vendor = [String(book || '').toLowerCase(), ...TICKET_BOOKS].find((b) => b && rows.some((r) => r.line_vendor === b));
+  const data = vendor ? rows.filter((r) => r.line_vendor === vendor) : rows;
   const latest = new Map(); const path = []; let last = null;
   const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)), books: rs.length }; };
   for (const r of data) {

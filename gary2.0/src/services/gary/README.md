@@ -9,10 +9,13 @@ A game pick: the desk (`agentic/scoutReport/sports/<league>.js`) → the researc
 - **NFL** (new system, Oct 19 2026): `orchestrator/nflRead.js` decides what Gary reads and in what order and asks the
   question; `orchestrator/nflKnowledge.js` is what he knows about NFL markets. The bettor's data is
   `../sports/nfl/nflBettorData.js`; the last three seasons `scoutReport/sports/nflLastSeasons.js`.
-- **College football**: `orchestrator/ncaafQuestion.js`, college's own process (a change to the NFL never reaches it).
-  `orchestrator/footballDeskText.js` is the desk-reading plumbing both share.
-- **NBA**: `orchestrator/agentLoop.js` on the April 8 2026 prompts pinned in `orchestrator/nbaWinningEra.js`. Before a
-  team's first game its desk carries BEFORE THE FIRST GAME (`../sports/nba/nbaOpeningNight.js`).
+- **College football** (Oct 21 2026, the NFL treatment): `orchestrator/ncaafRead.js` with `orchestrator/ncaafKnowledge.js`,
+  college's own copy (a change to the NFL never reaches it), with its own news desk (`nflResearchPrompts.js`).
+- **NBA** (Oct 21 2026, the NFL treatment): `orchestrator/nbaRead.js` with `orchestrator/nbaKnowledge.js`; ratings and the
+  season game by game from `../sports/nba/nbaBettorData.js`. Before a team's first game its desk carries BEFORE THE
+  FIRST GAME (`../sports/nba/nbaOpeningNight.js`). `GARY_NBA_SYSTEM=april` runs the April 8 2026 prompts
+  (`orchestrator/nbaWinningEra.js`) through `orchestrator/agentLoop.js` instead.
+- `orchestrator/footballDeskText.js` is the desk-reading plumbing the three reads share.
 - **MLB**: `agentic/mlbJuneEra/`, the frozen June 15 2026 engine: bug fixes only, guarded by
   `tests/services/agentic/mlbJuneEra.test.js`. Postseason games go to `mlbJuneEra/playoffQuestion.js`.
 
