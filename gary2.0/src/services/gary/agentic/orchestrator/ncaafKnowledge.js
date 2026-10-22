@@ -68,3 +68,19 @@ ${line || 'Not on the desk.'}
 confidence_score (0.50-1.00) is how confident you are in this pick.`;
 
 export const NCAAF_FORMAT_ONLY = 'Your answer did not include the JSON block. Add it now with the same pick and the same Gary\'s Take: "final_pick" ("[Team] [spread or ML] [price]" at that ticket\'s exact price from THE LINE), "rationale" ("Gary\'s Take\\n\\n" followed by the Gary\'s Take you wrote) and "confidence_score" (0.50-1.00).';
+
+// Gary's college board (winners/ncaafBoard.js): every picked game still to start, read as the picks read them, without
+// his write-ups; the bets are his, any number or none, in his order. The NFL and NBA boards' ask; college names each
+// game and team as its heading does, because college nicknames repeat (two Tigers, two Bulldogs).
+export const ncaafBoardMessage = (entries, today) => `## TODAY'S COLLEGE BOARD — ${today}
+
+${entries.join('\n\n')}
+
+You'll give your lean on every one of these games for the Picks page; that's separate. This is your betting card for today: which of these games would you actually put your own money on, and on which side? A lean isn't a bet. Bet only the games you'd really back with your own money: any number of them, including none.
+
+For each game you'd bet, say why in a sentence or two. Then end with this JSON block, listing the games you'd bet from the one you like most, each game and team named as its heading names them:
+\`\`\`json
+{"bets": [{"game": "Away Team at Home Team", "side": "the team you're backing", "why": "one sentence"}]}
+\`\`\``;
+
+export const NCAAF_BOARD_FORMAT_ONLY = 'Your answer did not end with the JSON block. Add it now, the same bets in the same order, each game and team named as its heading names them: {"bets": [{"game": "Away Team at Home Team", "side": "the team you\'re backing", "why": "one sentence"}]}, or {"bets": []} if you would bet none.';

@@ -141,6 +141,21 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }
 
+/** One game on Gary's college board (winners/ncaafBoard.js), read the way the pick reads it, without his write-up: the
+ * line and how it got here, the quarterbacks and coaches, the availability report, how good both teams are, the
+ * situation and the news desk's report. */
+export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gameId, kickoff, asOf = new Date() } = {}) {
+  const lines = await linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_ncaaf').catch(() => null);
+  const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+  return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}`,
+    lineStory(lines, homeTeam, awayTeam), '',
+    'Quarterbacks and coaches:', quarterbacksAndCoaches(desk) || 'Not on the desk.', '',
+    'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
+    'How good they are:', howGood(desk), '',
+    'The situation:', situation(desk) || 'Nothing unusual.',
+    news ? `\nThe news desk:\n${news}` : ''].join('\n');
+}
+
 // The news desk's latest on who plays (nflResearchPrompts.js, college's items), from the game as Gary reads it.
 // Optional: a failed or timed-out search leaves TODAY'S NEWS as "Nothing beyond the scout report."
 async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker) {

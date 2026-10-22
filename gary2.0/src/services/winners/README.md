@@ -10,6 +10,9 @@ Gary picks every game for the Picks page; Winners holds the ones he bets. The wo
   each game read the way the NBA pick reads it (`buildNbaBoardEntry` in `nbaRead.js`, Oct 22 2026);
   `seat_nba_board` seats five a night, 28 minutes before tip, spread over the night (Oct 21 2026): the first third of
   tip times can take two, the first two thirds four, the late games the rest. (Oct 20, opening night, seated every NBA pick.)
+- **College** (`ncaafBoard.js`, from Oct 23 2026): the NFL's look about 110 minutes before the first kickoff he hasn't
+  boarded, each game read the way the college pick reads it (`buildNcaafBoardEntry` in `ncaafRead.js`);
+  `seat_ncaaf_board` seats five a day spread over the kickoff times as the NBA's are, 75 minutes before kickoff.
 - **The other game picks**: `garyBet.js` (play or pass, the amount) and `garyCard.js` (he places each pick on today's
   card and names his book); `seat_the_card` (SQL) seats the book 75 minutes before a start. Big games: the sweep.
 - `lateNews.js`: before a pick seats, availability is compared with what it was at the pick; Gary stands or

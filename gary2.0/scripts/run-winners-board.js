@@ -14,6 +14,7 @@ import { placeOnCard } from '../src/services/winners/garyCard.js';
 import { runLateNewsChecks } from '../src/services/winners/lateNews.js';
 import { runNflBoard } from '../src/services/winners/nflBoard.js';
 import { runNbaBoard } from '../src/services/winners/nbaBoard.js';
+import { runNcaafBoard } from '../src/services/winners/ncaafBoard.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 // Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is
@@ -156,6 +157,9 @@ async function main() {
     await runNbaBoard(supabase,todayET());
     const nbaSeated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
     if(nbaSeated)console.log(`[Winners] NBA board seated ${nbaSeated}`);
+    await runNcaafBoard(supabase,todayET());
+    const collegeSeated=check(await supabase.rpc('seat_ncaaf_board',{p_date:todayET()}));
+    if(collegeSeated)console.log(`[Winners] college board seated ${collegeSeated}`);
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     await runBigGameStakes(supabase,todayET());
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
@@ -243,6 +247,22 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
+  // GARY'S COLLEGE BOARD (Oct 22 2026, from Oct 23, ncaafBoard.js): about 110 minutes before the first kickoff he
+  // hasn't boarded he picks his bets from the picked college games still to start; his bets on the pick's side seat 75
+  // minutes out after the late-news check, five a day spread over the kickoffs (SQL seat_ncaaf_board).
+  const ncaafBoard=async()=>{
+    while(true) {
+      try {
+        await pass(async()=>{
+          const did=await runNcaafBoard(supabase,todayET());
+          if(did && !['no_games','nothing_open','waiting','busy','card'].includes(did))console.log(`[Winners] ${new Date().toISOString()} college board: ${did}`);
+          const seated=check(await supabase.rpc('seat_ncaaf_board',{p_date:todayET()}));
+          if(seated)console.log(`[Winners] ${new Date().toISOString()} college board seated ${seated}`);
+        });
+      } catch(e){logFailure('college board',e);}
+      await sleep(LOOP_MS);
+    }
+  };
   // A big game Gary passed on waits for his number (garyBigGameStake.js); the net is $100 in the last minutes.
   const bigGames=async()=>{
     while(true) {
@@ -265,6 +285,6 @@ async function main() {
       }
     }
   };
-  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),bigGames(),newCode()]);
+  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),ncaafBoard(),bigGames(),newCode()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

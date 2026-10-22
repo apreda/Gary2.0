@@ -15,7 +15,7 @@
 | MLB | the frozen June engine `gary/agentic/mlbJuneEra/` (postseason: `playoffQuestion.js`) | `run-agentic-mlb-props.js` | `mlbDartsBoard.js` | Gary's card (`winners/garyCard.js`) |
 | NFL | the NFL read `gary/agentic/orchestrator/nflRead.js` (Oct 19 new system) | `run-agentic-nfl-props.js` | `nflDartsBoard.js` | `winners/nflBoard.js` |
 | NBA | the NBA read `gary/agentic/orchestrator/nbaRead.js` (Oct 21; `GARY_NBA_SYSTEM=april` = the April 8 prompts) | `run-agentic-nba-props.js` (`pickdesk/nbaPropsDesk.js`) | `nbaDartsBoard.js` | `winners/nbaBoard.js` (from Oct 21) |
-| College football | the college read `gary/agentic/orchestrator/ncaafRead.js` (Oct 21) | none, ever | none | Gary's card |
+| College football | the college read `gary/agentic/orchestrator/ncaafRead.js` (Oct 21) | none, ever | none | `winners/ncaafBoard.js` (from Oct 23) |
 | NHL | held and out of the app since Oct 6 2026; its code stays | | | |
 
 ## Rules decided by sport name
