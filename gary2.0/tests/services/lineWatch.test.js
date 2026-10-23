@@ -79,6 +79,14 @@ describe('THE LINE WATCH tick', () => {
     const out = await runLineWatchTick({ now: MIDDAY, log, sports: ['americanfootball_nfl'], bdl: failing, odds: { getGamesWithOddsByIds: vi.fn() }, record: vi.fn() });
     expect(out).toEqual([{ sport: 'americanfootball_nfl', error: 'BDL 503' }]);
     expect(log.mock.calls[0][0]).toContain('line watch NFL skipped (BDL 503)');
+    // MLB (Oct 23 2026): BDL's `date` is the first pitch; a final has none. Without its own branch the football
+    // resolver found no kickoff and the watch never saw an MLB game.
+    const mlb = { getGames: vi.fn(async () => [
+      { id: 7, date: '2026-09-10T00:00:00.000Z', status: 'STATUS_SCHEDULED', season_type: 'postseason' },
+      { id: 8, date: '2026-09-09T16:00:00.000Z', status: 'STATUS_FINAL', season_type: 'postseason' },
+    ]) };
+    expect((await upcomingWeekGames('baseball_mlb', MIDDAY, { bdl: mlb })).map((g) => g.id)).toEqual([7]);
+
     // The failure counts as a poll: nothing fires again a minute later.
     const next = await runLineWatchTick({ now: new Date(MIDDAY.getTime() + 60_000), log, sports: ['americanfootball_nfl'], bdl: failing, odds: { getGamesWithOddsByIds: vi.fn() }, record: vi.fn() });
     expect(next).toEqual([]);

@@ -226,6 +226,29 @@ async function nbaGamesWithOddsByIds(games) {
   });
 }
 
+/** The MLB line watch's boards (Oct 23 2026): game-id-scoped v2 odds for the games the caller holds, in the bookmakers
+ * shape and with the club names ("Brewers") the pick's own MLB odds fetch records, so both write one ledger. */
+async function mlbGamesWithOddsByIds(games) {
+  const list = (Array.isArray(games) ? games : []).filter((g) => g?.id != null);
+  if (!list.length) return [];
+  const ids = [...new Set(list.map((g) => g.id))];
+  const rows = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const page = await ballDontLieService.getOddsV2({ game_ids: ids.slice(i, i + 100), per_page: 100 }, 'mlb');
+    if (Array.isArray(page)) rows.push(...page);
+  }
+  return list.map((g) => ({
+    id: g.id,
+    bdl_game_id: g.id,
+    sport_key: 'baseball_mlb',
+    home_team: mapTeamName(g.home_team),
+    away_team: mapTeamName(g.visitor_team || g.away_team),
+    // BDL's MLB `date` carries the first pitch ("2026-10-24T00:00:00.000Z"); a date without a time is no start time.
+    commence_time: g.datetime || (String(g.date || '').includes('T') ? g.date : null),
+    bookmakers: nflBookmakersForGame(g, rows.filter((r) => String(r?.game_id) === String(g.id))).filter((b) => b.markets.length),
+  }));
+}
+
 export const ballDontLieOddsService = {
   /**
    * Scheduler-only NFL fast path: one exact game transport and one exact odds
@@ -259,6 +282,7 @@ export const ballDontLieOddsService = {
     const isNfl = sportKey === 'americanfootball_nfl';
     const isNcaaf = sportKey === 'americanfootball_ncaaf';
     if (sportKey === 'basketball_nba') return nbaGamesWithOddsByIds(games);
+    if (sportKey === 'baseball_mlb') return mlbGamesWithOddsByIds(games);
     if (!isNfl && !isNcaaf) throw new Error(`getGamesWithOddsByIds: unsupported sport ${sportKey}`);
     const list = (Array.isArray(games) ? games : []).filter((g) => g?.id != null);
     if (list.length === 0) return [];

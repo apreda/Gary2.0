@@ -5,14 +5,14 @@
  * The odds service already records every board it sees, one row per book per
  * change (odds_snapshots), but football boards were fetched only on game day —
  * a Sunday line that dropped on Monday had no rungs between. This watch runs
- * inside the scheduler daemon and polls the week's NFL and NCAAF boards:
+ * inside the scheduler daemon and polls the week's NFL, NCAAF, NBA and MLB boards:
  *   · every 30 minutes through the week,
  *   · every 10 minutes inside the last three hours before a kickoff,
  *   · never 1-6 AM ET.
  * One BDL odds request per league per poll (the week's game ids come from a
  * slate list refreshed every six hours), so the ladder under the pick card and
- * the movers board in The Hub have real rungs. Display only: nothing here
- * reaches Gary's desk.
+ * the movers board in The Hub have real rungs. Nothing here writes to Gary's
+ * desk; each sport's story reads the line's path from the same ledger.
  */
 import { ballDontLieService } from '../providers/ballDontLieService.js';
 import { ballDontLieOddsService } from '../providers/ballDontLieOddsService.js';
@@ -21,8 +21,10 @@ import { filterBlockedVendors } from '../providers/oddsService.js';
 import { resolveNflKickoff } from '../sports/nfl/nflGamePolicy.js';
 import { classifyNcaafCoveredGames, resolveNcaafKickoff } from '../sports/ncaaf/ncaafGamePolicy.js';
 
-// The NBA joined Oct 20 2026 so THE LINE under an NBA pick has rungs too.
-export const LINE_WATCH_SPORTS = ['americanfootball_nfl', 'americanfootball_ncaaf', 'basketball_nba'];
+// The NBA joined Oct 20 2026 so THE LINE under an NBA pick has rungs too. MLB joined Oct 23 2026 (founder: the line
+// and how it got here in the playoff story): its boards were recorded only when a pick run fetched them, so the World
+// Series Game 1 line had two rungs a day apart, -158 and -196, and no time for the move when the Rays named Martinez.
+export const LINE_WATCH_SPORTS = ['americanfootball_nfl', 'americanfootball_ncaaf', 'basketball_nba', 'baseball_mlb'];
 export const BASE_INTERVAL_MS = 30 * 60_000;
 export const NEAR_KICKOFF_INTERVAL_MS = 10 * 60_000;
 export const NEAR_KICKOFF_WINDOW_MS = 3 * 3600_000;
@@ -36,7 +38,7 @@ export const WATCH_DAYS = { americanfootball_nfl: 13 };
 // rung is recorded even when the poll lands a few minutes late.
 const KICKOFF_GRACE_MS = 20 * 60_000;
 
-const LABELS = { americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA' };
+const LABELS = { americanfootball_nfl: 'NFL', americanfootball_ncaaf: 'NCAAF', basketball_nba: 'NBA', baseball_mlb: 'MLB' };
 export const sportLabel = (sport) => LABELS[sport] || sport;
 
 export function etHour(now = new Date()) {
@@ -73,6 +75,13 @@ export function pollDue({ now = new Date(), lastPollAt = null, nextKickoffAt = n
 }
 
 export function kickoffOf(sport, game) {
+  if (sport === 'baseball_mlb') {
+    // BDL's MLB game carries its first pitch in `date` ("2026-10-24T00:00:00.000Z" is 8:00 PM ET Oct 23). A date with
+    // no time, a final and a postponed game have no first pitch to watch toward.
+    const raw = String(game?.datetime || game?.date || '');
+    const t = raw.includes('T') ? Date.parse(raw) : NaN;
+    return Number.isFinite(t) && !/final|post/i.test(`${game?.status || ''} ${game?.status_state || ''}`) ? new Date(t) : null;
+  }
   if (sport === 'basketball_nba') {
     const t = Date.parse(game?.datetime || '');
     return Number.isFinite(t) && !/final/i.test(String(game?.status || '')) ? new Date(t) : null;
@@ -95,9 +104,12 @@ export async function upcomingWeekGames(sport, now = new Date(), { bdl = ballDon
   } else {
     const params = { dates: weekDates(now, WATCH_DAYS[sport] || WEEK_DAYS), per_page: 100 };
     if (sport === 'americanfootball_nfl') params.season_type = [1, 2, 3];
-    if (sport === 'americanfootball_ncaaf') params.paginateAll = true;
+    // A regular-season MLB week is about 100 games, past one 100-row page.
+    if (sport === 'americanfootball_ncaaf' || sport === 'baseball_mlb') params.paginateAll = true;
     let list = (await bdl.getGames(sport, params, 10)) || [];
     if (!Array.isArray(list)) list = [];
+    // No spring training on the ledger (founder law: no preseason data).
+    if (sport === 'baseball_mlb') list = list.filter((g) => !/pre|spring|exhib/i.test(String(g?.season_type || '')));
     if (sport === 'americanfootball_ncaaf') {
       let classified = classifyNcaafCoveredGames(list);
       if (classified.unresolved.length > 0) {
