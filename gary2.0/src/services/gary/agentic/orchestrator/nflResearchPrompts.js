@@ -38,7 +38,7 @@ const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor na
 
 1. The latest news on who plays. For BOTH teams, find reporting newer than what is below or missing from it: ${NEWS_DESK_ITEMS[isCollege(sport) ? 'NCAAF' : 'NFL']}. Give each item its date.
 
-2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons.
+2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason.
 
 Report what happened only: no statistics, no opinions, analysis or predictions from anyone, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
 
