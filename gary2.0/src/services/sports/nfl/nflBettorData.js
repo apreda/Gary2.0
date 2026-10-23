@@ -21,11 +21,12 @@ export const etDate = (when = new Date()) => new Date(when).toLocaleDateString('
 
 /** Everything the desk reads, loaded once per call. Unavailable files leave their sections out, said so. */
 export async function loadBettorData(season) {
-  const [schedule, tw, pw] = await Promise.all([
+  const [schedule, tw, pw, sc] = await Promise.all([
     getNflSchedule().catch(() => null), loadNflverseFile('stats_team_week', season), loadNflverseFile('stats_player_week', season),
+    loadNflverseFile('snap_counts', season).catch(() => null),
   ]);
   const rows = (f) => (f && !f.unavailable ? f.rows : null);
-  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], teamWeek: rows(tw), playerWeek: rows(pw) };
+  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc) };
 }
 
 const played = (d, season, before) => d.schedule.filter((r) => r.season === String(season) && r.game_type === 'REG'
@@ -81,16 +82,44 @@ export function strength(d, team, before, qb = null) {
   return lines.join('\n');
 }
 
-/** THIS SEASON GAME BY GAME: result and score, who played quarterback (everyone with 5+ passes), yards both ways; the
- * opponent's record now. */
+// Who was missing and who came back, game by game, from the snap counts (Oct 23 2026 data check: TNF's data never said
+// Kyler Gordon was back for the Bears or which Patriots linemen were out). A regular plays 60%+ of his side's snaps in
+// at least half the team's games; he is missing from a game where he played under 10%, and back in the first game he
+// plays 60%+ after missing one. A player taking a quarter of the snaps for the first time this season is new in the
+// lineup, with his share (Kyler Gordon's season debut for the Bears: 31%).
+function lineupChanges(d, code, gs) {
+  const rows = (d.snaps || []).filter((r) => r.team === code);
+  if (!rows.length || !gs.length) return new Map();
+  const share = new Map();
+  for (const r of rows) share.set(`${r.game_id}|${r.player}`, Math.max(n(r.offense_pct), n(r.defense_pct)));
+  const pos = new Map(rows.map((r) => [r.player, r.position]));
+  const of = (g, p) => share.get(`${g.g.game_id}|${p}`) || 0;
+  const regulars = [...pos.keys()].filter((p) => gs.filter((g) => of(g, p) >= 0.6).length >= Math.ceil(gs.length / 2));
+  const out = new Map();
+  gs.forEach((g, i) => {
+    const missing = regulars.filter((p) => of(g, p) < 0.1);
+    const back = i ? regulars.filter((p) => of(g, p) >= 0.6 && of(gs[i - 1], p) < 0.1) : [];
+    const fresh = i ? [...pos.keys()].filter((p) => !regulars.includes(p) && of(g, p) >= 0.25 && gs.slice(0, i).every((e) => of(e, p) < 0.1)) : [];
+    out.set(g.g.game_id, { missing, back, fresh });
+  });
+  const named = (ps) => ps.slice(0, 8).map((p) => `${p} (${pos.get(p)})`).join(', ') + (ps.length > 8 ? ` and ${ps.length - 8} more` : '');
+  for (const [k, v] of out) out.set(k, [v.missing.length ? `missing regulars: ${named(v.missing)}` : null, v.back.length ? `back: ${named(v.back)}` : null,
+    v.fresh.length ? `new in the lineup: ${v.fresh.slice(0, 8).map((p) => `${p} (${pos.get(p)}, ${Math.round(100 * (share.get(`${k}|${p}`) || 0))}% of snaps)`).join(', ')}` : null].filter(Boolean).join(' · '));
+  return out;
+}
+
+/** THIS SEASON GAME BY GAME: result and score, who played quarterback (everyone with 5+ passes), yards both ways, and
+ * which regulars were missing or back; the opponent's record now. */
 export function gameByGame(d, team, before) {
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
+  const changes = lineupChanges(d, c, gs);
   return [`${team}, newest first:`, ...gs.slice().reverse().map((x) => {
     const qb = x.passers.length ? ` · QB ${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ')}`
       : starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
     const how = x.off && x.def ? ` · ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : '';
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}`;
+    const who = changes.get(x.g.game_id);
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
   })].join('\n');
 }
 
