@@ -1,14 +1,16 @@
 // THE NFL READ (Oct 19 2026, the new NFL system; founder: "create your own pie instead of trying to fix the pie that
 // we have now"). Every NFL game pick. Gary reads the game the way a sharp does before betting it: the line and how it
 // got to this number first, then who's playing at quarterback, who's out, how good both teams are play after play
-// (with ranks), the season game by game, the spot and the week's reporting, plus the news desk's latest on who plays.
+// (with ranks), the season game by game and the spot, plus the news desk's latest on who plays. No articles (founder,
+// Oct 22 2026: TNF's read built its Patriots case from a Patriots.com game plan cut to its opening, and read more evenly
+// without the articles).
 // He is asked what the line is saying, what matters in this game and what doesn't, and who he likes at this spread;
 // then he writes that answer as the card. His instructions are what a sharp knows about NFL markets (nflKnowledge.js)
-// and the date. Nothing weighs, scores or projects for him. The scout report stays the source of the injury report,
-// the starting quarterbacks and the articles; this file decides what he reads and in what order.
+// and the date. Nothing weighs, scores or projects for him. The scout report stays the source of the injury report
+// and the starting quarterbacks; this file decides what he reads and in what order.
 import { createHash } from 'node:crypto';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
-import { sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf, esc } from './footballDeskText.js';
+import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
 import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
 import { loadBettorData, strength, gameByGame, quarterbacks, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
@@ -38,22 +40,6 @@ export function injuriesAsReported(desk) {
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// The AP preview's closing box ("Need to know": the odds when it was written, both teams' records against the
-// spread, the series record and franchise trivia) is cut; the preview's own story stays. On the test set the box was
-// the only place Gary met records against the spread.
-const withoutApBox = (body) => String(body || '').split(/\s*\bNeed to know\b/)[0];
-
-// This week's reporting: each team's week, the storylines or preview, the quarterbacks story; openings only.
-export function reporting(desk, homeTeam, awayTeam) {
-  const all = articlesOf(desk);
-  const pick = (re) => all.find((a) => re.test(a.heading));
-  const chosen = [pick(new RegExp(`^${esc(awayTeam)} — THIS WEEK'S CHANGES`)), pick(new RegExp(`^${esc(homeTeam)} — THIS WEEK'S CHANGES`)),
-    pick(/^THE (?:STORYLINES THIS WEEK|GAME PREVIEW), AS WRITTEN/), pick(/^THE QUARTERBACKS, AS WRITTEN/)].filter(Boolean);
-  const seen = new Set();
-  return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${articleOpening(withoutApBox(a.body))}`).join('\n\n');
-}
-
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
 export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason() } = {}) {
   const before = etDate(asOf);
@@ -77,7 +63,6 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', schedule && !schedule.unavailable ? nflLastSeasonsText(schedule, { homeTeam, awayTeam, season }) : ''],
     ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
     ['THE SITUATION', situation],
-    ['THIS WEEK, AS THE BEAT WRITERS TELL IT', reporting(desk, homeTeam, awayTeam)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }

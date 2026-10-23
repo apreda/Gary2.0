@@ -2,7 +2,8 @@
 // the old NBA if needed"). Every NBA game pick unless GARY_NBA_SYSTEM=april, which runs the April 2026 prompts
 // (nbaWinningEra.js) through the agent loop. The NBA's own copy of the NFL read's shape (nflRead.js): the line and how
 // it got to this number first, then who's playing and who's out, how good both teams are per possession with ranks,
-// the season game by game, the rotation, the spot and the reporting, plus the day's news gathered for the desk. He is
+// the season game by game, the rotation and the spot, plus the day's news gathered for the desk. No articles (founder,
+// Oct 22 2026, for every sport after TNF's NFL read). He is
 // asked what the line is saying, what matters in this game and what doesn't, and which side he likes at this spread;
 // then he writes that answer as the card. His instructions are what a sharp knows about NBA markets (nbaKnowledge.js)
 // and the date. Nothing weighs, scores or projects for him. The 11-factor research briefing does not run: the desk's
@@ -10,7 +11,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
-import { esc, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords } from './footballDeskText.js';
+import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatings, strengthLine, gameByGame } from '../../../sports/nba/nbaBettorData.js';
@@ -79,21 +80,6 @@ function beforeFirstGame(desk, team) {
   return (end > 0 ? rest.slice(1, end) : rest.slice(1)).join('\n').trim();
 }
 
-// The reporting: the preview and storylines, each team's identity piece and the recent run; openings only, with any
-// sentence that carries a betting line left out.
-export function reporting(desk, homeTeam, awayTeam) {
-  const all = articlesOf(desk);
-  const pick = (re) => all.find((a) => re.test(a.heading));
-  const chosen = [pick(/^THE GAME PREVIEW, AS WRITTEN/), pick(/^THE STORYLINES, AS WRITTEN/),
-    pick(new RegExp(`^${esc(awayTeam)} — WHO THIS TEAM IS RIGHT NOW`)), pick(new RegExp(`^${esc(homeTeam)} — WHO THIS TEAM IS RIGHT NOW`)),
-    pick(/^THE RECENT RUN, AS WRITTEN/)].filter(Boolean);
-  const seen = new Set();
-  return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => ({ a, opening: articleOpening(withoutBettingLines(a.body)) }))
-    .filter(({ opening }) => opening.trim())
-    .map(({ a, opening }) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${opening}`).join('\n\n');
-}
-
 /** The day's news gathered for the desk: the part after its own injury lists, without betting lines. */
 export function deskNews(desk) {
   const state = sectionOf(desk, 'CURRENT STATE & CONTEXT');
@@ -144,7 +130,6 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     ['THIS SEASON, GAME BY GAME', `${awayGames}\n\n${homeGames}`],
     ['THE ROTATION THIS SEASON', rotation(desk)],
     ['THE SITUATION', sectionOf(desk, 'REST & SCHEDULE SITUATION')],
-    ['THE REPORTING, AS WRITTEN', reporting(desk, homeTeam, awayTeam)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: deskNews(desk) };
 }

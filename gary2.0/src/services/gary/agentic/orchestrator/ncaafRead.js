@@ -1,7 +1,8 @@
 // THE COLLEGE READ (Oct 21 2026, founder: "give college the NFL treatment"). Every college game pick. College's own
 // copy of the NFL read's shape (nflRead.js), built from college's desk: the line and how it got to this number first,
 // then the quarterbacks and coaches, who's out and who plays instead, how good both teams are play after play and
-// against whom, the season game by game, the spot and the week's reporting, plus the news desk's latest on who plays.
+// against whom, the season game by game and the spot, plus the news desk's latest on who plays. No articles (founder,
+// Oct 22 2026, for every sport after TNF's NFL read).
 // He is asked what the line is saying, what matters in this game and what doesn't, and which side he likes at this
 // spread; then he writes that answer as the card. His instructions are what a sharp knows about college markets
 // (ncaafKnowledge.js) and the date. Nothing weighs, scores or projects for him. A change to the NFL read never reaches
@@ -10,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { ncaafSystemPrompt, ncaafGameMessage, ncaafCardMessage, NCAAF_FORMAT_ONLY } from './ncaafKnowledge.js';
-import { esc, RULE, isTitle, sectionOf, articlesOf, articleOpening, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
+import { RULE, isTitle, sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -103,26 +104,6 @@ function situation(desk) {
   return [...road, sectionOf(desk, 'REST & SCHEDULE SITUATION')].filter(Boolean).join('\n');
 }
 
-// The AP preview's closing box (odds when written, records against the spread, series trivia) is cut, as for the NFL.
-const withoutApBox = (body) => String(body || '').split(/\s*\bNeed to know\b/)[0];
-
-// This week's reporting: each team's week and last game, the preview or storylines, the quarterbacks story; openings
-// only, with any sentence that carries a betting line left out.
-export function reporting(desk, homeTeam, awayTeam) {
-  const all = articlesOf(desk);
-  const pick = (re) => all.find((a) => re.test(a.heading));
-  const chosen = [
-    pick(new RegExp(`^${esc(awayTeam)} — THIS WEEK'S CHANGES`)), pick(new RegExp(`^${esc(homeTeam)} — THIS WEEK'S CHANGES`)),
-    pick(new RegExp(`^${esc(awayTeam)} — LAST COMPLETED GAME`)), pick(new RegExp(`^${esc(homeTeam)} — LAST COMPLETED GAME`)),
-    pick(/^THE (?:STORYLINES THIS WEEK|GAME PREVIEW), AS WRITTEN/), pick(/^THE QUARTERBACKS, AS WRITTEN/),
-  ].filter(Boolean);
-  const seen = new Set();
-  return chosen.filter((a) => !seen.has(a.title) && seen.add(a.title))
-    .map((a) => ({ a, opening: articleOpening(withoutBettingLines(withoutApBox(a.body))) }))
-    .filter(({ opening }) => opening.trim())
-    .map(({ a, opening }) => `"${a.title}"${a.published ? ` (${a.published})` : ''}\n${opening}`).join('\n\n');
-}
-
 /** The game as Gary reads it. `asOf` cuts the line's path at the moment of the pick; `book` is the ticket's book. */
 export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date() } = {}) {
   const lines = await linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_ncaaf', book).catch(() => null);
@@ -136,7 +117,6 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
     ['HOW GOOD THEY ARE', howGood(desk)],
     ['THIS SEASON, GAME BY GAME', withoutScoreboardNoise(afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME')))],
     ['THE SITUATION', situation(desk)],
-    ['THIS WEEK, AS THE BEAT WRITERS TELL IT', reporting(desk, homeTeam, awayTeam)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }
