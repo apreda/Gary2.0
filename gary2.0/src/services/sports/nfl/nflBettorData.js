@@ -52,7 +52,10 @@ export function teamGames(d, code, season, before) {
     const us = tw.find((r) => r.game_id === g.game_id && r.team === code); const them = tw.find((r) => r.game_id === g.game_id && r.team === opp);
     const pf = n(home ? g.home_score : g.away_score), pa = n(home ? g.away_score : g.home_score);
     const passers = passersOf(d, g, code);
-    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers,
+    // Who the opponent had at quarterback: Atlanta's loss to a 4-1 Baltimore was to Tyler Huntley, Lamar Jackson out
+    // (Oct 23 2026 data check).
+    const oppQb = passersOf(d, g, opp)[0]?.player_display_name || (home ? g.away_qb_name : g.home_qb_name) || null;
+    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers, oppQb,
       qb: passers[0]?.player_display_name || (home ? g.home_qb_name : g.away_qb_name) || null,
       off: us ? { yards: yards(us) } : null, def: them ? { yards: yards(them) } : null };
   }).sort((a, b) => a.date.localeCompare(b.date));
@@ -119,14 +122,16 @@ export function gameByGame(d, team, before) {
       : starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
     const how = x.off && x.def ? ` · ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : '';
     const who = changes.get(x.g.game_id);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}${x.oppQb ? `, ${x.oppQb} at QB` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
   })].join('\n');
 }
 
 const passing = (rows) => {
   const g = rows.filter((r) => n(r.attempts) >= 8); if (!g.length) return null;
   const s = (k) => g.reduce((a, r) => a + n(r[k]), 0);
-  return `${g.length} game${g.length === 1 ? '' : 's'} · ${(100 * s('completions') / (s('attempts') || 1)).toFixed(1)}% · ${(s('passing_yards') / (s('attempts') || 1)).toFixed(1)} yds/att · ${s('passing_tds')} TD, ${s('passing_interceptions')} INT`;
+  const relief = rows.filter((r) => n(r.attempts) > 0 && n(r.attempts) < 8);
+  const short = relief.length ? ` (plus ${relief.length} game${relief.length === 1 ? '' : 's'} with fewer passes: ${relief.reduce((a, r) => a + n(r.completions), 0)}-of-${relief.reduce((a, r) => a + n(r.attempts), 0)}, ${relief.reduce((a, r) => a + n(r.passing_interceptions), 0)} INT)` : '';
+  return `${g.length} game${g.length === 1 ? '' : 's'} with 8+ passes · ${(100 * s('completions') / (s('attempts') || 1)).toFixed(1)}% · ${(s('passing_yards') / (s('attempts') || 1)).toFixed(1)} yds/att · ${s('passing_tds')} TD, ${s('passing_interceptions')} INT${short}`;
 };
 /** The desk's starter for a team ("[HOME] Team: Name (…"), or null. */
 export function deskStarter(deskQbSection, team) {
