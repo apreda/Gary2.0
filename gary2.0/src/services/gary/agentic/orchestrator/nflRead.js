@@ -1,7 +1,9 @@
 // THE NFL READ (Oct 19 2026, the new NFL system; founder: "create your own pie instead of trying to fix the pie that
 // we have now"). Every NFL game pick. Gary reads the game the way a sharp does before betting it: the line and how it
-// got to this number first, then who's playing at quarterback, who's out, how good both teams are play after play
-// (with ranks), the season game by game and the spot, plus the news desk's latest on who plays. No articles (founder,
+// got to this number first, then who's playing at quarterback, who's out, how both teams have scored and moved the ball
+// (with this week's starter apart from his backups' games), the season game by game with who started at quarterback
+// and the spot, plus the news desk's latest on who plays. This season only, no per-play numbers (founder, Oct 23
+// 2026: "last season is old news"; see nflBettorData.js). No articles (founder,
 // Oct 22 2026: TNF's read built its Patriots case from a Patriots.com game plan cut to its opening, and read more evenly
 // without the articles).
 // He is asked what the line is saying, what matters in this game and what doesn't, and who he likes at this spread;
@@ -11,9 +13,7 @@
 import { createHash } from 'node:crypto';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { nflLastSeasonsText } from '../scoutReport/sports/nflLastSeasons.js';
-import { getNflSchedule } from '../../../sports/nfl/nflSchedule.js';
-import { loadBettorData, strength, gameByGame, quarterbacks, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, strength, gameByGame, quarterbacks, deskStarter, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -43,11 +43,11 @@ export function injuriesAsReported(desk) {
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
 export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason() } = {}) {
   const before = etDate(asOf);
-  const [data, schedule, lines] = await Promise.all([
+  const [data, lines] = await Promise.all([
     loadBettorData(season),
-    getNflSchedule().catch(() => null),
     linePath(await db().catch(() => null), gameId, asOf).catch(() => null),
   ]);
+  const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const line = lineOf(desk);
   const where = spot(data, homeTeam, awayTeam, gameDate || before);
   const header = where.neutral
@@ -57,10 +57,9 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
-    ['THE QUARTERBACKS', quarterbacks(data, sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK'), homeTeam, awayTeam, before)],
+    ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', injuriesAsReported(desk)],
-    ['HOW GOOD THEY ARE', `${strength(data, awayTeam, before)}\n${strength(data, homeTeam, before)}`],
-    ['WHO THESE TEAMS ARE: THE LAST THREE SEASONS', schedule && !schedule.unavailable ? nflLastSeasonsText(schedule, { homeTeam, awayTeam, season }) : ''],
+    ['HOW GOOD THEY ARE', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`],
     ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
     ['THE SITUATION', situation],
   ];
@@ -72,13 +71,14 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
 export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameId, gameDate, kickoff, asOf = new Date(), data }) {
   const before = etDate(asOf);
   const lines = await linePath(await db().catch(() => null), gameId, asOf).catch(() => null);
+  const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   const where = spot(data, homeTeam, awayTeam, gameDate || before);
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}${where.neutral ? ` · ${where.neutral}` : ''}`,
     lineStory(lines, homeTeam, awayTeam), '',
-    'Quarterbacks:', quarterbacks(data, sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK'), homeTeam, awayTeam, before), '',
+    'Quarterbacks:', quarterbacks(data, qbs, homeTeam, awayTeam, before), '',
     'Injury report:', injuriesAsReported(desk), '',
-    'How good they are:', `${strength(data, awayTeam, before)}\n${strength(data, homeTeam, before)}`, '',
+    'How good they are:', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`, '',
     'The spot:', where.text || 'Nothing unusual.',
     news ? `\nThe news desk:\n${news}` : ''].join('\n');
 }
