@@ -1,8 +1,8 @@
 // THE NFL READ (Oct 19 2026, the new NFL system; founder: "create your own pie instead of trying to fix the pie that
 // we have now"). Every NFL game pick. Gary reads the game the way a sharp does before betting it: the line and how it
-// got to this number first, then who's playing at quarterback, who's out, how both teams have scored and moved the ball
-// (with this week's starter apart from his backups' games), the season game by game with who started at quarterback
-// and the spot, plus the news desk's latest on who plays. This season only, no per-play numbers (founder, Oct 23
+// got to this number first, then who's playing at quarterback (with this week's starter's record apart from his
+// backups' games), who's out, the season game by game, the players the ball goes to, and the schedule, travel and
+// weather, plus the news desk's latest on who plays. This season only, no per-play numbers (founder, Oct 23
 // 2026: "last season is old news"; see nflBettorData.js). No articles (founder,
 // Oct 22 2026: TNF's read built its Patriots case from a Patriots.com game plan cut to its opening, and read more evenly
 // without the articles).
@@ -44,10 +44,11 @@ function backOffReport(data, desk, awayTeam, homeTeam, before) {
   return lines.length ? `MISSED OR LEFT THE LAST GAME, NOT ON THIS WEEK'S INJURY REPORT\n${lines.join('\n')}` : null;
 }
 
-// The injury report as reported, without the desk's standing notes about it.
+// The injury report as reported, without the desk's standing notes about it or its own title and rule under the
+// section's heading (Oct 23 2026 section review).
 export function injuriesAsReported(desk) {
   return sectionOf(desk, 'INJURY REPORT').split('\n')
-    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE/.test(l))
+    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE|^NFL INJURY REPORT$|^─+$/.test(l))
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -67,17 +68,21 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ? String(matchupHeader(desk)).replace(/^Venue: .*$/m, `Venue: ${where.neutral} (neutral site; ${homeTeam} are the designated home team)`)
     : matchupHeader(desk);
   const situation = [where.text, (desk.match(/^Kickoff: [^\n]*/m) || [])[0], (desk.match(/^Kickoff weather[^\n]*/m) || [])[0]].filter(Boolean).join('\n');
+  // The order a bettor reads a game in: the line and how it moved; who plays (the quarterbacks, the injury report, who is
+  // back); each team's season game by game; the players the ball goes to; the schedule, travel and weather. Headings
+  // name the data, never what to make of it (Oct 23 2026 section review: "WHO THE OFFENSE RUNS THROUGH" and "THE
+  // SITUATION" went the way of "HOW GOOD THEY ARE").
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
-    ['WHO THE OFFENSE RUNS THROUGH (beyond the quarterback: most carries and most targets this season)',
+    // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
+    // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
+    ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
+    ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season, quarterbacks aside)",
       `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'))}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'))}`],
-    // The record and the quarterback split head each team's game log; a separate HOW GOOD THEY ARE repeated its scores
-    // and yards (Oct 23 2026 data review).
-    ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n\n${gameByGame(data, homeTeam, before, deskStarter(qbs, homeTeam))}`],
-    ['THE SITUATION', situation],
+    ['SCHEDULE, TRAVEL AND WEATHER', situation],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }
