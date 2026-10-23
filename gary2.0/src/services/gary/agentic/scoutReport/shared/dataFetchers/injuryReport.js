@@ -14,6 +14,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
   const todayStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   lines.push(`TODAY'S DATE: ${todayStr}`);
   lines.push('');
+  // A source that did not load says so above the rows it would have set (Oct 23 2026 source audit).
+  for (const note of injuries?.notOnFile || []) lines.push(note);
   lines.push('');
 
   // Categorize injuries by importance/duration

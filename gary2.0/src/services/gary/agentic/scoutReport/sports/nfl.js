@@ -1053,11 +1053,17 @@ export async function buildNflScoutReport(game, options = {}) {
   // only this game's week counts. Its game status wins over the feed's row and the feed's note for a player both list
   // (Oct 23 2026 data audit: Sills read "QUESTIONABLE per this week's note; the feed still reads IR-R" with the
   // official report saying Out); the feed's note stays as text.
+  if (injuries && injuries.sourceOk !== false && !scheduleWeek) {
+    (injuries.notOnFile ||= []).push(`Official injury report: not on file (the schedule did not give this game's week); the statuses below are the injury feed's.`);
+  }
   if (scheduleWeek && injuries && injuries.sourceOk !== false) {
     const key = (first, last) => `${String(last || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '')}|${String(first || '').toLowerCase().slice(0, 1)}`;
     for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
       const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch(() => null);
-      if (!report?.players?.length) continue;
+      if (!report?.players?.length) {
+        (injuries.notOnFile ||= []).push(`Official injury report, Wk ${scheduleWeek}, ${team}: not on file; the statuses below are the injury feed's.`);
+        continue;
+      }
       const list = Array.isArray(injuries[side]) ? injuries[side] : (injuries[side] = []);
       const byKey = new Map(list.map((i) => [key(i.player?.first_name, i.player?.last_name), i]));
       for (const p of report.players) {
