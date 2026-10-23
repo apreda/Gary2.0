@@ -46,7 +46,6 @@ import {
   todayLong,
 } from './propsBrain.js';
 import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
-import { loadPriceHistory } from './priceHistory.js';
 import { refreshNflRedZone, loadNflRedZone } from '../../sports/nfl/nflRedZone.js';
 import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals } from '../../sports/nfl/nflPlayerContext.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
@@ -238,22 +237,20 @@ export function buildNflEvidenceMaps(context) {
   const positionByName = new Map();
   const countingWindow = new Map();
   const season = String(context?.dataWindow?.season ?? '');
-  const priorSeason = String(context?.dataWindow?.priorSeason ?? '');
 
   for (const c of context?.propCandidates || []) {
     const key = norm(c?.player);
     const id = c?.playerId;
     if (!key || id == null) continue;
     const currentLogs = context?.playerGameLogs?.[id];
-    const priorLogs = context?.priorGameLogs?.[id];
     const current = Array.isArray(currentLogs?.games) ? currentLogs.games : null;
-    const prior = Array.isArray(priorLogs?.games) ? priorLogs.games : null;
-    if (current?.length) gamesByName.set(key, currentLogs);
-    if (prior?.length) priorGamesByName.set(key, priorLogs);
-    // A count reads whichever season it actually came from, and says which.
-    if (current && current.length >= 3) countingWindow.set(key, { games: current, label: season });
-    else if (prior?.length) countingWindow.set(key, { games: prior, label: priorSeason });
-    const seasonStat = context?.playerSeasonStats?.[id] || context?.priorSeasonStats?.[id];
+    // This season only (founder, Oct 23 2026: no last season, ever): last season's games no longer sit beside this
+    // season's or stand in for them when a player has fewer than three. priorGamesByName stays empty.
+    if (current?.length) {
+      gamesByName.set(key, currentLogs);
+      countingWindow.set(key, { games: current, label: season });
+    }
+    const seasonStat = context?.playerSeasonStats?.[id];
     const position = seasonStat?.player?.position_abbreviation || seasonStat?.player?.position;
     if (position) positionByName.set(key, position);
   }
@@ -265,12 +262,14 @@ async function loadNflSheetContext({ season, game, players }) {
   let supabase = null;
   try { ({ supabaseAdmin: supabase } = await import('../../../supabaseClient.js')); } catch { /* the red zone is left out */ }
   if (supabase) await refreshNflRedZone({ supabase, seasons: [season], log: { warn: () => {} } }).catch(() => 0);
-  const [rz, days, snaps, defCur, defPrev, rows, injuries, history] = await Promise.all([
-    supabase ? loadNflRedZone({ supabase, seasons: [season, season - 1] }).catch(() => null) : null,
-    gameDays(), snapCounts(season), defenseByPosition(season), defenseByPosition(season - 1), weeklyRows(season),
+  // This season only, and no prop price history: a prop's line and price before today are the market's opinion, and
+  // Gary reads the player and the game (founder, Oct 23 2026). The board still prints today's line he bets.
+  const [rz, days, snaps, defCur, rows, injuries] = await Promise.all([
+    supabase ? loadNflRedZone({ supabase, seasons: [season] }).catch(() => null) : null,
+    gameDays(), snapCounts(season), defenseByPosition(season), weeklyRows(season),
     ballDontLieService.getNflPlayerInjuries().catch(() => []),
-    loadPriceHistory(supabase, { league: 'NFL', players, date: new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), days: 21 }).catch(() => new Map()),
   ]);
+  const defPrev = null, history = null;
   const weeksByName = new Map();
   // Keyed the way the sheets look players up (normName strips Jr./Sr./III: nflverse writes "Michael Pittman",
   // the board "Michael Pittman Jr."), skill positions only (audit, Oct 13 2026).

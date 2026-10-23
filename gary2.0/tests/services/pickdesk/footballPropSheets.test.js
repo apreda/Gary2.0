@@ -123,7 +123,7 @@ describe('THE NFL PROP SHEETS', () => {
 });
 
 // ═══ The Week 1 carry, as the desk assembles it ═════════════════════════════
-describe('the NFL evidence maps (the Week 1 carry)', () => {
+describe('the NFL evidence maps', () => {
   const context = {
     dataWindow: { season: 2026, priorSeason: 2025 },
     propCandidates: [
@@ -140,27 +140,13 @@ describe('the NFL evidence maps (the Week 1 carry)', () => {
     priorSeasonStats: { 38: { player: { position_abbreviation: 'QB' } } },
   };
 
-  it('carries last season for a player with no games this season', () => {
-    const { gamesByName, priorGamesByName, countingWindow, positionByName } = buildNflEvidenceMaps(context);
-
+  it('reads this season only: no games this season means no sheet and no count (Oct 23 2026, no last season)', () => {
+    const { gamesByName, priorGamesByName, countingWindow } = buildNflEvidenceMaps(context);
     expect(gamesByName.has('josh allen')).toBe(false);
-    expect(priorGamesByName.get('josh allen').games).toHaveLength(3);
-    expect(countingWindow.get('josh allen').label).toBe('2025');
-    expect(positionByName.get('josh allen')).toBe('QB');
-  });
-
-  it('keeps counting last season until this season has three games of its own', () => {
-    const { countingWindow } = buildNflEvidenceMaps(context);
-    // Two games this season is not yet a count; last season still carries it.
-    expect(countingWindow.get('james cook').label).toBe('2025');
-    expect(countingWindow.get('james cook').games).toHaveLength(4);
-
-    const grown = buildNflEvidenceMaps({
-      ...context,
-      playerGameLogs: { 99: { games: [wrGame(4, 30), wrGame(5, 44), wrGame(6, 71)] } },
-    });
-    expect(grown.countingWindow.get('james cook').label).toBe('2026');
-    expect(grown.countingWindow.get('james cook').games).toHaveLength(3);
+    expect(countingWindow.has('josh allen')).toBe(false);
+    expect(priorGamesByName.size).toBe(0);
+    expect(countingWindow.get('james cook').label).toBe('2026');
+    expect(countingWindow.get('james cook').games).toHaveLength(2);
   });
 
   it('skips a board name with no resolved player id', () => {
@@ -170,8 +156,10 @@ describe('the NFL evidence maps (the Week 1 carry)', () => {
 
   it('names the season inside the cleared count', () => {
     const { countingWindow } = buildNflEvidenceMaps(context);
-    expect(clearedCountClause(countingWindow, 'james cook', 'player_receptions', 4.5))
-      .toBe('over in 3 of his last 4 games in 2025');
+    // Two games this season are not a count yet, and last season no longer stands in.
+    expect(clearedCountClause(countingWindow, 'james cook', 'player_receptions', 4.5)).toBeNull();
+    const grown = buildNflEvidenceMaps({ ...context, playerGameLogs: { 99: { games: [wrGame(4, 30), wrGame(5, 44), wrGame(6, 71)] } } });
+    expect(clearedCountClause(grown.countingWindow, 'james cook', 'player_receptions', 4.5)).toBe('over in 2 of his last 3 games in 2026');
     expect(clearedCountClause(countingWindow, 'nobody', 'player_receptions', 4.5)).toBeNull();
   });
 });
