@@ -10,11 +10,14 @@
 // injury is already in the spread" and "the team that looked bad can be the better side".
 // Oct 22 2026 (founder): "what the favorite has to do to cover it, and what the underdog has to do" went, as it had
 // from college and the NBA; TNF's Patriots +3 card closed on "the Bears need to win by four".
+// Same night (founder): the better-side line ("one of them is the better side to be on at that number. That isn't the
+// same as the better team") went. TNF's read took the Patriots +3 without ever saying they win; a rewrite that tied the
+// side to the team at small numbers brought back "Chicago has to win by four". The question already asks for the side
+// at this spread.
 export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.
 
 What a spread is:
 - The spread holds everything public: who's playing, how both teams have played, the matchup, rest, travel, weather and the week's news. Take it as the number; you aren't out to show it's wrong or to set one of your own.
-- Every spread has two sides, and in a given game one of them is the better side to be on at that number. That isn't the same as the better team, the better players or the healthier roster.
 - A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
 - Most games finish more than a field goal away from the spread. The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.
 
