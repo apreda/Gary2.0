@@ -147,38 +147,8 @@ async function fetchQBStatsByName(qbName, teamName, season = footballSeasonForDa
 
     let statsSeason = selectedStatsSeason;
     let qbStats = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, statsSeason), statsSeason, season, baseline));
-    // SEASON-OPEN FALLBACK (the qbWatch pattern, founder GO Aug 20): the
-    // current season's stat rows are empty until a QB has played — a Week 1
-    // starter or a backup taking over. Fall to the PRIOR season, LABELED,
-    // whenever the current season has no played games.
-    if (!qbStats.length || !(Number(qbStats[0]?.games_played) > 0)) {
-      let prior = findQbRows(validPlayerSeasonRows(await ballDontLieService.getNflSeasonStatsByTeam(team.id, season - 1), season - 1, season, baseline));
-      // A starter who changed clubs in the offseason has no line on this
-      // club's prior season (Sep 1 review: the fallback was team-scoped, so
-      // a 4,000-yard passer read "no NFL stat line on file"). Find HIM —
-      // the active-player search by name — and read his own prior season.
-      if (!prior.length || !(Number(prior[0]?.games_played) > 0)) {
-        try {
-          const found = await ballDontLieService.getPlayersActive('americanfootball_nfl', { search: searchParts[searchParts.length - 1], per_page: 25 }).catch(() => null);
-          const candidates = (found?.data || found || []).filter((pl) => {
-            const full = `${pl?.first_name || ''} ${pl?.last_name || ''}`.trim().toLowerCase();
-            const pos = String(pl?.position_abbreviation || pl?.position || '').toUpperCase();
-            return (full === searchName || full.includes(searchName) || searchName.includes(full)) && (pos === 'QB' || pos === 'QUARTERBACK');
-          });
-          const him = candidates[0];
-          if (him?.id) {
-            const own = validPlayerSeasonRows((await ballDontLieService.getNflPlayerSeasonStats({ playerId: him.id, season: season - 1 }).catch(() => [])) || [], season - 1, season, baseline);
-            if (own.length && Number(own[0]?.games_played) > 0) prior = own;
-          }
-        } catch { /* the by-player lookup is additive */ }
-      }
-      if (prior.length && Number(prior[0]?.games_played) > 0) {
-        qbStats = prior;
-        statsSeason = season - 1;
-        console.log(`[Scout Report] QB ${qbName}: no ${season} games yet — using labeled ${statsSeason} season line`);
-      }
-    }
-
+    // No prior-season fallback (founder, Oct 23 2026, every sport: "last season is old news"; source audit: it ran
+    // three times). A quarterback with no games this season has no season line, and the desk says so below.
     if (qbStats.length === 0) {
       console.log(`[Scout Report] No BDL stats found for QB "${qbName}" on ${teamName} - may be new/backup`);
       // Return QB info without stats (they might be a new backup)

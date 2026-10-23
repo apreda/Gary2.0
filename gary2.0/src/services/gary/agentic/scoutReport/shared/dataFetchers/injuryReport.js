@@ -299,7 +299,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 export function formatStartingLineups(homeTeam, awayTeam, lineups) {
   if (!lineups || (!lineups.home?.length && !lineups.away?.length)) return '';
 
-  const lines = ['STARTING LINEUPS (PROBABLE/CONFIRMED)'];
+  // A web search's projection, named as one (Oct 23 2026 source audit: printed as "CONFIRMED").
+  const lines = ['STARTING LINEUPS (PROJECTED, FROM A WEB SEARCH; NOT CONFIRMED)'];
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   if (lineups.away?.length) {

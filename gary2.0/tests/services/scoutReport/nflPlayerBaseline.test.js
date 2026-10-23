@@ -52,9 +52,9 @@ describe('NFL current roster and verified performance seasons', () => {
     expect(formatted).toContain('Seattle Seahawks: 2026-27 regular-season totals');
   });
 
-  it('rejects a seeded current quarterback total whose games exceed verified current games', async () => {
+  it('rejects a seeded current quarterback total whose games exceed verified current games, with no last-season line in its place (Oct 23 2026)', async () => {
     const result = await fetchQBStatsByName('Drake Maye', home.full_name, 2026, { statsSeason: 2026, currentRegularGamesPlayed: 1 });
-    expect(result).toMatchObject({ statsSeason: 2025, passingYards: 4000 });
+    expect(result).toMatchObject({ statsSeason: null, passingYards: 0 });
   });
 
   it('does not replace an explicitly unavailable baseline with the contaminated current endpoint', async () => {
