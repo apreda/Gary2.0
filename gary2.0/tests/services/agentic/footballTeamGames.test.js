@@ -114,7 +114,6 @@ describe('football game ledger — summaries', () => {
     const line = gameStoryLine(blownLead[0]);
     expect(line).toContain('led 24-10 at half');
     expect(line).toContain('outscored 0-21 after');
-    expect(line).toContain('lost a halftime lead');
   });
 
   it('reads a scoreless quarter as zero, not as missing data', () => {

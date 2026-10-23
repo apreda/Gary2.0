@@ -391,7 +391,7 @@ function notOnFile(results, onFile) {
 }
 
 /**
- * The players WHO THE OFFENSE RUNS THROUGH lists for one team, name to entry: the two with the most carries and the
+ * The players CARRIES AND CATCHES, GAME BY GAME lists for one team, name to entry: the two with the most carries and the
  * three with the most catches in the games with player lines on file, quarterbacks left out (Oct 23 2026 data audit).
  * The availability and regulars sections name these players and point to that section instead of repeating them.
  */
@@ -402,7 +402,7 @@ function offenseCore(rows, results, onFile) {
   const top = (key, n) => [...byPlayer].filter(([, e]) => !passer(e) && total(e, key) > 0).sort((a, b) => total(b[1], key) - total(a[1], key)).slice(0, n);
   return new Map([...top('rushing_attempts', 2), ...top('receptions', 3)]);
 }
-const UNDER_OFFENSE = 'game by game under WHO THE OFFENSE RUNS THROUGH';
+const UNDER_OFFENSE = 'game by game under CARRIES AND CATCHES, GAME BY GAME';
 
 /**
  * The availability report's players beside what they did this season, and
@@ -417,7 +417,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   const byPlayer = playersOf(rows, games);
   // One line per player: the games he has a stat row in, the last one, and his season's totals (Oct 23 2026 data review:
   // every defender's tackles game by game, and three backups' logs at every position, buried the report under noise).
-  // A player WHO THE OFFENSE RUNS THROUGH lists game by game is pointed there, not repeated.
+  // A player CARRIES AND CATCHES, GAME BY GAME lists game by game is pointed there, not repeated.
   const gameByGame = (name, entry) => {
     const played = games.filter((r) => entry.games.has(String(r.gameId)));
     const sinceLast = games.length - 1 - games.indexOf(played.at(-1));
@@ -481,7 +481,7 @@ function onReport(name, reported) {
 }
 
 /**
- * WHO THE OFFENSE RUNS THROUGH (Oct 23 2026 data audit: Duke read as a 40-pass team with Nate Sheppard, 20 carries
+ * CARRIES AND CATCHES, GAME BY GAME (Oct 23 2026 data audit: Duke read as a 40-pass team with Nate Sheppard, 20 carries
  * and 11 catches against North Carolina, nowhere in the story). The offenseCore players, each game newest first: every
  * game when there are five or fewer, else the latest five and the season's totals. A game with no row for him reads
  * "no stat row" (college publishes no snap counts, so it is not "did not play"); a game whose player lines are not on
@@ -637,7 +637,7 @@ ${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results,
 ${RULE}`;
 
   // One intro paragraph each, which the read leaves out: "no stat row" says what the box score shows and no more.
-  const offense = `WHO THE OFFENSE RUNS THROUGH
+  const offense = `CARRIES AND CATCHES, GAME BY GAME
 ${RULE}
 Each team's two players with the most carries and three with the most catches
 this season, quarterbacks left out, each game newest first (the latest five

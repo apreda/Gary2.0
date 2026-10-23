@@ -273,7 +273,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
     ['THIS SEASON, GAME BY GAME', gameLog(desk)],
-    ['WHO THE OFFENSE RUNS THROUGH', afterIntro(sectionOf(desk, 'WHO THE OFFENSE RUNS THROUGH'))],
+    ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
     ['THE SITUATION', situation(desk)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };

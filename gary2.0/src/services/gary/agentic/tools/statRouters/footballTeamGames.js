@@ -198,14 +198,9 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
       ? `tied ${htFor}-${htAgainst} at half`
       : `${htFor > htAgainst ? 'led' : 'trailed'} ${htFor}-${htAgainst} at half`;
     const after = `outscored ${result.secondHalfFor}-${result.secondHalfAgainst} after${result.overtime ? ', overtime included' : ''}`;
+    // The halves only: "won after trailing at half" and "lost a halftime lead" restated these numbers as a label (Oct 23
+    // 2026 data review).
     parts.push(`${ht}, ${after}`);
-
-    // Name the swing only when the second half actually reversed the game —
-    // stated as what happened, never as a judgement about the team.
-    const ledAtHalf = htFor > htAgainst;
-    if (result.tied) { /* a tie is neither a lost lead nor a comeback win */ }
-    else if (ledAtHalf && !result.won) parts.push('lost a halftime lead');
-    else if (!ledAtHalf && htFor !== htAgainst && result.won) parts.push('won after trailing at half');
   } else {
     parts.push('quarter detail not available for this game');
   }
