@@ -46,7 +46,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // and got hurt; the line named Lock alone).
 // 6 (Oct 13 2026, audit): drives that start with a kickoff the kicking team recovers, and drives that start at a
 // bare "50", are counted; temperature and wind fall back to the weather text when their columns are empty.
-const LEDGER_SCHEMA = 6;
+// 7 (Oct 23 2026 data audit): each game's score by quarter, the QB hits that were not sacks, kneel-downs by who took
+// them, and drives that ran out the half, ended in a safety or began in the opponent's territory (and their points).
+const LEDGER_SCHEMA = 7;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -64,7 +66,9 @@ const WANTED = [
   'return_team', 'return_yards', 'penalty_team', 'penalty_yards',
   // Oct 12 2026 (blind spots): the drive each play belongs to, and the game's site and weather.
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
-  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather'
+  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
+  // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
+  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id'
 ];
 
 const num = (v) => {
@@ -332,14 +336,20 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   if (d.start == null) d.start = drivePlace(g('drive_start_yard_line'), posteam);
 }
 
-/** One game's drives for one team, as counts. */
+/** One game's drives for one team, as counts. Drives that ran out the half are counted apart (`drive_end_of_half`),
+ * outside `drives`; drives that began past midfield, in the opponent's territory, are counted with their points
+ * (Oct 23 2026 data audit: Denver began 5 of its 12 drives in Chargers territory and scored 20 of its 23 points
+ * from them, and the story read the game as "yards about even"). */
 function driveTotals(list) {
   const t = { drives: 0, drive_points: 0, drive_tds: 0, drive_fgs: 0, drive_punts: 0, drive_turnovers: 0, drive_downs: 0,
-    drive_missed_fgs: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0, start_sum: 0, start_n: 0 };
+    drive_missed_fgs: 0, drive_safeties: 0, drive_end_of_half: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0,
+    opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0 };
   for (const d of list) {
-    if (d.result === 'End of half' || d.start == null) continue;
-    t.drives += 1;
+    if (d.start == null) continue;
     const pts = d.scoreStart != null && d.scoreEnd != null ? Math.max(0, d.scoreEnd - d.scoreStart) : 0;
+    if (d.start > 50) { t.opp_territory_drives += 1; t.opp_territory_points += pts; }
+    if (d.result === 'End of half') { t.drive_end_of_half += 1; continue; }
+    t.drives += 1;
     t.drive_points += pts;
     if (d.result === 'Touchdown') t.drive_tds += 1;
     else if (d.result === 'Field goal') t.drive_fgs += 1;
@@ -347,6 +357,7 @@ function driveTotals(list) {
     else if (d.result === 'Turnover' || d.result === 'Opp touchdown') t.drive_turnovers += 1;
     else if (d.result === 'Turnover on downs') t.drive_downs += 1;
     else if (d.result === 'Missed field goal') t.drive_missed_fgs += 1;
+    else if (d.result === 'Safety') t.drive_safeties += 1;
     if (d.result === 'Punt' && d.firstDowns === 0) t.three_and_outs += 1;
     if (d.inside20) { t.red_zone_trips += 1; if (d.result === 'Touchdown') t.red_zone_tds += 1; }
     t.start_sum += d.start; t.start_n += 1;
@@ -411,6 +422,10 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
   const games = new Map();
   const drives = new Map();
   const gameTeamLines = new Map();
+  // Each game's running score at the end of each quarter (5 is overtime), from every row, the quarter-end rows
+  // included (Oct 23 2026 data audit: checked against the finals of all 94 games through Week 7 and ESPN's quarter
+  // scores of 27).
+  const periods = new Map();
   let header = null;
   let idx = null;
   let malformed = 0;
@@ -425,6 +440,13 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     if (cells.length !== header.length) { malformed += 1; return; }
     rows += 1;
     const g = (name) => cells[idx[name]];
+
+    const qtr = num(g('qtr')), homeNow = num(g('total_home_score')), awayNow = num(g('total_away_score'));
+    if (qtr != null && homeNow != null && awayNow != null && g('home_team') && g('away_team')) {
+      if (!periods.has(g('game_id'))) periods.set(g('game_id'), { home: g('home_team'), away: g('away_team'), at: new Map() });
+      const at = periods.get(g('game_id')).at; const cur = at.get(qtr) || [0, 0];
+      at.set(qtr, [Math.max(cur[0], homeNow), Math.max(cur[1], awayNow)]);
+    }
 
     const playType = g('play_type');
     const posteam = g('posteam');
@@ -469,8 +491,8 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     if (!gameTeamLines.has(gameId)) gameTeamLines.set(gameId, new Map());
     const perGame = gameTeamLines.get(gameId);
     for (const [code, role] of [[posteam, 'offense'], [defteam, 'defense']]) {
-      const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0 });
-      if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit(), extra: extraUnit() });
+      const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0, hitsBesideSacks: 0 });
+      if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit(), extra: extraUnit(), kneels: {} });
       const slot = perGame.get(code)[role];
       const e = num(g('epa'));
       const sc = num(g('success'));
@@ -482,11 +504,21 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         // pass play here is a dropback: sacks and their lost yards included.
         const yards = num(g('yards_gained')) ?? 0;
         if (g('play_type') === 'run') { slot.runs += 1; slot.runYards += yards; }
-        else { slot.passes += 1; slot.passYards += yards; if (flag(g('sack'))) slot.sacks += 1; }
+        else {
+          slot.passes += 1; slot.passYards += yards; if (flag(g('sack'))) slot.sacks += 1;
+          // The quarterback hit on a play that was not a sack (Oct 23 2026 data audit: nflverse flags 408 of its 434
+          // sacks as hits too, so a hit count with the sacks in it said the same pressure twice).
+          if (flag(g('qb_hit')) && !flag(g('sack'))) slot.hitsBesideSacks += 1;
+        }
         if (flag(g('interception')) || flag(g('fumble_lost'))) slot.turnovers += 1;
       }
     }
 
+    // Kneel-downs by who took them: the weekly stats count them as carries (Oct 23 2026 data audit).
+    if (playType === 'qb_kneel' && g('rusher_player_id') && g('rusher_player_id') !== 'NA') {
+      const k = perGame.get(posteam).kneels; const who = g('rusher_player_id');
+      k[who] = { n: (k[who]?.n || 0) + 1, yards: (k[who]?.yards || 0) + (num(g('yards_gained')) ?? 0) };
+    }
     addGameDetail(perGame, playType, posteam, defteam, g);
     addDriveRow(drives, gameId, posteam, g, playType);
 
@@ -607,12 +639,21 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           defense_runs: slot.defense.runs, defense_run_yards_allowed: slot.defense.runYards,
           defense_pass_plays: slot.defense.passes, defense_pass_yards_allowed: slot.defense.passYards,
           defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers,
+          offense_qb_hits_beside_sacks: slot.offense.hitsBesideSacks, defense_qb_hits_beside_sacks: slot.defense.hitsBesideSacks,
+          kneels: slot.kneels,
           ...finishGameDetail(slot.extra),
           ...driveTotals(gameDrives.filter((d) => d.team === code))
         };
       }
     }
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines };
+    // Points each team scored in each quarter (a fifth is overtime), by team code.
+    // A quarter with no rows leaves the quarters off rather than folding its points into the next.
+    const p = periods.get(g.game_id); let quarters = null;
+    if (p && [...p.at.keys()].sort((a, b) => a - b).every((q, i) => q === i + 1)) {
+      const qs = [...p.at.keys()].sort((a, b) => a - b); quarters = { [p.home]: [], [p.away]: [] }; let prev = [0, 0];
+      for (const q of qs) { const [h, a] = p.at.get(q); quarters[p.home].push(h - prev[0]); quarters[p.away].push(a - prev[1]); prev = [h, a]; }
+    }
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

@@ -29,7 +29,8 @@ const HEADER = [
   'field_goal_result', 'kick_distance', 'extra_point_result', 'punt_blocked', 'own_kickoff_recovery',
   'return_team', 'return_yards', 'penalty_team', 'penalty_yards',
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
-  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather'
+  'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
+  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -184,6 +185,7 @@ describe('a parsed season', () => {
       return_team: '', return_yards: '0', penalty_team: '', penalty_yards: '0',
       fixed_drive: '1', fixed_drive_result: 'Punt', drive_first_downs: '0', drive_inside20: '0', drive_start_yard_line: 'AAA 25',
       posteam_score: '0', posteam_score_post: '0', roof: 'outdoors', temp: '60', wind: '8', stadium: 'Test Field', weather: 'Rain Temp: 60° F',
+      home_team: 'BBB', away_team: 'AAA', total_home_score: '0', total_away_score: '0', rusher_player_id: '',
       ...over
     };
     return HEADER.map((h) => base[h]).join(',');
@@ -256,7 +258,7 @@ describe('a parsed season', () => {
       row({ fixed_drive: '1', fixed_drive_result: 'Touchdown', drive_first_downs: '3', drive_inside20: '1', drive_start_yard_line: 'AAA 25', play_type: 'extra_point', posteam_score: '6', posteam_score_post: '7' }),
       // Drive 2, BBB: a three-and-out from the AAA 40 (the opponent's 40, so 60 yards from its own goal).
       row({ fixed_drive: '2', posteam: 'BBB', defteam: 'AAA', fixed_drive_result: 'Punt', drive_first_downs: '0', drive_start_yard_line: 'AAA 40' }),
-      // Drive 3, AAA: a kneel to end the half is left out.
+      // Drive 3, AAA: a kneel to end the half is left out of the drives and counted on its own.
       row({ fixed_drive: '3', fixed_drive_result: 'End of half', drive_start_yard_line: 'AAA 30', play_type: 'qb_kneel' }),
     ].join('\n');
     const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
@@ -265,7 +267,28 @@ describe('a parsed season', () => {
     const b = led.games[0].lines.BBB;
     expect([a.drives, a.drive_points, a.drive_tds, a.red_zone_trips, a.red_zone_tds, a.avg_drive_start]).toEqual([1, 7, 1, 1, 1, 25]);
     expect([b.drives, b.three_and_outs, b.avg_drive_start]).toEqual([1, 1, 60]);
+    // Oct 23 2026 data audit: the half's last kneel is its own count, and BBB's drive from the AAA 40 began in AAA's territory.
+    expect([a.drive_end_of_half, a.opp_territory_drives, b.opp_territory_drives, b.opp_territory_points]).toEqual([1, 0, 1, 0]);
     expect([led.games[0].roof, led.games[0].temp, led.games[0].wind, led.games[0].conditions]).toEqual(['outdoors', 60, 8, 'Rain']);
+  });
+
+  it('scores each quarter from the running score, and counts hits that were not sacks (Oct 23 2026)', async () => {
+    const body = [HEADER.join(','),
+      // Q1: AAA (away) scores 7. A sack that is also flagged a hit, and a hit on a throw.
+      row({ qtr: '1', total_away_score: '7', sack: '1', qb_hit: '1' }),
+      row({ qtr: '1', total_away_score: '7', qb_hit: '1' }),
+      // Q2 has only an end-of-quarter row with no team on it; BBB (home) scored 3 in it.
+      row({ qtr: '2', posteam: '', defteam: '', play_type: '', total_away_score: '7', total_home_score: '3' }),
+      // Q3: nothing scored. Q4: AAA kneels.
+      row({ qtr: '3', total_away_score: '7', total_home_score: '3' }),
+      row({ qtr: '4', total_away_score: '7', total_home_score: '3', play_type: 'qb_kneel', rusher_player_id: '00-1' }),
+    ].join('\n');
+    const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl });
+    const g = led.games[0];
+    expect(g.quarters).toEqual({ AAA: [7, 0, 0, 0], BBB: [0, 3, 0, 0] });
+    expect([g.lines.AAA.offense_qb_hits_beside_sacks, g.lines.BBB.defense_qb_hits_beside_sacks]).toEqual([1, 1]);
+    expect(g.lines.AAA.kneels).toEqual({ '00-1': { n: 1, yards: 25 } });
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {
