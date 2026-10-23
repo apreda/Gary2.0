@@ -29,6 +29,38 @@ export async function leagueRatings(season = nbaSeason()) {
   }, 30);
 }
 
+// The league's ratings as they stood at `asOf`. A pick made now reads BDL's season averages; a replay or the morning
+// data check reads the same numbers rebuilt from the box scores of games finished before `asOf` (possessions by
+// Basketball-Reference's formula, averaged over both sides, which matches BDL's published ratings). The season averages as of today put games played after the pick
+// into a replay's story (Oct 23 2026 data check: Denver's "0-1, 84-96" before the 84-96 game).
+export async function leagueRatingsAt(asOf = new Date(), season = nbaSeason()) {
+  if (Date.now() - new Date(asOf).getTime() < 6 * 3600 * 1000) return leagueRatings(season);
+  const cut = new Date(asOf).getTime();
+  const games = ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], per_page: 100, paginateAll: true })) || [])
+    .filter((g) => !g.postseason && /final/i.test(String(g.status || '')) && Date.parse(g.datetime || `${g.date}T23:59:00Z`) < cut);
+  const dates = [...new Set(games.map((g) => String(g.date || g.datetime).slice(0, 10)))];
+  const boxes = new Map();
+  for (const d of dates) for (const b of (await ballDontLieService.getNbaBoxScores(d, 24 * 60).catch(() => null)) || []) boxes.set(b.id, b);
+  const sum = (side) => (side?.players || []).reduce((a, p) => ({ fga: a.fga + (Number(p.fga) || 0), fgm: a.fgm + (Number(p.fgm) || 0), fta: a.fta + (Number(p.fta) || 0),
+    oreb: a.oreb + (Number(p.oreb) || 0), dreb: a.dreb + (Number(p.dreb) || 0), tov: a.tov + (Number(p.turnover) || 0) }), { fga: 0, fgm: 0, fta: 0, oreb: 0, dreb: 0, tov: 0 });
+  const half = (t, o) => t.fga + 0.4 * t.fta - 1.07 * (t.oreb / ((t.oreb + o.dreb) || 1)) * (t.fga - t.fgm) + t.tov;
+  const acc = {};
+  for (const g of games) {
+    const b = boxes.get(g.id); if (!b) continue;
+    const h = sum(b.home_team), v = sum(b.visitor_team); const p = (half(h, v) + half(v, h)) / 2; if (!(p > 0)) continue;
+    for (const [team, us, them] of [[g.home_team?.full_name, g.home_team_score, g.visitor_team_score], [g.visitor_team?.full_name, g.visitor_team_score, g.home_team_score]]) {
+      const t = (acc[team] ||= { gp: 0, w: 0, l: 0, pts: 0, opp: 0, poss: 0 });
+      t.gp += 1; t.w += us > them ? 1 : 0; t.l += us > them ? 0 : 1; t.pts += us; t.opp += them; t.poss += p;
+    }
+  }
+  const out = {};
+  for (const [team, t] of Object.entries(acc)) {
+    const off = (100 * t.pts) / t.poss, def = (100 * t.opp) / t.poss;
+    out[team] = { gp: t.gp, w: t.w, l: t.l, off, def, net: off - def, pace: t.poss / t.gp };
+  }
+  return out;
+}
+
 const rankOf = (league, team, key, high) => {
   const order = Object.entries(league).filter(([, t]) => Number.isFinite(t[key])).sort((a, b) => (high ? b[1][key] - a[1][key] : a[1][key] - b[1][key]));
   return order.findIndex(([name]) => name === team) + 1;

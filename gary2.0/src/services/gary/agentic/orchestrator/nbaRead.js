@@ -15,7 +15,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatings, strengthLine, gameByGame } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, strengthLine, gameByGame } from '../../../sports/nba/nbaBettorData.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -127,7 +127,7 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
   const [lines, ratings] = await Promise.all([
     linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba', book).catch(() => null),
-    league ? Promise.resolve(league) : leagueRatings().catch(() => ({})),
+    league ? Promise.resolve(league) : leagueRatingsAt(asOf).catch(() => ({})),
   ]);
   const line = nbaLineOf(desk);
   const how = howGood(desk, ratings, homeTeam, awayTeam);
