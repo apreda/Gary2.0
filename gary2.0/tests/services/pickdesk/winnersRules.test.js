@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  etParts, namedBigGame, isBigGame, ncaafBigGameId,
+  etParts, namedBigGame, isBigGame, ncaafBigGameId, ncaafBigGameIds,
 } from '../../../src/services/winners/winnersRules.js';
 
 describe('winnersRules — the big game', () => {
@@ -55,5 +55,17 @@ describe('winnersRules — the big game', () => {
       { id: 'y', homeRanking: 3, awayRanking: 5, commence_time: '2026-09-05T23:30:00Z' },
     ];
     expect(ncaafBigGameId(slate)).toBe('y');
+  });
+
+  it('NCAAF: the top two — ranked matchups first, then the highest-ranked team', () => {
+    const slate = [
+      { id: 'a', homeRanking: 3, awayRanking: null, commence_time: '2026-09-05T16:00:00Z' },
+      { id: 'b', homeRanking: 1, awayRanking: 5, commence_time: '2026-09-05T23:30:00Z' },
+      { id: 'c', homeRanking: 2, awayRanking: 4, commence_time: '2026-09-05T20:00:00Z' },
+      { id: 'd', homeRanking: null, awayRanking: null, commence_time: '2026-09-05T16:00:00Z' },
+    ];
+    expect(ncaafBigGameIds(slate)).toEqual(['b', 'c']);
+    expect(ncaafBigGameIds(slate.filter((g) => g.id !== 'c'))).toEqual(['b', 'a']);
+    expect(ncaafBigGameIds([slate[3]])).toEqual([]);
   });
 });

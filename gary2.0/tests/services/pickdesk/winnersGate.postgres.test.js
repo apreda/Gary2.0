@@ -121,6 +121,7 @@ describe.skipIf(!supported)('Winners admission: the card, the book, big games, p
     migration('20261013170000_retire_winners_judge.sql');
     migration('20261013190000_winners_floor_waits_for_late_news.sql');
     migration('20261014223000_darts_off_winners.sql');
+    migration('20261023170000_winners_big_games_only.sql');   // big games in every league (the NFL/NBA/college exclusions came after this chain)
     day = sql(`SELECT to_char(clock_timestamp() AT TIME ZONE 'America/New_York','YYYY-MM-DD')`);
   }, 60000);
   afterAll(() => { if (started) execFileSync(`${bin}/pg_ctl`, ['-D', `${directory}/data`, '-m', 'immediate', '-w', 'stop'], { env: pgEnv, stdio: 'ignore' }); if (directory) rmSync(directory, { recursive: true, force: true }); });

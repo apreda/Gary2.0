@@ -12,9 +12,6 @@ import { runPropsSelection } from '../src/services/winners/winnersProps.js';
 import { runBigGameStakes } from '../src/services/winners/garyBigGameStake.js';
 import { placeOnCard } from '../src/services/winners/garyCard.js';
 import { runLateNewsChecks } from '../src/services/winners/lateNews.js';
-import { runNflBoard } from '../src/services/winners/nflBoard.js';
-import { runNbaBoard } from '../src/services/winners/nbaBoard.js';
-import { runNcaafBoard } from '../src/services/winners/ncaafBoard.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 // Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is
@@ -134,32 +131,20 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
   }
 }
 
-// GARY'S CARD (founder GO, Oct 12 2026; migration 20261012233000_winners_card.sql). Game picks: the pick runner places
-// each pick on today's card as it lands (garyCard.js); this worker seats the picks in his book on Winners at his amount
-// 75 minutes before kickoff (28 before an NBA tip), once the late-news check has cleared them (SQL seat_the_card). A
-// big game goes on at the same moment at his amount or his number (the sweep; the judge that read it is retired,
-// migration 20261013170000_retire_winners_judge.sql).
-// Props: the reader compares each window's published props and selects the clear and lean ones with its own
-// stake (winnersProps.js, daily-props-v1).
+// BIG GAMES ONLY (founder GO, Oct 23 2026): Winners game bets are the day's big games (winners_big_games: MLB playoff
+// games, TNF/SNF/MNF, college's top two, the NBA's national-TV games). Each goes on at Gary's amount or his number
+// once the late-news check has cleared it (the sweep). Gary's card, and his NFL, NBA and college boards, no longer
+// seat anything; their code stays (seat_the_card, seat_*_board, nflBoard.js, nbaBoard.js, ncaafBoard.js).
+// Props: the reader compares each window's published props and selects the clear ones with its own stake
+// (winnersProps.js, daily-props-v1).
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=winners-card-v1 + big games; props=daily-props-v1; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=big games only; props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await runPropsSelection(supabase,todayET());
     await runLateNewsChecks(supabase,todayET());
-    const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
-    if(seated)console.log(`[Winners] card seated ${seated}`);
-    await runNflBoard(supabase,todayET());
-    const boardSeated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
-    if(boardSeated)console.log(`[Winners] NFL board seated ${boardSeated}`);
-    await runNbaBoard(supabase,todayET());
-    const nbaSeated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
-    if(nbaSeated)console.log(`[Winners] NBA board seated ${nbaSeated}`);
-    await runNcaafBoard(supabase,todayET());
-    const collegeSeated=check(await supabase.rpc('seat_ncaaf_board',{p_date:todayET()}));
-    if(collegeSeated)console.log(`[Winners] college board seated ${collegeSeated}`);
     const swept=check(await supabase.rpc('admit_winners_pending',{p_date:todayET()}));
     await runBigGameStakes(supabase,todayET());
     if(swept)console.log(`[Winners] sweep admitted ${swept}`);
@@ -196,8 +181,8 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  // The card seats its top 75 minutes before each kickoff (28 before an NBA tip); a seated pass goes to the number ask
-  // below. The late-news check runs first: a pick seats only once it is cleared or Gary has kept it (lateNews.js).
+  // The late-news check, 75 minutes before each kickoff (28 before an NBA tip): a big game goes on only once it is
+  // cleared or Gary has kept it (lateNews.js). The card backstop still places picks on his card; the card seats nothing.
   const card=async()=>{
     while(true) {
       try {
@@ -208,58 +193,8 @@ async function main() {
             const checked=await runLateNewsChecks(supabase,todayET());
             if(checked)console.log(`[Winners] ${new Date().toISOString()} late news checked ${checked}`);
           } catch(e){logFailure('late news',e);}
-          const seated=check(await supabase.rpc('seat_the_card',{p_date:todayET()}));
-          if(seated)console.log(`[Winners] ${new Date().toISOString()} card seated ${seated}`);
         });
       } catch(e){logFailure('card',e);}
-      await sleep(LOOP_MS);
-    }
-  };
-  // GARY'S NFL BOARD (Oct 19 2026, nflBoard.js): about 110 minutes before a slate's first kickoff he picks his bets
-  // from the board fresh; his bets on the same side as the pick seat 75 minutes out after the late-news check (SQL
-  // seat_nfl_board). The card no longer seats NFL. Its late-news checks run in the card loop above.
-  const nflBoard=async()=>{
-    while(true) {
-      try {
-        await pass(async()=>{
-          const did=await runNflBoard(supabase,todayET());
-          if(did && !['no_games','nothing_open','waiting','busy'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NFL board: ${did}`);
-          const seated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
-          if(seated)console.log(`[Winners] ${new Date().toISOString()} NFL board seated ${seated}`);
-        });
-      } catch(e){logFailure('NFL board',e);}
-      await sleep(LOOP_MS);
-    }
-  };
-  // GARY'S NBA BOARD (Oct 19 2026, from Oct 21, nbaBoard.js): about 50 minutes before the first tip he hasn't boarded
-  // he picks his bets from the picked games still to tip; his bets on the pick's side seat 28 minutes out after the
-  // late-news check (SQL seat_nba_board).
-  const nbaBoard=async()=>{
-    while(true) {
-      try {
-        await pass(async()=>{
-          const did=await runNbaBoard(supabase,todayET());
-          if(did && !['no_games','nothing_open','waiting','busy','opening_night'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NBA board: ${did}`);
-          const seated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
-          if(seated)console.log(`[Winners] ${new Date().toISOString()} NBA board seated ${seated}`);
-        });
-      } catch(e){logFailure('NBA board',e);}
-      await sleep(LOOP_MS);
-    }
-  };
-  // GARY'S COLLEGE BOARD (Oct 22 2026, from Oct 23, ncaafBoard.js): about 110 minutes before the first kickoff he
-  // hasn't boarded he picks his bets from the picked college games still to start; his bets on the pick's side seat 75
-  // minutes out after the late-news check, five a day spread over the kickoffs (SQL seat_ncaaf_board).
-  const ncaafBoard=async()=>{
-    while(true) {
-      try {
-        await pass(async()=>{
-          const did=await runNcaafBoard(supabase,todayET());
-          if(did && !['no_games','nothing_open','waiting','busy','card'].includes(did))console.log(`[Winners] ${new Date().toISOString()} college board: ${did}`);
-          const seated=check(await supabase.rpc('seat_ncaaf_board',{p_date:todayET()}));
-          if(seated)console.log(`[Winners] ${new Date().toISOString()} college board seated ${seated}`);
-        });
-      } catch(e){logFailure('college board',e);}
       await sleep(LOOP_MS);
     }
   };
@@ -285,6 +220,6 @@ async function main() {
       }
     }
   };
-  await Promise.all([reconcile(),props(),sweep(),card(),nflBoard(),nbaBoard(),ncaafBoard(),bigGames(),newCode()]);
+  await Promise.all([reconcile(),props(),sweep(),card(),bigGames(),newCode()]);
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href)main().then(()=>process.exit(0)).catch(e=>{console.error('[Winners] startup:',e.message);process.exit(1);});

@@ -302,19 +302,28 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
   // Winners whatever he stakes, except NFL Thursday and Monday night (founder,
   // Oct 4 2026: only SNF qualifies automatically; those two stay big games
   // for the free pick). Fail-soft: the slate write never waits on this.
+  // Oct 23 2026 (founder GO: Winners game bets are the big games only): college takes its top two, and the NBA
+  // its national-TV games, up to two a night (nbaNationalGames.js).
   try {
-    const { ncaafBigGameId, isBigGame, namedBigGame, loadBigGameOverrides } = await import('../winners/winnersRules.js');
+    const { ncaafBigGameIds, isBigGame, namedBigGame, loadBigGameOverrides } = await import('../winners/winnersRules.js');
     const { picksService } = await import('../gary/picksService.js');
     const list = Array.isArray(games) ? games : [];
     let bigs = [];
+    const networksById = new Map();
     const overrides = loadBigGameOverrides();
     const hasNamedGames = Boolean(overrides?.[etDateStr]?.[sport.league]);
     if (sport.league === 'NCAAF') {
-      const id = ncaafBigGameId(list);
+      const ids = new Set(ncaafBigGameIds(list, 2));
       bigs = hasNamedGames ? list.filter(g => namedBigGame(overrides, etDateStr, sport.league, g))
-        : id ? list.filter((g) => String(g?.bdl_game_id ?? g?.id) === String(id)) : [];
+        : list.filter((g) => ids.has(String(g?.bdl_game_id ?? g?.id)));
     } else if (sport.league === 'NFL' || sport.league === 'MLB') {
       bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr, overrides }));
+    } else if (sport.league === 'NBA') {
+      const { fetchNationalNbaGames } = await import('../winners/nbaNationalGames.js');
+      for (const { row, networks } of await fetchNationalNbaGames(etDateStr, list)) {
+        bigs.push(row);
+        networksById.set(String(row.bdl_game_id ?? row.id), networks);
+      }
     }
     for (const big of bigs) {
       const playoff = String(big.season_type || '').toLowerCase() === 'postseason';
@@ -325,6 +334,7 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         matchup: `${big.away_team} @ ${big.home_team}`,
         reason: namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
           : sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
+          : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
           : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball',
       });
       console.log(`[Daily Slate] 🏆 ${sport.league} big game today: ${big.away_team} @ ${big.home_team}`);

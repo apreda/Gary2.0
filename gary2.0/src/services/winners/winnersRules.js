@@ -88,11 +88,12 @@ const rankOf = (v) => {
 };
 
 /**
- * NCAAF: the game with both teams ranked and the lowest combined ranking
- * (tie → the later kickoff). No ranked-vs-ranked game → the game holding the
- * highest-ranked team. No ranked team → null.
+ * NCAAF: the games with both teams ranked, lowest combined ranking first
+ * (tie → the later kickoff), then the games holding the highest-ranked team.
+ * Up to `max` ids (founder, Oct 23 2026: Winners game bets are the day's one
+ * or two big games). No ranked team → [].
  */
-export function ncaafBigGameId(slate = []) {
+export function ncaafBigGameIds(slate = [], max = 2) {
   const rows = (slate || []).map((g) => ({
     id: String(g.id ?? g.game_id ?? ''),
     h: rankOf(g.homeRanking ?? g.home_ranking),
@@ -100,9 +101,14 @@ export function ncaafBigGameId(slate = []) {
     t: new Date(g.commence_time || g.gameTime || 0).getTime() || 0,
   }));
   const both = rows.filter((r) => r.h && r.a).sort((x, y) => (x.h + x.a) - (y.h + y.a) || y.t - x.t);
-  if (both.length) return both[0].id;
-  const one = rows.filter((r) => r.h || r.a).sort((x, y) => Math.min(x.h ?? 99, x.a ?? 99) - Math.min(y.h ?? 99, y.a ?? 99) || y.t - x.t);
-  return one.length ? one[0].id : null;
+  const one = rows.filter((r) => (r.h || r.a) && !(r.h && r.a))
+    .sort((x, y) => Math.min(x.h ?? 99, x.a ?? 99) - Math.min(y.h ?? 99, y.a ?? 99) || y.t - x.t);
+  return [...both, ...one].slice(0, max).map((r) => r.id);
+}
+
+/** NCAAF: the single biggest game (the first of ncaafBigGameIds), or null. */
+export function ncaafBigGameId(slate = []) {
+  return ncaafBigGameIds(slate, 1)[0] ?? null;
 }
 
 /** Qualification only. The admissions ledger enforces capacity and publication. */
