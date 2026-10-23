@@ -74,88 +74,28 @@ function injuriesAsReported(desk) {
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// HOW GOOD THEY ARE: the poll, the conferences, and each team's season against FBS teams with who played quarterback.
-// Oct 23 2026 (founder, after TNF: "its data we know its data"): the provider's season table and per-play measures
-// went. Both blended games against FCS teams and games another quarterback played: Oregon's 317 passing yards a game on
-// Oct 17 were mostly Dante Moore's, with Moore out and Brock Thomas (15 passes all year) starting, and an 84-0 win
-// over Portland State sat inside its averages. Every game's own unit lines stay in the season game by game.
+// HOW GOOD THEY ARE: the poll, the conferences, the season table and the per-play measures the desk carries (success
+// rate, explosiveness, sacks and tackles for loss; points per trip and turnover counts are left out).
 function howGood(desk) {
+  const text = String(desk || '');
   const poll = sectionOf(desk, 'AP TOP 25');
   const conferences = sectionOf(desk, 'NCAAF CONFERENCE CONTEXT').split('\n').filter((l) => /^\[(?:HOME|AWAY)\]/.test(l)).map((l) => l.replace(/^\[(?:HOME|AWAY)\] /, '')).join('\n');
-  const teams = seasonGames(desk);
-  const starters = thisWeeksQuarterbacks(desk, teams.map((t) => t.team));
-  const seasons = teams.map(({ team, games }) => seasonLines(team, games, starters.get(team))).join('\n\n');
-  return [poll, conferences, seasons].filter(Boolean).join('\n\n');
-}
-
-const nameKey = (name) => String(name || '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
-
-// This week's quarterback for each team, as the desk's quarterbacks section names him under the team's name.
-function thisWeeksQuarterbacks(desk, teams) {
-  const out = new Map(); let team = null;
-  for (const l of quarterbacksAndCoaches(desk).split('\n')) {
-    if (teams.includes(l.trim())) { team = l.trim(); continue; }
-    const m = l.match(/^Quarterback: (.+?) — /);
-    if (m && team && !out.has(team)) out.set(team, m[1].trim());
+  const table = sectionOf(desk, 'TEAM STATISTICS').split('\n').filter((l) => !/^This section uses|^records provide|^A dash means/.test(l)).join('\n').trim();
+  const block = (name) => { const i = text.indexOf(`\n${name}\n`); if (i < 0) return null; const j = text.slice(i + 1).search(/\n(?:NCAAF_[A-Z_]+|REST & SCHEDULE)/); return text.slice(i + 1, j < 0 ? undefined : i + 1 + j); };
+  const side = (b, s) => { if (!b) return {}; const i = b.indexOf(`\n${s}:\n`); if (i < 0) return {}; const out = {}; for (const l of b.slice(i + s.length + 3).split('\n')) { const m = l.match(/^ {2}([a-z_]+): (.+)$/); if (!m) break; out[m[1]] = m[2]; } return out; };
+  const b = { sr: block('NCAAF_SUCCESS_RATE'), ex: block('NCAAF_EXPLOSIVE_PLAYS'), pr: block('NCAAF_PRESSURE_RATE') };
+  const perPlay = [];
+  for (const s of ['away', 'home']) {
+    const sr = side(b.sr, s), ex = side(b.ex, s), pr = side(b.pr, s);
+    const team = sr.team || ex.team || pr.team;
+    if (!team) continue;
+    const parts = [];
+    if (sr.offense_success_rate) parts.push(`plays that succeed: ${sr.offense_success_rate} on offense, ${sr.defense_success_rate_allowed} allowed on defense`);
+    if (ex.offense_explosiveness) parts.push(`size of the successful plays (explosiveness): ${ex.offense_explosiveness} on offense, ${ex.defense_explosiveness_allowed} allowed`);
+    if (pr.sacks) parts.push(`${pr.sacks} sacks and ${pr.tackles_for_loss} tackles for loss`);
+    if (parts.length) perPlay.push(`${team}: ${parts.join('; ')}`);
   }
-  return out;
-}
-
-// Each team's games from the desk's season game by game: result, score, FCS or not, who threw the most passes, and
-// the yards each side gained (runs plus passing; null when the game's unit lines are missing).
-export function seasonGames(desk) {
-  const teams = []; let cur = null; let game = null;
-  const yards = (l) => { const r = l.match(/(\d+) runs for (-?\d+)/), p = l.match(/passing \d+-\d+ for (-?\d+)/); return r && p ? Number(r[2]) + Number(p[1]) : null; };
-  for (const l of sectionOf(desk, 'THIS SEASON GAME BY GAME').split('\n')) {
-    const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
-    if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }
-    const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), opponent: g[5], fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
-    if (!game) continue;
-    const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
-    if (q) game.qb = q[1].trim();
-    else if (/^\s+offense: /.test(l)) game.off = yards(l);
-    else if (/^\s+defense: /.test(l)) game.def = yards(l);
-  }
-  return teams;
-}
-
-const one = (x) => (Math.round(x * 10) / 10).toFixed(1);
-function perGame(gs) {
-  const n = gs.length;
-  const pts = `${one(gs.reduce((a, g) => a + g.pf, 0) / n)} points a game, ${one(gs.reduce((a, g) => a + g.pa, 0) / n)} allowed`;
-  const y = gs.filter((g) => g.off != null && g.def != null);
-  if (!y.length) return pts;
-  const yds = `${Math.round(y.reduce((a, g) => a + g.off, 0) / y.length)} yards a game, ${Math.round(y.reduce((a, g) => a + g.def, 0) / y.length)} allowed`;
-  return `${pts} · ${yds}${y.length < n ? ` (yards from ${y.length} of the ${n})` : ''}`;
-}
-const record = (gs) => { const w = gs.filter((g) => g.result === 'W').length, l = gs.filter((g) => g.result === 'L').length, t = gs.length - w - l; return `${w}-${l}${t ? `-${t}` : ''}`; };
-const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
-
-// One team: its games against FBS teams, the FCS games named apart, and the same games by who threw the most passes.
-export function seasonLines(team, all, qb = null) {
-  const fbs = all.filter((g) => !g.fcs), fcs = all.filter((g) => g.fcs);
-  const out = [fbs.length ? `${team}, against FBS teams, ${games(fbs.length)}: ${record(fbs)}, ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
-  if (fcs.length) out.push(`  against FCS teams: ${fcs.map((g) => `${g.result} ${g.pf}-${g.pa} vs ${g.opponent}`).join('; ')}`);
-  if (!fbs.length) return out.join('\n');
-  const by = new Map();
-  for (const g of fbs) { const k = g.qb || 'no passing rows'; by.set(k, [...(by.get(k) || []), g]); }
-  const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
-  if (mine && by.size === 1) out.push(`  ${qb}, this week's quarterback, threw the most passes in all ${fbs.length}.`);
-  else if (mine) {
-    out.push(`  With ${qb} (this week's quarterback) throwing the most passes, ${games(by.get(mine).length)}: ${record(by.get(mine))}, ${perGame(by.get(mine))}`);
-    for (const [k, gs] of by) if (k !== mine) out.push(`  With ${k} throwing the most passes, ${games(gs.length)}: ${record(gs)}, ${perGame(gs)}`);
-  } else {
-    if (qb) out.push(`  ${qb}, this week's quarterback, threw the most passes in none of these games.`);
-    for (const [k, gs] of by) out.push(`  With ${k} throwing the most passes, ${games(gs.length)}: ${record(gs)}, ${perGame(gs)}`);
-  }
-  return out.join('\n');
-}
-
-// Who else plays there, without the offensive line: linemen record no stats in the feed, so the "others" it listed
-// were linemen's stray tackles (Oklahoma's three doubtful linemen on Oct 17 read as "Fred Hinton: Sep 4 1 tackle").
-function whoElsePlays(desk) {
-  return afterIntro(sectionOf(desk, 'WHO PRODUCED IT')).split('\n').filter((l) => !/^\s+others at (?:OL|OT|OG|IOL|C|G|T): /.test(l)).join('\n');
+  return [poll, conferences, table, perPlay.join('\n')].filter(Boolean).join('\n\n');
 }
 
 function situation(desk) {
@@ -173,7 +113,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk)],
     ['THE AVAILABILITY REPORT', injuriesAsReported(desk)],
-    ['WHAT THE PLAYERS ON THE REPORT HAVE DONE, AND WHO ELSE PLAYS THERE', whoElsePlays(desk)],
+    ['WHAT THE PLAYERS ON THE REPORT HAVE DONE, AND WHO ELSE PLAYS THERE', afterIntro(sectionOf(desk, 'WHO PRODUCED IT'))],
     ['HOW GOOD THEY ARE', howGood(desk)],
     ['THIS SEASON, GAME BY GAME', withoutScoreboardNoise(afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME')))],
     ['THE SITUATION', situation(desk)],
