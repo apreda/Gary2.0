@@ -48,7 +48,7 @@ export function injuriesAsReported(desk) {
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
+/** The game as Gary reads it. `asOf` cuts every fact: games before its ET date. */
 export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null } = {}) {
   const before = etDate(asOf);
   // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,

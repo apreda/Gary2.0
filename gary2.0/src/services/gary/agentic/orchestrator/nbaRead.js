@@ -590,8 +590,8 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
     'The situation:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
 }
 
-/** The game as Gary reads it. `asOf` cuts the line's path and the season at the moment of the pick; `book` is the
- * ticket's book; `league` (tests only) stands in for the league's ratings. */
+/** The game as Gary reads it. `asOf` cuts the season at the moment of the pick; `league` (tests only) stands in for the
+ * league's ratings. */
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
   // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,
   // Oct 23 2026: the market is other people's opinions, and Gary reads the game; see nbaKnowledge.js).

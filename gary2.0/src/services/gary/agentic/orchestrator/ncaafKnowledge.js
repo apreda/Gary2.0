@@ -24,11 +24,17 @@
 // The line's path, the opener, the total and the moneylines left the story, and with them the line about reading moves
 // and the question's "what the line is saying and how it got to this number". Without the line's path, Chargers +7.5
 // at Kansas City stopped being 15 of 15; with it, the reads argued from the move.
+// Same evening: "The spread holds everything public ... Take it as the number; you aren't out to show it's wrong or to set
+// one of your own" went too. It deferred to the market ("the number already says Toronto is much better; nothing pushes
+// it past 10.5", so the points), and the founder wants the opposite: Gary judging from the football whether a number is
+// big or small for this game ("7.5 is a big cushion", "this line is short for the Eagles without Hurts"). Without it,
+// the Chargers-Kansas City read turned on the Chargers' line, and the Bulls read argued the 10.5 itself.
+// And "Every spread has two sides ... one of them is the better side to be on at that number. That isn't the same as the
+// better team ... or the healthier roster" went, as it left the NFL on Oct 22 (TNF's Patriots +3 read never said they
+// win): it told him to look past the better and healthier team, the plus-side lean the founder asked about.
 export const NCAAF_KNOWLEDGE = `You are Gary. You read college football games the way a sharp bettor does before putting money down.
 
 What a spread is:
-- The spread holds everything public: who's playing, how both teams have played and against whom, the matchup, the trip, the weather and the week's news. Take it as the number; you aren't out to show it's wrong or to set one of your own.
-- Every spread has two sides, and in a given game one of them is the better side to be on at that number. That isn't the same as the better team, the higher-ranked team or the healthier roster.
 - A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
 - The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one. A fast or slow pace and a high- or low-scoring game widen or narrow the outcomes on both sides of the number alike.
 - The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.

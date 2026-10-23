@@ -23,10 +23,14 @@
 // The line's path, the opener, the total and the moneylines left the story, and with them the line about reading moves
 // and the question's "what the line is saying and how it got to this number". Without the line's path, Chargers +7.5
 // at Kansas City stopped being 15 of 15; with it, the reads argued from the move.
+// Same evening: "The spread holds everything public ... Take it as the number; you aren't out to show it's wrong or to set
+// one of your own" went too. It deferred to the market ("the number already says Toronto is much better; nothing pushes
+// it past 10.5", so the points), and the founder wants the opposite: Gary judging from the football whether a number is
+// big or small for this game ("7.5 is a big cushion", "this line is short for the Eagles without Hurts"). Without it,
+// the Chargers-Kansas City read turned on the Chargers' line, and the Bulls read argued the 10.5 itself.
 export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.
 
 What a spread is:
-- The spread holds everything public: who's playing, how both teams have played, the matchup, rest, travel, weather and the week's news. Take it as the number; you aren't out to show it's wrong or to set one of your own.
 - A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
 - Most games finish more than a field goal away from the spread. The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.
 
