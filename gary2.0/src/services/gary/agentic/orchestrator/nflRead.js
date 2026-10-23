@@ -29,6 +29,8 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
+const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+
 let _db = null;
 async function db() {
   if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
@@ -43,11 +45,12 @@ export function injuriesAsReported(desk) {
 }
 
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
-export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason() } = {}) {
+export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null } = {}) {
   const before = etDate(asOf);
+  // The line's path at the ticket's own book, as college and the NBA read it (Oct 23 2026 source audit).
   const [data, lines] = await Promise.all([
     loadBettorData(season),
-    linePath(await db().catch(() => null), gameId, asOf).catch(() => null),
+    linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_nfl', book).catch(() => null),
   ]);
   const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const line = lineOf(desk);
@@ -115,7 +118,7 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
   const costTracker = createCostTracker(`NFL read: ${awayTeam} @ ${homeTeam} (${sport})`);
   try {
     const game = options.game || {};
-    const { line, story } = await buildNflReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, gameDate: game.commence_time ? etDate(game.commence_time) : null });
+    const { line, story } = await buildNflReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, gameDate: game.commence_time ? etDate(game.commence_time) : null, book: game.line_vendor });
     console.log(`[NFL Read] the game as Gary reads it (${story.length} chars)`);
     const research = await latestNews(story, sport, homeTeam, awayTeam, options, costTracker);
     if (research.news) console.log(`[NFL Read] News desk report ready (${research.news.length} chars, ${research.model})`);
@@ -143,7 +146,9 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    const read = await ask(nflGameMessage(story, research.news));
+    // A failed news search says so; "Nothing beyond the scout report" is kept for a search that found nothing (Oct 23
+    // 2026 source audit: a failure read as a quiet day).
+    const read = await ask(nflGameMessage(story, research.news || NEWS_NOT_ON_FILE));
     console.log(`[NFL Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     // What he was asked and answered, as college and the NBA keep it: the morning data check reads it (Oct 23 2026).
     try {

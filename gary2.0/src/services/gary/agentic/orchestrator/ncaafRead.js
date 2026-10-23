@@ -25,6 +25,8 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
+const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+
 let _db = null;
 async function db() {
   if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
@@ -262,7 +264,8 @@ export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, o
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    const read = await ask(ncaafGameMessage(story, research.news));
+    // A failed news search says so (Oct 23 2026 source audit: a failure read as a quiet day).
+    const read = await ask(ncaafGameMessage(story, research.news || NEWS_NOT_ON_FILE));
     console.log(`[NCAAF Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     try {
       const dir = `${homedir()}/Library/Logs/gary-ncaaf-read`;

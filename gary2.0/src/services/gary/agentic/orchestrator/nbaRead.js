@@ -25,6 +25,8 @@ import { buildMlCapRetryMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap } from './agentLoop.js';
 
+const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+
 let _db = null;
 async function db() {
   if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
@@ -199,7 +201,8 @@ export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, opt
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    const read = await ask(nbaGameMessage(story, news));
+    // A desk whose news search failed carries no news section; that says so (Oct 23 2026 source audit).
+    const read = await ask(nbaGameMessage(story, news || NEWS_NOT_ON_FILE));
     console.log(`[NBA Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     try {
       const dir = `${homedir()}/Library/Logs/gary-nba-read`;

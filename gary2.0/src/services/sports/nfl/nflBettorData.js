@@ -243,8 +243,12 @@ export async function linePath(db, gameId, until = new Date(), sport = 'american
     .eq('sport', sport).eq('game_id', String(gameId)).lte('seen_at', new Date(until).toISOString())
     .order('seen_at').limit(5000);
   if (error || !rows?.length) return null;
-  const vendor = [String(book || '').toLowerCase(), ...TICKET_BOOKS].find((b) => b && rows.some((r) => r.line_vendor === b));
+  // With a ticket's book, that book's rows only: another book's path, or the median of all, is a different line from
+  // the one Gary bets (Oct 23 2026 source audit). Without one (the boards), the first ticket book on file.
+  const asked = String(book || '').toLowerCase();
+  const vendor = asked ? asked : TICKET_BOOKS.find((b) => rows.some((r) => r.line_vendor === b));
   const data = vendor ? rows.filter((r) => r.line_vendor === vendor) : rows;
+  if (asked && !data.length) return { path: [], now: null, book: asked, missing: true };
   const latest = new Map(); const path = []; let last = null;
   const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)), books: rs.length }; };
   // A moneyline move of 15 cents or more is a point on the path too (Oct 23 2026 data audit: Thunder -300 to -335 with
@@ -265,6 +269,7 @@ const BOOK_NAMES = { fanduel: 'FanDuel', draftkings: 'DraftKings', betrivers: 'B
 // the line watch first polled), and no book was named; each move is when we first saw it, and moneyline moves of 15
 // cents or more print with the spread's (Oct 23 2026 data audit).
 export function lineStory(lines, homeTeam, awayTeam) {
+  if (lines?.missing) return `No line history on file at ${BOOK_NAMES[lines.book] || lines.book} for this game.`;
   if (!lines?.now || !lines.path?.length) return 'No line history on file for this game.';
   const side = (h) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}` : `${awayTeam} -${h}`);
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
