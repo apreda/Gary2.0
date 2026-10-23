@@ -61,6 +61,10 @@ function quarterbacksAndCoaches(desk) {
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
     if (RULE.test(lines[i]) || isTitle(lines[i], lines[i + 1])) break;
+    // The official report's line stays, without its link: it is when the availability below was published (Oct 23 2026
+    // data audit: "doubtful" with no date read the same as a week-old listing).
+    const official = lines[i].match(/^\[official\] (.+?)(?: \(\d{4}-\d{2}-\d{2}\))? https?:\/\/\S+\s*$/);
+    if (official) { out.push(`Official report: ${official[1]}`); continue; }
     if (/^Observed |^\[[a-z0-9_]+\] |^\[official\] |^Availability source:|^UNCERTAINTY:|^Availability designations are/.test(lines[i])) continue;
     out.push(lines[i]);
   }
