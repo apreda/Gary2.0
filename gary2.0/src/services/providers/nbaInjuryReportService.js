@@ -31,18 +31,10 @@ async function fetchAllInjuries(dateStr) {
     console.log(`[NBA Injuries] Using cached official report (${cachedData.length} entries, ${Math.round((now - cachedAt) / 1000)}s old)`);
     return cachedData;
   }
-  let report;
-  try {
-    report = await latestOfficialReport();
-  } catch (error) {
-    // The official report out of reach (blocked or missing): BDL's NBA injury list, so a pick never fails for want of
-    // the league's PDF (Oct 19 2026, the night before the opener: the CDN 403'd this host).
-    const fallback = await bdlInjuryRows(dateStr).catch(() => null);
-    if (!fallback) throw error;
-    console.warn(`[NBA Injuries] Official report unavailable (${error.message}); BDL's injury list instead (${fallback.length} entries)`);
-    cachedData = fallback; cachedDate = dateStr; cachedAt = now; cachedNotSubmitted = []; cachedReportTime = null;
-    return fallback;
-  }
+  // No fallback (founder, Oct 23 2026: no fallback that gives different data when the original source fails). BDL's
+  // list stood in when the league's PDF was out of reach (Oct 19 2026: the CDN 403'd this host); it is a different
+  // source with different statuses, so a failure now stops the pick (groundingInjuries) and the next trigger retries.
+  const report = await latestOfficialReport();
   cachedNotSubmitted = report.notSubmitted || [];
   cachedReportTime = new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET';
   const [y, m, d] = String(dateStr).split('-');
@@ -57,22 +49,6 @@ async function fetchAllInjuries(dateStr) {
   return data;
 }
 
-/** BDL's NBA injury list in this service's row shape; "Day-To-Day" reads as Questionable. */
-async function bdlInjuryRows(dateStr) {
-  const { ballDontLieService } = await import('./ballDontLieService.js');
-  const [rows, teams] = await Promise.all([
-    ballDontLieService.getInjuriesGeneric('basketball_nba', {}, 10),
-    ballDontLieService.getTeams('basketball_nba'),
-  ]);
-  const teamById = new Map((teams || []).map((t) => [String(t.id), t.full_name]));
-  const out = (rows || []).map((r) => {
-    const status = String(r?.status || '').trim();
-    return { team: teamById.get(String(r?.player?.team_id ?? r?.team_id)) || '', player: `${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim(),
-      status: /day.to.day/i.test(status) ? 'Questionable' : status || 'Questionable', reason: String(r?.description || '').trim(), source: 'bdl', gameDate: null };
-  }).filter((r) => r.team && r.player);
-  if (!out.length) throw new Error('BDL NBA injuries empty');
-  return out;
-}
 
 /**
  * Check if an API team name matches a target team name

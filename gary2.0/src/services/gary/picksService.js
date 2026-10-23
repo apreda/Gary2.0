@@ -167,9 +167,11 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
       if (res.error?.message && isTransientDbError(res.error)) throw new Error(res.error.message);
       return res;
     }, { label: 'exact-ID pick preflight', delaysMs: [10_000, 20_000] }).catch((e) => ({ data: null, error: e }));
+    // FAIL-CLOSED (Oct 23 2026 source audit): failing open could re-run a published pick (founder law: never re-run a
+    // published pick). A read that fails stops this run; the next trigger retries, and storing needs the same database.
     if (error) {
-      console.warn(`⚠️ Exact-ID pick preflight read failed (${source}): ${error.message || error.code || 'unknown'} — FAIL-OPEN: this game may re-run research even if its pick is already stored`);
-      return { exists: false, existingPick: null, source, error: error.message || 'read failed' };
+      console.warn(`⚠️ Exact-ID pick preflight read failed (${source}): ${error.message || error.code || 'unknown'} — FAIL-CLOSED: skipping this run; the next trigger retries`);
+      return { exists: true, existingPick: null, source, error: error.message || 'read failed', unknown: true };
     }
 
     const rawPicks = data?.[0]?.picks;
@@ -192,8 +194,8 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
       source,
     };
   } catch (error) {
-    console.warn(`⚠️ Exact-ID pick preflight failed open: ${error.message}`);
-    return { exists: false, existingPick: null, error: error.message };
+    console.warn(`⚠️ Exact-ID pick preflight failed closed: ${error.message} — skipping this run; the next trigger retries`);
+    return { exists: true, existingPick: null, error: error.message, unknown: true };
   }
 }
 

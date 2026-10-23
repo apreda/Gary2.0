@@ -116,7 +116,7 @@ describe('exact provider-id pick preflight', () => {
     expect(query.eq).toHaveBeenCalledWith('season', 2026);
   });
 
-  it('fails open on a read error so retries are never suppressed', async () => {
+  it('fails closed on a read error so a published pick is never re-run (the next trigger retries)', async () => {
     mocks.response = { data: null, error: { message: 'temporary read failure' } };
 
     await expect(pickAlreadyStoredByGameId(
@@ -124,9 +124,10 @@ describe('exact provider-id pick preflight', () => {
       '2026-08-29',
       700101,
     )).resolves.toMatchObject({
-      exists: false,
+      exists: true,
       existingPick: null,
       error: 'temporary read failure',
+      unknown: true,
     });
   });
 

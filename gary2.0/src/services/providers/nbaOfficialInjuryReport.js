@@ -84,7 +84,18 @@ export async function latestOfficialReport({ now = new Date(), lookbackHours = 3
   const start = Math.floor(now.getTime() / SLOT_MS) * SLOT_MS;
   for (let t = start; t > start - lookbackHours * 3_600_000; t -= SLOT_MS) {
     const url = reportUrlFor(new Date(t));
-    const response = await fetchImpl(url, { headers: { 'User-Agent': 'Mozilla/5.0 (GaryAI injury reader)' } }).catch(() => null);
+    // Each request gets 20 s, and a network failure stops the search at once: on a dead connection the reader asked
+    // for every quarter hour of a day and a half (Oct 23 2026 source audit).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20_000);
+    let response;
+    try {
+      response = await fetchImpl(url, { headers: { 'User-Agent': 'Mozilla/5.0 (GaryAI injury reader)' }, signal: controller.signal });
+    } catch (error) {
+      throw new Error(`Official NBA injury report unreachable (${error.name === 'AbortError' ? 'timed out after 20 s' : error.message})`);
+    } finally {
+      clearTimeout(timer);
+    }
     // A 403 is the CDN refusing this client (Oct 19 2026: Akamai blocked the host after a few hundred probes), not a
     // slot with no report: stop at once instead of asking for every quarter hour of the day and a half.
     if (response?.status === 403) throw new Error('Official NBA injury report blocked (403) by the CDN');
