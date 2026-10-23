@@ -451,7 +451,7 @@ function snapLines(team, snaps, injuries) {
  * one he did. A fact about playing, not about why: a healthy backup who did not get on the field reads the
  * same way. A player the snap data cannot place gets no note, and so does a whole team whose snap data
  * trails its latest final (the count would be a game short).
- * Sets `participation` on each placed injury: { missed, missedWeeks, lastPlayedWeek }.
+ * Sets `participation` on each placed injury: { missed, missedWeeks, lastPlayedWeek, lastShare }.
  */
 export async function attachNflParticipation({ homeTeam, awayTeam, home, away, season, injuries = {} }) {
   for (const [team, bdl, list] of [[homeTeam, home, injuries.home], [awayTeam, away, injuries.away]]) {
@@ -464,18 +464,23 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
     const weeks = [...new Set(snaps.rows.map((r) => r.week))].sort((a, b) => a - b);
     const finals = results.map((r) => Number(r.week)).filter((w) => Number.isFinite(w) && w > 0);
     if (!finals.length || Math.max(...finals) > weeks.at(-1)) continue;
+    // A week counts as played on an offensive or defensive snap, with that week's share: a special-teams-only row read
+    // as "played in the last game", and Doubs' 3% (hurt early) read the same as a full game (Oct 23 2026 data audit).
     const byPlayer = new Map();
     for (const row of snaps.rows) {
-      if (!byPlayer.has(row.player)) byPlayer.set(row.player, new Set());
-      byPlayer.get(row.player).add(row.week);
+      const share = Math.max(Number(row.offense_pct) || 0, Number(row.defense_pct) || 0);
+      if (!(share > 0)) continue;
+      if (!byPlayer.has(row.player)) byPlayer.set(row.player, new Map());
+      byPlayer.get(row.player).set(row.week, share);
     }
     const reported = reportLookup(list, [...byPlayer.keys()]);
-    for (const [player, playedWeeks] of byPlayer) {
+    for (const [player, shares] of byPlayer) {
       const injury = reported(player);
       if (!injury) continue;
       const missedWeeks = [];
-      for (let i = weeks.length - 1; i >= 0 && !playedWeeks.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
-      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek: Math.max(...playedWeeks) };
+      for (let i = weeks.length - 1; i >= 0 && !shares.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
+      const lastPlayedWeek = Math.max(...shares.keys());
+      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: shares.get(lastPlayedWeek) };
     }
   }
 }

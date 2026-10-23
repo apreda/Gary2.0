@@ -115,9 +115,10 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
         + (reconciled.feed ? ` per this week's note; the feed still reads ${String(reconciled.feed).toUpperCase()}` : '');
       const oldNote = i.noteCurrent === false && i.reportDateStr ? ` (note from ${i.reportDateStr}, before the last game)` : '';
       const p = i.participation;
+      const share = p?.lastShare != null ? `, ${p.lastShare}% of snaps` : '';
       const played = !p ? '' : p.missed > 0
-        ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}`
-        : `; played in the last game (Wk ${p.lastPlayedWeek})`;
+        ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}${share}`
+        : `; played in the last game (Wk ${p.lastPlayedWeek}${share})`;
       durationTag = `${oldNote} [${status}${played}]`;
     } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';

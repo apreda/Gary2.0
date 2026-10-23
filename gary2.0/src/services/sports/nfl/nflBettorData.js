@@ -85,21 +85,35 @@ function perGame(gs) {
 
 /** HOW GOOD THEY ARE: this season to date; when this week's starter (`qb`) missed games, the team with him apart from
  * the games someone else played quarterback (whoever threw the most passes). */
+// One game relative to this week's quarterback: his game when he threw 75%+ of the passes, shared when he threw fewer,
+// without him when he threw none (Oct 23 2026 data audit: a backups-only game sat in "shared" and the Falcons read
+// 0-1 without Penix when they were 0-2). Without passing rows, the schedule's quarterback decides.
+function qbRole(x, qb) {
+  if (!x.passers.length) return sameQb(starterOf(x), qb) ? 'with' : 'without';
+  const his = x.passers.find((r) => sameQb(r.player_display_name, qb));
+  if (!his) return 'without';
+  return n(his.attempts) >= 0.75 * x.passers.reduce((a, r) => a + n(r.attempts), 0) ? 'with' : 'shared';
+}
+const passerLine = (x) => x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ');
+
+/** HOW GOOD THEY ARE: when this week's starter (`qb`) missed or shared games, his games first, then the games without
+ * him, then the shared ones, then the season as a whole (the season line leading read as who the team is). */
 export function strength(d, team, before, qb = null) {
   const gs = teamGames(d, codeOf(team), d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   const split = [gs.some((x) => x.home) ? `${record(gs.filter((x) => x.home))} at home` : null, gs.some((x) => !x.home) ? `${record(gs.filter((x) => !x.home))} on the road` : null].filter(Boolean).join(', ');
-  const lines = [`${team} (${record(gs)}, ${split})`, `  This season, ${gs.length} game${gs.length === 1 ? '' : 's'}: ${perGame(gs)}`];
-  const both = gs.filter((x) => shared(x));
-  const his = qb ? gs.filter((x) => !shared(x) && sameQb(starterOf(x), qb)) : []; const rest = gs.filter((x) => !shared(x) && !his.includes(x));
-  if (qb && (rest.length || both.length) && (his.length || rest.length)) {
-    const others = [...new Set(rest.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
-    const games = (k) => `${k} game${k === 1 ? '' : 's'}`;
-    if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(his)}`);
-    if (rest.length) lines.push(`  With ${others} at quarterback, ${games(rest.length)}: ${record(rest)}, ${perGame(rest)}`);
-    if (both.length) lines.push(`  Shared at quarterback, left out of both: ${both.map((x) => `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} (${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ')})`).join('; ')}`);
-  }
-  return lines.join('\n');
+  const games = (k) => `${k} game${k === 1 ? '' : 's'}`;
+  const season = `  This season, ${games(gs.length)}: ${perGame(gs)}`;
+  const lines = [`${team} (${record(gs)}, ${split})`];
+  const by = (role) => (qb ? gs.filter((x) => qbRole(x, qb) === role) : []);
+  const his = by('with'), without = by('without'), both = by('shared');
+  if (!qb || (!without.length && !both.length)) return [...lines, season].join('\n');
+  const others = [...new Set(without.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
+  if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(his)}`);
+  else lines.push(`  ${qb} has not played a full game at quarterback this season.`);
+  if (without.length) lines.push(`  Without him (${others} at quarterback), ${games(without.length)}: ${record(without)}, ${perGame(without)}`);
+  if (both.length) lines.push(`  Shared at quarterback, ${games(both.length)}: ${both.map((x) => `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} (${passerLine(x)})`).join('; ')}`);
+  return [...lines, season].join('\n');
 }
 
 // Who was missing and who came back, game by game, from the snap counts (Oct 23 2026 data check: TNF's data never said
@@ -161,13 +175,17 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
   for (const team of [awayTeam, homeTeam]) {
     const qb = deskStarter(deskQbSection, team);
     const gs = teamGames(d, codeOf(team), season, before);
-    const starts = {}; for (const x of gs) { const nm = starterOf(x); if (nm) starts[nm] = (starts[nm] || 0) + 1; }
-    const who = Object.entries(starts).sort((a, b) => b[1] - a[1]).map(([nm, k]) => `${nm} ${k}`).join(', ');
-    const hasStarted = qb && Object.keys(starts).some((nm) => sameQb(nm, qb));
+    // The same count as HOW GOOD: his full games, shared games, and the games without him by who played.
+    const roles = qb ? gs.map((x) => qbRole(x, qb)) : [];
+    const k = (role) => roles.filter((r) => r === role).length;
+    const others = {}; gs.forEach((x, i) => { if (!qb || roles[i] === 'without') { const nm = starterOf(x); if (nm) others[nm] = (others[nm] || 0) + 1; } });
+    const otherList = Object.entries(others).sort((a, b) => b[1] - a[1]).map(([nm, c]) => `${nm} ${c}`).join(', ');
+    const who = qb ? [`${qb} ${k('with')}`, k('shared') ? `shared ${k('shared')}` : null, otherList ? `without him: ${otherList}` : null].filter(Boolean).join(' · ') : otherList;
+    const hasStarted = qb && (k('with') > 0 || k('shared') > 0);
     const ids = new Set(played(d, season, before).map((g) => g.game_id));
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
-    if (gs.length) lines.push(`  at quarterback this season (most passes in a game): ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
+    if (gs.length) lines.push(`  games at quarterback this season: ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
     if (qb) lines.push(`  ${qb} this season: ${passing(his) || 'no games with 8+ passes'}`);
     out.push(lines.join('\n'));
   }

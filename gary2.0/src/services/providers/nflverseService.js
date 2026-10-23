@@ -24,9 +24,17 @@
  * today; Week 1 is Sep 9). That is reported as a stated fact, never as an
  * empty result — a missing file must not read as "nobody is hurt".
  */
+import { mkdirSync, writeFileSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
-const REQUEST_TIMEOUT_MS = 20_000;
+// The weekly player file is ~3 MB; on a slow connection it took 49 s against a 20 s limit, and its failure dropped
+// every NFL story back to the schedule's quarterback field (Oct 23 2026). Each file gets 90 s and one retry, and the
+// last good copy on disk stands in when both fail.
+const REQUEST_TIMEOUT_MS = 90_000;
+const DISK_DIR = join(homedir(), '.cache', 'gary', 'nflverse');
+const DISK_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
 const CACHE_TTL_MS = 30 * 60 * 1000; // files refresh through the week, not by the minute
 
 const cache = new Map();
@@ -91,31 +99,51 @@ export function parseCsv(text) {
  */
 const RELEASE_TAGS = { roster: 'rosters', stats_team_week: 'stats_team', stats_player_week: 'stats_player' };
 
-async function loadRelease(asset, season, { fetchImpl = globalThis.fetch } = {}) {
+async function fetchRelease(url, fetchImpl) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(url, { signal: controller.signal });
+    if (response.status === 404) return { status: 404 };
+    if (!response.ok) return { status: response.status };
+    return { status: 200, text: await response.text() };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk = fetchImpl === globalThis.fetch } = {}) {
   const key = `${asset}_${season}`;
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
 
   const tag = RELEASE_TAGS[asset] || asset;
   const url = `${RELEASE_BASE}/${tag}/${asset}_${season}.csv`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let value;
-  try {
-    const response = await fetchImpl(url, { signal: controller.signal });
-    if (response.status === 404) {
-      // The season has not started. A stated fact, never an empty list.
-      value = { unavailable: true, reason: `nflverse has not published ${asset}_${season}.csv yet — that file appears once the ${season} season begins.` };
-    } else if (!response.ok) {
-      value = { unavailable: true, reason: `nflverse returned HTTP ${response.status} for ${asset}_${season}.csv.` };
-    } else {
-      value = { rows: parseCsv(await response.text()) };
+  const file = join(DISK_DIR, `${key}.csv`);
+  let value; let lastError = null;
+  for (let attempt = 0; attempt < 2 && !value; attempt++) {
+    try {
+      const r = await fetchRelease(url, fetchImpl);
+      if (r.status === 404) {
+        // The season has not started. A stated fact, never an empty list.
+        value = { unavailable: true, reason: `nflverse has not published ${asset}_${season}.csv yet — that file appears once the ${season} season begins.` };
+      } else if (r.status !== 200) {
+        lastError = new Error(`HTTP ${r.status}`);
+      } else {
+        value = { rows: parseCsv(r.text) };
+        if (disk) { try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(file, r.text); } catch { /* the copy is a convenience */ } }
+      }
+    } catch (error) {
+      lastError = error;
     }
-  } catch (error) {
-    // A failed fetch is NOT an empty result.
-    return { unavailable: true, reason: `Could not reach nflverse for ${asset}_${season}.csv: ${error.message}` };
-  } finally {
-    clearTimeout(timer);
+  }
+  if (!value) {
+    // A failed fetch is NOT an empty result: the last good copy if it is recent, else the failure, said so.
+    try {
+      const age = disk ? Date.now() - statSync(file).mtimeMs : Infinity;
+      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000) };
+    } catch { /* no copy */ }
+    return { unavailable: true, reason: `Could not reach nflverse for ${asset}_${season}.csv: ${lastError?.message || 'no answer'}` };
   }
   cache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });
   return value;
