@@ -22,6 +22,8 @@ export function playoffQuestionSystemPrompt(today) {
 Today is ${today}. Your memory of players, rosters and stats is out of date; the scout report is current. Only mention players on the scout report's rosters, and never write a number, score or record that isn't in the scout report or the research notes.`;
 }
 
+// The assistant gets the story Gary reads (Oct 23 2026 data audit: told Gary read the whole desk, it left out "the
+// same Rays lineup as the scout report's" while no lineup reached Gary).
 export function playoffResearchPrompt(desk) {
   return `You are the research assistant for a sports bettor named Gary. Gary reads the scout report below in full. Your job is to find what it does not have.
 
@@ -98,15 +100,17 @@ export function starterStories(desk) {
     const name = (rawName || '').trim();
     const last = name.split(' ').pop();
     const form = formOf(b, name);
-    const story = last && articles.find((a) => a.title.includes(last) && /\bstart|\bmound|\bhill|\bGame \d/i.test(`${a.title} ${a.meta}`));
-    if (story) {
-      const paragraphs = story.body.split(/\n+/).filter((l) => l.trim());
-      let opening = '';
-      for (const para of paragraphs) { if (opening && opening.length + para.length > 1200) break; opening += `${opening ? '\n' : ''}${para}`; }
-      return [`${club}: ${name}`, form || null, `"${story.title}"`, opening].filter(Boolean).join('\n');
-    }
+    // His postseason starts always print; a club story prints only when its opening is about him (Oct 23 2026 data
+    // audit: "...hand ball to Messick" opened on five paragraphs about Kwan's lip, in place of Messick's three starts).
     const post = (b.match(/This postseason, game by game:\n((?: {4}[^\n]+\n?)+)/) || [])[1];
-    return [`${club}: ${name}`, form || null, post ? `This postseason:\n${post.trimEnd().split('\n').map((l) => `  ${l.trim()}`).join('\n')}` : null].filter(Boolean).join('\n');
+    const story = last && articles.find((a) => a.title.includes(last) && /\bstart|\bmound|\bhill|\bGame \d/i.test(`${a.title} ${a.meta}`));
+    let opening = '';
+    if (story) {
+      for (const para of story.body.split(/\n+/).filter((l) => l.trim())) { if (opening && opening.length + para.length > 1200) break; opening += `${opening ? '\n' : ''}${para}`; }
+      if (!opening.includes(last)) opening = '';
+    }
+    return [`${club}: ${name}`, form || null, post ? `This postseason:\n${post.trimEnd().split('\n').map((l) => `  ${l.trim()}`).join('\n')}` : null,
+      opening ? `"${story.title}"\n${opening}` : null].filter(Boolean).join('\n');
   }).join('\n\n');
 }
 
@@ -132,7 +136,7 @@ export function bullpensInWords(desk) {
       late.length ? `  Late innings, most used first: ${late.join(', ')}` : null,
       lastDay ? `  Pitched ${lastDay}: ${worked.join(', ') || 'none'}` : null,
       twoStraight.length ? `  Pitched two straight days: ${twoStraight.join(', ')}` : null,
-      rested.length ? `  Didn't pitch in the last three days: ${rested.join(', ')}` : null,
+      rested.length ? `  No pitches in the last three days (${days.join(', ')}), starters included: ${rested.join(', ')}` : null,
       next ? `  ${next}` : null,
     ].filter(Boolean).join('\n');
   }).join('\n');
@@ -146,12 +150,26 @@ export function buildSeriesStory(desk, price = '') {
   const road = seriesRoad(text);
   const starters = starterStories(text);
   const pens = bullpensInWords(text);
+  // Who plays tonight (Oct 23 2026 data audit: the lineups, the availability list and the starters' workload were on
+  // the desk and never reached Gary, while his instructions say to mention only players on the rosters).
+  // The batting orders only: the section goes on to each hitter's stats (career lines against tonight's starter
+  // reach back past this season), which stay on the desk with the other tables.
+  const lineups = sectionOf(text, 'CONFIRMED LINEUPS').split(/\n\s*\n(?=Each of tonight's)/)[0].trim().split('\n')
+    .map((l) => l.replace(/ \[Bats: [A-Z]\]| \(Throws: [A-Z]\)/g, '')).join('\n');
+  const out = sectionOf(text, 'AVAILABILITY').trim().replace(/^\s*\[KNOWN\] /gm, '  ');
+  const workload = sectionOf(text, "THE STARTERS' WORKLOAD").split('\n').filter((l) => /^\| \*\*/.test(l))
+    .map((l) => l.split('|').map((c) => c.trim()).filter(Boolean)).map((c) => `  ${c[0].replace(/\*\*/g, '')}: ${String(c[1] || '').replace(/\*\*/g, '')} (${String(c[2] || '').replace(/\*\*/g, '')})`).join('\n');
+  const rosters = sectionOf(text, 'ROSTERS').trim();
   return [
     header.join('\n'),
     [records ? `Regular season, final records:\n${records}` : null, favoredLine(price) || null].filter(Boolean).join('\n'),
     road ? `HOW EACH CLUB GOT HERE\n${road}` : null,
+    `TONIGHT'S LINEUPS\n${lineups || 'Not posted when this was written.'}`,
+    out ? `WHO'S OUT\n${out}` : null,
     starters ? `TONIGHT'S STARTERS, AS THE BEAT WRITERS TELL IT\n${starters}` : null,
+    workload ? `THE STARTERS' WORKLOAD, AS REPORTED\n${workload}` : null,
     pens ? `THE BULLPENS\n${pens}` : null,
+    rosters ? `THE ROSTERS\n${rosters}` : null,
     storylines ? `WHAT THIS WEEK IS ABOUT, AS WRITTEN\n${storylines}` : null,
   ].filter(Boolean).join('\n\n');
 }
@@ -206,10 +224,12 @@ async function researchNotes(desk, homeTeam, awayTeam, options, costTracker) {
 export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
   const costTracker = createCostTracker(`Playoff question: ${awayTeam} @ ${homeTeam} (${sport})`);
   try {
+    const { desk: deskWithoutPrice, price } = splitPrice(desk);
+    const story = buildSeriesStory(deskWithoutPrice, price);
     let notes;
     try {
       notes = await Promise.race([
-        researchNotes(desk, homeTeam, awayTeam, options, costTracker),
+        researchNotes(story, homeTeam, awayTeam, options, costTracker),
         new Promise((_, reject) => setTimeout(() => reject(new Error(`research timed out after ${RESEARCH_BRIEFING_TIMEOUT_MS / 1000}s`)), RESEARCH_BRIEFING_TIMEOUT_MS)),
       ]);
     } catch (err) {
@@ -241,8 +261,6 @@ export async function runPlayoffQuestion({ desk, today }, sport, homeTeam, awayT
       return response.content || '';
     };
 
-    const { desk: deskWithoutPrice, price } = splitPrice(desk);
-    const story = buildSeriesStory(deskWithoutPrice, price);
     console.log(`[Playoff Question] ${session.modelName}: the series in words (${story.length} chars)`);
     const read = await ask(buildPlayoffGameMessage(story, notes));
     console.log(`[Playoff Question] Answer (${read.length} chars); asking for the card`);
