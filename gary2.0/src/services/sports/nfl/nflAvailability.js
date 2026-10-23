@@ -100,7 +100,10 @@ export function reconcileNflStatus(row) {
     const word = named[1][0].toUpperCase() + named[1].slice(1).toLowerCase();
     return word.toLowerCase() === status.toLowerCase() ? { status, feed: null } : { status: word, feed: status || null };
   }
-  if (reserve && /\bactivated\b[^.]*\b(injured reserve|reserve|pup|physically unable|non-football)/i.test(note)) {
+  // "Will not be activated" is not an activation (Oct 23 2026 data check: Thornton read ACTIVATED from a note that said
+  // he would not be).
+  if (reserve && /\bactivated\b[^.]*\b(injured reserve|reserve|pup|physically unable|non-football)/i.test(note)
+    && !/\b(?:not|n't|never|won't|without)\s+(?:be\s+|yet\s+|been\s+)?activated\b/i.test(note)) {
     return { status: 'Activated', feed: status };
   }
   if (isWeeklyNflDesignation(status) && /\b(limited|full|did not|didn't|non-?)[ -]?(participa\w*|practice)|estimated practice report/i.test(note)) {

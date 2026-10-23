@@ -137,9 +137,25 @@ function lineupChanges(d, code, gs) {
     const prev = name.get(r.pfr_player_id);
     if (!prev || n(r.week) >= prev.week) name.set(r.pfr_player_id, { week: n(r.week), name: r.player, pos: r.position });
   }
-  const reserve = new Map();
-  for (const r of d.rosterWeekly || []) if (r.team === code && r.pfr_id && /^RES$/i.test(r.status)) reserve.set(`${n(r.week)}|${r.pfr_id}`, r.status_description_abbr || 'RES');
-  const onReserve = (g, id) => reserve.has(`${g.week}|${id}`);
+  // The weekly roster by PFR id and by name: many of its rows carry no PFR id (Paris Johnson, on reserve, read as off
+  // the team when only ids were matched).
+  const key = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+  const reserve = new Set(); const inactive = new Set(); const onTeam = new Set(); const rosterWeeks = new Set();
+  for (const r of d.rosterWeekly || []) {
+    if (r.team !== code) continue;
+    const w = n(r.week); rosterWeeks.add(w);
+    for (const k of [r.pfr_id, key(r.full_name)].filter(Boolean)) {
+      onTeam.add(`${w}|${k}`);
+      if (/^RES$/i.test(r.status)) reserve.add(`${w}|${k}`);
+      if (/^INA$/i.test(r.status)) inactive.add(`${w}|${k}`);
+    }
+  }
+  const keysOf = (id) => [id, key(name.get(id)?.name)].filter(Boolean);
+  const onReserve = (g, id) => keysOf(id).some((k) => reserve.has(`${g.week}|${k}`));
+  const wasInactive = (g, id) => keysOf(id).some((k) => inactive.has(`${g.week}|${k}`));
+  // Off the team that week (traded or released): on neither the id nor the name in that week's roster (Oct 23 2026 data
+  // check: a traded receiver read as a missing regular).
+  const gone = (g, id) => rosterWeeks.has(g.week) && !keysOf(id).some((k) => onTeam.has(`${g.week}|${k}`));
   const players = [...name.keys()];
   const of = (g, id) => share.get(`${g.g.game_id}|${id}`) || 0;
   const label = (g, id, pct, extra = '') => `${name.get(id).name} (${posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos}${pct ? `, ${Math.round(100 * of(g, id))}% of snaps` : ''}${extra})`;
@@ -148,12 +164,18 @@ function lineupChanges(d, code, gs) {
   gs.forEach((g, i) => {
     const prior = gs.slice(0, i);
     const regular = (id) => prior.length > 0 && prior.filter((e) => of(e, id) >= 0.6).length >= Math.ceil(prior.length / 2);
-    const missing = players.filter((id) => regular(id) && of(g, id) < 0.1);
-    const reserved = players.filter((id) => !missing.includes(id) && onReserve(g, id) && of(g, id) < 0.1 && prior.some((e) => of(e, id) >= 0.25));
+    // A regular who did not play at all is missing; one with a few snaps left early or was limited, with his share
+    // (Oct 23 2026 data check: an in-game injury read as "missing"); one no longer on the roster has left the team.
+    const departed = players.filter((id) => regular(id) && of(g, id) === 0 && gone(g, id));
+    const missing = players.filter((id) => regular(id) && of(g, id) === 0 && !gone(g, id));
+    const limited = players.filter((id) => regular(id) && of(g, id) > 0 && of(g, id) < 0.25);
+    const reserved = players.filter((id) => !missing.includes(id) && !departed.includes(id) && onReserve(g, id) && of(g, id) === 0 && prior.some((e) => of(e, id) >= 0.25));
     const back = i ? players.filter((id) => of(g, id) >= 0.25 && of(gs[i - 1], id) < 0.1 && prior.some((e) => of(e, id) >= 0.25)) : [];
     const fresh = i ? players.filter((id) => of(g, id) >= 0.25 && prior.every((e) => of(e, id) < 0.1)) : [];
     const parts = [
-      missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}${onReserve(g, id) ? ', on reserve' : ''})`)}` : null,
+      missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}${onReserve(g, id) ? ', on reserve' : wasInactive(g, id) ? ', inactive' : ''})`)}` : null,
+      limited.length ? `left early or limited: ${list(limited, (id) => label(g, id, true))}` : null,
+      departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos})`)}` : null,
       reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos})`)}` : null,
       back.length ? `back: ${list(back, (id) => label(g, id, true))}` : null,
       fresh.length ? `new in the lineup: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? ', off reserve' : ''))}` : null,
