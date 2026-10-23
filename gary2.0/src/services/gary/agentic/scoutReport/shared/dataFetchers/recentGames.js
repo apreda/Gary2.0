@@ -189,17 +189,13 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
     console.log(`[Rest Calc] Last game was ${lastGameWasHome ? 'HOME' : 'ROAD'} for ${teamName}`);
   }
   
-  // Check for 3 games in 4 days (heavy schedule)
-  const fourDaysAgo = new Date(upcomingDate);
-  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
-  const recentGamesInWindow = gamesWithDates.filter(g => g.gameDate >= fourDaysAgo);
-  const gamesInLast4Days = recentGamesInWindow.length;
+  // Tonight as the 3rd game in 4 nights (2+ games in the 3 days before) or the 4th in 5 (3+ in the 4 days before).
+  // The counts are tonight's game included (Oct 23 2026 data audit: prior games over four days with 3 needed missed a
+  // real third game in four nights, and printed a 4-in-5 as "3 games in 4 nights").
+  const priorWithin = (days) => { const from = new Date(upcomingDate); from.setDate(from.getDate() - days); return gamesWithDates.filter(g => g.gameDate >= from && g.gameDate < upcomingDate).length; };
+  const gamesInLast4Days = priorWithin(3) + 1;
   const isHeavySchedule = gamesInLast4Days >= 3;
-  
-  // Check for 4 games in 5 days
-  const fiveDaysAgo = new Date(upcomingDate);
-  fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-  const gamesInLast5Days = gamesWithDates.filter(g => g.gameDate >= fiveDaysAgo).length;
+  const gamesInLast5Days = priorWithin(4) + 1;
   const isVeryHeavySchedule = gamesInLast5Days >= 4;
   
   console.log(`[Rest Calc] Days rest: ${daysRest}, Back-to-back: ${isBackToBack}, Games in 4 days: ${gamesInLast4Days}`);
@@ -245,9 +241,9 @@ export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest) {
     
     // Heavy schedule context (factual)
     if (rest.isVeryHeavySchedule) {
-      parts.push(`${rest.gamesInLast5Days} games in 5 nights`);
+      parts.push(`tonight is game ${rest.gamesInLast5Days} in 5 nights`);
     } else if (rest.isHeavySchedule) {
-      parts.push(`${rest.gamesInLast4Days} games in 4 nights`);
+      parts.push(`tonight is game ${rest.gamesInLast4Days} in 4 nights`);
     }
     
     return `• ${team}: ${parts.join('. ')}`;

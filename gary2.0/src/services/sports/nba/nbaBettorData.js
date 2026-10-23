@@ -72,9 +72,13 @@ const RANKED_FROM_GAMES = 5;
 
 /** HOW GOOD THEY ARE for one team: its record and per-possession numbers, with ranks among the teams that have played
  * once it has played RANKED_FROM_GAMES games. */
+// Five games or fewer print the record and the count only: one night's per-100 numbers read as who the team is, and the
+// game log already lists each game with who played (Oct 23 2026 data audit).
+const RATED_FROM_GAMES = 6;
 export function strengthLine(league, team) {
   const t = league[team];
   if (!t) return `${team}: no games yet this season.`;
+  if (t.gp < RATED_FROM_GAMES) return `${team} (${t.w}-${t.l}), ${t.gp} game${t.gp === 1 ? '' : 's'}: each one is in the season game by game below.`;
   const teams = Object.keys(league).length;
   const ranked = t.gp >= RANKED_FROM_GAMES;
   const rank = (key, high, ofAll = false) => (ranked ? ` (${ord(rankOf(league, team, key, high))}${ofAll ? ` of ${teams}` : ''})` : '');

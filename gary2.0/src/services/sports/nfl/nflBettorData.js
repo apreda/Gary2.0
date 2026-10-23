@@ -43,9 +43,6 @@ function passersOf(d, g, code) {
     .sort((a, b) => n(b.attempts) - n(a.attempts));
 }
 const starterOf = (x) => x.qb || null;
-// A game is shared when no quarterback threw 75% of the passes: Williams' Week 2 (15-of-26, hurt; Bagent 5-of-9) is
-// neither his game nor the backups' (Oct 23 2026 data check), so the splits leave it out and say so.
-const shared = (x) => x.passers.length > 1 && n(x.passers[0].attempts) < 0.75 * x.passers.reduce((a, r) => a + n(r.attempts), 0);
 // The same quarterback under two spellings: suffixes and punctuation aside, the same last name and first initial
 // ("Michael Penix Jr." / "Michael Penix", "Cam Ward" / "Cameron Ward", "C.J. Stroud" / "CJ Stroud").
 const qbKey = (name) => String(name || '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z ]/g, '').trim().split(/\s+/);
@@ -153,7 +150,7 @@ export function gameByGame(d, team, before) {
       : starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
     const how = x.off && x.def ? ` · ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : '';
     const who = changes.get(x.g.game_id);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}${x.oppQb ? `, ${x.oppQb} at QB` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))} now${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
   })].join('\n');
 }
 

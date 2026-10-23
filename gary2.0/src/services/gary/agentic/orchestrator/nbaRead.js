@@ -59,17 +59,30 @@ export function injuriesAsReported(desk) {
 
 // THE ROTATION: each team's top players by minutes with their basic line this season (the desk's advanced and
 // team-share lines stay out).
-function rotation(desk) {
-  return sectionOf(desk, 'AVAILABLE ROSTER').split('\n')
-    .filter((l) => /^\[(?:HOME|AWAY)\] /.test(l) || /^ {2}\S.* - .*PPG/.test(l))
-    .map((l) => l.replace(/^\[(?:HOME|AWAY)\] (.+):$/, (m, t) => `${t.replace(/\b([A-Z])([A-Z']+)\b/g, (w, a, b) => a + b.toLowerCase())}:`))
-    .join('\n').trim();
+// A team with five games or fewer shows no season averages ("Maxey 28.0 PPG, GP: 1"); each game's minutes and points
+// are in the season game by game (Oct 23 2026 data audit).
+function rotation(desk, ratings = {}) {
+  const out = []; let small = false;
+  for (const l of sectionOf(desk, 'AVAILABLE ROSTER').split('\n')) {
+    if (/^\[(?:HOME|AWAY)\] /.test(l)) {
+      const team = l.replace(/^\[(?:HOME|AWAY)\] (.+):$/, '$1').replace(/\b([A-Z])([A-Z']+)\b/g, (w, a, b) => a + b.toLowerCase());
+      const key = Object.keys(ratings).find((k) => k.toLowerCase() === team.toLowerCase());
+      small = !key || ratings[key].gp < 6;
+      const name = key || team;
+      out.push(small ? `${name}: ${key ? `${ratings[key].gp} game${ratings[key].gp === 1 ? '' : 's'} so far` : 'no games yet'}; each game's minutes and points are in the season game by game.` : `${name}:`);
+    } else if (!small && /^ {2}\S.* - .*PPG/.test(l)) out.push(l);
+  }
+  return out.join('\n').trim();
 }
 
 // Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-0").
-function standings(desk) {
+// Before a team's tenth game, its record only: a conference rank among teams tied at 1-0 or 0-0 is the feed's tie
+// order ("Cavaliers #15 in East (0-0)"), and home and road splits are a game or two (Oct 23 2026 data audit).
+function standings(desk, ratings = {}) {
   return sectionOf(desk, 'NBA LEAGUE CONTEXT').split('\n').filter((l) => /^\s*\[(?:HOME|AWAY)\] /.test(l))
-    .map((l) => l.trim().replace(/^\[(?:HOME|AWAY)\] /, '')).join('\n');
+    .map((l) => l.trim().replace(/^\[(?:HOME|AWAY)\] /, ''))
+    .map((l) => { const m = l.match(/^(.+?): #\d+ in \w+ \((\d+)-(\d+)\)/); return m && Number(m[2]) + Number(m[3]) < 10 ? `${m[1]}: ${m[2]}-${m[3]}` : l; })
+    .join('\n');
 }
 
 // A team before its first game: the desk's BEFORE THE FIRST GAME block for it (this season's roster and who left),
@@ -80,7 +93,12 @@ function beforeFirstGame(desk, team) {
   if (i < 0) return '';
   const rest = block.slice(i).split('\n');
   const end = rest.findIndex((l, k) => k > 0 && /^\[(?:HOME|AWAY)\] /.test(l));
-  return (end > 0 ? rest.slice(1, end) : rest.slice(1)).filter((l) => !/^\s*Last season\b/.test(l)).join('\n').trim();
+  // This season's roster in the present tense: who is on it and who is new to the team, without where anyone was last
+  // season or who left (the read turned "left since last season" into "thinner than last year"; Oct 23 2026 audit).
+  return (end > 0 ? rest.slice(1, end) : rest.slice(1))
+    .filter((l) => !/^\s*(?:Last season|Left since last season)\b/.test(l))
+    .map((l) => l.replace(/back from last season: /, '').replace(/; new: /, '; new to the team: ').replace(/ \((?:no NBA games in|20\d\d-\d\d with)[^)]*\)/g, ''))
+    .join('\n').trim();
 }
 
 /** The day's news gathered for the desk: the part after its own injury lists, without betting lines. */
@@ -94,18 +112,20 @@ export function deskNews(desk) {
 }
 
 // The desk's news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point
-// attempts", Oct 21 2026); a sentence that does leaves (founder, Oct 23 2026, every sport: "last season is old news").
-// A season written as "2025-26" counts only when it isn't this one (the first version dropped every "2026-27" too).
-const PAST_SEASON = /\blast season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibition\b/i;
+// attempts", Oct 21 2026); a paragraph or bullet that does leaves whole (founder, Oct 23 2026, every sport: "last season
+// is old news"). Dropping one sentence left the next one's numbers under the wrong game (Oct 23 2026 data audit: a
+// preseason "5-for-36" read as the opener). A season written "2025-26" counts only when it isn't this one.
+const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star selection\b|\bsummer league\b/i;
 const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)-(\d\d)\b/g)].some((m) => Number(m[1]) < season);
 export function withoutPastSeasons(text, season = nbaSeason()) {
-  return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“*])/).filter((x) => !PAST_SEASON.test(x) && !pastSeasonLabel(x, season)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+  return String(text || '').split('\n').filter((p) => !PAST_SEASON.test(p) && !pastSeasonLabel(p, season))
+    .filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
 // How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,
 // the desk's BEFORE THE FIRST GAME block.
 function howGood(desk, ratings, homeTeam, awayTeam) {
-  return [standings(desk), ...[awayTeam, homeTeam].map((team) => {
+  return [standings(desk, ratings), ...[awayTeam, homeTeam].map((team) => {
     const before = ratings[team] ? '' : beforeFirstGame(desk, team);
     return before ? `${team}: no games yet this season. Before the first game:\n${before}` : strengthLine(ratings, team);
   })].filter(Boolean).join('\n\n');
@@ -140,7 +160,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     ['WHO IS PLAYING', [sectionOf(desk, 'STARTING LINEUPS'), injuriesAsReported(desk)].filter(Boolean).join('\n\n')],
     ['HOW GOOD THEY ARE', how],
     ['THIS SEASON, GAME BY GAME', `${awayGames}\n\n${homeGames}`],
-    ['THE ROTATION THIS SEASON', rotation(desk)],
+    ['THE ROTATION THIS SEASON', rotation(desk, ratings)],
     ['THE SITUATION', sectionOf(desk, 'REST & SCHEDULE SITUATION')],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: deskNews(desk) };
