@@ -4,6 +4,7 @@ import { cachedResearch } from '../../gary/sharedResearchCache.js';
 import { searchGrounded } from '../../content/insights/ncaafSearch.js';
 import { nameKey, playerName } from '../../content/insights/ncaafNames.js';
 import { officialAvailabilityForGame } from './ncaafAvailabilityReports.js';
+import { ncaafTeamConferenceId } from './ncaafGamePolicy.js';
 import { createModelSession, sendToSessionWithRetry } from '../../gary/agentic/orchestrator/sessionManager.js';
 import { BACKGROUND_GPT } from '../../gary/agentic/orchestrator/subscriptionRoutes.js';
 
@@ -208,6 +209,26 @@ function officialStatus(raw) {
  * name matches; the report itself is the source, so an unmatched name is kept
  * as printed. The searched quarterback, staff and context stay.
  */
+// A conference that publishes an availability report and failed to give one leaves that side's absences not on file:
+// the search's rows do not stand in for the official report (Oct 23 2026 source audit; founder: no fallback that gives
+// different data when the original source fails).
+const REPORTING_CONFERENCES = { 1: 'ACC', 2: 'American', 7: 'MAC', 10: 'SEC' };
+export function markOfficialMissing(context, official, { game } = {}) {
+  if (!context?.sides || !official || official.found || !official.errors?.length) return context;
+  const out = structuredClone(context);
+  for (const side of ['home', 'away']) {
+    const team = side === 'home' ? game?.home_team : (game?.away_team ?? game?.visitor_team);
+    const conference = REPORTING_CONFERENCES[ncaafTeamConferenceId(team)];
+    const error = conference && official.errors.find((e) => e.startsWith(`${conference}:`) || e.startsWith('all:'));
+    if (!error || !out.sides[side]) continue;
+    out.sides[side].injuries = [];
+    out.sides[side].availability = 'unavailable';
+    out.sides[side].availability_note = `the ${conference} availability report was not retrieved (${error.replace(/^[^:]+: /, '')}); absences not on file`;
+    out.sides[side].official_missing = true;
+  }
+  return out;
+}
+
 export function applyOfficialReport(context, official, { game, rosters } = {}) {
   if (!official?.found || !context?.sides) return context;
   const out = structuredClone(context);
@@ -278,8 +299,8 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     }
     if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
     // The conference's own report, when the game has one, comes before any search for it.
-    const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch(() => null);
-    const withOfficial = ctx => applyOfficialReport(ctx, official, { game, rosters });
+    const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch((e) => ({ found: false, errors: [`all: ${e.message}`] }));
+    const withOfficial = ctx => markOfficialMissing(applyOfficialReport(ctx, official, { game, rosters }), official, { game });
     const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' }));
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
     // for Iowa State but not for BYU, the same report). A team left without a
@@ -289,7 +310,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     // A side whose every reported absence was rejected is as thin as one with no report (college review, Oct 13
     // 2026: Illinois' 11 rejected rows never got the focused search).
     const lacking = ctx => ['home', 'away'].filter(side => { const r = ctx.sides?.[side];
-      return r?.availability === 'unavailable' || (r?.availability === 'partial' && !r?.injuries?.length); });
+      return !r?.official_missing && (r?.availability === 'unavailable' || (r?.availability === 'partial' && !r?.injuries?.length)); });
     const thin = lacking(first);
     if (!thin.length) return first;
     const names = thin.map(side => fullName(side === 'home' ? home : away));
@@ -331,7 +352,7 @@ export function formatNcaafGameContext(context, { listInjuries = true } = {}) {
     ...['away', 'home'].flatMap(side => {
       const row = context.sides[side], qb = row.quarterback;
       return [row.team, qb ? `Quarterback: ${qb.name} — ${qb.status}. ${qb.note || ''}` : `Quarterback: unresolved. ${row.quarterback_uncertainty || ''}`,
-        `Availability source: ${row.availability}. Empty list means no absences reported by these sources, not confirmed healthy.`,
+        `Availability source: ${row.availability}${row.availability_note ? ` (${row.availability_note})` : ''}. Empty list means no absences reported by these sources, not confirmed healthy.`,
         ...(listInjuries ? row.injuries.map(p => `${p.name}: ${p.status}. ${p.description}`) : []),
         ...row.coaches.map(p => `${p.role}: ${p.name}`), ...row.context.map(p => p.fact),
         ...row.sources.map(s => `[${s.id}] ${s.title || ''} (${s.reported}) ${s.url}`)];
