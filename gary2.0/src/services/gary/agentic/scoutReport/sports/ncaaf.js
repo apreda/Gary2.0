@@ -1411,6 +1411,10 @@ ${schedule ? `${schedule.seasonGames}
 
 ${schedule.whoProduced}
 
+${schedule.regulars}
+
+${schedule.offense}
+
 ${schedule.homeRoad}` : `THIS SEASON GAME BY GAME — NOT ON THIS DESK
 ${RULE}
 The schedule, home and road sections could not be built for this game (${scheduleMissing || 'source unavailable'}).
