@@ -21,12 +21,12 @@ export const etDate = (when = new Date()) => new Date(when).toLocaleDateString('
 
 /** Everything the desk reads, loaded once per call. Unavailable files leave their sections out, said so. */
 export async function loadBettorData(season) {
-  const [schedule, tw, pw, sc] = await Promise.all([
+  const [schedule, tw, pw, sc, rw] = await Promise.all([
     getNflSchedule().catch(() => null), loadNflverseFile('stats_team_week', season), loadNflverseFile('stats_player_week', season),
-    loadNflverseFile('snap_counts', season).catch(() => null),
+    loadNflverseFile('snap_counts', season).catch(() => null), loadNflverseFile('roster_weekly', season).catch(() => null),
   ]);
   const rows = (f) => (f && !f.unavailable ? f.rows : null);
-  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc) };
+  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc), rosterWeekly: rows(rw) };
 }
 
 const played = (d, season, before) => d.schedule.filter((r) => r.season === String(season) && r.game_type === 'REG'
@@ -116,29 +116,47 @@ export function strength(d, team, before, qb = null) {
   return [...lines, season].join('\n');
 }
 
-// Who was missing and who came back, game by game, from the snap counts (Oct 23 2026 data check: TNF's data never said
-// Kyler Gordon was back for the Bears or which Patriots linemen were out). A regular plays 60%+ of his side's snaps in
-// at least half the team's games; he is missing from a game where he played under 10%, and back in the first game he
-// plays 60%+ after missing one. A player taking a quarter of the snaps for the first time this season is new in the
-// lineup, with his share (Kyler Gordon's season debut for the Bears: 31%).
+// Who was missing and who came back, game by game, from the snap counts and the weekly rosters (Oct 23 2026 data checks:
+// TNF's data never said Kyler Gordon was back for the Bears, which Patriots regulars were out, or that A.J. Brown, hurt
+// in Week 1, spent Weeks 2-5 on reserve). Each game is read against the games before it only: a regular there played
+// 60%+ of his side's snaps in at least half the earlier games; he is missing when he played under 10%. Anyone who
+// played a quarter of the snaps in an earlier game and is on reserve that week is listed as on reserve; back is the
+// first game at a quarter or more after a game under 10%; new is a first game at a quarter or more this season.
+// Players are matched on their PFR id and named as the latest snap row names them; positions are that game's.
 function lineupChanges(d, code, gs) {
-  const rows = (d.snaps || []).filter((r) => r.team === code);
+  const ids = new Set(gs.map((g) => g.g.game_id));
+  const rows = (d.snaps || []).filter((r) => r.team === code && ids.has(r.game_id) && r.pfr_player_id);
   if (!rows.length || !gs.length) return new Map();
-  const share = new Map();
-  for (const r of rows) share.set(`${r.game_id}|${r.player}`, Math.max(n(r.offense_pct), n(r.defense_pct)));
-  const pos = new Map(rows.map((r) => [r.player, r.position]));
-  const of = (g, p) => share.get(`${g.g.game_id}|${p}`) || 0;
-  const regulars = [...pos.keys()].filter((p) => gs.filter((g) => of(g, p) >= 0.6).length >= Math.ceil(gs.length / 2));
+  const share = new Map(), posAt = new Map(), name = new Map();
+  for (const r of rows) {
+    share.set(`${r.game_id}|${r.pfr_player_id}`, Math.max(n(r.offense_pct), n(r.defense_pct)));
+    posAt.set(`${r.game_id}|${r.pfr_player_id}`, r.position);
+    const prev = name.get(r.pfr_player_id);
+    if (!prev || n(r.week) >= prev.week) name.set(r.pfr_player_id, { week: n(r.week), name: r.player, pos: r.position });
+  }
+  const reserve = new Map();
+  for (const r of d.rosterWeekly || []) if (r.team === code && r.pfr_id && /^RES$/i.test(r.status)) reserve.set(`${n(r.week)}|${r.pfr_id}`, r.status_description_abbr || 'RES');
+  const onReserve = (g, id) => reserve.has(`${g.week}|${id}`);
+  const players = [...name.keys()];
+  const of = (g, id) => share.get(`${g.g.game_id}|${id}`) || 0;
+  const label = (g, id, pct, extra = '') => `${name.get(id).name} (${posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos}${pct ? `, ${Math.round(100 * of(g, id))}% of snaps` : ''}${extra})`;
+  const list = (ps, f) => ps.slice(0, 8).map(f).join(', ') + (ps.length > 8 ? ` and ${ps.length - 8} more` : '');
   const out = new Map();
   gs.forEach((g, i) => {
-    const missing = regulars.filter((p) => of(g, p) < 0.1);
-    const back = i ? regulars.filter((p) => of(g, p) >= 0.6 && of(gs[i - 1], p) < 0.1) : [];
-    const fresh = i ? [...pos.keys()].filter((p) => !regulars.includes(p) && of(g, p) >= 0.25 && gs.slice(0, i).every((e) => of(e, p) < 0.1)) : [];
-    out.set(g.g.game_id, { missing, back, fresh });
+    const prior = gs.slice(0, i);
+    const regular = (id) => prior.length > 0 && prior.filter((e) => of(e, id) >= 0.6).length >= Math.ceil(prior.length / 2);
+    const missing = players.filter((id) => regular(id) && of(g, id) < 0.1);
+    const reserved = players.filter((id) => !missing.includes(id) && onReserve(g, id) && of(g, id) < 0.1 && prior.some((e) => of(e, id) >= 0.25));
+    const back = i ? players.filter((id) => of(g, id) >= 0.25 && of(gs[i - 1], id) < 0.1 && prior.some((e) => of(e, id) >= 0.25)) : [];
+    const fresh = i ? players.filter((id) => of(g, id) >= 0.25 && prior.every((e) => of(e, id) < 0.1)) : [];
+    const parts = [
+      missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}${onReserve(g, id) ? ', on reserve' : ''})`)}` : null,
+      reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos})`)}` : null,
+      back.length ? `back: ${list(back, (id) => label(g, id, true))}` : null,
+      fresh.length ? `new in the lineup: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? ', off reserve' : ''))}` : null,
+    ].filter(Boolean);
+    out.set(g.g.game_id, parts.join(' · '));
   });
-  const named = (ps) => ps.slice(0, 8).map((p) => `${p} (${pos.get(p)})`).join(', ') + (ps.length > 8 ? ` and ${ps.length - 8} more` : '');
-  for (const [k, v] of out) out.set(k, [v.missing.length ? `missing regulars: ${named(v.missing)}` : null, v.back.length ? `back: ${named(v.back)}` : null,
-    v.fresh.length ? `new in the lineup: ${v.fresh.slice(0, 8).map((p) => `${p} (${pos.get(p)}, ${Math.round(100 * (share.get(`${k}|${p}`) || 0))}% of snaps)`).join(', ')}` : null].filter(Boolean).join(' · '));
   return out;
 }
 
