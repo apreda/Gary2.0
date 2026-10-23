@@ -26,7 +26,9 @@ export async function loadBettorData(season) {
     loadNflverseFile('snap_counts', season).catch(() => null), loadNflverseFile('roster_weekly', season).catch(() => null),
   ]);
   const rows = (f) => (f && !f.unavailable ? f.rows : null);
-  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc), rosterWeekly: rows(rw) };
+  // A schedule that did not load is said to be missing, never read as a season with no games (Oct 23 2026 source audit).
+  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], scheduleMissing: !schedule || Boolean(schedule.unavailable),
+    teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc), rosterWeekly: rows(rw) };
 }
 
 const played = (d, season, before) => d.schedule.filter((r) => r.season === String(season) && r.game_type === 'REG'
@@ -78,7 +80,7 @@ function perGame(gs) {
   if (gs.length <= VALUES_UP_TO) return gs.map((x) => `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.off && x.def ? ` (${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)})` : ''}`).join(', ');
   const avg = (xs, f) => xs.reduce((a, x) => a + f(x), 0) / xs.length;
   const m = gs.filter((x) => x.off && x.def);
-  return `${one(avg(gs, (x) => x.pf))} points a game, ${one(avg(gs, (x) => x.pa))} allowed${m.length ? ` · ${Math.round(avg(m, (x) => x.off.yards))} yards a game, ${Math.round(avg(m, (x) => x.def.yards))} allowed` : ''}`;
+  return `${one(avg(gs, (x) => x.pf))} points a game, ${one(avg(gs, (x) => x.pa))} allowed${m.length ? ` · ${Math.round(avg(m, (x) => x.off.yards))} yards a game, ${Math.round(avg(m, (x) => x.def.yards))} allowed${m.length < gs.length ? ` (yards from ${m.length} of the ${gs.length}; the rest not on file)` : ''}` : ' · yards not on file'}`;
 }
 
 /** HOW GOOD THEY ARE: this season to date; when this week's starter (`qb`) missed games, the team with him apart from
@@ -97,6 +99,7 @@ const passerLine = (x) => x.passers.map((r) => `${r.player_display_name} ${n(r.c
 /** HOW GOOD THEY ARE: when this week's starter (`qb`) missed or shared games, his games first, then the games without
  * him, then the shared ones, then the season as a whole (the season line leading read as who the team is). */
 export function strength(d, team, before, qb = null) {
+  if (d.scheduleMissing) return `${team}: the season's results are not on file (the schedule file did not load).`;
   const gs = teamGames(d, codeOf(team), d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   const split = [gs.some((x) => x.home) ? `${record(gs.filter((x) => x.home))} at home` : null, gs.some((x) => !x.home) ? `${record(gs.filter((x) => !x.home))} on the road` : null].filter(Boolean).join(', ');
@@ -105,7 +108,7 @@ export function strength(d, team, before, qb = null) {
   const lines = [`${team} (${record(gs)}, ${split})`];
   const by = (role) => (qb ? gs.filter((x) => qbRole(x, qb) === role) : []);
   const his = by('with'), without = by('without'), both = by('shared'), unknown = by('unknown');
-  if (unknown.length) lines.push(`  Who played quarterback is not on file for ${games(unknown.length)} (the weekly player stats did not load), so no split by quarterback is shown.`);
+  if (unknown.length) lines.push(`  Who played quarterback is not on file for ${games(unknown.length)} (not in the weekly player stats), so no split by quarterback is shown.`);
   if (unknown.length) return [...lines, season].join('\n');
   if (!qb || (!without.length && !both.length)) return [...lines, season].join('\n');
   const others = [...new Set(without.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
@@ -163,6 +166,7 @@ function lineupChanges(d, code, gs) {
 /** THIS SEASON GAME BY GAME: result and score, who played quarterback (everyone with 5+ passes), yards both ways, and
  * which regulars were missing or back; the opponent's record now. */
 export function gameByGame(d, team, before) {
+  if (d.scheduleMissing) return `${team}: the season game by game is not on file (the schedule file did not load).`;
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   const changes = lineupChanges(d, c, gs);
@@ -213,6 +217,7 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
 
 /** The spot: rest and travel for each side, from the schedule. */
 export function spot(d, homeTeam, awayTeam, gameDate) {
+  if (d.scheduleMissing) return 'Rest and travel are not on file (the schedule file did not load).';
   const hc = codeOf(homeTeam), ac = codeOf(awayTeam);
   const row = d.schedule.find((r) => r.season === String(d.season) && r.home_team === hc && r.away_team === ac && r.gameday === gameDate)
     || d.schedule.find((r) => r.season === String(d.season) && r.home_team === hc && r.away_team === ac && r.home_score === '');

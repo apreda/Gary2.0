@@ -15,7 +15,10 @@ import { parseCsv, nflverseCode } from '../../providers/nflverseService.js';
 const URL = 'https://github.com/nflverse/nflverse-data/releases/download/schedules/games.csv';
 const DISK_DIR = join(process.env.TMPDIR || '/tmp', 'gary-nfl-schedule-cache');
 const DISK_FILE = join(DISK_DIR, 'games.csv');
-const TTL_MS = 6 * 3600_000;
+// 30 minutes, so a night game's story has the day's earlier finals; a copy on disk stands in for a failed download only
+// within 12 hours, and says how old it is (Oct 23 2026 source audit: any age was used, unmarked).
+const TTL_MS = 30 * 60_000;
+const DISK_MAX_AGE_MS = 12 * 3600_000;
 const TIMEOUT_MS = 30_000;
 let memo = null;
 
@@ -128,7 +131,10 @@ export async function getNflSchedule({ fetchImpl = globalThis.fetch, force = fal
       text = await fetchText(fetchImpl);
       try { if (!existsSync(DISK_DIR)) mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(DISK_FILE, text); } catch { /* cache only */ }
     } catch (error) {
-      try { if (existsSync(DISK_FILE)) { text = readFileSync(DISK_FILE, 'utf8'); stale = true; } } catch { /* honest failure below */ }
+      try {
+        const age = existsSync(DISK_FILE) ? Date.now() - statSync(DISK_FILE).mtimeMs : Infinity;
+        if (age < DISK_MAX_AGE_MS) { text = readFileSync(DISK_FILE, 'utf8'); stale = Math.round(age / 3600_000); }
+      } catch { /* honest failure below */ }
       if (!text) return { unavailable: true, reason: `Could not read nflverse's schedule file: ${error.message}` };
     }
   }
