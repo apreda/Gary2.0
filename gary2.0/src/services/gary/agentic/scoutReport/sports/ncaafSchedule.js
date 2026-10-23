@@ -189,8 +189,11 @@ function quarterbackOfGame(rows, result) {
     .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
   if (!passers.length) return 'quarterback: no passing rows for this game';
   const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 10);
+  // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine
+  // games); college box scores count sacks as runs, so the line says so.
+  const runs = (row) => (Number(row.rushing_attempts) > 0 ? `; ${row.rushing_attempts} runs for ${row.rushing_yards ?? '?'} yds${Number(row.rushing_touchdowns) > 0 ? `, ${row.rushing_touchdowns} TD` : ''} (sacks included)` : '');
   return `quarterback: ${shown.map((row) => `${row.player.first_name} ${row.player.last_name} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
-    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT`).join('; ')}`;
+    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}`).join('; ')}`;
 }
 
 /** The named starter's games this season, split by site. */
