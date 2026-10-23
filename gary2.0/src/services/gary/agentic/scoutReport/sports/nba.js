@@ -802,10 +802,10 @@ VENUE: [arena name, city]
   // This supplements the official injury report with game context and today's news
   if (nbaCurrentState?.groundedRaw && injuries) {
     // Combine: keep the official injury report as the injury source, add Grounding narrative for context
+    // The marker is always written: the read finds the news by it, and without an earlier narrative the news went
+    // in unmarked and never reached Gary (Oct 23 2026 data audit).
     const existingNarrative = injuries.narrativeContext || '';
-    injuries.narrativeContext = existingNarrative
-      ? `${existingNarrative}\n\n--- TODAY'S GAME CONTEXT & NEWS ---\n${nbaCurrentState.groundedRaw}`
-      : nbaCurrentState.groundedRaw;
+    injuries.narrativeContext = `${existingNarrative ? `${existingNarrative}\n\n` : ''}--- TODAY'S GAME CONTEXT & NEWS ---\n${nbaCurrentState.groundedRaw}`;
     console.log(`[Scout Report] NBA current state added to narrative (${nbaCurrentState.groundedRaw.length} chars)`);
   }
 

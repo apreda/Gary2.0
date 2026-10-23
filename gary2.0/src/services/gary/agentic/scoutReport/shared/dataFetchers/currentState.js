@@ -134,8 +134,8 @@ ${availabilityContext ? `\n--- GAME-DAY AVAILABILITY ---\n${availabilityContext}
 Based on the search results above, write the current state report. For EACH team, cover:
 
 **${homeTeam} — What's going on with this team right now?**
-- **RECENT TRAJECTORY:** Record, ranking, recent performance over the last 5-10 games. Winning streak? Losing streak?
-- **LAST GAME:** What happened? Score, key performances, beat writer narrative (was it a blowout, comeback, overtime thriller, buzzer beater?).
+- **RECENT GAMES:** This season's record, and each of the last few games: the date, the score, who played and who didn't, and the key performances.
+- **LAST GAME:** What happened, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances.
 - **TOP STORYLINES & HEADLINES:** The big stories around this team RIGHT NOW:
   * Recent trades, acquisitions, roster moves
   * Breakout performances or slumps from key players
@@ -162,7 +162,10 @@ RULES:
 - Do NOT make betting predictions or pick a winner.
 - Use specific details — names, dates, scores, quotes. No vague generalities.
 - Only use information from the search results above. Do not make anything up.
-- Write in a knowledgeable, factual tone. Think beat writer, not hype man.`;
+- Write in a knowledgeable, factual tone. Think beat writer, not hype man.
+- THIS SEASON ONLY: nothing about last season, earlier seasons or the preseason (no last-season records, finishes, playoff runs, averages or rankings, and no preseason games or numbers).
+- Report what happened, each item with its date. No opinions, analysis, predictions or takes from anyone, no "the key question tonight is" framing, and no game plans or scheme breakdowns.
+- No rates from a game or a short stretch (points per 100 possessions, shooting or efficiency percentages over a few games). Scores and box-score lines from specific games are fine.`;
 
     const narrativeStart = Date.now();
     // Narrative synthesis is a pure content pass over the search results —
