@@ -9,6 +9,7 @@
 // and the date. Nothing weighs, scores or projects for him. The 11-factor research briefing does not run: the desk's
 // news is the news, as the NFL's news desk is.
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { homedir } from 'node:os';
 import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
@@ -39,13 +40,15 @@ export function nbaLineOf(desk) {
 // The injury report as reported, in plain facts. The desk's labels steer ("PRICED IN", "ESTABLISHED ABSENCES (already
 // reflected in line + all stats above — do NOT cite these players by name as reasons for your pick)"); the read keeps
 // what each label stood on: since when, and how many games the team has played without him. Before a team's first
-// game its entries carry no tag ("[out for the opener]" read as Out beside a Questionable status).
+// game its entries carry no tag ("[out for the opener]" read as Out beside a Questionable status). The desk's
+// established tier holds anyone missing from the recent box scores, Questionable included (Dean Wade, newly signed,
+// read as "ALREADY OUT" on Oct 22), so its heading says only that.
 export function injuriesAsReported(desk) {
   return sectionOf(desk, 'INJURY REPORT').split('\n')
     .filter((l) => !/^TODAY'S DATE/.test(l))
     .map((l) => l
       .replace(/^ACTIVE INJURIES$/, 'NEW, UNCERTAIN OR PROBABLE')
-      .replace(/^ESTABLISHED ABSENCES.*$/, 'ALREADY OUT (the team has played its recent games without them)')
+      .replace(/^ESTABLISHED ABSENCES.*$/, "NOT IN THE TEAM'S RECENT GAMES (each with tonight's status)")
       .replace(/ ?\[SEASON OPENER — no regular-season games played yet\]/, '')
       .replace(/\[SEASON-LONG\]/, '[has not played in any of the team\'s recent games]')
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[since ${since.trim()}, ${days} days${missed ? `, ${missed}` : ''}]`)
@@ -92,9 +95,11 @@ export function deskNews(desk) {
 
 // The desk's news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point
 // attempts", Oct 21 2026); a sentence that does leaves (founder, Oct 23 2026, every sport: "last season is old news").
-const PAST_SEASON = /\blast season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\b20\d\d-\d\d\b|\bpreseason\b|\bexhibition\b/i;
-export function withoutPastSeasons(text) {
-  return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“*])/).filter((x) => !PAST_SEASON.test(x)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+// A season written as "2025-26" counts only when it isn't this one (the first version dropped every "2026-27" too).
+const PAST_SEASON = /\blast season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibition\b/i;
+const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)-(\d\d)\b/g)].some((m) => Number(m[1]) < season);
+export function withoutPastSeasons(text, season = nbaSeason()) {
+  return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“*])/).filter((x) => !PAST_SEASON.test(x) && !pastSeasonLabel(x, season)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
 // How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,

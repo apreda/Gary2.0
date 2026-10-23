@@ -1148,22 +1148,18 @@ export async function buildNcaafScoutReport(game, options = {}) {
   // a ranked matchup, and the poll lane existed for the insights board but
   // never reached the pick dossier. Current poll (latest week only); the
   // Week-0 window before the season's first in-season poll falls to whatever
-  // poll BDL serves for the season (the preseason poll), else the prior
-  // season's FINAL poll worded as last season's finish. Facts only, fail-open.
+  // poll BDL serves for the season (the preseason poll). No fallback to last
+  // season's final poll (founder, Oct 23 2026, every sport: "last season is old
+  // news"): with no poll this season the section is left out. Facts only, fail-open.
   let apPollSection = '';
   // Current-poll rank by team name, for the opponents in the schedule sections.
   let apRankOf = () => null;
   try {
-    let pollSeason = ncaafSeasonYear;
+    const pollSeason = ncaafSeasonYear;
     let poll = (await ballDontLieService.getNcaafRankings(pollSeason)) || [];
-    if (!poll.length) {
-      pollSeason = ncaafSeasonYear - 1;
-      poll = (await ballDontLieService.getNcaafRankings(pollSeason)) || [];
-    }
     if (poll.length) {
       const maxWeek = Math.max(...poll.map((r) => Number(r?.week) || 0));
       poll = poll.filter((r) => (Number(r?.week) || 0) === maxWeek);
-      const isPriorPoll = pollSeason !== ncaafSeasonYear;
       const normName = (v) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const rowFor = (teamName) => poll.find((r) => {
         const t = r?.team || {};
@@ -1171,15 +1167,12 @@ export async function buildNcaafScoutReport(game, options = {}) {
         if (!full) return false;
         return normName(full) === normName(teamName) || namesRefer(teamName, full);
       });
-      if (!isPriorPoll) apRankOf = (teamName) => rowFor(teamName)?.rank ?? null;
-      const pollLabel = isPriorPoll ? "last season's final AP poll" : 'the current AP poll';
+      apRankOf = (teamName) => rowFor(teamName)?.rank ?? null;
       const line = (teamName) => {
         const r = rowFor(teamName);
-        if (!r) return `${teamName}: not in the Top 25 of ${pollLabel}`;
+        if (!r) return `${teamName}: not in the Top 25 of the current AP poll`;
         const rec = r.record ? ` at ${r.record}` : '';
-        return isPriorPoll
-          ? `${teamName}: finished last season ranked No. ${r.rank}${rec} in the final AP poll`
-          : `${teamName}: No. ${r.rank} in the current AP poll${rec}`;
+        return `${teamName}: No. ${r.rank} in the current AP poll${rec}`;
       };
       apPollSection = `
 AP TOP 25

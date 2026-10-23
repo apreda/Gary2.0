@@ -121,8 +121,11 @@ export function seasonGames(desk) {
 }
 
 const one = (x) => (Math.round(x * 10) / 10).toFixed(1);
+// Five games or fewer are listed game by game instead of averaged (an average of two carried by one blowout reads as
+// who the team is; Oct 23 2026 data check).
 function perGame(gs) {
   const n = gs.length;
+  if (n <= 5) return gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
   const pts = `${one(gs.reduce((a, g) => a + g.pf, 0) / n)} points a game, ${one(gs.reduce((a, g) => a + g.pa, 0) / n)} allowed`;
   const y = gs.filter((g) => g.off != null && g.def != null);
   if (!y.length) return pts;

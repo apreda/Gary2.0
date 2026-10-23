@@ -43,6 +43,17 @@ function passersOf(d, g, code) {
     .sort((a, b) => n(b.attempts) - n(a.attempts));
 }
 const starterOf = (x) => x.qb || null;
+// A game is shared when no quarterback threw 75% of the passes: Williams' Week 2 (15-of-26, hurt; Bagent 5-of-9) is
+// neither his game nor the backups' (Oct 23 2026 data check), so the splits leave it out and say so.
+const shared = (x) => x.passers.length > 1 && n(x.passers[0].attempts) < 0.75 * x.passers.reduce((a, r) => a + n(r.attempts), 0);
+// The same quarterback under two spellings: suffixes and punctuation aside, the same last name and first initial
+// ("Michael Penix Jr." / "Michael Penix", "Cam Ward" / "Cameron Ward", "C.J. Stroud" / "CJ Stroud").
+const qbKey = (name) => String(name || '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z ]/g, '').trim().split(/\s+/);
+export function sameQb(a, b) {
+  const x = qbKey(a), y = qbKey(b);
+  if (!x[0] || !y[0]) return false;
+  return x.join('') === y.join('') || (x.at(-1) === y.at(-1) && x[0][0] === y[0][0]);
+}
 
 /** One team's season before `before`: each game's result, score, yards both ways and who started at quarterback. */
 export function teamGames(d, code, season, before) {
@@ -61,8 +72,12 @@ export function teamGames(d, code, season, before) {
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
 const record = (gs) => { const w = gs.filter((x) => x.won).length, t = gs.filter((x) => x.tied).length; return `${w}-${gs.length - w - t}${t ? `-${t}` : ''}`; };
-// Points a game both ways, and yards a game where the weekly stats are published.
+// Points a game both ways, and yards a game where the weekly stats are published. Five games or fewer are listed game by
+// game instead: an average of two carried by one blowout read as who the team is (Oct 23 2026 data check: "with
+// Williams, 31.0 points a game" was 59, 3 and 31).
+const VALUES_UP_TO = 5;
 function perGame(gs) {
+  if (gs.length <= VALUES_UP_TO) return gs.map((x) => `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.off && x.def ? ` (${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)})` : ''}`).join(', ');
   const avg = (xs, f) => xs.reduce((a, x) => a + f(x), 0) / xs.length;
   const m = gs.filter((x) => x.off && x.def);
   return `${one(avg(gs, (x) => x.pf))} points a game, ${one(avg(gs, (x) => x.pa))} allowed${m.length ? ` · ${Math.round(avg(m, (x) => x.off.yards))} yards a game, ${Math.round(avg(m, (x) => x.def.yards))} allowed` : ''}`;
@@ -75,12 +90,14 @@ export function strength(d, team, before, qb = null) {
   if (!gs.length) return `${team}: no games played yet this season.`;
   const split = [gs.some((x) => x.home) ? `${record(gs.filter((x) => x.home))} at home` : null, gs.some((x) => !x.home) ? `${record(gs.filter((x) => !x.home))} on the road` : null].filter(Boolean).join(', ');
   const lines = [`${team} (${record(gs)}, ${split})`, `  This season, ${gs.length} game${gs.length === 1 ? '' : 's'}: ${perGame(gs)}`];
-  const last = qb ? qb.split(' ').at(-1) : null;
-  const his = last ? gs.filter((x) => String(starterOf(x) || '').endsWith(last)) : []; const rest = gs.filter((x) => !his.includes(x));
-  if (his.length && rest.length) {
+  const both = gs.filter((x) => shared(x));
+  const his = qb ? gs.filter((x) => !shared(x) && sameQb(starterOf(x), qb)) : []; const rest = gs.filter((x) => !shared(x) && !his.includes(x));
+  if (qb && (rest.length || both.length) && (his.length || rest.length)) {
     const others = [...new Set(rest.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
-    lines.push(`  With ${qb} at quarterback, ${his.length} game${his.length === 1 ? '' : 's'}: ${record(his)}, ${perGame(his)}`,
-      `  With ${others} at quarterback, ${rest.length} game${rest.length === 1 ? '' : 's'}: ${record(rest)}, ${perGame(rest)}`);
+    const games = (k) => `${k} game${k === 1 ? '' : 's'}`;
+    if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(his)}`);
+    if (rest.length) lines.push(`  With ${others} at quarterback, ${games(rest.length)}: ${record(rest)}, ${perGame(rest)}`);
+    if (both.length) lines.push(`  Shared at quarterback, left out of both: ${both.map((x) => `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} (${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ')})`).join('; ')}`);
   }
   return lines.join('\n');
 }
@@ -135,7 +152,7 @@ const passing = (rows) => {
 };
 /** The desk's starter for a team ("[HOME] Team: Name (…"), or null. */
 export function deskStarter(deskQbSection, team) {
-  const m = String(deskQbSection || '').match(new RegExp(`\\] ${team.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ([^(\\n]+?) \\(`));
+  const m = String(deskQbSection || '').match(new RegExp(`\\] ${team.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ([^(\\n]+?)(?: \\(|\\s*$)`, 'm'));
   return m ? m[1].trim() : null;
 }
 /** The desk's starter for each team, the starts so far and his own passing this season. */
@@ -146,10 +163,9 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
     const gs = teamGames(d, codeOf(team), season, before);
     const starts = {}; for (const x of gs) { const nm = starterOf(x); if (nm) starts[nm] = (starts[nm] || 0) + 1; }
     const who = Object.entries(starts).sort((a, b) => b[1] - a[1]).map(([nm, k]) => `${nm} ${k}`).join(', ');
-    const last = qb ? qb.split(' ').at(-1) : null;
-    const hasStarted = qb && Object.keys(starts).some((nm) => nm.endsWith(last));
+    const hasStarted = qb && Object.keys(starts).some((nm) => sameQb(nm, qb));
     const ids = new Set(played(d, season, before).map((g) => g.game_id));
-    const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && r.player_display_name === qb && ids.has(r.game_id));
+    const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
     if (gs.length) lines.push(`  at quarterback this season (most passes in a game): ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
     if (qb) lines.push(`  ${qb} this season: ${passing(his) || 'no games with 8+ passes'}`);
