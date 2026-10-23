@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { loadBettorData, strength, gameByGame, notOnReport, quarterbacks, deskStarter, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -72,6 +72,8 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
+    ['WHO THE OFFENSE RUNS THROUGH (beyond the quarterback: most carries and most targets this season)',
+      `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'))}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'))}`],
     // The record and the quarterback split head each team's game log; a separate HOW GOOD THEY ARE repeated its scores
     // and yards (Oct 23 2026 data review).
     ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n\n${gameByGame(data, homeTeam, before, deskStarter(qbs, homeTeam))}`],

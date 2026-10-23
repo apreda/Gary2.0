@@ -210,6 +210,39 @@ function lineupChanges(d, code, gs) {
   return out;
 }
 
+/** WHO THE OFFENSE RUNS THROUGH: beyond the quarterback, the two players with the most carries and the four with the
+ * most targets this season, each game's touches and yards newest first (five games or fewer, else the latest five and
+ * the season's totals), and whether he is on this week's injury report (`reportText`). Counts, not rates (Oct 23 2026:
+ * Kenneth Walker led the league in rushing and carried Kansas City past the Chargers; Gary read only quarterbacks, and
+ * called Kansas City thin without Rice and Thornton without knowing who was left). */
+export function skillPlayers(d, team, before, reportText = '') {
+  if (d.scheduleMissing || !d.playerWeek) return `${team}: the players' weekly stats are not on file.`;
+  const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
+  if (!gs.length) return `${team}: no games played yet this season.`;
+  const ids = new Set(gs.map((x) => x.g.game_id));
+  const rows = d.playerWeek.filter((r) => r.team === c && ids.has(r.game_id) && r.position !== 'QB');
+  const by = new Map();
+  for (const r of rows) { if (!by.has(r.player_id)) by.set(r.player_id, []); by.get(r.player_id).push(r); }
+  const total = (rs, k) => rs.reduce((a, r) => a + n(r[k]), 0);
+  const ranked = (k) => [...by.values()].filter((rs) => total(rs, k) > 0).sort((a, b) => total(b, k) - total(a, k));
+  const chosen = [...new Set([...ranked('carries').slice(0, 2), ...ranked('targets').slice(0, 4)])];
+  const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
+  // A game with no stats row is "did not play" only when the snap counts have no snap for him either: Rice left Week 4
+  // after 10% of the snaps without a touch.
+  const snapShare = (name, gameId) => { const k = sameKey(name); const r = (d.snaps || []).find((x) => x.team === c && x.game_id === gameId && sameKey(x.player) === k); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
+  const game = (r) => [n(r.carries) ? `${n(r.carries)} ${n(r.carries) === 1 ? 'carry' : 'carries'} ${n(r.rushing_yards)} yds${n(r.rushing_tds) ? ` ${n(r.rushing_tds)} TD` : ''}` : null,
+    n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null].filter(Boolean).join(', ') || 'no touches';
+  const lines = chosen.map((rs) => {
+    const last = rs.slice().sort((a, b) => n(b.week) - n(a.week))[0];
+    const played = new Map(rs.map((r) => [r.game_id, r]));
+    const recent = gs.slice().reverse().slice(0, VALUES_UP_TO).map((x) => `Wk ${x.week} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
+    const season = gs.length > VALUES_UP_TO ? ` · season, ${rs.length} games: ${game(Object.fromEntries(['carries', 'rushing_yards', 'rushing_tds', 'receptions', 'targets', 'receiving_yards', 'receiving_tds'].map((k) => [k, total(rs, k)])))}` : '';
+    const listed = text.includes(sameKey(last.player_display_name)) ? ' · on this week\'s injury report' : '';
+    return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}${season}`;
+  });
+  return [`${team}:`, ...lines].join('\n');
+}
+
 /** Regulars who missed the team's last game, or left it early, and are not on this week's injury report (`reported`:
  * the names on it): the report lists who may not play, so a player missing from it is one the team expects back (Oct 23
  * 2026 data check: Quentin Johnston missed Week 5, was cleared for Kansas City, and nothing Gary read said so). */

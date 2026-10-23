@@ -28,6 +28,10 @@ export const NEAR_KICKOFF_INTERVAL_MS = 10 * 60_000;
 export const NEAR_KICKOFF_WINDOW_MS = 3 * 3600_000;
 export const SLATE_TTL_MS = 6 * 3600_000;
 export const WEEK_DAYS = 7;
+// NFL games are watched 13 days out, so the look-ahead line and the Sunday-night opener are on file: a 7-day window
+// first saw Chargers-Chiefs at -8.5 on the Sunday night before, after it had opened -7.5, and Gary read the drift back
+// to -7.5 as the market moving toward the Chargers all week (Oct 23 2026 data check).
+export const WATCH_DAYS = { americanfootball_nfl: 13 };
 // A game stays on the watch this long past its kickoff so the last pregame
 // rung is recorded even when the poll lands a few minutes late.
 const KICKOFF_GRACE_MS = 20 * 60_000;
@@ -89,7 +93,7 @@ export async function upcomingWeekGames(sport, now = new Date(), { bdl = ballDon
   if (cached && now.getTime() - cached.fetchedAt < SLATE_TTL_MS) {
     games = cached.games;
   } else {
-    const params = { dates: weekDates(now), per_page: 100 };
+    const params = { dates: weekDates(now, WATCH_DAYS[sport] || WEEK_DAYS), per_page: 100 };
     if (sport === 'americanfootball_nfl') params.season_type = [1, 2, 3];
     if (sport === 'americanfootball_ncaaf') params.paginateAll = true;
     let list = (await bdl.getGames(sport, params, 10)) || [];
