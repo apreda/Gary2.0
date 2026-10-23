@@ -69,15 +69,15 @@ function standings(desk) {
     .map((l) => l.trim().replace(/^\[(?:HOME|AWAY)\] /, '')).join('\n');
 }
 
-// A team before its first game: the desk's BEFORE THE FIRST GAME block for it (last season's finish, this season's
-// roster and who left).
+// A team before its first game: the desk's BEFORE THE FIRST GAME block for it (this season's roster and who left),
+// without last season's finish (founder, Oct 23 2026, every sport: "last season is old news").
 function beforeFirstGame(desk, team) {
   const block = sectionOf(desk, 'BEFORE THE FIRST GAME');
   const i = block.search(new RegExp(`^\\[(?:HOME|AWAY)\\] ${esc(team)}$`, 'm'));
   if (i < 0) return '';
   const rest = block.slice(i).split('\n');
   const end = rest.findIndex((l, k) => k > 0 && /^\[(?:HOME|AWAY)\] /.test(l));
-  return (end > 0 ? rest.slice(1, end) : rest.slice(1)).join('\n').trim();
+  return (end > 0 ? rest.slice(1, end) : rest.slice(1)).filter((l) => !/^\s*Last season\b/.test(l)).join('\n').trim();
 }
 
 /** The day's news gathered for the desk: the part after its own injury lists, without betting lines. */
