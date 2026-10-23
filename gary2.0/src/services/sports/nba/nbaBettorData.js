@@ -117,6 +117,16 @@ function whoPlayed(box, others) {
     + (box.opponent?.length ? `\n      theirs with 15+ minutes: ${box.opponent.filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min}`).join(', ')}` : '');
 }
 
+/** The date of a team's first regular-season game this season (ET, YYYY-MM-DD), or null. */
+export async function firstGameDate(team, season = nbaSeason()) {
+  const teams = await ballDontLieService.getTeams('basketball_nba');
+  const t = findTeam(teams, team);
+  if (!t) return null;
+  const games = (await ballDontLieService.getGames('basketball_nba', { team_ids: [t.id], seasons: [season], per_page: 100, paginateAll: true }) || [])
+    .filter((g) => !g.postseason).map((g) => String(g.date || g.datetime || '').slice(0, 10)).filter(Boolean).sort();
+  return games[0] || null;
+}
+
 /** THIS SEASON GAME BY GAME: each finished game before `before`, newest first, with the opponent's record now; the
  * newest BOX_GAMES with who played. */
 export async function gameByGame(team, league, before = new Date(), season = nbaSeason()) {

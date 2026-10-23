@@ -15,7 +15,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, strengthLine, gameByGame } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, strengthLine, gameByGame, firstGameDate } from '../../../sports/nba/nbaBettorData.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -128,6 +128,19 @@ const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious season\b|\bprio
 const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)[-–](\d\d)\b/g)].some((m) => Number(m[1]) < season);
 // A rate from a game or two (Oct 23 2026 audit: "84.7 points per 100 possessions during Embiid's 33 minutes").
 const SHORT_RATE = /per 100 possessions|offensive rating|defensive rating|net rating|true shooting|effective field goal/i;
+// A paragraph dated before the season's first game is about the preseason even when it doesn't say so (Oct 23 2026:
+// "Dallas's last game was a 135-111 home loss to Atlanta on October 16" was a preseason game).
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+export function withoutPreseasonDates(text, start, season = nbaSeason()) {
+  if (!start) return String(text || '');
+  const startMs = Date.parse(`${start}T00:00:00Z`);
+  const before = (p) => [...p.matchAll(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})\b/g)].some((m) => {
+    const mo = MONTHS[m[1].toLowerCase()]; const year = mo >= 6 ? season : season + 1;
+    return Date.UTC(year, mo, Number(m[2])) < startMs;
+  });
+  return String(text || '').split('\n').filter((p) => !before(p)).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+}
+
 export function withoutPastSeasons(text, season = nbaSeason()) {
   return String(text || '').split('\n').filter((p) => !PAST_SEASON.test(p) && !pastSeasonLabel(p, season) && !SHORT_RATE.test(p))
     .filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
@@ -180,7 +193,8 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     ['THE ROTATION THIS SEASON', rotation(desk, ratings)],
     ['THE SITUATION', sectionOf(desk, 'REST & SCHEDULE SITUATION')],
   ];
-  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: deskNews(desk) };
+  const starts = (await Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null)))).filter(Boolean).sort();
+  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: withoutPreseasonDates(deskNews(desk), starts[0]) };
 }
 
 export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
