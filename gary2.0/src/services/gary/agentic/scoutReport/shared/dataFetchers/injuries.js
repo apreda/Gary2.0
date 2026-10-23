@@ -227,6 +227,9 @@ export async function fetchInjuries(homeTeam, awayTeam, sport, gameDate = null, 
           staleInjuries: [], // Computed in buildScoutReport after box-score resolution
           lineups: nbaLineups,
           narrativeContext,
+          // Which official report this is and who had not filed yet (Oct 23 2026 data audit: dropped here, so the desk
+          // never said the report's time and a team that had not filed read as having no injuries).
+          notSubmitted: groundingInjuries?.notSubmitted,
           _homeTeamId: groundingInjuries?._homeTeamId,
           _awayTeamId: groundingInjuries?._awayTeamId
         };

@@ -1172,7 +1172,12 @@ ${game.gameSignificance}
 
   // Generate injury report separately so we can log it for debugging
   // Pass rosterDepth for NBA so injury report can show team-share context for OUT players
-  const injuryReportText = formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, nbaRosterDepth);
+  // The section names the league report it was read from; the read dates each listing against it (Oct 23 2026 data
+  // audit: nothing said which report it was or when a player first appeared on it).
+  const injuryReportText = `Official NBA injury report: ${injuries?.notSubmitted?.reportTime || 'report time not on file'}\n`
+    + formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, nbaRosterDepth);
+  // Where each team's last game was, tonight's trip and a tip outside the usual evening (Oct 23 2026 data audit).
+  const homeCity = findTeam(await ballDontLieService.getTeams('basketball_nba').catch(() => []), homeTeam)?.city || null;
 
   // Debug: Log the injury report Gary will see (first 3000 chars)
   if (injuryReportText && injuryReportText.length > 50) {
@@ -1219,7 +1224,7 @@ ${narrativeContext}
 ` : ''}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${firstGameLines(formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam)))}
+${firstGameLines(formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam), { city: homeCity, tip: game.commence_time }))}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${nbaRosterDepth ? formatNbaRosterDepth(homeTeam, awayTeam, nbaRosterDepth, injuries) : ''}

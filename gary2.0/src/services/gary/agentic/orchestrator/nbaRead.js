@@ -1,8 +1,9 @@
 // THE NBA READ (Oct 21 2026, founder: "give college the NFL treatment and same with NBA then we can always go back to
 // the old NBA if needed"). Every NBA game pick unless GARY_NBA_SYSTEM=april, which runs the April 2026 prompts
 // (nbaWinningEra.js) through the agent loop. The NBA's own copy of the NFL read's shape (nflRead.js): the line and how
-// it got to this number first, then who's playing and who's out, how good both teams are per possession with ranks,
-// the season game by game, the rotation and the spot, plus the day's news gathered for the desk. No articles (founder,
+// it got to this number first, then who's playing and who's out, the season game by game (each team's record and,
+// from its sixth game, its per-possession numbers with ranks at the head of its log), the rotation and the spot, plus
+// the day's news gathered for the desk. No articles (founder,
 // Oct 22 2026, for every sport after TNF's NFL read). He is
 // asked what the line is saying, what matters in this game and what doesn't, and which side he likes at this spread;
 // then he writes that answer as the card. His instructions are what a sharp knows about NBA markets (nbaKnowledge.js)
@@ -15,7 +16,9 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, strengthLine, gameByGame, firstGameDate } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, ratingsLine, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock, RATED_FROM_GAMES } from '../../../sports/nba/nbaBettorData.js';
+import { latestOfficialReport, gameListing, listingHistory, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
+import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -39,40 +42,150 @@ export function nbaLineOf(desk) {
     .filter((l) => /^(?:Spread|Moneyline|Tickets on this game|Total|Over\/Under):/.test(l)).join('\n');
 }
 
+// An Eastern clock time written without a year ("Oct 23, 4:00 PM"), as an instant: the year is the pick's, the offset
+// the one New York keeps that day.
+const MONTH_NUM = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+function easternInstant(mon, day, h, min, ampm, asOf) {
+  const mo = MONTH_NUM[mon]; const at = new Date(asOf);
+  if (mo == null || Number.isNaN(at.getTime())) return null;
+  const year = at.getUTCFullYear() + (mo === 0 && at.getUTCMonth() === 11 ? 1 : mo === 11 && at.getUTCMonth() === 0 ? -1 : 0);
+  const hour = (Number(h) % 12) + (ampm === 'PM' ? 12 : 0);
+  for (const off of [4, 5]) {
+    const d = new Date(Date.UTC(year, mo, Number(day), hour + off, Number(min)));
+    if (Number(d.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' })) === hour) return d.toISOString();
+  }
+  return null;
+}
+// The tip, from the desk's header ("Sport: NBA | Friday, Oct 23, 4:00 PM EDT").
+function tipOf(desk, asOf) {
+  const m = String(desk || '').match(/^Sport: [^|\n]+\| \w+, (\w{3}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM) E[DS]T$/m);
+  return m ? easternInstant(m[1], m[2], m[3], m[4], m[5], asOf) : null;
+}
+const reportDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
+
 // The injury report as reported, in plain facts. The desk's labels steer ("PRICED IN", "ESTABLISHED ABSENCES (already
 // reflected in line + all stats above — do NOT cite these players by name as reasons for your pick)"); the read keeps
 // what each label stood on: since when, and how many games the team has played without him. Before a team's first
 // game its entries carry no tag ("[out for the opener]" read as Out beside a Questionable status). The desk's
 // established tier holds anyone missing from the recent box scores, Questionable included (Dean Wade, newly signed,
-// read as "ALREADY OUT" on Oct 22), so its heading says only that.
-export function injuriesAsReported(desk) {
-  return sectionOf(desk, 'INJURY REPORT').split('\n')
-    .filter((l) => !/^TODAY'S DATE/.test(l))
-    .map((l) => l
-      .replace(/^ACTIVE INJURIES$/, 'NEW, UNCERTAIN OR PROBABLE')
-      .replace(/^ESTABLISHED ABSENCES.*$/, "NOT IN THE TEAM'S RECENT GAMES (each with tonight's status)")
+// read as "ALREADY OUT" on Oct 22). Each team's players now sit in one list, away team first as in the game log: the
+// tiers' headings ("NEW, UNCERTAIN OR PROBABLE") named a judgment, and each player's own tag and first listing carry
+// what they stood on (Oct 23 2026 data audit). A team with nobody on the report says so. The projected starters'
+// heading that sits inside the section is theirs, not the report's.
+export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = {}) {
+  const teams = new Map([['AWAY', null], ['HOME', null]]);
+  let side = null;
+  for (const raw of sectionOf(desk, 'INJURY REPORT').split('\n')) {
+    if (!raw.trim() || /^TODAY'S DATE|^Official NBA injury report: |^STARTING LINEUPS \(|^ACTIVE INJURIES$|^ESTABLISHED ABSENCES|^[─━]+$/.test(raw)) continue;
+    const h = raw.match(/^\[(HOME|AWAY)\] ([^:]+):\s*(.*)$/);
+    if (h) {
+      side = h[1];
+      const t = teams.get(side) || { name: h[2], rows: [], notes: [] };
+      if (h[3]) t.notes.push(h[3]);
+      teams.set(side, t);
+      continue;
+    }
+    const l = raw
       .replace(/ ?\[SEASON OPENER — no regular-season games played yet\]/, '')
       .replace(/\[SEASON-LONG\]/, '[has not played in any of the team\'s recent games]')
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[since ${since.trim()}, ${days} days${missed ? `, ${missed}` : ''}]`)
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) \(([^)]+)\)\]/, '[$1]')
-      .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM)\]/, ''))
-    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM)\]/, '').replace(/\s+$/, '');
+    if (side && teams.get(side)) teams.get(side).rows.push(l);
+  }
+  if (![...teams.values()].some(Boolean)) return '';
+  const out = [];
+  for (const [tag, t] of teams) {
+    const name = t?.name || (tag === 'HOME' ? homeTeam : awayTeam);
+    if (!name) continue;
+    if (t?.rows.length) out.push(`[${tag}] ${name}:\n${t.rows.join('\n')}${t.notes.length ? `\n  ${t.notes.join('; ')}` : ''}`);
+    else out.push(`[${tag}] ${name}: ${t?.notes.join('; ') || 'nobody listed'}`);
+  }
+  return out.join('\n');
+}
+
+// Which official report the desk read (Oct 23 2026 data audit: the injury section never said which report it was, so
+// a line move could not be matched to the news). A desk records it ("Official NBA injury report: Oct 22, 5:30 PM ET");
+// an older desk is matched to the report at or just before the pick whose rows for this game are the desk's own rows.
+const ROW = /^\s*• (.+?) \(([^)]+)\) - /;
+const statusKey = (s) => String(s || '').slice(0, 4).toLowerCase();
+function deskRows(desk) {
+  const out = new Map();
+  for (const l of sectionOf(desk, 'INJURY REPORT').split('\n')) { const m = l.match(ROW); if (m) out.set(playerKey(m[1]), statusKey(m[2])); }
+  return out;
+}
+async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }) {
+  const said = (sectionOf(desk, 'INJURY REPORT').match(/^Official NBA injury report: (\w{3}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM) ET$/m));
+  if (said) {
+    const at = easternInstant(said[1], said[2], said[3], said[4], said[5], asOf);
+    return at ? { postedAt: at } : null;
+  }
+  if (/^Official NBA injury report: report time not on file$/m.test(sectionOf(desk, 'INJURY REPORT'))) return null;
+  const mine = deskRows(desk);
+  const slot = Math.floor(new Date(asOf).getTime() / 900_000) * 900_000;
+  for (let t = slot; t > slot - 2 * 3_600_000; t -= 900_000) {
+    const report = await latestOfficialReport({ now: new Date(t), lookbackHours: 0.25 }).catch(() => null);
+    if (!report) continue;
+    const listing = gameListing(report, gameDate, homeTeam, awayTeam);
+    const theirs = new Map();
+    for (const side of Object.values(listing)) {
+      if (side === 'unfiled') continue;
+      for (const [k, r] of side) if (r.status !== 'Available' && !/g league/i.test(r.reason)) theirs.set(k, statusKey(r.status));
+    }
+    if (theirs.size === mine.size && [...mine].every(([k, s]) => theirs.get(k) === s)) return { postedAt: report.postedAt };
+  }
+  return null;
+}
+
+// Each player's listing for this game since it began: when he first appeared and how his status went (Oct 23 2026
+// data audit: Jarrett Allen first appeared on the 5:00 PM report and the line moved at 5:11). Players a team first
+// listed together, unchanged since, share one line at the team's name instead of repeating it on each row.
+function listingNote(h, anchorAt) {
+  if (!h) return { first: 'first listing not on file', how: null };
+  const first = h.openEnded ? `listed on every report for this game back to the ${reportClock(h.firstAt)} ET report`
+    : h.firstAt === anchorAt ? 'first listed on this report'
+      : `first listed on the ${reportClock(h.firstAt)} ET report${h.teamFirst ? ", the team's first report for this game" : ''}`;
+  const how = h.firstAt === anchorAt ? null : h.statuses.length === 1 ? 'unchanged'
+    : h.statuses.map((x, i) => (i ? `${x.status} from the ${reportClock(x.from)} ET report` : `${x.status} at first`)).join(', ');
+  return { first, how };
+}
+async function injurySection(desk, { homeTeam, awayTeam, tip, asOf }) {
+  const text = injuriesAsReported(desk, { homeTeam, awayTeam });
+  if (!text) return 'Official NBA injury report: not on file.';
+  const gameDate = reportDay(tip || asOf);
+  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
+  if (!anchor) return `Official NBA injury report: report time not on file.\n${text}`;
+  const history = await listingHistory({ anchorAt: anchor.postedAt, gameDate, home: homeTeam, away: awayTeam }).catch((e) => ({ error: e.message }));
+  if (history.error) return `Official NBA injury report of ${reportClock(anchor.postedAt)} ET (when each player was first listed: not on file, ${history.error}):\n${text}`;
+  const blocks = [];
+  for (const l of text.split('\n')) {
+    const m = l.match(ROW);
+    if (!m || !blocks.length) blocks.push({ head: l, rows: [] });
+    else blocks[blocks.length - 1].rows.push({ line: l, ...listingNote(history.get(playerKey(m[1])), anchor.postedAt) });
+  }
+  const out = blocks.map(({ head, rows }) => {
+    const shared = rows.length > 1 && rows.filter((r) => r.how === 'unchanged').map((r) => r.first).find((x, i, all) => all.filter((y) => y === x).length > 1);
+    const note = (r) => { const parts = [r.first === shared ? null : r.first, r.how === 'unchanged' ? (r.first === shared ? null : 'same status on every report since') : r.how].filter(Boolean); return parts.length ? ` — ${parts.join('; ')}` : ''; };
+    return [shared ? `${head.replace(/:$/, '')} (${shared.replace(/^first listed/, 'each first listed')}, same status on every report since unless noted):` : head,
+      ...rows.map((r) => `${r.line}${note(r)}`)].join('\n');
+  });
+  return `Official NBA injury report of ${reportClock(anchor.postedAt)} ET:\n${out.join('\n')}`;
 }
 
 // THE ROTATION: each team's top players by minutes with their basic line this season (the desk's advanced and
-// team-share lines stay out).
-// A team with five games or fewer shows no season averages ("Maxey 28.0 PPG, GP: 1"); each game's minutes and points
-// are in the season game by game (Oct 23 2026 data audit).
-function rotation(desk, ratings = {}) {
-  const out = []; let small = false;
+// team-share lines stay out), once the team has six games. Before that each game's minutes, points and shooting are in
+// its game log, and a line saying so was all this section held (Oct 23 2026 data audit); it is left out while both
+// teams are under six.
+const ROTATION_FROM_GAMES = 6;
+function rotation(desk, teams) {
+  const out = []; let keep = false;
   for (const l of sectionOf(desk, 'AVAILABLE ROSTER').split('\n')) {
-    if (/^\[(?:HOME|AWAY)\] /.test(l)) {
-      const team = l.replace(/^\[(?:HOME|AWAY)\] (.+):$/, '$1').replace(/\b([A-Z])([A-Z']+)\b/g, (w, a, b) => a + b.toLowerCase());
-      const key = Object.keys(ratings).find((k) => k.toLowerCase() === team.toLowerCase());
-      small = !key || ratings[key].gp < 6;
-      const name = key || team;
-      out.push(small ? `${name}: ${key ? `${ratings[key].gp} game${ratings[key].gp === 1 ? '' : 's'} so far` : 'no games yet'}; each game's minutes and points are in the season game by game.` : `${name}:`);
-    } else if (!small && /^ {2}\S.* - .*PPG/.test(l)) out.push(l);
+    const h = l.match(/^\[(HOME|AWAY)\] /);
+    if (h) {
+      const t = teams[h[1]];
+      keep = Boolean(t?.games) && t.games.length >= ROTATION_FROM_GAMES;
+      if (keep) out.push(`${t.name}:`);
+    } else if (keep && /^ {2}\S.* - .*PPG/.test(l)) out.push(l);
   }
   return out.join('\n').trim();
 }
@@ -84,14 +197,14 @@ function projectedStarters(desk) {
   return five ? `Projected starters (a web search's projection, not confirmed):\n${five}` : '';
 }
 
-// Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-0").
-// Before a team's tenth game, its record only: a conference rank among teams tied at 1-0 or 0-0 is the feed's tie
-// order ("Cavaliers #15 in East (0-0)"), and home and road splits are a game or two (Oct 23 2026 data audit).
-function standings(desk, ratings = {}) {
-  return sectionOf(desk, 'NBA LEAGUE CONTEXT').split('\n').filter((l) => /^\s*\[(?:HOME|AWAY)\] /.test(l))
-    .map((l) => l.trim().replace(/^\[(?:HOME|AWAY)\] /, ''))
-    .map((l) => { const m = l.match(/^(.+?): #\d+ in \w+ \((\d+)-(\d+)\)/); return m && Number(m[2]) + Number(m[3]) < 10 ? `${m[1]}: ${m[2]}-${m[3]}` : l; })
-    .join('\n');
+// Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-1").
+function standingsOf(desk) {
+  const out = new Map();
+  for (const l of sectionOf(desk, 'NBA LEAGUE CONTEXT').split('\n')) {
+    const m = l.trim().match(/^\[(?:HOME|AWAY)\] (.+?): (#\d+ in \w+) \((\d+)-(\d+)\)(?: \| Home: (\d+-\d+))?(?: \| Road: (\d+-\d+))?/);
+    if (m) out.set(m[1], { w: Number(m[3]), l: Number(m[4]), place: m[2], home: m[5], road: m[6] });
+  }
+  return out;
 }
 
 // A team before its first game: the desk's BEFORE THE FIRST GAME block for it (this season's roster and who left),
@@ -110,91 +223,408 @@ function beforeFirstGame(desk, team) {
     .join('\n').trim();
 }
 
-/** The day's news gathered for the desk: the part after its own injury lists, without betting lines. */
-export function deskNews(desk) {
-  const state = sectionOf(desk, 'CURRENT STATE & CONTEXT');
-  const i = state.indexOf("--- TODAY'S GAME CONTEXT & NEWS ---");
-  const text = i >= 0 ? state.slice(i + "--- TODAY'S GAME CONTEXT & NEWS ---".length) : '';
-  // The search's own opening line ("I'll use the latest roster news ...") is its note to itself, not news.
-  const body = text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, '');
-  return withoutPastSeasons(withoutBettingLines(body)).replace(/\n{3,}/g, '\n\n').trim();
+// The head of each team's game log (Oct 23 2026: HOW GOOD THEY ARE went, a heading that told Gary what to conclude;
+// what it held that the log does not is here): the record from the team's own games, from the tenth game the
+// conference place and the home and road records (before that a place among teams tied at 1-0 is the feed's tie order,
+// "Cavaliers #15 in East (0-0)", and a split is a game or two), and from the sixth game the per-possession numbers with
+// ranks. A team before its first game says so once, here, with this season's roster.
+const RATINGS_MISSING = Symbol('ratings missing');
+const STANDINGS_FROM_GAMES = 10;
+function teamHead(desk, ratings, team, ts) {
+  if (!ts) return { text: `${team}: this season's games not on file.` };
+  if (!ts.games.length) {
+    const before = beforeFirstGame(desk, team);
+    return { text: `${team}: no games yet; tonight is its first game of the season.${before ? `\n${before}` : ''}` };
+  }
+  const regular = ts.games.filter((g) => !g.postseason);
+  const w = regular.filter((g) => (g.home_team?.id === ts.id ? g.home_team_score > g.visitor_team_score : g.visitor_team_score > g.home_team_score)).length;
+  const s = standingsOf(desk).get(team);
+  const more = s && regular.length >= STANDINGS_FROM_GAMES ? `; ${s.place}${s.home ? `; home ${s.home}, road ${s.road}` : ''}` : '';
+  const head = `${team} (${w}-${regular.length - w}${more})`;
+  const missing = ratings[RATINGS_MISSING];
+  const rated = missing ? `opponents' records${regular.length >= RATED_FROM_GAMES ? ' and per 100 possessions' : ''}: not on file (the league's ratings did not load: ${missing})` : ratingsLine(ratings, team);
+  return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
+}
+async function gameLog(desk, ratings, team, asOf, ts) {
+  const h = teamHead(desk, ratings, team, ts);
+  if (!h.head) return h.text;
+  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts }).catch(() => `${h.head}: games not on file.`);
+  return h.rated ? log.replace(/^(.*)\n/, `$1\n  ${h.rated}\n`) : log;
 }
 
-// The desk's news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point
-// attempts", Oct 21 2026); a paragraph or bullet that does leaves whole (founder, Oct 23 2026, every sport: "last season
-// is old news"). Dropping one sentence left the next one's numbers under the wrong game (Oct 23 2026 data audit: a
-// preseason "5-for-36" read as the opener). A season written "2025-26" counts only when it isn't this one.
-const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star selection\b|\bsummer league\b|\bscrimmage\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b/i;
+// THE SITUATION from the same games as the log: days off since each team's last game, where that game was, tonight's
+// trip and a tip outside the usual evening (Oct 23 2026 data audit). A team before its first game is left out (its
+// log says so).
+function situation(seasons, homeTeam, awayTeam, tip, asOf) {
+  const at = tip || new Date(asOf).toISOString();
+  const rest = [homeTeam, awayTeam].map((team, i) => (seasons[i]?.games?.length ? calculateRestSituation(seasons[i].games, at, team) : null));
+  return formatRestSituation(homeTeam, awayTeam, rest[0], rest[1], { city: seasons[0]?.city || null, tip })
+    .split('\n').filter((l) => !/: Rest data unavailable$/.test(l)).join('\n').trim();
+}
+
+// THE NEWS GARY READS: the desk's news search (the part after its own injury lists), without betting lines, past
+// seasons, the preseason, numbers that are not a regular-season box score before the pick, and the lines those leave
+// orphaned. A paragraph, bullet or table row that fails leaves whole: dropping one sentence left the next one's numbers
+// under the wrong game (Oct 23 2026 data audit: a preseason "5-for-36" read as the opener).
+const NEWS_MARK = "--- TODAY'S GAME CONTEXT & NEWS ---";
+const plain = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’‘]/g, "'").replace(/\*+/g, '');
+
+// The news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point attempts", Oct
+// 21 2026; founder, Oct 23 2026, every sport: "last season is old news"). A season written "2025-26" counts only when
+// it isn't this one. Departures from last season's roster, last season's awards and "last spring" are last season too
+// (Oct 23 2026 data audit: Gary's Spurs and Nuggets reads leaned on "with Lu Dort and Isaiah Joe having departed"); a
+// player who leaves a game is this season.
+const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious[- ]seasons?\b|\bprior[- ]seasons?\b|\ba year ago\b|\bpreseasons?\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star (?:selections?|appearances?)\b|\bAll-Defensive\b|\bAll-Rookie\b|\bof the Year\b|\bsummer league\b|\bscrimmages?\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b|\bdepart(?:ed|s|ure|ures)\b(?! (?:from )?(?:the |that |\w+'s )?(?:game|contest)\b| (?:in|during|early in|late in) the (?:first|second|third|fourth) (?:quarter|half)\b| with (?:an? )?(?:\w+ ){0,2}(?:injury|soreness|sprain|strain|cramps?)\b)|\bleft (?:\S+ ){0,3}in free agency\b|\b(?:traded|dealt) away\b|\blast (?:spring|summer)\b|\breturns (?:its|their|all of its|all of their) (?:top|entire|core|starting)\b/i;
 const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)[-–](\d\d)\b/g)].some((m) => Number(m[1]) < season);
 // A rate from a game or two (Oct 23 2026 audit: "84.7 points per 100 possessions during Embiid's 33 minutes").
 const SHORT_RATE = /per 100 possessions|offensive rating|defensive rating|net rating|true shooting|effective field goal/i;
-// A paragraph dated before the season's first game is about the preseason even when it doesn't say so (Oct 23 2026:
-// "Dallas's last game was a 135-111 home loss to Atlanta on October 16" was a preseason game).
+const pastSeasonLine = (p, season) => PAST_SEASON.test(p) || pastSeasonLabel(p, season) || SHORT_RATE.test(p);
+
+// Dates before the first game. A month written alone counts when it was last season, before the league year turned on
+// July 1 ("in April", "hired in May"; Oct 23 2026 data audit); a trade "in July" made this season's roster. A full date
+// before the first game counts when its sentence reports a game ("Dallas's last game was a 135-111 home loss to
+// Atlanta on October 16" was a preseason game); a roster move, a contract or a schedule change dated then is this
+// season's news (Oct 23 2026: the Bucks' 3 p.m. tip, moved on October 16 for the World Series, and the Bulls' October
+// 17 cuts had left with the preseason games). A date takes its most recent year up to ten days past the pick ("March 5"
+// in October is last March).
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-export function withoutPreseasonDates(text, start, season = nbaSeason()) {
-  if (!start) return String(text || '');
+const MONTH = 'January|February|March|April|May|June|July|August|September|October|November|December';
+const DATED = new RegExp(`\\b(${MONTH}|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\\.?\\s+(\\d{1,2})(?![\\d:])\\b`, 'g');
+const MONTH_ALONE = new RegExp(`\\b(?:in|since|during|from|until|through|by|early|late|mid-|last|back in|this past)\\s+(${MONTH})\\b(?!\\s+\\d)`, 'g');
+const GAME_REPORT = /\b(?:beat(?! (?:writers?|reporters?)\b)|beats|beaten|beating|defeated|edged|routed|fell to|lost to|lost at|lost by|loss to|loss at|win over|win against|won at|won against|won by|victory|scored|finished with|shot|outscored|points|rebounds|assists|finale)\b|\b(?:[6-9]\d|1\d\d)\s?[–-]\s?(?:[6-9]\d|1\d\d)\b/i;
+const sentencesOf = (p) => plain(p).replace(/\b(Jr|Sr|St|Mr|vs)\./g, '$1').split(/(?<=[.!?])\s+(?=[A-Z"“|-])/);
+function beforeTheSeason(p, start, asOf) {
+  if (!start) return false;
   const startMs = Date.parse(`${start}T00:00:00Z`);
-  const before = (p) => [...p.matchAll(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})\b/g)].some((m) => {
-    const mo = MONTHS[m[1].toLowerCase()]; const year = mo >= 6 ? season : season + 1;
-    return Date.UTC(year, mo, Number(m[2])) < startMs;
-  });
-  return String(text || '').split('\n').filter((p) => !before(p)).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+  const at = new Date(asOf || Date.now());
+  const yearOf = (mo, day) => { let y = at.getUTCFullYear(); while (Date.UTC(y, mo, day) > at.getTime() + 10 * 86_400_000) y -= 1; return y; };
+  const datedGame = sentencesOf(p).some((s) => GAME_REPORT.test(s)
+    && [...s.matchAll(DATED)].some((m) => { const mo = MONTHS[m[1].slice(0, 3).toLowerCase()]; return Date.UTC(yearOf(mo, Number(m[2])), mo, Number(m[2])) < startMs; }));
+  const leagueYear = Date.UTC(new Date(startMs).getUTCFullYear() - (new Date(startMs).getUTCMonth() < 6 ? 1 : 0), 6, 1);
+  const alone = [...plain(p).matchAll(MONTH_ALONE)].some((m) => { const mo = MONTHS[m[1].slice(0, 3).toLowerCase()]; return Date.UTC(yearOf(mo, 1), mo + 1, 1) <= leagueYear; });
+  return datedGame || alone;
 }
 
-export function withoutPastSeasons(text, season = nbaSeason()) {
-  return String(text || '').split('\n').filter((p) => !PAST_SEASON.test(p) && !pastSeasonLabel(p, season) && !SHORT_RATE.test(p))
-    .filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+// SCORES AND STAT LINES ARE CHECKED AGAINST THE BOX SCORES (Oct 23 2026 data audit: a team that had not played reached
+// Gary through its exhibitions, "Jokić 7-for-8" and "Evan was elite", so the two sides were measured on different kinds
+// of game). A number stays when it is a regular-season final or box-score line from before the pick: a final score, a
+// player's or a team's points, rebounds, assists, steals, blocks, turnovers, fouls, threes or shooting. A number tied
+// to a part of a game (a quarter, the paint, the bench) cannot be checked and stands, and so does one for a team past
+// its fifth game, whose earlier boxes are not loaded. A player of a team with no games yet has no box: his stat lines
+// leave, and so does what he did on a court said without a number.
+const WORD_NUMS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20 };
+const N = `(\\d{1,3}(?:\\.\\d)?|${Object.keys(WORD_NUMS).join('|')})`;
+const numOf = (x) => (/^\d/.test(x) ? Number(x) : WORD_NUMS[x.toLowerCase()]);
+const STAT_KEYS = [['points', 'pts'], ['pts', 'pts'], ['offensive rebounds', 'oreb'], ['rebounds', 'reb'], ['assists', 'ast'], ['steals', 'stl'], ['blocks', 'blk'], ['turnovers', 'turnover'], ['fouls', 'pf'], ['made threes', 'fg3m'], ['threes', 'fg3m'], ['three-pointers', 'fg3m'], ['3-pointers', 'fg3m']];
+const STAT = new RegExp(`\\b${N} (${STAT_KEYS.map(([w]) => w).join('|')})\\b`, 'gi');
+const PAIR = new RegExp(`\\b${N}[- ](?:for|of)[- ]${N}\\b`, 'gi');
+const SHOT_CONTEXT = /^[\s\w-]{0,30}?(?:shooting|from the field|from the floor|from three|from deep|from the line|three-point|3-point|free throws?|field goals?|shots|attempts|FG|3PT|FT)\b/i;
+const SCORE = /\b(\d{2,3})\s?[–-]\s?(\d{2,3})\b/g;
+const NAMED_SCORE = /\b[A-Z][a-z]+(?: [A-Z][a-z]+)? (\d{2,3}), [A-Z][a-z]+(?: [A-Z][a-z]+)? (\d{2,3})\b/g;
+const PART_OF_GAME = /^[^.;]{0,45}?\b(?:quarter|half\b|halftime|overtime|in the paint|fast[- ]break|off turnovers|second[- ]chance|bench|off the bench|stretch|minutes? remaining|final \w+ minutes|opening \w+ minutes|run\b|in transition)/i;
+const IN_GAME = /\b(?:lead|led|leading|trail(?:ed|ing)?|advantage|cut|deficit|pushed|ahead|behind|within|after (?:one|two|three) quarters|at halftime|at the half|at the break|run)\b/i;
+const ANAPHOR = /^\s*(?:\*\*)?(?:That|This(?! report\b)|These|Those|It|Its|They|Their|He|His|She|Her|Both|The (?:scrimmage|game|finale|exhibition|performance|outing|showing))\b/;
+// A game told without a checkable number: what a player did on a court said in the past ("Mobley supplied the strongest
+// impression", "Evan was elite") and how a game went ("Boston recovered from a 14-point third-quarter deficit"). For a
+// team with no games yet that game was the preseason (Oct 23 2026: both came through for opening-night teams). A skill
+// named in the present ("Mitchell's scoring", "Tyson's shooting") is not a game (two previews of the Cavaliers'
+// opener had left over it).
+const GAME_TOLD = /\b(?:deficit|comeback|recovered|rallied|tying|tied the game|go-ahead|overtime|quarter|halftime|first half|second half|trailed|outscored|rested|recap|final margin|won(?!['’]t)|lost|beat(?! (?:writers?|reporters?)\b)|defeated|win over|loss to|finale|scrimmage|exhibition)\b/i;
+const PERFORMANCE = /\b(?:impression|impressed|impressive|was elite|stood out|looked (?:sharp|good|great|strong|rusty|comfortable)|scored|finished with|poured in|posted|tallied|shot \d|went \d|played \d+ minutes|in \d+ minutes)\b|\bled\b[^.;]{0,30}\bin (?:scoring|rebounding|assists)\b/i;
+
+/** What the news is checked against: both teams' regular-season games before the pick, their box scores, every player
+ * the desk names (one with no box this season has no stat line to match) and the league's other teams. */
+export function newsFacts(seasons, names, league = []) {
+  const finals = [], teamRows = [], players = new Map(), teamWords = new Set(), complete = new Set(), zero = new Set(), zeroWords = new Set();
+  const add = (name, team, row, own) => {
+    const p = players.get(plain(name)) || { team: null, rows: [] };
+    if (row) p.rows.push(row);
+    if (own || !p.team) p.team = team;
+    players.set(plain(name), p);
+  };
+  for (const ts of seasons) {
+    if (!ts) continue;
+    if (!ts.games.length) { zero.add(ts.team); for (const w of [ts.city, ts.nickname]) if (w) { zeroWords.add(plain(w)); teamWords.add(plain(w)); } }
+    if (ts.boxes.filter(Boolean).length >= ts.games.length) complete.add(ts.team);
+    for (const g of ts.games) {
+      if (g.postseason) continue;
+      finals.push([g.home_team_score, g.visitor_team_score]);
+      for (const t of [g.home_team, g.visitor_team]) for (const w of [t?.city, t?.name]) if (w) teamWords.add(plain(w));
+    }
+    ts.boxes.forEach((box, i) => {
+      if (!box) return;
+      const game = ts.games[i]?.id;
+      teamRows.push(box.totals, box.opponent.totals);
+      for (const p of box) add(p.name, ts.team, { ...p, game }, true);
+      for (const p of box.opponent) add(p.name, box.opponent.fullName, { ...p, game }, false);
+    });
+  }
+  for (const [team, list] of names) for (const n of list) add(n, team, null, false);
+  const tonight = new Set([...names.keys(), ...seasons.filter(Boolean).map((ts) => ts.id)]);
+  const here = new Set(seasons.filter(Boolean).flatMap((ts) => [ts.city, ts.nickname]).filter(Boolean).map(plain));
+  const others = league.filter((t) => !tonight.has(t.id) && !tonight.has(t.full_name)).flatMap((t) => [t.city === 'LA' ? 'Los Angeles' : t.city, t.name]).filter(Boolean).map(plain).filter((w) => !here.has(w));
+  return { finals, teamRows, players, teamWords, complete, zero, zeroWords: [...zeroWords], tonight, here, allComplete: seasons.every((ts) => ts && complete.has(ts.team)),
+    // A game count past the most either team has played is not this season's ("7.8 points in 69 games as a rookie").
+    maxGames: seasons.every(Boolean) ? Math.max(...seasons.map((ts) => ts.games.length)) : Infinity,
+    elsewhere: others.length ? new RegExp(`\\b(?:[Aa]gainst|[Vv]s\\.?|[Vv]ersus|[Ii]n|[Aa]t|[Oo]ver) (?:the )?(?:${[...new Set(others)].map(esc).join('|')})\\b|\\b(?:${[...new Set(others)].map(esc).join('|')})(?:'s)? (?:game|shooting|performance|outing|showing|win|loss)\\b`) : null };
+}
+// Every player the desk names for each team: the projected starters, the injury report, the rotation and the roster
+// before the first game.
+function deskNames(desk, homeTeam, awayTeam) {
+  const out = new Map([[homeTeam, new Set()], [awayTeam, new Set()]]);
+  const add = (team, n) => { const name = String(n || '').replace(/\s*\((?:rookie|[A-Z]{1,2})\)$/, '').trim(); if (team && /^[A-Z][\w'’.-]+(?: [\w'’.-]+){1,3}$/.test(name)) out.get(team)?.add(name); };
+  const sideOf = (tag) => (tag === 'HOME' ? homeTeam : awayTeam);
+  for (const l of sectionOf(desk, 'STARTING LINEUPS').split('\n')) {
+    const m = l.match(/^\[(HOME|AWAY)\] [^:]+: (.+)$/);
+    if (m) for (const p of m[2].split(', ')) add(sideOf(m[1]), p.replace(/ \([A-Z]{1,2}\)$/, ''));
+  }
+  let team = null;
+  for (const l of [...sectionOf(desk, 'INJURY REPORT').split('\n'), ...sectionOf(desk, 'AVAILABLE ROSTER').split('\n')]) {
+    const h = l.match(/^\[(HOME|AWAY)\] /); if (h) team = sideOf(h[1]);
+    const inj = l.match(ROW); if (inj) add(team, inj[1]);
+    const ros = l.match(/^ {2}(\S[^-]+?) - [\d.]+ PPG/); if (ros) add(team, ros[1]);
+  }
+  for (const t of [homeTeam, awayTeam]) {
+    for (const l of beforeFirstGame(desk, t).split('\n')) for (const p of l.replace(/^[^:]*: /, '').split(/, |; new to the team: /)) add(t, p);
+  }
+  return new Map([...out].map(([k, v]) => [k, [...v]]));
 }
 
-// How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,
-// the desk's BEFORE THE FIRST GAME block.
-// Ratings that did not load are said to be missing; an empty set read as two teams with no games yet (Oct 23 2026
-// source audit).
-const RATINGS_MISSING = Symbol('ratings missing');
-function howGood(desk, ratings, homeTeam, awayTeam) {
-  if (ratings[RATINGS_MISSING]) return `${standings(desk, {})}\n\nThe teams' ratings and records are not on file (${ratings[RATINGS_MISSING]}).`;
-  // Under six games the standings line is the record; the strength line would repeat it (Oct 23 2026 audit).
-  return [standings(desk, ratings), ...[awayTeam, homeTeam].map((team) => {
-    const before = ratings[team] ? '' : beforeFirstGame(desk, team);
-    if (before) return `${team}: no games yet this season. Before the first game:\n${before}`;
-    return ratings[team]?.gp < 6 ? null : strengthLine(ratings, team);
-  })].filter(Boolean).join('\n\n');
+// The names in a sentence, in order: full names, then last names not inside one. Names that sit together ("Simons
+// and Caldwell-Pope") form one group, and a number after them may be their sum.
+function namesIn(sentence, facts) {
+  const hits = [];
+  const taken = [];
+  const free = (i, len) => !taken.some(([a, b]) => i < b && i + len > a);
+  for (const name of facts.players.keys()) {
+    for (const m of sentence.matchAll(new RegExp(`\\b${esc(name)}\\b`, 'g'))) { hits.push({ at: m.index, end: m.index + name.length, names: [name] }); taken.push([m.index, m.index + name.length]); }
+  }
+  const byLast = new Map();
+  for (const name of facts.players.keys()) {
+    const last = name.split(' ').filter((w) => !/^(?:Jr|Sr|II|III|IV)\.?$/.test(w)).pop();
+    if (last && last.length >= 3) byLast.set(last, [...(byLast.get(last) || []), name]);
+  }
+  for (const [last, list] of byLast) {
+    for (const m of sentence.matchAll(new RegExp(`\\b${esc(last)}\\b`, 'g'))) if (free(m.index, last.length)) { hits.push({ at: m.index, end: m.index + last.length, names: list }); taken.push([m.index, m.index + last.length]); }
+  }
+  const teams = [...facts.teamWords].flatMap((w) => [...sentence.matchAll(new RegExp(`\\b${esc(w)}\\b`, 'g'))].map((m) => ({ at: m.index, end: m.index + w.length, team: true })));
+  const groups = [];
+  for (const h of [...hits, ...teams].sort((a, b) => a.at - b.at)) {
+    const prev = groups[groups.length - 1];
+    if (prev && !h.team && !prev.team && /^(?:'s)?\s*(?:,|and|&|,\s*and)?\s*$/.test(sentence.slice(prev.end, h.at))) { prev.members.push(h.names); prev.end = h.end; } else groups.push(h.team ? { ...h } : { at: h.at, end: h.end, members: [h.names] });
+  }
+  return groups;
+}
+// A claim about whoever a name may be: it holds when one of them has a matching row, and it stands unchecked when one
+// of them is past the boxes on file (a team after its fifth game, or a third team's player).
+const rowsOf = (facts, n) => facts.players.get(n)?.rows || [];
+const checkable = (facts, n) => facts.complete.has(facts.players.get(n)?.team);
+const claimOk = (facts, names, test) => names.some((n) => rowsOf(facts, n).some(test)) || !names.every((n) => checkable(facts, n));
+function groupOk(facts, members, key, value, each) {
+  if (members.length === 1 || each) return members.every((names) => claimOk(facts, names, (r) => r[key] === value));
+  // A group's number may be their total in one game (Simons and Caldwell-Pope's 23 in New York).
+  const games = new Set(members.flatMap((names) => names.flatMap((n) => rowsOf(facts, n).map((r) => r.game))));
+  const sumIn = (game) => members.reduce((a, names) => a + (names.map((n) => rowsOf(facts, n).find((r) => r.game === game)?.[key]).find((x) => x != null) ?? 0), 0);
+  return [...games].some((game) => sumIn(game) === value) || members.every((names) => claimOk(facts, names, (r) => r[key] === value))
+    || !members.every((names) => names.every((n) => checkable(facts, n)));
+}
+const averageOk = (facts, members, key, value) => members.length === 1 && members[0].some((n) => {
+  if (!checkable(facts, n)) return true;
+  const rows = rowsOf(facts, n).filter((r) => r.min > 0);
+  return rows.length > 0 && Math.abs(rows.reduce((a, r) => a + r[key], 0) / rows.length - value) < 0.051;
+});
+/** The numbers in one paragraph, bullet or table row of news that are not a regular-season final or box-score line
+ * from before the pick. */
+function uncheckedNumbers(line, facts) {
+  const bad = [];
+  // A table row reads as its first cell's: "| Tyler Herro | 31:55 | 24 points, nine assists; 9-for-21 shooting |" (Oct
+  // 23 2026: each cell read alone had no name, and eight correct rows left the Bucks' and Bulls' tables).
+  const cells = /^\s*\|/.test(line) ? plain(line).split('|').map((c) => c.trim()).filter(Boolean) : null;
+  const sentences = cells ? cells.slice(1).map((c) => `${cells[0]}: ${c}`) : sentencesOf(line);
+  let carry = null;
+  const zeroIn = (s, groups) => groups.some((g) => !g.team && g.members.some((names) => names.some((n) => facts.zero.has(facts.players.get(n)?.team))))
+    || facts.zeroWords.some((w) => new RegExp(`\\b${esc(w)}\\b`).test(s));
+  // A "finale" for a team yet to play was its preseason finale, wherever in the paragraph it falls ("Ott's assessment
+  // after the finale was direct ... His praise of Green", Oct 23 2026).
+  const whole = cells ? cells.join(' ') : sentences.join(' ');
+  if (/\bfinale\b/i.test(whole) && zeroIn(whole, namesIn(whole, facts))) bad.push('the preseason finale');
+  for (const m of whole.matchAll(/\b(?:in|over|across|through|of)\s+(?:(?:his|their|its|the|those)\s+)?(?:(?:first|last|past|previous)\s+)?(\d{1,3})\s+(?:games|appearances|starts|outings|contests)\b/gi)) if (Number(m[1]) > facts.maxGames) bad.push(m[0]);
+  for (const sentence of sentences) {
+    const groups = namesIn(sentence, facts);
+    // "He", "his" and "him" are the player named last before them in the paragraph ("Bailey's strongest recent storyline
+    // is defensive development. Against San Antonio, he produced six points").
+    const he = /\b(?:he|his|him)\b/i.test(sentence) ? carry : null;
+    const ownerAt = (i) => { const g = [...groups].reverse().find((x) => x.end <= i); return he && (!g || g.team) ? he : g || null; };
+    const isFinal = (a, b) => facts.finals.some(([h, v]) => (h === a && v === b) || (h === b && v === a));
+    for (const re of [SCORE, NAMED_SCORE]) {
+      for (const m of sentence.matchAll(re)) {
+        const a = Number(m[1]), b = Number(m[2]);
+        if (a < 60 || b < 60 || isFinal(a, b)) continue;
+        if (IN_GAME.test(sentence) && facts.finals.some(([h, v]) => (a <= h && b <= v) || (a <= v && b <= h))) continue;
+        bad.push(m[0]);
+      }
+    }
+    for (const m of sentence.matchAll(PAIR)) {
+      const after = sentence.slice(m.index + m[0].length);
+      if (!/-/.test(m[0]) && !SHOT_CONTEXT.test(after) && !/(?:shot|shooting|made|making|hit|hitting|went|connected on)\s*$/i.test(sentence.slice(0, m.index))) continue;
+      if (PART_OF_GAME.test(after)) continue;
+      const made = numOf(m[1]), att = numOf(m[2]);
+      const pairs = (r) => [[r.fgm, r.fga], [r.fg3m, r.fg3a], [r.ftm, r.fta]].some(([x, y]) => x === made && y === att);
+      const owner = ownerAt(m.index);
+      const ok = owner && !owner.team ? owner.members.every((names) => claimOk(facts, names, pairs)) : facts.teamRows.some(pairs) || !facts.allComplete;
+      if (!ok) bad.push(m[0]);
+    }
+    for (const m of sentence.matchAll(STAT)) {
+      const after = sentence.slice(m.index + m[0].length);
+      const perGame = /^\s*(?:per game|a game|a night)\b/i.test(after);
+      if (!perGame && PART_OF_GAME.test(after)) continue;
+      const key = STAT_KEYS.find(([w]) => w === m[2].toLowerCase())[1];
+      const value = numOf(m[1]);
+      const owner = ownerAt(m.index);
+      if (!owner || owner.team) {
+        // A team's own count: its final score or its box (a points number under 60 is part of a game). A count with no
+        // one named before it stands, unless it is a points total no final has.
+        const fits = key === 'pts' ? value < 60 || facts.finals.some(([h, v]) => h === value || v === value) : facts.teamRows.some((r) => r[key] === value) || !facts.allComplete;
+        if (!fits && (owner || key === 'pts')) bad.push(m[0]);
+        continue;
+      }
+      const each = /\b(?:apiece|each)\b/i.test(after.slice(0, 20));
+      const ok = perGame || String(m[1]).includes('.') ? averageOk(facts, owner.members, key, value) : groupOk(facts, owner.members, key, value, each);
+      if (!ok) bad.push(m[0]);
+    }
+    // A team with no games yet, or one of its players, in a game or against a team it does not play tonight: the
+    // preseason ("His rebounding in Houston", "Against Charlotte, his shooting and distribution worked together"). The
+    // other city is the team that has played when the sentence names it too ("Simons and Caldwell-Pope supplied 23
+    // points in New York, while Cleveland's supporting group includes Tyson's shooting").
+    const playedToo = groups.some((g) => (g.team ? facts.here.has(sentence.slice(g.at, g.end)) && !facts.zeroWords.includes(sentence.slice(g.at, g.end))
+      : g.members.some((names) => names.some((n) => { const t = facts.players.get(n)?.team; return facts.tonight.has(t) && !facts.zero.has(t); }))));
+    const away = facts.elsewhere?.test(sentence) && !playedToo && !/\b(?:tonight|today|next|upcoming|will)\b/i.test(sentence);
+    if (zeroIn(sentence, [...groups, ...(he ? [he] : [])]) && (PERFORMANCE.test(sentence) || GAME_TOLD.test(sentence) || away)) bad.push('a game by a team with no games yet');
+    const last = [...groups].reverse().find((g) => !g.team);
+    if (last) carry = last;
+  }
+  return bad;
+}
+
+// The news's own table of the projected starters repeats WHO IS PLAYING (Oct 23 2026: every rebuilt story had both).
+const POSITION_CELL = /^(?:point guard|shooting guard|small forward|power forward|center|guard|forward|position|pg|sg|sf|pf|c|g|f)$/i;
+function startersTables(lines, desk) {
+  const last = (n) => plain(n).toLowerCase().replace(/\s*\([a-z]{1,2}\)$/, '').replace(/,?\s+(?:jr|sr|ii|iii|iv)\.?$/, '').trim().split(' ').pop();
+  const starters = new Set(sectionOf(desk, 'STARTING LINEUPS').split('\n')
+    .flatMap((l) => (l.match(/^\[(?:HOME|AWAY)\] [^:]+: (.+)$/)?.[1] || '').split(', ')).filter(Boolean).map(last));
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^\s*\|/.test(lines[i]) || (i > 0 && /^\s*\|/.test(lines[i - 1]))) continue;
+    let e = i; while (e + 1 < lines.length && /^\s*\|/.test(lines[e + 1])) e += 1;
+    const body = lines.slice(i + 1, e + 1).filter((l) => !/^\s*\|[\s|:-]+\|\s*$/.test(l));
+    const cells = body.flatMap((l) => l.split('|').map((c) => plain(c).trim()).filter(Boolean));
+    if (starters.size && cells.length && cells.every((c) => POSITION_CELL.test(c) || starters.has(last(c)))) for (let k = i; k <= e; k += 1) out.push(k);
+  }
+  return out;
+}
+
+// A line up to its last sentence ("Jr." and "p.m." end none).
+function beforeLastSentence(line) {
+  let cut = 0;
+  for (const m of line.matchAll(/[.!?](?:\*\*)?\s+(?=[A-Z*"“])/g)) if (!/\b(?:Jr|Sr|St|Mr|Mrs|Dr|vs|[ap]\.m|[A-Z])\.$/.test(line.slice(0, m.index + 1))) cut = m.index + m[0].length;
+  return line.slice(0, cut).trim();
+}
+// Lines left without what they introduced or referred to: an intro ending in ":" with nothing under it, a table with
+// no rows, a heading with nothing after it, and a "That ..." after a dropped paragraph (Oct 23 2026 data audit).
+function withoutOrphans(lines, drop) {
+  const blank = (i) => !lines[i].trim();
+  const nextIdx = (i) => { let k = i + 1; while (k < lines.length && blank(k)) k += 1; return k < lines.length ? k : -1; };
+  const prevIdx = (i) => { let k = i - 1; while (k >= 0 && blank(k)) k -= 1; return k; };
+  const listy = (i) => /^\s*(?:[-•*]\s|\|)/.test(lines[i]);
+  const heading = (i) => /^\s*\*\*[^*]+\*\*\s*$/.test(lines[i]);
+  for (let pass = 0, changed = true; changed && pass < 4; pass += 1) {
+    changed = false;
+    const set = (i) => { if (!drop[i]) { drop[i] = true; changed = true; } };
+    for (let i = 0; i < lines.length; i += 1) {
+      if (drop[i] || blank(i)) continue;
+      // A table whose rows all left takes its header and rule with it.
+      if (/^\s*\|/.test(lines[i]) && (i === 0 || !/^\s*\|/.test(lines[i - 1]))) {
+        let e = i; while (e + 1 < lines.length && /^\s*\|/.test(lines[e + 1])) e += 1;
+        const body = [...Array(e - i + 1).keys()].map((k) => i + k).filter((k) => !/^\s*\|[\s|:-]+\|\s*$/.test(lines[k])).slice(1);
+        if (body.length && body.every((k) => drop[k])) for (let k = i; k <= e; k += 1) set(k);
+      }
+      if (/:\s*(?:\*\*)?\s*$/.test(lines[i]) && !listy(i)) {
+        const n = nextIdx(i);
+        let orphan = n < 0;
+        if (n >= 0 && listy(n)) { let e = n; const kids = []; while (e < lines.length && (listy(e) || blank(e))) { if (!blank(e)) kids.push(e); e += 1; } orphan = kids.every((k) => drop[k]); } else if (n >= 0) orphan = drop[n];
+        // Only the intro's own sentence goes: "**Tonight's matchup — Philadelphia at New York, 7 p.m. EDT, NBC.** Both
+        // reported starting lineups remain projected:" keeps its tip and TV (Oct 23 2026).
+        if (orphan) {
+          const rest = beforeLastSentence(lines[i]);
+          if (rest && rest !== lines[i].trim()) { lines[i] = rest; changed = true; } else set(i);
+          continue;
+        }
+      }
+      if (ANAPHOR.test(lines[i]) && !listy(i)) { const p = prevIdx(i); if (p >= 0 && drop[p] && !heading(p)) set(i); }
+      if (heading(i)) { let k = i + 1, kept = false; while (k < lines.length && !heading(k)) { if (!blank(k) && !drop[k]) { kept = true; break; } k += 1; } if (!kept) set(i); }
+    }
+  }
+  return drop;
+}
+
+/** The news Gary reads (see above). `facts` is newsFacts' check list; `start` the first game date of the two teams. */
+export function newsForGary(desk, { facts = null, start = null, asOf = new Date(), season = nbaSeason() } = {}) {
+  const state = sectionOf(desk, 'CURRENT STATE & CONTEXT');
+  const i = state.indexOf(NEWS_MARK);
+  const text = i >= 0 ? state.slice(i + NEWS_MARK.length) : '';
+  // The search's own opening line ("I'll use the latest roster news ...") is its note to itself, not news.
+  const lines = withoutBettingLines(text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, '')).split('\n');
+  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || Boolean(facts && uncheckedNumbers(l, facts).length)));
+  for (const k of startersTables(lines, desk)) drop[k] = true;
+  withoutOrphans(lines, drop);
+  return lines.filter((_, k) => !drop[k]).filter((p, k, a) => p.trim() || (k > 0 && a[k - 1].trim())).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** One game on Gary's NBA board (winners/nbaBoard.js), read the way the pick reads it, without his write-up: the line
- * and how it got here, who's playing, how good both teams are and the situation. */
+ * and how it got here, who's playing, each team's season so far and the situation. */
 export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
   const lines = await linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba').catch(() => null);
+  const tipAt = tipOf(desk, asOf);
+  const [injuries, seasons] = await Promise.all([
+    injurySection(desk, { homeTeam, awayTeam, tip: tipAt, asOf }),
+    Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
+  ]);
   return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
     lineStory(lines, homeTeam, awayTeam), '',
-    'Who is playing:', [projectedStarters(desk), injuriesAsReported(desk)].filter(Boolean).join('\n\n'), '',
-    'How good they are:', howGood(desk, ratings, homeTeam, awayTeam), '',
-    'The situation:', sectionOf(desk, 'REST & SCHEDULE SITUATION') || 'Nothing unusual.'].join('\n');
+    'Who is playing:', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n'), '',
+    'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => teamHead(desk, ratings, t, ts).text).join('\n\n'), '',
+    'The situation:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
 }
 
 /** The game as Gary reads it. `asOf` cuts the line's path and the season at the moment of the pick; `book` is the
  * ticket's book; `league` (tests only) stands in for the league's ratings. */
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
-  const [lines, ratings] = await Promise.all([
+  const [lines, ratings, seasons] = await Promise.all([
     linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba', book).catch(() => null),
     league ? Promise.resolve(league) : leagueRatingsAt(asOf).catch((e) => ({ [RATINGS_MISSING]: e.message })),
+    Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
   const line = nbaLineOf(desk);
-  const how = howGood(desk, ratings, homeTeam, awayTeam);
-  const [awayGames, homeGames] = await Promise.all([awayTeam, homeTeam].map((team) => (ratings[RATINGS_MISSING] ? Promise.resolve(`${team}: games not on file.`) : ratings[team]
-    ? gameByGame(team, ratings, asOf).catch(() => `${team}: games not on file.`)
-    : Promise.resolve(`${team}: no games played yet this season.`))));
+  const tip = tipOf(desk, asOf);
+  const [homeLog, awayLog, injuries] = await Promise.all([
+    gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
+    gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
+    injurySection(desk, { homeTeam, awayTeam, tip, asOf }),
+  ]);
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
-    ['WHO IS PLAYING', [projectedStarters(desk), injuriesAsReported(desk)].filter(Boolean).join('\n\n')],
-    ['HOW GOOD THEY ARE', how],
-    ['THIS SEASON, GAME BY GAME', `${awayGames}\n\n${homeGames}`],
-    ['THE ROTATION THIS SEASON', rotation(desk, ratings)],
-    ['THE SITUATION', sectionOf(desk, 'REST & SCHEDULE SITUATION')],
+    ['WHO IS PLAYING', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n')],
+    ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
+    ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
+    ['THE SITUATION', situation(seasons, homeTeam, awayTeam, tip, asOf)],
   ];
-  const starts = (await Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null)))).filter(Boolean).sort();
-  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: withoutPreseasonDates(deskNews(desk), starts[0]) };
+  const [starts, teams] = await Promise.all([
+    Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null))).then((d) => d.filter(Boolean).sort()),
+    nbaTeams().catch(() => []),
+  ]);
+  const facts = newsFacts(seasons, deskNames(desk, homeTeam, awayTeam), teams);
+  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: newsForGary(desk, { facts, start: starts[0], asOf }) };
 }
 
 export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {

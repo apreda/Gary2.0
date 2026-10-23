@@ -188,6 +188,11 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
     lastGameWasHome = namesRefer(homeTeamName, teamName);
     console.log(`[Rest Calc] Last game was ${lastGameWasHome ? 'HOME' : 'ROAD'} for ${teamName}`);
   }
+  // Where the last game was, for the NBA's rest line: the other team's city and the day (Oct 23 2026 data audit).
+  // The feed's city for the Clippers is "LA".
+  const cityOf = (t) => (t?.city === 'LA' ? 'Los Angeles' : t?.city) || null;
+  const lastGameOpponentCity = lastGameWasHome === null ? null : cityOf(lastGameWasHome ? lastGame.visitor_team : lastGame.home_team);
+  const lastGameDay = new Date(`${lastGame.dateStr}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
   
   // Tonight as the 3rd game in 4 nights (2+ games in the 3 days before) or the 4th in 5 (3+ in the 4 days before).
   // The counts are tonight's game included (Oct 23 2026 data audit: prior games over four days with 3 needed missed a
@@ -208,30 +213,60 @@ export function calculateRestSituation(recentGames, gameDate, teamName = null) {
     gamesInLast4Days,
     gamesInLast5Days,
     lastGameDate: lastGame.gameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    lastGameWasHome
+    lastGameWasHome,
+    lastGameOpponentCity,
+    lastGameDay
   };
+}
+
+// Each NBA arena's time zone, by nickname, for the local tip time.
+const NBA_TIME_ZONES = {
+  'America/Chicago': ['Bulls', 'Mavericks', 'Rockets', 'Grizzlies', 'Bucks', 'Timberwolves', 'Pelicans', 'Thunder', 'Spurs'],
+  'America/Denver': ['Nuggets', 'Jazz'],
+  'America/Phoenix': ['Suns'],
+  'America/Los_Angeles': ['Warriors', 'Clippers', 'Lakers', 'Blazers', 'Kings'],
+};
+const zoneOf = (team) => Object.entries(NBA_TIME_ZONES).find(([, nicks]) => nicks.includes(String(team || '').trim().split(/\s+/).pop()))?.[0] || 'America/New_York';
+const clockIn = (iso, timeZone) => new Date(iso).toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' });
+/** The tip when it is outside the usual evening window (before 6:00 or from 9:00 PM local): "Tip: 4:00 PM ET, 3:00 PM
+ * local in Milwaukee." Null for an evening tip or an unknown one. */
+export function unusualTip(tip, homeTeam, city) {
+  if (!tip || Number.isNaN(Date.parse(tip))) return null;
+  const zone = zoneOf(homeTeam);
+  const [h, m] = new Date(tip).toLocaleTimeString('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).split(':').map(Number);
+  const local = h * 60 + m;
+  if (local >= 18 * 60 && local < 21 * 60) return null;
+  return `Tip: ${clockIn(tip, 'America/New_York')} ET${zone === 'America/New_York' ? '' : `, ${clockIn(tip, zone)} local`}${city ? ` in ${city}` : ''}.`;
 }
 
 /**
  * Format rest situation for scout report
  * FACTUAL OUTPUT ONLY - no commentary, emojis, or editorial (Gary interprets)
+ * `trip` (the NBA's, Oct 23 2026 data audit: travel and rest matter from week two): { city, tip } names where each
+ * team's last game was and tonight's trip, and adds the tip when it is outside the usual evening.
  */
-export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest) {
+export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest, trip = null) {
   const formatTeamRest = (team, rest, isHomeTeam) => {
     if (!rest || rest.daysRest === null) {
       return `${team}: Rest data unavailable`;
     }
-    
+
     const parts = [];
-    
+
     // Days off since the last game. daysRest counts calendar days between games, so a Tuesday-Thursday turn is 2 and a
     // back-to-back is 1; printed as "days rest" it read one day long (Oct 23 2026 data check: "2 days rest" for a team
     // that played Tuesday and Thursday).
     const off = rest.daysRest - 1;
-    parts.push(off <= 0 ? `no day off since its last game (${rest.lastGameDate})` : `${off} day${off === 1 ? '' : 's'} off since its last game (${rest.lastGameDate})`);
-    
+    if (trip) {
+      const where = rest.lastGameWasHome === null || !rest.lastGameOpponentCity ? '' : rest.lastGameWasHome ? `, at home vs ${rest.lastGameOpponentCity}` : `, at ${rest.lastGameOpponentCity}`;
+      const since = `since its last game (${rest.lastGameDay || rest.lastGameDate}${where})`;
+      parts.push(`${off <= 0 ? `no day off ${since}, the second night of a back-to-back` : `${off} day${off === 1 ? '' : 's'} off ${since}`}; tonight ${isHomeTeam ? 'at home' : `at ${trip.city || homeTeam}`}`);
+    } else {
+      parts.push(off <= 0 ? `no day off since its last game (${rest.lastGameDate})` : `${off} day${off === 1 ? '' : 's'} off since its last game (${rest.lastGameDate})`);
+    }
+
     // Back-to-back status with home/away context
-    if (rest.isBackToBack) {
+    if (rest.isBackToBack && !trip) {
       // For B2B, note where they played last (important for fatigue assessment)
       // Tonight's game location is known (isHomeTeam), last game location we track
       const lastGameLocation = rest.lastGameWasHome === true ? 'at home' : 
@@ -240,17 +275,16 @@ export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest) {
     }
     
     // Heavy schedule context (factual)
-    if (rest.isVeryHeavySchedule) {
-      parts.push(`tonight is game ${rest.gamesInLast5Days} in 5 nights`);
-    } else if (rest.isHeavySchedule) {
-      parts.push(`tonight is game ${rest.gamesInLast4Days} in 4 nights`);
-    }
-    
+    const heavy = rest.isVeryHeavySchedule ? `game ${rest.gamesInLast5Days} in 5 nights` : rest.isHeavySchedule ? `game ${rest.gamesInLast4Days} in 4 nights` : null;
+    if (heavy && trip) parts[parts.length - 1] += `, ${heavy}`;
+    else if (heavy) parts.push(`tonight is ${heavy}`);
+
     return `• ${team}: ${parts.join('. ')}`;
   };
-  
+
+  const tip = trip ? unusualTip(trip.tip, homeTeam, trip.city) : null;
   return `${formatTeamRest(homeTeam, homeRest, true)}
-${formatTeamRest(awayTeam, awayRest, false)}`;
+${formatTeamRest(awayTeam, awayRest, false)}${tip ? `\n${tip}` : ''}`;
 }
 
 /**
