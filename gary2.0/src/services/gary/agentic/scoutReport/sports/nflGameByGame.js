@@ -19,7 +19,7 @@
  * that does not answer is named as missing.
  */
 import { getPlayLedger } from '../../../../sports/nfl/nflPlayLedger.js';
-import { getSnapWeeks, nflverseCode, NFLVERSE_TEAM_CODES } from '../../../../providers/nflverseService.js';
+import { getSnapWeeks, nflverseCode, NFLVERSE_TEAM_CODES, loadNflverseFile } from '../../../../providers/nflverseService.js';
 import { getNflSchedule, sideFacts, restPhrase, tripPhrase, NFL_STADIUMS } from '../../../../sports/nfl/nflSchedule.js';
 import { loadTeamResults } from '../../tools/statRouters/footballTeamGames.js';
 import { loadLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
@@ -481,6 +481,28 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       for (let i = weeks.length - 1; i >= 0 && !shares.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
       const lastPlayedWeek = Math.max(...shares.keys());
       injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: shares.get(lastPlayedWeek) };
+    }
+    // A listed player with no offensive or defensive snap all season says so (Oct 23 2026 data audit: Kansas City's 4-0
+    // was all without Josh Simmons and his row carried no tag). Decided only on an exact name match in this team's
+    // weekly roster, whose PFR id then has no snap row; a name that does not match is left untagged.
+    const [roster, snapFile] = await Promise.all([loadNflverseFile('roster_weekly', season).catch(() => null), loadNflverseFile('snap_counts', season).catch(() => null)]);
+    const code = nflverseCode(team);
+    if (roster?.rows && snapFile?.rows && code) {
+      const played = new Set(snapFile.rows.filter((r) => r.team === code && (Number(r.offense_pct) > 0 || Number(r.defense_pct) > 0)).map((r) => r.pfr_player_id));
+      const named = (i) => i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
+      for (const injury of list) {
+        if (injury.participation) continue;
+        const rows = roster.rows.filter((r) => r.team === code && nameKey(r.full_name) === nameKey(named(injury)));
+        if (!rows.length) continue;
+        const ids = new Set(rows.map((r) => r.pfr_id).filter(Boolean));
+        // Inactive or on reserve in every week the team has played is the roster's own record of not playing; with a
+        // PFR id, no snap row at all says the same.
+        const statusOf = (w) => rows.find((r) => Number(r.week) === w)?.status;
+        const sidelined = finals.every((w) => /^(INA|RES)$/i.test(statusOf(w) || ''));
+        const noSnaps = ids.size === 1 && !played.has([...ids][0]);
+        if (!sidelined && !noSnaps) continue;
+        injury.participation = { neverPlayed: true, reserveAll: finals.every((w) => /^RES$/i.test(statusOf(w) || '')) };
+      }
     }
   }
 }
