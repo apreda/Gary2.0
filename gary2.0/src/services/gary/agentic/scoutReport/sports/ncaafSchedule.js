@@ -196,6 +196,19 @@ function quarterbackOfGame(rows, result) {
     + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}`).join('; ')}`;
 }
 
+// The player rows against the team's own box (Oct 23 2026 source audit: BDL's college player rows missed overtime
+// and disagreed with the team line in 6 of 9 games, Minchey 22-of-34 for 224 against 23-of-36 for 246). When the
+// passers' attempts differ from the team's by more than one, the line says so and shows the team's numbers.
+function checkedQuarterback(text, rows, result, units) {
+  const team = String(units?.[0] || '').match(/passing (\d+)-(\d+) for (-?\d+)/);
+  if (!team || /no passing rows/.test(text)) return text;
+  const passers = (rows || []).filter((row) => String(row?.game?.id) === String(result.gameId) && Number(row.passing_attempts) > 0);
+  const attempts = passers.reduce((sum, row) => sum + Number(row.passing_attempts || 0), 0);
+  return Math.abs(attempts - Number(team[2])) > 1
+    ? `${text} (these player lines do not match the team's passing, ${team[1]}-of-${team[2]} for ${team[3]}; the player numbers are not reliable for this game)`
+    : text;
+}
+
 /** The named starter's games this season, split by site. */
 function quarterbackLines(team, quarterback, rows, results) {
   if (!quarterback?.name) return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown. The game-by-game lines above name who played quarterback in each game.`];
@@ -362,7 +375,7 @@ teams, who played quarterback (the most pass attempts), and each unit's game:
 plays, success rate, the run game, the pass game, turnovers and third downs.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
-    ? s.results.map((r) => `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${quarterbackOfGame(rows[i], r)}\n${unitLines(s.team, r).join('\n')}`).join('\n')
+    ? s.results.map((r) => { const units = unitLines(s.team, r); return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r), rows[i], r, units)}\n${units.join('\n')}`; }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
 
