@@ -308,7 +308,9 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
   }));
   const news = typeof research.result === 'string' ? research.result : research.result?.briefing;
   if (!news) console.warn(`[NCAAF Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
-  return { news: news ? String(news).trim() : null, model: news ? research.model : null };
+  // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
+  // the market (founder, Oct 23 2026).
+  return { news: news ? withoutBettingLines(String(news).trim()).trim() || null : null, model: news ? research.model : null };
 }
 
 export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {

@@ -15,6 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
+import { withoutBettingLines } from './ncaafRead.js';
 import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
@@ -116,7 +117,9 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
   }));
   const news = typeof research.result === 'string' ? research.result : research.result?.briefing;
   if (!news) console.warn(`[NFL Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
-  return { news: news ? String(news).trim() : null, model: news ? research.model : null };
+  // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
+  // the market (founder, Oct 23 2026).
+  return { news: news ? withoutBettingLines(String(news).trim()).trim() || null : null, model: news ? research.model : null };
 }
 
 export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
