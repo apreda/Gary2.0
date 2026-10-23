@@ -1,25 +1,20 @@
-// LATE NEWS (founder GO, Oct 13 2026: "we need a mechanism for scratching the pick and letting the users know that
-// this pick was scratched and why"; "Gary can also scratch the pick if he wants").
+// LATE NEWS (founder GO, Oct 13 2026): every game pick's availability is recorded when it publishes, from the feed the
+// sport's desk reads (NFL: the BDL injury feed with this week's notes; NBA: the league's official report; MLB: the starting
+// pitchers and posted lineups; college: the conference's official availability report), and read again when the pick is
+// due on Winners (75 minutes before an NFL, college or MLB start, after the NFL inactives; 28 minutes before an NBA tip).
+// What changed, and who was still undecided, is recorded for the data check.
 //
-// Every game pick's availability is recorded when it publishes: both teams, from the feed the sport's desk reads
-// (NFL: the BDL injury feed with this week's notes; NBA: the league's official report; MLB: the starting pitchers and posted
-// lineups; college: the conference's official availability report). When the pick is due on Winners (75 minutes
-// before an NFL, college or MLB start, after the NFL inactives; 28 minutes before an NBA tip, after the final
-// statuses), the same feed is read again:
-//   nothing changed and nobody undecided  -> the pick goes on as before ('clear');
-//   something changed, or a player is still undecided -> Gary reads his own write-up and the news and answers
-//     whether the pick stands ('stand') or is scratched ('scratch');
-//   the feed cannot be read -> the pick goes on as before ('no_feed'), and the log says so.
-// A scratched pick stays in the app marked scratched with his reason (SQL scratch_game_pick), is never graded and
-// never goes on Winners (seat_the_card and admit_winners_candidate read winners_late_news). NHL is not on Winners.
+// A published pick is final (founder, Oct 23 2026: "Gary can't scratch it ... he has to make his best pick with the
+// information available ... if they really are still undecided then Gary has to still make the pick just like the
+// public would"). The check no longer asks him whether the pick stands and never scratches it: nothing changed is
+// 'clear', a change or an undecided player is recorded with 'stand', a feed that cannot be read is 'no_feed'. The
+// Mavericks +7.5 of Oct 23 had been scratched when Aaron Nesmith came off Indiana's report.
 import { ballDontLieService as bdl } from '../providers/ballDontLieService.js';
 import { reconcileNflStatus } from '../sports/nfl/nflAvailability.js';
 import { getMlbSchedule, getConfirmedLineups } from '../providers/mlbStatsApiService.js';
 import { clubNick } from '../sports/mlb/mlbGameFrames.js';
 import { officialAvailabilityForGame } from '../sports/ncaaf/ncaafAvailabilityReports.js';
 import { latestOfficialReport } from '../providers/nbaOfficialInjuryReport.js';
-import { generateSolText } from '../content/insights/solText.js';
-import { APP_WRITING_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 
 const MIN = 60_000;
 /** When a pick is checked (and seats): minutes before the start, and the last minute it may still seat. */
@@ -27,7 +22,6 @@ export const CHECK_WINDOW = { NBA: { lead: 28, floor: 10 }, default: { lead: 75,
 const windowFor = (league) => CHECK_WINDOW[league] || CHECK_WINDOW.default;
 const BDL_SPORT = { NFL: 'americanfootball_nfl', NBA: 'basketball_nba' };
 const etDate = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-const clock = (iso) => new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 const nameKey = (v) => String(v || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 const fullName = (p) => `${p?.first_name || ''} ${p?.last_name || ''}`.trim();
 const STATUS_WORD = { q: 'Questionable', d: 'Doubtful', o: 'Out', gtd: 'Game-time decision', dtd: 'Day-to-day' };
@@ -186,44 +180,6 @@ export function diffAvailability(before, after, league) {
   return { changes, unresolved };
 }
 
-// What a listing means, said plainly beside a player not yet ruled in or out (founder, Oct 13 2026: "let Gary
-// understand what questionable means", not just that it is undecided).
-const MEANING = {
-  NBA: 'On the NBA injury report, questionable or day-to-day means the team has not ruled him in or out, and doubtful means he is unlikely to play. Teams can update the report until tip-off.',
-  NCAAF: 'On the conference availability report, questionable means the school has not ruled him in or out, and doubtful means he is unlikely to play. The report is updated on game day.',
-};
-
-/** The ask: the pick, his own words, the news, one question. */
-export function buildLateNewsAsk({ league, pick, matchup, commence, homeTeam, awayTeam, rationale, changes, unresolved }) {
-  const team = (side) => (side === 'home' ? homeTeam : awayTeam);
-  const line = (r, text) => `- ${team(r.side)}: ${r.name}${r.position ? ` (${r.position})` : ''}, ${text}${r.note ? `. ${r.note}` : ''}`;
-  return [
-    `You are Gary. Earlier today you made this ${league} pick: ${pick} (${matchup}, ${clock(commence)} ET).`,
-    '',
-    'What you wrote:',
-    String(rationale || '').trim() || '(no write-up stored)',
-    '',
-    ...(changes.length ? ['Since you made it:', ...changes.map((c) => line(c, `${c.from} → ${c.to}`)), ''] : []),
-    ...(unresolved.length ? ['Not ruled in or out yet:', ...unresolved.map((u) => `- ${team(u.side)}: ${u.name}${u.position ? ` (${u.position})` : ''}, ${u.status.toLowerCase()}${u.note ? `. Latest report: ${u.note}` : ''}`),
-      MEANING[league] || '', ''].filter((l, i, a) => l !== '' || a[i - 1] !== '') : []),
-    'Does the pick stand, or do you scratch it?',
-    '',
-    'Answer with one JSON object: {"decision": "stand" or "scratch", "why": "one or two sentences; if you scratch it, fans read this"}',
-  ].join('\n');
-}
-
-export function parseLateNewsAnswer(text) {
-  const match = String(text || '').match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    const o = JSON.parse(match[0]);
-    const decision = String(o.decision || '').trim().toLowerCase();
-    const why = String(o.why || '').replace(/\s+/g, ' ').trim();
-    if (!['stand', 'scratch'].includes(decision) || (decision === 'scratch' && !why)) return null;
-    return { decision, why };
-  } catch { return null; }
-}
-
 const CANDIDATE_FIELDS = 'id,game_date,league,game_id,pick_text,commence_time,created_at,homeTeam:pick_snapshot->>homeTeam,awayTeam:pick_snapshot->>awayTeam,matchup:pick_snapshot->>matchup,rationale:pick_snapshot->>rationale,model:pick_snapshot->>model';
 
 /** Record a game pick's availability as it publishes (the pick runner; the worker backstops one it missed). */
@@ -254,7 +210,7 @@ export async function recordPickAvailability(client, { league, gameId, log = con
  * The worker's pass: record any pick that has no availability yet, then check every pick that is due. Returns how
  * many it checked.
  */
-export async function runLateNewsChecks(client, date, { now = Date.now(), availability = availabilityNow, generate = generateSolText, log = console } = {}) {
+export async function runLateNewsChecks(client, date, { now = Date.now(), availability = availabilityNow, log = console } = {}) {
   const { data: cands, error } = await client.from('winners_candidates').select(CANDIDATE_FIELDS).eq('game_date', date).eq('kind', 'game');
   if (error) throw error;
   const open = (cands || []).filter((c) => c.league !== 'NHL' && Date.parse(c.commence_time) > now + windowFor(c.league).floor * MIN);
@@ -275,7 +231,7 @@ export async function runLateNewsChecks(client, date, { now = Date.now(), availa
     }
     if (row.decision) continue;
     if (Date.parse(c.commence_time) > now + windowFor(c.league).lead * MIN) continue;
-    await checkOne(client, c, row.at_pick, { availability, generate, log });
+    await checkOne(client, c, row.at_pick, { availability, log });
     checked++;
   }
   return checked;
@@ -286,7 +242,7 @@ async function settle(client, c, fields) {
   if (error) throw error;
 }
 
-async function checkOne(client, c, atPick, { availability, generate, log }) {
+async function checkOne(client, c, atPick, { availability, log }) {
   const label = `${c.league} ${c.pick_text}`;
   const now = await availability({ league: c.league, homeTeam: c.homeTeam, awayTeam: c.awayTeam, commence: c.commence_time });
   if (now.unavailable) {
@@ -296,26 +252,7 @@ async function checkOne(client, c, atPick, { availability, generate, log }) {
   const before = atPick && !atPick.unavailable && !atPick.late ? atPick : null;
   const { changes, unresolved } = diffAvailability(before, now, c.league);
   if (!changes.length && !unresolved.length) return settle(client, c, { at_check: now, changes: [], unresolved: [], decision: 'clear' });
-  const ask = buildLateNewsAsk({ league: c.league, pick: c.pick_text, matchup: c.matchup || `${c.awayTeam} @ ${c.homeTeam}`,
-    commence: c.commence_time, homeTeam: c.homeTeam, awayTeam: c.awayTeam, rationale: c.rationale, changes, unresolved });
-  let answer = null; let writer = null;
-  for (const m of [...new Set([c.model, APP_WRITING_MODEL].filter(Boolean))]) {
-    try {
-      answer = parseLateNewsAnswer(await generate(ask, { model: m, effort: 'medium', maxTokens: 800 }));
-      if (answer) { writer = m; break; }
-      log.warn?.(`[Late news] ${label}: ${m} did not answer in the JSON asked for`);
-    } catch (e) { log.warn?.(`[Late news] ${label}: ${m} failed (${e?.message || e})`); }
-  }
-  if (!answer) {
-    log.warn?.(`[Late news] ${label}: no answer; the pick goes on as before`);
-    return settle(client, c, { at_check: now, changes, unresolved, decision: 'failed', asked: true, why: 'no answer' });
-  }
-  await settle(client, c, { at_check: now, changes, unresolved, decision: answer.decision, why: answer.why, model: writer, asked: true });
-  if (answer.decision === 'scratch') {
-    const { data, error } = await client.rpc('scratch_game_pick', { p_candidate_id: c.id, p_reason: answer.why });
-    if (error) throw error;
-    log.log?.(`[Late news] ✂️  ${label} scratched: ${answer.why} (${JSON.stringify(data)})`);
-  } else {
-    log.log?.(`[Late news] ${label} stands after the news: ${answer.why}`);
-  }
+  // A change or an undecided player is recorded; the pick stands as published (see the top of this file).
+  await settle(client, c, { at_check: now, changes, unresolved, decision: 'stand', why: 'A published pick is final; the changes are recorded.' });
+  log.log?.(`[Late news] ${label}: ${changes.length} change(s), ${unresolved.length} undecided; recorded, the pick stands`);
 }

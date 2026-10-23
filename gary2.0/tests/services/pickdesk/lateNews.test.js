@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diffAvailability, parseLateNewsAnswer, buildLateNewsAsk, findMlbGame } from '../../../src/services/winners/lateNews.js';
+import { diffAvailability, findMlbGame } from '../../../src/services/winners/lateNews.js';
 
 const row = (side, name, status, extra = {}) => ({ side, name, position: 'WR', status, note: null, ...extra });
 
@@ -36,22 +36,4 @@ describe('late news (founder GO, Oct 13 2026)', () => {
     expect(changes.find((c) => c.name === 'Spot Starter').from).toBe('Ace Arm was the starting pitcher');
   });
 
-  it('reads only a stand or a scratch with a reason', () => {
-    expect(parseLateNewsAnswer('{"decision":"scratch","why":"His QB is out."}')).toEqual({ decision: 'scratch', why: 'His QB is out.' });
-    expect(parseLateNewsAnswer('ok {"decision":"stand","why":""}')).toEqual({ decision: 'stand', why: '' });
-    expect(parseLateNewsAnswer('{"decision":"scratch","why":""}')).toBeNull();
-    expect(parseLateNewsAnswer('{"decision":"maybe"}')).toBeNull();
-  });
-
-  it('asks one question after the pick, his words and the news', () => {
-    const ask = buildLateNewsAsk({ league: 'NFL', pick: 'X +3', matchup: 'X @ Y', commence: '2026-10-18T17:00:00Z', homeTeam: 'Y', awayTeam: 'X',
-      rationale: 'MY WORDS', changes: [{ side: 'home', name: 'A One', position: 'QB', from: 'Questionable', to: 'Inactive', note: null }], unresolved: [] });
-    expect(ask).toContain('MY WORDS');
-    expect(ask).toContain('- Y: A One (QB), Questionable → Inactive');
-    expect(ask.match(/\?/g)).toHaveLength(1);
-    const nba = buildLateNewsAsk({ league: 'NBA', pick: 'X +3', matchup: 'X @ Y', commence: '2026-10-22T23:30:00Z', homeTeam: 'Y', awayTeam: 'X',
-      rationale: 'W', changes: [], unresolved: [{ side: 'away', name: 'B Two', position: 'SG', status: 'Questionable', note: 'Coach says game-time decision.' }] });
-    expect(nba).toContain('- X: B Two (SG), questionable. Latest report: Coach says game-time decision.');
-    expect(nba).toContain('questionable or day-to-day means the team has not ruled him in or out');
-  });
 });

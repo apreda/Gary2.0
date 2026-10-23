@@ -21,11 +21,12 @@ does not run them and their code is kept. Props are unchanged (clear only).
   `seat_ncaaf_board` seats five a day spread over the kickoff times as the NBA's are, 75 minutes before kickoff.
 - **The other game picks**: `garyBet.js` (play or pass, the amount) and `garyCard.js` (he places each pick on today's
   card and names his book); `seat_the_card` (SQL) seats the book 75 minutes before a start. Big games: the sweep.
-- `lateNews.js`: before a pick seats, availability is compared with what it was at the pick; Gary stands or
-  scratches. A scratch keeps the pick in the app, faded, with his reason, and never grades it.
+- `lateNews.js`: before a pick seats, availability is compared with what it was at the pick and the changes are
+  recorded for the data check. A published pick is final: nothing asks Gary to reconsider and nothing scratches it
+  (founder, Oct 23 2026).
 - `winnersRules.js`, `winnersAdmissions.js`, `winnersBook.js`, `winnersProps.js` (props: clear only since Oct 21
   2026, a lean only when nothing else would make it that day; six a day for MLB/NFL/college, three a night for the NBA), `winnersScore.js`, `winnersBigGames.json`, `ticketIdentity.js`,
   `garyBigGameStake.js`, `winnersDatabaseCall.js`. Darts are not on Winners.
 - The database does the gating: `supabase/migrations/` (`admit_winners_candidate`, `seat_the_card`, `seat_nfl_board`,
-  `seat_nba_board`, `winners_daily_floor` waits for late news, `scratch_game_pick`).
+  `seat_nba_board`, `winners_daily_floor` waits for late news; `scratch_game_pick` is no longer called).
 - Check the app decoder before changing a snapshot's shape (an emptied field once broke the whole board).
