@@ -87,7 +87,14 @@ export function deskNews(desk) {
   const text = i >= 0 ? state.slice(i + "--- TODAY'S GAME CONTEXT & NEWS ---".length) : '';
   // The search's own opening line ("I'll use the latest roster news ...") is its note to itself, not news.
   const body = text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, '');
-  return withoutBettingLines(body).replace(/\n{3,}/g, '\n\n').trim();
+  return withoutPastSeasons(withoutBettingLines(body)).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// The desk's news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point
+// attempts", Oct 21 2026); a sentence that does leaves (founder, Oct 23 2026, every sport: "last season is old news").
+const PAST_SEASON = /\blast season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\b20\d\d-\d\d\b|\bpreseason\b|\bexhibition\b/i;
+export function withoutPastSeasons(text) {
+  return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“*])/).filter((x) => !PAST_SEASON.test(x)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
 // How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,
