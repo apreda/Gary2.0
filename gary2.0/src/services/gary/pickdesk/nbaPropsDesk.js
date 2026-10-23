@@ -8,8 +8,9 @@
  * A player is on it when the books price him as a main player (a points line of 12.5 or more, rebounds 7.5 or
  * more, or assists 5.5 or more); his other markets come with him when they're lines people bet (MARKET_FLOOR).
  *
- * The sheets: this season's games once he has three; before that, last season's, labeled as last season (opening
- * week has no current games at all). Every row is a game he played, newest first.
+ * The sheets: this season's games only, every row a game he played, newest first (founder, Oct 23 2026: no last
+ * season, ever; opening week's last-season sheets read "cleared 8.5 in 8 of 10" and the props they carried were sized
+ * $550-600 on Winners). A player with no games yet this season says so.
  */
 import { createHash } from 'crypto';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
@@ -106,20 +107,18 @@ const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v !=
 /** One player's sheet: his menu markets, then his games for exactly the stats they settle on. */
 async function playerSheet(player, markets, asOf) {
   const season = nbaSeason(asOf);
-  const [cur, prev] = await Promise.all([
-    ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf }).catch(() => null),
-    ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season: season - 1, asOf }).catch(() => null),
-  ]);
-  const thisSeason = cur?.games || [];
-  const useCurrent = thisSeason.length >= 3;
-  const games = useCurrent ? thisSeason : (prev?.games || []);
-  const label = useCurrent ? 'this season' : `last season (${season - 1}-${String(season).slice(2)})`;
+  const cur = await ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf }).catch(() => null);
+  const games = cur?.games || [];
   const fields = [...new Set(['min', ...markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)])])];
   const name = (f) => ({ min: 'min', pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' }[f]);
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];
-  if (!useCurrent && thisSeason.length) lines.push(`  This season so far (${thisSeason.length} game${thisSeason.length === 1 ? '' : 's'}): ${thisSeason.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent || '?'} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
-  if (!games.length) { lines.push(`  No games on file for ${label}.`); return lines.join('\n'); }
-  lines.push(`  ${label[0].toUpperCase()}${label.slice(1)}, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);
+  if (!cur) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
+  if (!games.length) { lines.push('  No games yet this season.'); return lines.join('\n'); }
+  if (games.length < 3) {
+    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent || '?'} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
+    return lines.join('\n');
+  }
+  lines.push(`  This season, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);
   lines.push(`  Last ${Math.min(10, games.length)} of them, newest first:`);
   for (const f of fields.filter((x) => x !== 'min')) lines.push(`    ${name(f)}: ${games.slice(0, 10).map((g) => n1(g[f])).join(', ')}`);
   lines.push(`    min: ${games.slice(0, 10).map((g) => n1(g.min)).join(', ')}`);
@@ -146,11 +145,11 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
     return scout?.garyText || scout?.text || '';
   })();
   if (!scoutText) throw new Error('NBA props desk: scout report rendered empty');
-  // The game as the side pick reads it (nbaRead.js, Oct 22 2026), built from the same desk, with the day's news; the
-  // full desk if that fails.
-  const read = await buildNbaReadStory(scoutText, { homeTeam, awayTeam, gameId: game.bdl_game_id ?? game.id, book: game.line_vendor })
-    .catch((e) => { console.warn(`   [NBA Props] NBA story unavailable (${e.message}); the full desk`); return null; });
-  const deskText = read ? `${read.story}${read.news ? `\n\nTODAY'S NEWS\n${read.news}` : ''}` : scoutText;
+  // The game as the side pick reads it (nbaRead.js, Oct 22 2026), built from the same desk, with the day's news. No
+  // fallback to the full desk, which carries what the story filters out (founder, Oct 23 2026: no fallback that gives
+  // different data); a story that fails fails the props run, and the scheduler's next window tries again.
+  const read = await buildNbaReadStory(scoutText, { homeTeam, awayTeam });
+  const deskText = `${read.story}${read.news ? `\n\nTODAY'S NEWS\n${read.news}` : ''}`;
   console.log(`   [NBA Props] desk ${deskText.length} chars · board ${board.players.size} players, ${boardMarkets.length} markets`);
 
   await snapshotPropMenu({ markets: boardMarkets, matchup, gameId: game.bdl_game_id ?? game.id, gameDate: etDate(game.commence_time), league: 'NBA' });
