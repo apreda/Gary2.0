@@ -70,7 +70,9 @@ export function favoredLine(price = '') {
 export function seriesRoad(desk) {
   const run = sectionOf(String(desk || ''), 'HOW THEY GOT HERE');
   return run.split('\n').filter((l) => /^(?:[A-Z][^\n]* — this postseason|[A-Z][A-Za-z ]+ Series vs .*|\w{3} \d+ · .*)$/.test(l))
-    .map((l) => (/^\w{3} \d+ · /.test(l) ? `  ${l.replace(/, as written — /, ' — ').replace(/:\s*$/, '')}` : l))
+    // Date, round, game and score; the recap's headline goes ("Confident Rays quiet Cleveland" is framing; Oct 23 2026
+    // audit).
+    .map((l) => (/^\w{3} \d+ · /.test(l) ? `  ${l.replace(/, as written — .*$/, '')}` : l))
     .join('\n');
 }
 
@@ -146,7 +148,11 @@ export function buildSeriesStory(desk, price = '') {
   const text = String(desk || '');
   const header = (text.match(/^(?:MATCHUP|Venue|Start|Postseason): .*$/gm) || []).map((l) => l.replace(/^MATCHUP: /, ''));
   const records = ((text.match(/DIVISION STANDINGS[^\n]*\n((?: {2}[^\n]+\n?)+)/) || [])[1] || '').trimEnd().replace(/ \(Home: [^)]*\)/g, '');
-  const storylines = (text.match(/WHAT THIS WEEK IS ABOUT — AS WRITTEN\n═+\n([\s\S]*?)\n═+/) || [])[1]?.trim() || '';
+  // A storyline about another season or the franchise's history leaves (founder, Oct 23 2026, every sport: "last season
+  // is old news"; the audit found "77 seasons going back to the 1948 World Series" and "Hurricane Milton in October 2024").
+  const PAST = /\b(?:1[89]\d\d|20(?:[01]\d|2[0-5]))\b|franchise history|in history|drought|seasons going back|last season|first time since|all-time|since (?:its|their) (?:organizations?|franchise)/i;
+  const storylines = ((text.match(/WHAT THIS WEEK IS ABOUT — AS WRITTEN\n═+\n([\s\S]*?)\n═+/) || [])[1]?.trim() || '')
+    .split('\n').filter((l) => !(/^\s*•/.test(l) && PAST.test(l))).join('\n');
   const road = seriesRoad(text);
   const starters = starterStories(text);
   const pens = bullpensInWords(text);

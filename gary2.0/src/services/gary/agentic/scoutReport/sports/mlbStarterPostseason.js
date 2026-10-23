@@ -34,7 +34,10 @@ export async function mlbStarterPostseasonLines({ personId, season, beforeDate, 
       const s = g.stat || {};
       const where = `${g.isHome ? 'vs' : 'at'} ${g.opponent?.name || 'opponent'}`;
       const role = Number(s.gamesStarted) > 0 ? 'start' : 'relief';
-      return `    ${day(g.date)} ${where} (${role}): ${s.inningsPitched ?? '—'} IP, ${s.hits ?? '—'} H, ${s.earnedRuns ?? '—'} ER, ${s.baseOnBalls ?? '—'} BB, ${s.strikeOuts ?? '—'} K${s.numberOfPitches != null ? `, ${s.numberOfPitches} pitches` : ''}`;
+      // Runs with the earned ones in brackets, and his decision (Oct 23 2026 audit: Messick's "0 ER" hid 3 unearned runs
+      // and a loss).
+      const decision = Number(s.wins) > 0 ? ', W' : Number(s.losses) > 0 ? ', L' : '';
+      return `    ${day(g.date)} ${where} (${role}): ${s.inningsPitched ?? '—'} IP, ${s.hits ?? '—'} H, ${s.runs ?? '—'} R (${s.earnedRuns ?? '—'} ER), ${s.baseOnBalls ?? '—'} BB, ${s.strikeOuts ?? '—'} K${s.numberOfPitches != null ? `, ${s.numberOfPitches} pitches` : ''}${decision}`;
     });
     return `  This postseason, game by game:\n${lines.join('\n')}`;
   } catch {
