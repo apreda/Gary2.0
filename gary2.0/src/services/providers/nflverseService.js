@@ -30,11 +30,12 @@ import { homedir } from 'node:os';
 
 const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
 // The weekly player file is ~3 MB; on a slow connection it took 49 s against a 20 s limit, and its failure dropped
-// every NFL story back to the schedule's quarterback field (Oct 23 2026). Each file gets 90 s and one retry, and the
-// last good copy on disk stands in when both fail.
+// every NFL story back to the schedule's quarterback field (Oct 23 2026). Each file gets 90 s and one retry. The same
+// file downloaded within the last 12 hours stands in when both fail: the same source and the same data (the files
+// change after a game week), never another source's numbers.
 const REQUEST_TIMEOUT_MS = 90_000;
 const DISK_DIR = join(homedir(), '.cache', 'gary', 'nflverse');
-const DISK_MAX_AGE_MS = 3 * 24 * 3600 * 1000;
+const DISK_MAX_AGE_MS = 12 * 3600 * 1000;
 const CACHE_TTL_MS = 30 * 60 * 1000; // files refresh through the week, not by the minute
 
 const cache = new Map();

@@ -37,7 +37,8 @@ const played = (d, season, before) => d.schedule.filter((r) => r.season === Stri
 const yards = (r) => n(r.passing_yards) - Math.abs(n(r.sack_yards_lost)) + n(r.rushing_yards);
 // Who played quarterback in a game: everyone who threw 5 or more passes for the team, most first, from the weekly
 // player stats. The schedule's own quarterback field named Case Keenum for the Bears' Week 4 game that Tyson Bagent
-// played start to finish (Oct 23 2026 data check), so it is only the fallback.
+// played start to finish (Oct 23 2026 data check), and it is never used in its place (founder, Oct 23: no fallback that
+// gives different data when the source fails): without the player stats, who played says "not on file".
 function passersOf(d, g, code) {
   return (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) >= 5)
     .sort((a, b) => n(b.attempts) - n(a.attempts));
@@ -62,9 +63,9 @@ export function teamGames(d, code, season, before) {
     const passers = passersOf(d, g, code);
     // Who the opponent had at quarterback: Atlanta's loss to a 4-1 Baltimore was to Tyler Huntley, Lamar Jackson out
     // (Oct 23 2026 data check).
-    const oppQb = passersOf(d, g, opp)[0]?.player_display_name || (home ? g.away_qb_name : g.home_qb_name) || null;
+    const oppQb = passersOf(d, g, opp)[0]?.player_display_name || null;
     return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers, oppQb,
-      qb: passers[0]?.player_display_name || (home ? g.home_qb_name : g.away_qb_name) || null,
+      qb: passers[0]?.player_display_name || null,
       off: us ? { yards: yards(us) } : null, def: them ? { yards: yards(them) } : null };
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -86,7 +87,7 @@ function perGame(gs) {
 // without him when he threw none (Oct 23 2026 data audit: a backups-only game sat in "shared" and the Falcons read
 // 0-1 without Penix when they were 0-2). Without passing rows, the schedule's quarterback decides.
 function qbRole(x, qb) {
-  if (!x.passers.length) return sameQb(starterOf(x), qb) ? 'with' : 'without';
+  if (!x.passers.length) return 'unknown';
   const his = x.passers.find((r) => sameQb(r.player_display_name, qb));
   if (!his) return 'without';
   return n(his.attempts) >= 0.75 * x.passers.reduce((a, r) => a + n(r.attempts), 0) ? 'with' : 'shared';
@@ -103,7 +104,9 @@ export function strength(d, team, before, qb = null) {
   const season = `  This season, ${games(gs.length)}: ${perGame(gs)}`;
   const lines = [`${team} (${record(gs)}, ${split})`];
   const by = (role) => (qb ? gs.filter((x) => qbRole(x, qb) === role) : []);
-  const his = by('with'), without = by('without'), both = by('shared');
+  const his = by('with'), without = by('without'), both = by('shared'), unknown = by('unknown');
+  if (unknown.length) lines.push(`  Who played quarterback is not on file for ${games(unknown.length)} (the weekly player stats did not load), so no split by quarterback is shown.`);
+  if (unknown.length) return [...lines, season].join('\n');
   if (!qb || (!without.length && !both.length)) return [...lines, season].join('\n');
   const others = [...new Set(without.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
   if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(his)}`);
@@ -147,7 +150,7 @@ export function gameByGame(d, team, before) {
   const changes = lineupChanges(d, c, gs);
   return [`${team}, newest first:`, ...gs.slice().reverse().map((x) => {
     const qb = x.passers.length ? ` · QB ${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ')}`
-      : starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
+      : ' · QB not on file';
     const how = x.off && x.def ? ` · ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : '';
     const who = changes.get(x.g.game_id);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))} now${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}${who ? `\n      ${who}` : ''}`;
@@ -177,8 +180,9 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
     const k = (role) => roles.filter((r) => r === role).length;
     const others = {}; gs.forEach((x, i) => { if (!qb || roles[i] === 'without') { const nm = starterOf(x); if (nm) others[nm] = (others[nm] || 0) + 1; } });
     const otherList = Object.entries(others).sort((a, b) => b[1] - a[1]).map(([nm, c]) => `${nm} ${c}`).join(', ');
-    const who = qb ? [`${qb} ${k('with')}`, k('shared') ? `shared ${k('shared')}` : null, otherList ? `without him: ${otherList}` : null].filter(Boolean).join(' · ') : otherList;
-    const hasStarted = qb && (k('with') > 0 || k('shared') > 0);
+    const who = k('unknown') ? 'not on file (the weekly player stats did not load)'
+      : qb ? [`${qb} ${k('with')}`, k('shared') ? `shared ${k('shared')}` : null, otherList ? `without him: ${otherList}` : null].filter(Boolean).join(' · ') : otherList;
+    const hasStarted = !qb || k('unknown') > 0 || k('with') > 0 || k('shared') > 0;
     const ids = new Set(played(d, season, before).map((g) => g.game_id));
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
