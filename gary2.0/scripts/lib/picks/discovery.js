@@ -26,7 +26,7 @@ export function createPickGameDiscovery({ oddsService, picksService, ballDontLie
           } else {
             allGames = [...(allGames || []), slateGame];
           }
-          console.log(`[${config.name}] Exact game ${gameIdFilter}: matched saved schedule and merged available opening fields; missing prices remain unavailable`);
+          console.log(`[${config.name}] Exact game ${gameIdFilter}: matched saved schedule for the game's identity only; ${liveIndex >= 0 ? 'prices are the live feed\'s' : 'no live price, so the market gate decides'}`);
         }
       } catch (slateError) {
         console.warn(`[${config.name}] Exact daily_slate fallback unavailable: ${slateError.message}`);

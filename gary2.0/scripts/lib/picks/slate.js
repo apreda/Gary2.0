@@ -1,4 +1,4 @@
-/** Exact saved-slate recovery; live quoted fields retain precedence. */
+/** Exact saved-slate recovery: the game's identity, never its prices. */
 const DAILY_SLATE_LEAGUE = {
   americanfootball_nfl: 'NFL',
   americanfootball_ncaaf: 'NCAAF',
@@ -13,30 +13,16 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+// The saved slate identifies the game and nothing else (Oct 23 2026 source audit; founder: no fallback that gives
+// different data when the original source fails). It copied the morning's moneyline, spread and total into a live game
+// missing them, so a pick could price at a number the book no longer offered. A live game keeps only its own prices;
+// the slate fills identity fields it lacks, and a missing price stays missing, so the market gate refuses the pick.
+const IDENTITY = ['id', 'bdl_game_id', 'sport_key', 'home_team', 'away_team', 'commence_time', 'ncaaf_fbs_verified', 'ncaaf_fbs_verification_source'];
 export function mergeExactGameWithSlate(liveGame, slateGame) {
   if (!liveGame) return slateGame;
   if (!slateGame) return liveGame;
-  if (liveGame.market_source === 'the_odds_api') {
-    return { ...slateGame, ...liveGame, line_snapshot: 'live' };
-  }
-  const liveHasMl = finiteNumber(liveGame.moneyline_home) !== null && finiteNumber(liveGame.moneyline_away) !== null;
-  const liveHasPricedSpread = finiteNumber(liveGame.spread_home) !== null &&
-    (finiteNumber(liveGame.spread_home_odds) !== null || finiteNumber(liveGame.spread_away_odds) !== null);
-  const liveHasBook = Array.isArray(liveGame.bookmakers) && liveGame.bookmakers.some(book => Array.isArray(book?.markets) && book.markets.length > 0);
-  return {
-    ...slateGame,
-    ...liveGame,
-    moneyline_home: liveHasMl ? liveGame.moneyline_home : slateGame.moneyline_home,
-    moneyline_away: liveHasMl ? liveGame.moneyline_away : slateGame.moneyline_away,
-    spread_home: liveHasPricedSpread ? liveGame.spread_home : slateGame.spread_home,
-    spread_away: liveHasPricedSpread ? liveGame.spread_away : slateGame.spread_away,
-    spread_home_odds: liveHasPricedSpread ? liveGame.spread_home_odds : null,
-    spread_away_odds: liveHasPricedSpread ? liveGame.spread_away_odds : null,
-    total: finiteNumber(liveGame.total) !== null ? liveGame.total : slateGame.total,
-    line_vendor: liveHasMl || liveHasPricedSpread ? (liveGame.line_vendor ?? slateGame.line_vendor) : slateGame.line_vendor,
-    line_snapshot: liveHasMl || liveHasPricedSpread ? (liveGame.line_snapshot ?? 'live') : 'opening',
-    bookmakers: liveHasBook ? liveGame.bookmakers : slateGame.bookmakers,
-  };
+  const identity = Object.fromEntries(IDENTITY.filter((k) => liveGame[k] == null && slateGame[k] != null).map((k) => [k, slateGame[k]]));
+  return { ...liveGame, ...identity, line_snapshot: liveGame.line_snapshot ?? 'live' };
 }
 
 export function createSlateRecovery({ supabase }) {
@@ -55,21 +41,7 @@ export function createSlateRecovery({ supabase }) {
     const row = data?.[0];
     if (!row) return null;
 
-    const spreadHome = finiteNumber(row.spread);
-    const mlHome = finiteNumber(row.ml_home);
-    const mlAway = finiteNumber(row.ml_away);
-    const total = finiteNumber(row.total);
-    const vendor = row.line_vendor || 'opening-snapshot';
-    const markets = [];
-    if (mlHome !== null && mlAway !== null) {
-      markets.push({
-        key: 'h2h',
-        outcomes: [
-          { name: row.home_team, price: mlHome },
-          { name: row.away_team, price: mlAway },
-        ],
-      });
-    }
+    // Identity only: the saved prices are the morning's, never the live ticket's (see mergeExactGameWithSlate).
 
     return {
       id: row.bdl_game_id,
@@ -78,22 +50,22 @@ export function createSlateRecovery({ supabase }) {
       home_team: row.home_team,
       away_team: row.away_team,
       commence_time: row.commence_time,
-      spread_home: spreadHome,
-      spread_away: spreadHome === null ? null : -spreadHome,
+      spread_home: null,
+      spread_away: null,
       spread_home_odds: null,
       spread_away_odds: null,
-      moneyline_home: mlHome,
-      moneyline_away: mlAway,
-      total,
-      line_vendor: vendor,
-      line_snapshot: 'opening',
+      moneyline_home: null,
+      moneyline_away: null,
+      total: null,
+      line_vendor: null,
+      line_snapshot: 'none',
       // dailySlateService writes NCAAF rows only after the provider-grounded
       // FBS policy has accepted both teams. Carry that exact internal provenance
       // into this recovery object; no caller-supplied verified flag is trusted.
       ...(sportKey === 'americanfootball_ncaaf'
         ? { ncaaf_fbs_verified: true, ncaaf_fbs_verification_source: 'daily_slate' }
         : {}),
-      bookmakers: markets.length ? [{ key: vendor, title: vendor, markets }] : [],
+      bookmakers: [],
     };
   }
   return { fetchDailySlateGame };

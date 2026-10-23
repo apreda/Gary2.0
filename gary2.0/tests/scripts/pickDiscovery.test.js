@@ -66,11 +66,12 @@ describe('exact-slate recovery and market ownership', () => {
     expect(eq).toHaveBeenCalledWith('date', '2026-09-19');
   });
 
-  it('keeps live provider quotes above opening snapshots without inventing a spread price', () => {
-    const opening = { moneyline_home: -110, moneyline_away: 100, spread_home: -2.5, spread_away: 2.5, line_vendor: 'opening' };
-    expect(mergeExactGameWithSlate({ moneyline_home: -120, moneyline_away: 110, spread_home: -3.5 }, opening)).toMatchObject({
-      moneyline_home: -120, moneyline_away: 110, spread_home: -2.5, spread_home_odds: null,
-    });
+  it('takes only identity from the saved slate, never a price', () => {
+    const opening = { bdl_game_id: '7', commence_time: '2026-09-19T20:00:00Z', moneyline_home: -110, moneyline_away: 100, spread_home: -2.5, spread_away: 2.5, total: 44.5, line_vendor: 'opening' };
+    const merged = mergeExactGameWithSlate({ moneyline_home: -120, moneyline_away: 110, spread_home: -3.5 }, opening);
+    expect(merged).toMatchObject({ moneyline_home: -120, moneyline_away: 110, spread_home: -3.5, bdl_game_id: '7', commence_time: '2026-09-19T20:00:00Z', line_snapshot: 'live' });
+    expect(merged.total).toBeUndefined();
+    expect(merged.line_vendor).toBeUndefined();
     expect(mergeExactGameWithSlate({ market_source: 'the_odds_api', moneyline_home: -130 }, opening)).toMatchObject({
       moneyline_home: -130, line_snapshot: 'live',
     });
