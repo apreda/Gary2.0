@@ -69,8 +69,25 @@ async function one(p) {
   return { ...p, source: asked ? 'transcript' : 'rebuilt', ok: r.ok, check: r.check, text: r.text, transport: r.transport, error: r.error, secs: Math.round((Date.now() - t0) / 1000) };
 }
 
-function report(rows) {
-  const lines = [`# Data check, ${date}`, '', `${rows.length} picks · ${rows.filter((r) => r.check && !r.check.data_sound).length} with data problems · ${rows.filter((r) => r.check?.data_sound).length} sound · ${rows.filter((r) => !r.check).length} unchecked`, ''];
+// Side balance (Adam, Oct 23 2026: Gary's NBA picks were 13 of 17 underdogs): each sport's published game picks over
+// the last seven days, underdog (+) against favorite (-), so a lean shows the next morning.
+async function sideBalance() {
+  const from = new Date(Date.parse(`${date}T12:00:00Z`) - 6 * 86400000).toISOString().slice(0, 10);
+  const side = (pick) => { const m = String(pick || '').match(/\s([+-])\d+(?:\.\d)?\s+[+-]?\d{3}\b|ML\s+([+-])\d+/); return m ? (m[1] || m[2]) : null; };
+  const out = [];
+  const { data: g } = await db.from('game_results').select('league, pick_text, is_winners_pick').gte('game_date', from).lte('game_date', date);
+  const { data: f } = await db.from('nfl_results').select('pick_text').gte('game_date', from).lte('game_date', date);
+  const by = {};
+  for (const r of [...(g || []).filter((x) => !x.is_winners_pick), ...(f || []).map((x) => ({ ...x, league: 'NFL' }))]) {
+    const sd = side(r.pick_text); if (!sd) continue;
+    (by[r.league] ||= { dog: 0, fav: 0 })[sd === '+' ? 'dog' : 'fav'] += 1;
+  }
+  for (const [league, c] of Object.entries(by)) out.push(`${league}: ${c.dog} underdog, ${c.fav} favorite (${Math.round((100 * c.dog) / (c.dog + c.fav))}% underdog)`);
+  return out.length ? `Side balance, ${from} to ${date}: ${out.join(' · ')}` : '';
+}
+
+function report(rows, balance = '') {
+  const lines = [`# Data check, ${date}`, '', `${rows.length} picks · ${rows.filter((r) => r.check && !r.check.data_sound).length} with data problems · ${rows.filter((r) => r.check?.data_sound).length} sound · ${rows.filter((r) => !r.check).length} unchecked`, ...(balance ? ['', balance] : []), ''];
   for (const r of rows) {
     lines.push(`## ${r.league} · ${r.matchup} · ${r.pick} (${r.result}, ${r.finalScore || '?'})${r.source ? ` · data ${r.source}` : ''}`);
     if (!r.check) { lines.push(`Unchecked: ${r.skipped || r.error || 'no JSON in the answer'}`, ''); continue; }
@@ -95,6 +112,6 @@ await Promise.all(Array.from({ length: 2 }, async () => {
     writeFileSync(jsonPath, JSON.stringify(rows, null, 1));
   }
 }));
-writeFileSync(`${dir}/${date}.md`, report(rows));
+writeFileSync(`${dir}/${date}.md`, report(rows, await sideBalance().catch((e) => `Side balance not on file (${e.message})`)));
 console.log(`Report: ${dir}/${date}.md`);
 process.exit(0);
