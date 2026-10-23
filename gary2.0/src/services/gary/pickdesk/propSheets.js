@@ -26,11 +26,11 @@
 import { statForProp } from './propsBrain.js';
 import { isMlbStart } from '../../sports/mlb/mlbGameRows.js';
 import {
-  loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher, hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine,
+  loadMlbGameFrames, loadMlbPlayerSplits, hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine,
   platoonLine, slotLine, vsPitcherLine, expectedStatsLine,
 } from '../../sports/mlb/mlbGameFrames.js';
 import { getBatterXStats } from '../../providers/baseballSavantService.js';
-import { loadPriceHistory, priceHistoryLine } from './priceHistory.js';
+import { priceHistoryLine } from './priceHistory.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -197,22 +197,14 @@ export function pitcherMarketWindows(rows, propType, line, priceText) {
  * does not answer leaves its lines out.
  */
 export async function loadMlbSheetContext({ gamePk, season, dateEt, lineups, players = [], supabase = null }) {
-  const [games, splits, xstats, history] = await Promise.all([
+  // No career line against tonight's starter (past seasons) and no prop price history (the market's opinion): founder,
+  // Oct 23 2026, no last season ever and no market data. The sheets read this season and tonight.
+  const [games, splits, xstats] = await Promise.all([
     loadMlbGameFrames(dateEt).catch(() => []),
     gamePk ? loadMlbPlayerSplits([gamePk], season).catch(() => null) : null,
     getBatterXStats(season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
-    loadPriceHistory(supabase, { league: 'MLB', players, date: dateEt }).catch(() => new Map()),
   ]);
-  const pairs = [];
-  if (splits) {
-    for (const [side, opp] of [['home', 'away'], ['away', 'home']]) {
-      const arm = lineups?.[opp]?.pitcher?.name;
-      if (!arm) continue;
-      for (const b of lineups?.[side]?.batters || []) pairs.push({ batterId: splits.idOf(gamePk, b.name), pitcherId: splits.idOf(gamePk, arm) });
-    }
-  }
-  const vs = await loadVsPitcher(pairs).catch(() => new Map());
-  return { games, splits, xstats, history, vs, gamePk };
+  return { games, splits, xstats, history: null, vs: new Map(), gamePk };
 }
 
 /** "plate umpire Name: 31 games this season; 23.1 strikeouts and 8.2 walks per 100 batters (league 22.4 and 8.3)". */
