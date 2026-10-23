@@ -288,8 +288,11 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
     byPlayer.get(name).games.set(String(row.game.id), row);
   }
   const gameByGame = (entry) => games.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${entry.games.has(String(r.gameId)) ? productionLine(entry.games.get(String(r.gameId))) : 'no stat row'}`).join(' | ');
-  const weight = (entry) => [...entry.games.values()].reduce((sum, row) => sum + (Number(row.passing_attempts) || 0) + (Number(row.rushing_attempts) || 0)
-    + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0);
+  // Kickers and punters record no counted stats here, so they weigh by the games they have a row in (Oct 23 2026 data
+  // audit: with no "others at PK", a reserve kicker on the report read as "both teams list theirs out").
+  const kicking = (position) => /^(PK|K|P|LS)$/i.test(position || '');
+  const weight = (entry) => (kicking(entry.position) ? entry.games.size : [...entry.games.values()].reduce((sum, row) => sum + (Number(row.passing_attempts) || 0) + (Number(row.rushing_attempts) || 0)
+    + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0));
   const lines = [];
   const reportedKeys = new Set((reported || []).map((i) => nameKey(i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`)));
   for (const injury of reported || []) {
@@ -298,6 +301,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
     const position = found?.[1].position || injury.player?.position_abbreviation || injury.player?.position || '';
     lines.push(`  ${name}${position ? ` ${position}` : ''} — ${String(injury.status || 'on the report').toLowerCase()} · ${found ? gameByGame(found[1])
       : /^(OL|OT|OG|T|G|C|LT|RT|LG|RG)$/i.test(position) ? 'offensive linemen record no stats in this feed'
+        : kicking(position) ? 'kickers and punters record no counted stats in this feed'
         : 'no stat row in any game this season (no pass, carry, catch or tackle recorded)'}`);
     if (!position) continue;
     const others = [...byPlayer].filter(([player, entry]) => entry.position === position && nameKey(player) !== nameKey(name) && weight(entry) > 0)
