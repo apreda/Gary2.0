@@ -279,6 +279,14 @@ const half = (x) => (x == null ? null : Math.round(x * 2) / 2);
 // The ticket's book: the first of these the line watch has for the game, the order oddsService walks to price a pick.
 const TICKET_BOOKS = ['fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm', 'fanatics', 'betway', 'ballybet', 'betparx', 'rebet'];
 
+// A moneyline move is a change of 2.5 points or more in the home side's implied chance (Oct 23 2026 audit: cents
+// subtracted across +100 read +104 to -102 as a 206-cent move; a fixed 15 cents is a different size at -110 and -300).
+const implied = (odds) => { const o = Number(odds); return !Number.isFinite(o) || o === 0 ? null : o < 0 ? -o / (-o + 100) : 100 / (o + 100); };
+export function moneylineMoved(b, l) {
+  const a = implied(b?.ml_home), c = implied(l?.ml_home);
+  return a != null && c != null && Math.abs(a - c) >= 0.025;
+}
+
 /** The line's path from the line watch, from the first board to `until`, at the ticket's own book, so the path ends on
  * the number Gary bets (a six-book median beside the ticket gave him two numbers half a point apart, and he argued the
  * half point). Falls back to the median of the books when none of the ticket's books is on file. College and the NBA
@@ -286,7 +294,7 @@ const TICKET_BOOKS = ['fanduel', 'draftkings', 'betrivers', 'caesars', 'betmgm',
 export async function linePath(db, gameId, until = new Date(), sport = 'americanfootball_nfl', book = null) {
   if (!db || gameId == null) return null;
   const { data: rows, error } = await db.from('odds_snapshots')
-    .select('seen_at,line_vendor,spread_home,moneyline_home,moneyline_away,total')
+    .select('seen_at,line_vendor,spread_home,spread_home_odds,spread_away_odds,moneyline_home,moneyline_away,total')
     .eq('sport', sport).eq('game_id', String(gameId)).lte('seen_at', new Date(until).toISOString())
     .order('seen_at').limit(5000);
   if (error || !rows?.length) return null;
@@ -297,10 +305,9 @@ export async function linePath(db, gameId, until = new Date(), sport = 'american
   const data = vendor ? rows.filter((r) => r.line_vendor === vendor) : rows;
   if (asked && !data.length) return { path: [], now: null, book: asked, missing: true };
   const latest = new Map(); const path = []; let last = null;
-  const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)), books: rs.length }; };
-  // A moneyline move of 15 cents or more is a point on the path too (Oct 23 2026 data audit: Thunder -300 to -335 with
-  // the spread unchanged read as "a settled number").
-  const mlMoved = (b, l) => Math.abs((Number(b.ml_home) || 0) - (Number(l.ml_home) || 0)) >= 15 || Math.abs((Number(b.ml_away) || 0) - (Number(l.ml_away) || 0)) >= 15;
+  const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)),
+    sp_home: median(rs.map((x) => x.spread_home_odds)), sp_away: median(rs.map((x) => x.spread_away_odds)), books: rs.length }; };
+  const mlMoved = (b, l) => moneylineMoved(b, l);
   for (const r of data) {
     latest.set(r.line_vendor, r); const b = board(r.seen_at);
     if (!last || b.spread_home !== last.spread_home || b.total !== last.total || mlMoved(b, last)) { path.push(b); last = b; }
@@ -318,7 +325,8 @@ const BOOK_NAMES = { fanduel: 'FanDuel', draftkings: 'DraftKings', betrivers: 'B
 export function lineStory(lines, homeTeam, awayTeam) {
   if (lines?.missing) return `No line history on file at ${BOOK_NAMES[lines.book] || lines.book} for this game.`;
   if (!lines?.now || !lines.path?.length) return 'No line history on file for this game.';
-  const side = (h) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}` : `${awayTeam} -${h}`);
+  const price = (b, home) => { const x = home ? b?.sp_home : b?.sp_away; return Number.isFinite(Number(x)) && x != null ? ` (${Number(x) > 0 ? '+' : ''}${Math.round(Number(x))})` : ''; };
+  const side = (h, b = null) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}${price(b, true)}` : `${awayTeam} -${h}${price(b, false)}`);
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const ml = (x) => (x == null ? '?' : x > 0 ? `+${Math.round(x)}` : `${Math.round(x)}`);
   const mls = (b) => `moneylines ${awayTeam} ${ml(b.ml_away)}, ${homeTeam} ${ml(b.ml_home)}`;
@@ -329,12 +337,12 @@ export function lineStory(lines, homeTeam, awayTeam) {
   const moves = []; let prev = open;
   for (const { p } of polls) {
     const spread = p.spread_home !== prev.spread_home;
-    const money = Math.abs((Number(p.ml_home) || 0) - (Number(prev.ml_home) || 0)) >= 15 || Math.abs((Number(p.ml_away) || 0) - (Number(prev.ml_away) || 0)) >= 15;
-    if (spread || money) { moves.push(`  seen ${when(p.at)}: ${side(p.spread_home)} · ${mls(p)}`); prev = p; }
+    const money = moneylineMoved(p, prev);
+    if (spread || money) { moves.push(`  seen ${when(p.at)}: ${side(p.spread_home, p)} · ${mls(p)}`); prev = p; }
   }
   const kept = moves.length > 12 ? [...moves.slice(0, 4), `  … ${moves.length - 8} more moves …`, ...moves.slice(-4)] : moves;
   const book = lines.book ? `at ${BOOK_NAMES[lines.book] || lines.book}` : "across the books (median)";
-  return [`The line ${book}, first on file ${when(open.at)} (when the line watch first saw it, not necessarily the market's opening): ${side(open.spread_home)}, total ${open.total} · ${mls(open)}`,
-    kept.length ? `Moves since (spread, and moneyline moves of 15 cents or more):\n${kept.join('\n')}` : 'Neither the spread nor the moneyline has moved since.',
-    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (first on file ${open.total}) · ${mls(lines.now)}`].join('\n');
+  return [`The line ${book}, first on file ${when(open.at)} (when the line watch first saw it, not necessarily the market's opening): ${side(open.spread_home, open)}, total ${open.total} · ${mls(open)}`,
+    kept.length ? `Moves since (spread, and moneyline moves of 2.5 points or more of implied chance):\n${kept.join('\n')}` : 'Neither the spread nor the moneyline has moved since.',
+    `Now: ${side(lines.now.spread_home, lines.now)}, total ${lines.now.total} (first on file ${open.total}) · ${mls(lines.now)}`].join('\n');
 }
