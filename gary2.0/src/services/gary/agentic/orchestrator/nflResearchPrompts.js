@@ -32,7 +32,9 @@ const isCollege = (sport) => sport === 'NCAAF' || sport === 'americanfootball_nc
  */
 const NEWS_DESK_ITEMS = {
   NFL: 'game-day statuses and inactives, a starting-quarterback decision, late-week practice participation, a player activated, placed on injured reserve, signed, released or traded, a coordinator or play-caller change, and a weather change',
-  NCAAF: 'the latest availability report and game-day statuses, a starting-quarterback decision, a player suspended, ruled out, returning or leaving the team, a head coach, coordinator or play-caller change, and a weather change',
+  // A starter who played hurt, was benched or left the last game (Oct 23 2026 data audit: Arkansas center Caden Kitler
+  // played the first half against Tennessee with a foot injury and Kash Courtney played center after; no list has it).
+  NCAAF: 'the latest availability report and game-day statuses, a starting-quarterback decision, a starter who played hurt, was benched or left the team\'s last game, a player suspended, ruled out, returning or leaving the team, a head coach, coordinator or play-caller change, and a weather change',
 };
 const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor named Gary. Gary already has the game below: the line and how it moved, the quarterbacks, the ${isCollege(sport) ? 'availability' : 'injury'} report and both teams' season. Your job is two things.
 
