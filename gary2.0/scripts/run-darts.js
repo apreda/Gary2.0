@@ -32,8 +32,7 @@ const { buildNflDartsBoard, nflDartRow } = await import('../src/services/gary/da
 const { buildNbaDartsBoard, screenNbaCategory, nbaDartRow, NBA_MARKET } = await import('../src/services/gary/darts/nbaDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/gary/darts/dartsBrain.js');
 const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/gary/darts/dartsScreen.js');
-const { loadMlbGameFrames, loadMlbPlayerSplits, loadVsPitcher } = await import('../src/services/sports/mlb/mlbGameFrames.js');
-const { loadPriceHistory } = await import('../src/services/gary/pickdesk/priceHistory.js');
+const { loadMlbGameFrames, loadMlbPlayerSplits } = await import('../src/services/sports/mlb/mlbGameFrames.js');
 const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/providers/baseballSavantService.js');
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
 const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals } = await import('../src/services/sports/nfl/nflPlayerContext.js');
@@ -159,36 +158,30 @@ async function throwLeague(league) {
         for (const id of board.eligible[kind] || []) { const c = board.candidates.get(id); if (c?.playerId) ids.add(c.playerId); if (c?.facing?.playerId) ids.add(c.facing.playerId); }
       }
       for (const f of board.gamesById.values()) for (const st of [f.awayStarter, f.homeStarter]) if (st?.playerId) ids.add(st.playerId);
-      const names = [...new Set([...board.candidates.values()].map((c) => c.player).filter(Boolean))];
-      const [rows, games, splits, xstats, statcast, history] = await Promise.all([
+      // No career lines against tonight's starter (past seasons) and no price history (the market's opinion): founder,
+      // Oct 23 2026, no last season ever and no market data.
+      const [rows, games, splits, xstats, statcast] = await Promise.all([
         loadMlbRows([...ids], board.season, { log: { warn: log } }),
         loadMlbGameFrames(date).catch((e) => { log(`${league}: game frames unavailable (${e.message}); sheets print without dates and arms`); return []; }),
         loadMlbPlayerSplits([...board.gamesById.values()].map((f) => f.gamePk), board.season).catch(() => null),
         getBatterXStats(board.season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
         getBatterStatcastProfiles(board.season).then((list) => new Map((list || []).map((x) => [String(x.player_id), x]))).catch(() => new Map()),
-        loadPriceHistory(supabase, { league: 'MLB', players: names, date }),
       ]);
-      const pairs = [];
-      if (splits) {
-        for (const c of board.candidates.values()) {
-          const pk = board.gamesById.get(String(c.gameId))?.gamePk;
-          if (pk && c.player && c.facing?.name) pairs.push({ batterId: splits.idOf(pk, c.player), pitcherId: splits.idOf(pk, c.facing.name) });
-        }
-      }
-      const vs = await loadVsPitcher(pairs).catch(() => new Map());
-      log(`${league}: game rows for ${rows.size} of ${ids.size} players · ${games.length} past games framed · ${vs.size} batter-vs-starter lines · price history for ${history.size} markets`);
+      const vs = new Map(), history = null;
+      log(`${league}: game rows for ${rows.size} of ${ids.size} players · ${games.length} past games framed`);
       const ctx = { games, splits, vs, xstats, statcast, history, gamePkOf: (gid) => board.gamesById.get(String(gid))?.gamePk ?? null };
       for (const f of board.gamesById.values()) { blocks.set(String(f.gameId), mlbGameBlock(f, ctx, rows)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenMlbCategory({ kind, board, rowsByPlayer: rows, ctx, log: { log } }));
     } else {
       await refreshNflRedZone({ supabase, seasons: [board.season], log: { warn: log } }).catch((e) => log(`${league}: red zone refresh failed (${e.message})`));
-      const [gamesByName, priorByName, contexts, rz, days, snaps, defCur, defPrev, weekRows, injuries, history] = await Promise.all([
-        nflSeasonGames(board.season), nflSeasonGames(board.season - 1), loadNflContexts(board.frames, board.season, { log: { warn: log } }),
-        loadNflRedZone({ supabase, seasons: [board.season, board.season - 1] }).catch(() => null),
-        gameDays(), snapCounts(board.season), defenseByPosition(board.season), defenseByPosition(board.season - 1), nflWeeklyRows(board.season),
+      // This season only, and no price history (founder, Oct 23 2026: no last season ever, no market data).
+      const [gamesByName, contexts, rz, days, snaps, defCur, weekRows, injuries] = await Promise.all([
+        nflSeasonGames(board.season), loadNflContexts(board.frames, board.season, { log: { warn: log } }),
+        loadNflRedZone({ supabase, seasons: [board.season] }).catch(() => null),
+        gameDays(), snapCounts(board.season), defenseByPosition(board.season), nflWeeklyRows(board.season),
         bdl.getNflPlayerInjuries().catch(() => []),
-        loadPriceHistory(supabase, { league: 'NFL', players: [...new Set([...board.candidates.values()].map((c) => c.player))], date, days: 21 }),
       ]);
+      const priorByName = new Map(), defPrev = null, history = null;
       const weeksByName = new Map();
       for (const r of [...(weekRows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
       const framesById = new Map(board.frames.map((f) => [String(f.gameId), f]));

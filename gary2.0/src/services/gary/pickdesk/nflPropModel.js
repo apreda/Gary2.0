@@ -88,7 +88,7 @@ function offenseLine(rows) {
   return t;
 }
 
-/** Blend this season with last season (half weight per game), then shrink to the league with a 3-game prior. */
+/** This season's rates shrunk to the league with a 3-game prior (last season's half-weight blend went Oct 23 2026). */
 function teamRates(cur, prior) {
   const w = PRIOR_SEASON_GAME_WEIGHT;
   const sum = k => n(cur[k]) + w * n(prior[k]);
@@ -115,7 +115,9 @@ export async function buildNflGameContext({ game, season, spreadHome, total, asO
     ]);
     if (!home?.id || !away?.id) return null;
     const load = async (id) => {
-      const [cur, prior] = await Promise.all([teamSeason(id, season, true, asOf), teamSeason(id, season - 1, false)]);
+      // This season only, shrunk to the league average (founder, Oct 23 2026: no last season, ever).
+      const cur = await teamSeason(id, season, true, asOf);
+      const prior = { own: [], opp: [] };
       return {
         offense: teamRates(offenseLine(cur.own), offenseLine(prior.own)),
         defense: teamRates(offenseLine(cur.opp), offenseLine(prior.opp)),

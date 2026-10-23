@@ -38,8 +38,8 @@ async function mlbPlayerForm(dart, season) {
   return { of: games.length, ok };
 }
 
-// NBA (Oct 19 2026): the MLB shape, { of, ok }, his last ten games against the dart's line and side; this season
-// once he has three, last season before that.
+// NBA (Oct 19 2026): the MLB shape, { of, ok }, his last ten games against the dart's line and side, this season only
+// (founder, Oct 23 2026: no last season, ever).
 const NBA_FIELD = { pts: 'pts', reb: 'reb', ast: 'ast', threes: 'fg3m', pra: 'pra' };
 async function nbaPlayerForm(dart, date) {
   const field = NBA_FIELD[dart.kind];
@@ -47,8 +47,7 @@ async function nbaPlayerForm(dart, date) {
   const season = nbaSeason(new Date(`${date}T16:00:00Z`));
   const asOf = new Date(`${date}T12:00:00Z`);
   const cur = await bdl.getNbaPlayerGameLogs(dart.player_id, 10, {}, { season, asOf }).catch(() => null);
-  const games = (cur?.games || []).length >= 3 ? cur.games
-    : ((await bdl.getNbaPlayerGameLogs(dart.player_id, 10, {}, { season: season - 1, asOf }).catch(() => null))?.games || []);
+  const games = cur?.games || [];
   const last = games.slice(0, 10).reverse();
   if (!last.length) return null;
   const line = Number(String(dart.prop || '').split(' ').pop());

@@ -1,7 +1,8 @@
 // The NFL dart board: every game on the ET date still to kick off, its line,
 // each priced player with his injury tag, this season's game count and totals
-// beside last season's (a one or two game rate is a count, never who a player
-// is), and the day's prices for the seven NFL dart categories. Sources: BDL
+// (this season only: founder, Oct 23 2026, no last season ever; a one or two
+// game rate is a count, never who a player is), and the day's prices for the
+// seven NFL dart categories. Sources: BDL
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../../sports/nfl/nflStreaksService.js';
@@ -77,11 +78,10 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   if (!games.length) return { league: 'NFL', games: 0, text: '', candidates: new Map(), eligible: {} };
 
-  const [odds, injuries, thisYear, lastYear] = await Promise.all([
+  const [odds, injuries, thisYear] = await Promise.all([
     bdl.getOddsV2({ game_ids: games.map((g) => g.id) }, 'nfl').catch(() => []),
     bdl.getNflPlayerInjuries().catch(() => []),
     seasonLines(season),
-    seasonLines(season - 1),
   ]);
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
   // The quarterbacks' write-up (the Arms take ported to football) from the morning board, when it ran.
@@ -160,11 +160,9 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const nk = normName(info.name);
         const now26 = abbr ? thisYear.byKey.get(`${nk}|${abbr}`) : null;
         const cur = now26 || thisYear.byName.get(nk);
-        const prev = lastYear.byName.get(nk);
         const facts = [`${info.name} ${pos}`];
         if (status) facts.push(status.toLowerCase());
         facts.push(cur ? `${season}: ${statText(pos, cur)}` : `${season}: no games yet`);
-        if (prev) facts.push(`${season - 1}: ${statText(pos, prev)}`);
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;

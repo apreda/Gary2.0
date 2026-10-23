@@ -1,6 +1,6 @@
 // The NBA dart board (Oct 19 2026, for the opener): every game on the ET date still to tip, its line and total,
 // each rotation player's main over/under line in the five NBA dart categories, and a sheet of his own games for
-// the stat each settles on (this season once he has three, last season before that, labeled). No formula: the
+// the stat each settles on (this season only: founder, Oct 23 2026, no last season ever). No formula: the
 // menu is the board in the books' order of who matters most (the higher line first). Sources: BDL games, odds,
 // player props, injuries and game logs.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
@@ -102,20 +102,17 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     const c = board.candidates.get(id);
     const mk = c?.[kind];
     if (!mk) continue;
-    const [cur, prev] = await Promise.all([
-      bdl.getNbaPlayerGameLogs(c.playerId, 100, {}, { season: board.season, asOf }).catch(() => null),
-      bdl.getNbaPlayerGameLogs(c.playerId, 100, {}, { season: board.season - 1, asOf }).catch(() => null),
-    ]);
-    const now = cur?.games || [];
-    const games = (now.length >= 3 ? now : (prev?.games || [])).map((g) => ({ ...g, opponent: g.opponent || board.abbrById?.get(String(g.opponentId)) || '?' }));
-    const label = now.length >= 3 ? 'this season' : `last season (${board.season - 1}-${String(board.season).slice(2)})`;
+    const cur = await bdl.getNbaPlayerGameLogs(c.playerId, 100, {}, { season: board.season, asOf }).catch(() => null);
+    const games = (cur?.games || []).map((g) => ({ ...g, opponent: g.opponent || board.abbrById?.get(String(g.opponentId)) || '?' }));
     const head = `${c.player} (${c.team})${c.status ? ` · ${c.status}` : ''} · ${LABEL[kind]} ${mk.line} · over ${fmtOdds(mk.over)} / under ${fmtOdds(mk.under)}`;
     const sheet = [head];
-    if (now.length && now.length < 3) sheet.push(`    This season so far: ${now.map((g) => `${g.isHome ? 'vs' : '@'} ${board.abbrById?.get(String(g.opponentId)) || '?'} ${one(g[m.stat])}`).join(', ')}`);
-    if (games.length) {
-      sheet.push(`    ${label[0].toUpperCase()}${label.slice(1)}: ${one(avg(games, m.stat))} ${m.word} a game in ${one(avg(games, 'min'))} minutes over ${games.length} games`);
+    if (!cur) sheet.push("    This season's games are not on file (the game log did not load).");
+    else if (!games.length) sheet.push('    No games yet this season.');
+    else if (games.length < 3) sheet.push(`    This season so far: ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${one(g[m.stat])}`).join(', ')}`);
+    else {
+      sheet.push(`    This season: ${one(avg(games, m.stat))} ${m.word} a game in ${one(avg(games, 'min'))} minutes over ${games.length} games`);
       sheet.push(`    Last ${Math.min(10, games.length)}, newest first: ${games.slice(0, 10).map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${one(g[m.stat])}`).join(', ')}`);
-    } else sheet.push('    No games on file.');
+    }
     menu.push({ id, gameId: c.gameId, line: head, sheet: sheet.join('\n') });
   }
   // The books' order of who matters most: the higher line first.
