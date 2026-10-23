@@ -1,8 +1,8 @@
 // THE COLLEGE READ (Oct 21 2026, founder: "give college the NFL treatment"). Every college game pick. College's own
 // copy of the NFL read's shape (nflRead.js), built from college's desk: the line and how it got to this number first,
-// then the quarterbacks and coaches, who's out and who plays instead, how good both teams are play after play and
-// against whom, the season game by game and the spot, plus the news desk's latest on who plays. No articles (founder,
-// Oct 22 2026, for every sport after TNF's NFL read).
+// then the quarterbacks and coaches, who's out and who plays instead, the season game by game, who carries the offense
+// and the spot, plus the news desk's latest on who plays. No articles (founder, Oct 22 2026, for every sport after TNF's
+// NFL read).
 // He is asked what the line is saying, what matters in this game and what doesn't, and which side he likes at this
 // spread; then he writes that answer as the card. His instructions are what a sharp knows about college markets
 // (ncaafKnowledge.js) and the date. Nothing weighs, scores or projects for him. A change to the NFL read never reaches
@@ -49,36 +49,101 @@ function afterIntro(section) {
   return (/^(?:Every|Each) /.test(paras[0] || '') ? paras.slice(1) : paras).join('\n\n').trim();
 }
 
-// The quarterbacks and coaching staff, without the desk's sourcing lines.
-function quarterbacksAndCoaches(desk) {
+// The two teams, as the desk's matchup line names them.
+const teamsOf = (desk) => (String(desk || '').match(/^MATCHUP: (.+)$/m)?.[1] || '').split(/ @ | vs /).map((t) => t.trim()).filter(Boolean);
+
+// A context note about who plays (a player ruled out, eligible again, returning, or who replaces whom) belongs with the
+// availability report, not under the coaches (Oct 23 2026: "Evan Jackson ... the likely replacement at boundary safety
+// for Phillips" sat two sections away from Phillips's line). A replacement that names one of the team's coaches is a
+// staff note and stays ("Bateman as the replacement for Brad White").
+const AVAILABILITY_NOTE = /availability|\bruled out\b|\beligib|\binjur|\bquestionable\b|\bdoubtful\b|\bprobable\b|\bout for\b|\breturns?\b|\breturning\b|\bsuspen|\bexpected to play\b|\bsurgery\b|\bconcussion\b|\bremoved from\b|\bresumed\b/i;
+function aboutAvailability(note, coaches = []) {
+  if (AVAILABILITY_NOTE.test(note)) return true;
+  const staff = /\bcoach|coordinator|play[- ]?call|\bstaff\b/i.test(note) || coaches.some((last) => new RegExp(`\\b${last}\\b`).test(note));
+  return /\breplace/i.test(note) && !staff;
+}
+// Each team's coaches' last names, from the role lines.
+const coachesOf = (lines, team) => lines.filter((l) => l.team === team && l.kind === 'role' && !/^Quarterback:/.test(l.text))
+  .map((l) => l.text.replace(/^[^:]+: /, '').trim().split(/\s+/).pop()).filter((n) => /^[A-Za-z'-]{2,}$/.test(n || ''));
+
+// The quarterbacks section's lines by team: { team, kind: 'team' | 'role' | 'note' | 'official' | 'source', text }.
+function quarterbackSectionLines(desk) {
   const lines = String(desk || '').split('\n');
   const start = lines.findIndex((l) => /^COLLEGE STARTING QUARTERBACKS AND STAFF/.test(l));
-  if (start < 0) return '';
+  if (start < 0) return [];
+  const teams = teamsOf(desk);
   const out = [];
+  let team = null;
   for (let i = start + 1; i < lines.length; i++) {
-    if (RULE.test(lines[i]) || isTitle(lines[i], lines[i + 1])) break;
-    // The official report's line stays, without its link: it is when the availability below was published (Oct 23 2026
-    // data audit: "doubtful" with no date read the same as a week-old listing).
-    const official = lines[i].match(/^\[official\] (.+?)(?: \(\d{4}-\d{2}-\d{2}\))? https?:\/\/\S+\s*$/);
-    if (official) { out.push(`Official report: ${official[1]}`); continue; }
-    // "Availability source:" stays: it says whether each side's absences were checked, and when a conference report
-    // could not be read, that they are not on file (Oct 23 2026 source audit).
-    if (/^Observed |^\[[a-z0-9_]+\] |^\[official\] |^UNCERTAINTY:|^Availability designations are/.test(lines[i])) continue;
-    // A context note about another season, a former player, a scheme, or someone's assessment leaves (Oct 23 2026
-    // audit: "Elliott described Duke as structurally similar to last season", "credited Duke's protection" carried a
-    // live read). Quarterback and role lines stay.
-    const note = !/^(?:Quarterback|head coach|offensive coordinator|defensive coordinator|co-offensive coordinator|co-defensive coordinator|offensive play caller|defensive play caller|play caller|Availability source|Official report):/i.test(lines[i]) && !/^[A-Z][\w.&' -]+$/.test(lines[i].trim());
-    if (note && /last season|\b20(?:1\d|2[0-5])\b|\bformer\b|\bprevious\b|\bdescribed\b|\bcredited\b|\bscheme|\bformation|\bpersonnel group|similar to|\bpraised\b|\bemphasi[sz]ed\b/i.test(lines[i])) continue;
-    out.push(lines[i]);
+    const l = lines[i];
+    if (RULE.test(l) || isTitle(l, lines[i + 1])) break;
+    if (teams.includes(l.trim())) { team = l.trim(); out.push({ team, kind: 'team', text: l }); continue; }
+    // The official report's line, without its link: it is when the availability was published (Oct 23 2026 data audit:
+    // "doubtful" with no date read the same as a week-old listing).
+    const official = l.match(/^\[official\] (.+?)(?: \(\d{4}-\d{2}-\d{2}\))? https?:\/\/\S+\s*$/);
+    if (official) { out.push({ team, kind: 'official', text: `Official report: ${official[1]}` }); continue; }
+    if (/^Observed |^\[[a-z0-9_]+\] |^UNCERTAINTY:|^Availability designations are/.test(l)) continue;
+    // "Availability source:" says whether each side's absences were checked, and when a conference report could not be
+    // read, that they are not on file (Oct 23 2026 source audit). Its standing note on what an empty list means goes:
+    // the report says it per team.
+    if (/^Availability source:/.test(l)) { out.push({ team, kind: 'source', text: l.replace(/ Empty list means no absences reported by these sources, not confirmed healthy\.$/, '') }); continue; }
+    if (/^(?:Quarterback|head coach|offensive coordinator|defensive coordinator|co-offensive coordinator|co-defensive coordinator|offensive play caller|defensive play caller|play caller):/i.test(l)) {
+      out.push({ team, kind: 'role', text: l }); continue;
+    }
+    // A context note about another season, a former player, a scheme or game plan, or someone's assessment leaves (Oct 23
+    // 2026 audit: "Elliott described Duke as structurally similar to last season", "credited Duke's protection" carried a
+    // live read; "describes Houston's defense as a 4-2-5", "an emphasis on running through Sanford and Hughes"). A
+    // team's name is one of the matchup's two names (a note with no comma passed for a team name the same day).
+    if (/last season|\b20(?:1\d|2[0-5])\b|\bformer\b|\bprevious\b|\bdescribed\b|\bcredited\b|\bscheme|\bformation|\bpersonnel group|similar to|\bpraised\b|\bemphasi[sz]ed\b|\bemphasis\b|\bgame plan|\b\d-\d-\d\b/i.test(l)) continue;
+    if (l.trim()) out.push({ team, kind: 'note', text: l });
   }
-  return out.join('\n').trim();
+  return out;
+}
+
+// The quarterbacks and coaching staff, without the desk's sourcing lines. `availability: false` leaves out each team's
+// availability source, official report and notes about who plays, which the read gives with the availability report.
+function quarterbacksAndCoaches(desk, { availability = true } = {}) {
+  const lines = quarterbackSectionLines(desk);
+  return lines.filter((l) => availability || !(l.kind === 'source' || l.kind === 'official' || (l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, l.team)))))
+    .map((l) => l.text).join('\n').trim();
 }
 
 // The availability report as reported, without the desk's standing notes about it.
 function injuriesAsReported(desk) {
   return sectionOf(desk, 'INJURY REPORT').split('\n')
-    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE/.test(l))
+    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE|^ACTIVE INJURIES$|^─+$/.test(l))
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Each team's availability source, as the quarterbacks section gives it: the conference's report when it was read, else
+// what the source line says ("checked", or "unavailable (the ACC availability report was not retrieved ...)").
+function availabilitySources(desk) {
+  const out = new Map();
+  for (const l of quarterbackSectionLines(desk)) {
+    if (l.kind === 'official') out.set(l.team, l.text.replace(/^Official report: /, ''));
+    else if (l.kind === 'source' && !out.has(l.team)) out.set(l.team, l.text.replace(/^Availability source: (.+?)\.?$/, 'availability source: $1'));
+  }
+  return out;
+}
+
+// THE AVAILABILITY REPORT (Oct 23 2026 data audit: the report's rows and then the same players again with their season
+// read as two lists of the same names). One list: each team with its report's source, each reported player once with
+// his status, anything the report adds, and his season's stat rows; then who else plays at his position, and the
+// week's reporting on who plays. Without the desk's player lines it is the report as reported.
+function availabilityReport(desk) {
+  const teams = teamsOf(desk), source = availabilitySources(desk);
+  const lines = quarterbackSectionLines(desk);
+  const notes = new Map(teams.map((t) => [t, lines.filter((l) => l.team === t && l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, t))).map((l) => `  reporting: ${l.text.trim()}`)]));
+  const rows = afterIntro(sectionOf(desk, 'WHO PRODUCED IT'));
+  if (!rows) {
+    return [...teams.filter((t) => source.get(t) || notes.get(t).length).map((t) => [`${t}${source.get(t) ? ` — ${source.get(t)}` : ''}`, ...notes.get(t)].join('\n')),
+      injuriesAsReported(desk)].filter(Boolean).join('\n');
+  }
+  return rows.split(/\n\s*\n/).map((block) => {
+    const [head, ...lines] = block.split('\n');
+    const team = teams.find((t) => head === t || head.startsWith(`${t} (`));
+    return [team && source.get(team) ? `${head} — ${source.get(team)}` : head, ...lines, ...(team ? notes.get(team) : [])].join('\n');
+  }).join('\n\n');
 }
 
 // HOW GOOD THEY ARE: the poll, the conferences, and each team's season against FBS teams with who played quarterback.
@@ -91,7 +156,7 @@ function injuriesAsReported(desk) {
 // THEY ARE section repeated the log's scores and yards under a heading that told him what to conclude (Oct 23 2026).
 function qbSplit(gs, qb) {
   const by = new Map();
-  for (const g of gs) { const k = g.qb || 'not on file'; by.set(k, [...(by.get(k) || []), g]); }
+  for (const g of gs) { const k = g.qb || 'passer not on file'; by.set(k, [...(by.get(k) || []), g]); }
   const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
   if (!gs.length || (mine && by.size === 1)) return null;
   const parts = [...by].sort(([a], [b]) => (a === mine ? -1 : b === mine ? 1 : 0))
@@ -155,45 +220,36 @@ export function seasonGames(desk) {
   return teams;
 }
 
-const one = (x) => (Math.round(x * 10) / 10).toFixed(1);
-// Five games or fewer are listed game by game instead of averaged (an average of two carried by one blowout reads as
-// who the team is; Oct 23 2026 data check).
-function perGame(gs) {
-  const n = gs.length;
-  if (n <= 5) return gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.ot ? ' OT' : ''} ${g.at || 'vs'} ${g.opponent}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
-  const pts = `${one(gs.reduce((a, g) => a + g.pf, 0) / n)} points a game, ${one(gs.reduce((a, g) => a + g.pa, 0) / n)} allowed`;
-  const y = gs.filter((g) => g.off != null && g.def != null);
-  if (!y.length) return pts;
-  const yds = `${Math.round(y.reduce((a, g) => a + g.off, 0) / y.length)} yards a game, ${Math.round(y.reduce((a, g) => a + g.def, 0) / y.length)} allowed`;
-  return `${pts} · ${yds}${y.length < n ? ` (yards from ${y.length} of the ${n})` : ''}`;
-}
+// Every game listed, at every count (Oct 23 2026 data audit: from six games on the board averaged the season, and
+// Virginia's last three, about 250 yards gained and 433 allowed, read as "346 yards a game, 344 allowed").
+const perGame = (gs) => gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.ot ? ' OT' : ''} ${g.at || 'vs'} ${g.opponent}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
 const record = (gs) => { const w = gs.filter((g) => g.result === 'W').length, l = gs.filter((g) => g.result === 'L').length, t = gs.length - w - l; return `${w}-${l}${t ? `-${t}` : ''}`; };
 const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
+// A game whose box score's player lines are not on file (or carry no passer) names no quarterback.
+const NOT_ON_FILE_QB = 'not on file';
+// The quarterback lines name their games and give the record only: the games themselves are listed once, above them.
+const byQb = (gs) => `${record(gs)} (${gs.map((g) => `${g.at || 'vs'} ${g.opponent}`).join(', ')})`;
 
-// One team: its games against FBS teams, the FCS games named apart, and the same games by who threw the most passes.
+// One team: its games against FBS teams, newest first, the FCS games named apart, and the same games by who threw the
+// most passes.
 export function seasonLines(team, all, qb = null) {
   const fbs = all.filter((g) => !g.fcs), fcs = all.filter((g) => g.fcs);
-  const out = [fbs.length ? `${team}, against FBS teams, ${games(fbs.length)}: ${record(fbs)}, ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
+  const out = [fbs.length ? `${team}, against FBS teams, ${games(fbs.length)}, newest first: ${record(fbs)}, ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
   if (fcs.length) out.push(`  against FCS teams: ${fcs.map((g) => `${g.result} ${g.pf}-${g.pa} vs ${g.opponent}`).join('; ')}`);
   if (!fbs.length) return out.join('\n');
   const by = new Map();
-  for (const g of fbs) { const k = g.qb || 'no passing rows'; by.set(k, [...(by.get(k) || []), g]); }
+  for (const g of fbs) { const k = g.qb || NOT_ON_FILE_QB; by.set(k, [...(by.get(k) || []), g]); }
   const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
+  const who = (k) => (k === NOT_ON_FILE_QB ? 'With the passer not on file' : `With ${k} throwing the most passes`);
   if (mine && by.size === 1) out.push(`  ${qb}, this week's quarterback, threw the most passes in all ${fbs.length}.`);
   else if (mine) {
-    out.push(`  With ${qb} (this week's quarterback) throwing the most passes, ${games(by.get(mine).length)}: ${record(by.get(mine))}, ${perGame(by.get(mine))}`);
-    for (const [k, gs] of by) if (k !== mine) out.push(`  With ${k} throwing the most passes, ${games(gs.length)}: ${record(gs)}, ${perGame(gs)}`);
+    out.push(`  With ${qb} (this week's quarterback) throwing the most passes, ${games(by.get(mine).length)}: ${byQb(by.get(mine))}`);
+    for (const [k, gs] of by) if (k !== mine) out.push(`  ${who(k)}, ${games(gs.length)}: ${byQb(gs)}`);
   } else {
     if (qb) out.push(`  ${qb}, this week's quarterback, threw the most passes in none of these games.`);
-    for (const [k, gs] of by) out.push(`  With ${k} throwing the most passes, ${games(gs.length)}: ${record(gs)}, ${perGame(gs)}`);
+    for (const [k, gs] of by) out.push(`  ${who(k)}, ${games(gs.length)}: ${byQb(gs)}`);
   }
   return out.join('\n');
-}
-
-// Who else plays there, without the offensive line: linemen record no stats in the feed, so the "others" it listed
-// were linemen's stray tackles (Oklahoma's three doubtful linemen on Oct 17 read as "Fred Hinton: Sep 4 1 tackle").
-function whoElsePlays(desk) {
-  return afterIntro(sectionOf(desk, 'WHO PRODUCED IT')).split('\n').filter((l) => !/^\s+others at (?:OL|OT|OG|IOL|C|G|T): /.test(l)).join('\n');
 }
 
 function situation(desk) {
@@ -206,13 +262,18 @@ function situation(desk) {
 export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date() } = {}) {
   const lines = await linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_ncaaf', book).catch(() => null);
   const line = lineOf(desk);
+  // The order (founder, Oct 23 2026): the line and how it moved, who plays, each team's season game by game, the players
+  // who carry the offense, the situation.
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
-    ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk)],
-    ['THE AVAILABILITY REPORT', injuriesAsReported(desk)],
-    ['WHAT THE PLAYERS ON THE REPORT HAVE DONE, AND WHO ELSE PLAYS THERE', whoElsePlays(desk)],
+    ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk, { availability: false })],
+    ['THE AVAILABILITY REPORT', availabilityReport(desk)],
+    // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
+    // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
+    ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
     ['THIS SEASON, GAME BY GAME', gameLog(desk)],
+    ['WHO THE OFFENSE RUNS THROUGH', afterIntro(sectionOf(desk, 'WHO THE OFFENSE RUNS THROUGH'))],
     ['THE SITUATION', situation(desk)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
