@@ -52,6 +52,7 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     loadBettorData(season),
     linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_nfl', book).catch(() => null),
   ]);
+  data.asOf = asOf;   // same-day finals count once over (nflBettorData played())
   const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const line = lineOf(desk);
   const where = spot(data, homeTeam, awayTeam, gameDate || before);

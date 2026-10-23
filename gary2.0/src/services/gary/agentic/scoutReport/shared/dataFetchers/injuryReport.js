@@ -120,6 +120,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       const share = p?.lastShare != null ? `, ${p.lastShare}% of snaps` : '';
       const played = !p ? '' : p.neverPlayed ? `; has not played this season${p.reserveAll ? ' (on reserve every week so far)' : ''}` : p.missed > 0
         ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}${share}`
+        : p.lastShare != null && p.lastShare < 10 ? `; on the field for ${p.lastShare}% of snaps in the last game (Wk ${p.lastPlayedWeek})`
         : `; played in the last game (Wk ${p.lastPlayedWeek}${share})`;
       durationTag = `${oldNote} [${status}${played}]`;
     } else if (i.status?.toUpperCase() === 'GTD') {

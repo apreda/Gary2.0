@@ -488,7 +488,9 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
     const [roster, snapFile] = await Promise.all([loadNflverseFile('roster_weekly', season).catch(() => null), loadNflverseFile('snap_counts', season).catch(() => null)]);
     const code = nflverseCode(team);
     if (roster?.rows && snapFile?.rows && code) {
-      const played = new Set(snapFile.rows.filter((r) => r.team === code && (Number(r.offense_pct) > 0 || Number(r.defense_pct) > 0)).map((r) => r.pfr_player_id));
+      // Special-teams snaps count as playing here: kickers, punters and coverage players have no other kind (Oct 23
+      // 2026 audit: they read "has not played this season").
+      const played = new Set(snapFile.rows.filter((r) => r.team === code && (Number(r.offense_pct) > 0 || Number(r.defense_pct) > 0 || Number(r.st_pct) > 0)).map((r) => r.pfr_player_id));
       const named = (i) => i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
       for (const injury of list) {
         if (injury.participation) continue;
@@ -500,7 +502,7 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
         const statusOf = (w) => rows.find((r) => Number(r.week) === w)?.status;
         const sidelined = finals.every((w) => /^(INA|RES)$/i.test(statusOf(w) || ''));
         const noSnaps = ids.size === 1 && !played.has([...ids][0]);
-        if (!sidelined && !noSnaps) continue;
+        if ((!sidelined && !noSnaps) || (ids.size === 1 && played.has([...ids][0]))) continue;
         injury.participation = { neverPlayed: true, reserveAll: finals.every((w) => /^RES$/i.test(statusOf(w) || '')) };
       }
     }
