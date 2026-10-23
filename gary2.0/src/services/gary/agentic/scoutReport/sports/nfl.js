@@ -1080,17 +1080,25 @@ export async function buildNflScoutReport(game, options = {}) {
   } catch { /* the mapping venue stands */ }
   // Official game designations the feed does not carry (round 2 audit, Oct 13 2026: six Week 5 designations, among
   // them a Ravens guard inactive that night, reached no desk). nflverse publishes the league's official report;
-  // only this game's week counts, and a player the feed already lists keeps the feed's row.
+  // only this game's week counts. Its game status wins over the feed's row and the feed's note for a player both list
+  // (Oct 23 2026 data audit: Sills read "QUESTIONABLE per this week's note; the feed still reads IR-R" with the
+  // official report saying Out); the feed's note stays as text.
   if (scheduleWeek && injuries && injuries.sourceOk !== false) {
     const key = (first, last) => `${String(last || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '')}|${String(first || '').toLowerCase().slice(0, 1)}`;
     for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
       const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch(() => null);
       if (!report?.players?.length) continue;
       const list = Array.isArray(injuries[side]) ? injuries[side] : (injuries[side] = []);
-      const have = new Set(list.map((i) => key(i.player?.first_name, i.player?.last_name)));
+      const byKey = new Map(list.map((i) => [key(i.player?.first_name, i.player?.last_name), i]));
       for (const p of report.players) {
         const [first, ...rest] = String(p.name || '').trim().split(/\s+/);
-        if (!p.game_status || !first || have.has(key(first, rest.join(' ')))) continue;
+        if (!p.game_status || !first) continue;
+        const listed = byKey.get(key(first, rest.join(' ')));
+        if (listed) {
+          listed.status = p.game_status; listed.officialStatus = true;
+          listed.comment = `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}. ${listed.comment || ''}`.trim();
+          continue;
+        }
         list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status,
           comment: `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}.`,
           freshness: 'FRESH', noteCurrent: true, source: 'NFL official report' });

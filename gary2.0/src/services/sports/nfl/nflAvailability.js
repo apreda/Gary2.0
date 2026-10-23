@@ -91,6 +91,8 @@ export function currentNflInjuries(rows = [], gameEnds = new Map()) {
 export function reconcileNflStatus(row) {
   const status = String(row?.status || '').trim();
   const note = String(row?.comment || row?.description || '');
+  // This week's official game status is final; a note never overrides it.
+  if (row?.officialStatus) return { status, feed: null };
   if (row?.noteCurrent !== true || !note) return { status, feed: null };
   const named = note.match(/\b(?:listed as|ruled|downgraded to|upgraded to|designated as|declared|is|was|remains)\s+(out|questionable|doubtful)\b/i);
   const reserve = /^(ir|pup|nfi|reserve|injured reserve)/i.test(status);
