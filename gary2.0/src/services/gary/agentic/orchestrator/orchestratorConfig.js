@@ -11,7 +11,9 @@ export const GAME_PICK_MODEL = process.env.GARY_MODEL_OVERRIDE || 'claude-opus-5
 // task but it can be on High").
 export const GAME_RESEARCH_MODEL = process.env.GARY_RESEARCH_MODEL || 'claude-opus-5-5';
 export const GAME_RESEARCH_FALLBACK_MODEL = process.env.GARY_RESEARCH_FALLBACK_MODEL || 'codex-gpt-6.1-sol';
-export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || 'deepseek';
+// No DeepSeek rung (Oct 23 2026 source audit): it cannot search the web, so as a news desk it could only write from
+// memory, and its credit had run out (402s in the worker logs). Set GARY_RESEARCH_BRIDGE_MODEL to add a rung back.
+export const GAME_RESEARCH_BRIDGE_MODEL = process.env.GARY_RESEARCH_BRIDGE_MODEL || null;
 // Same game model policy for the preserved June MLB engine.
 // GARY_MLB_BRAIN_MODEL is the explicit per-lane override.
 export const MLB_JUNE_BRAIN_MODEL = process.env.GARY_MLB_BRAIN_MODEL || 'claude-opus-5-5';
