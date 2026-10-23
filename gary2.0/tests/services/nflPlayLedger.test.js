@@ -272,11 +272,10 @@ describe('a parsed season', () => {
     expect([led.games[0].roof, led.games[0].temp, led.games[0].wind, led.games[0].conditions]).toEqual(['outdoors', 60, 8, 'Rain']);
   });
 
-  it('scores each quarter from the running score, and counts hits that were not sacks (Oct 23 2026)', async () => {
+  it('scores each quarter from the running score, and counts kneel-downs by who took them (Oct 23 2026)', async () => {
     const body = [HEADER.join(','),
-      // Q1: AAA (away) scores 7. A sack that is also flagged a hit, and a hit on a throw.
-      row({ qtr: '1', total_away_score: '7', sack: '1', qb_hit: '1' }),
-      row({ qtr: '1', total_away_score: '7', qb_hit: '1' }),
+      // Q1: AAA (away) scores 7.
+      row({ qtr: '1', total_away_score: '7' }),
       // Q2 has only an end-of-quarter row with no team on it; BBB (home) scored 3 in it.
       row({ qtr: '2', posteam: '', defteam: '', play_type: '', total_away_score: '7', total_home_score: '3' }),
       // Q3: nothing scored. Q4: AAA kneels.
@@ -287,8 +286,7 @@ describe('a parsed season', () => {
     const led = await _internals.streamAndAggregate(2025, { fetchImpl });
     const g = led.games[0];
     expect(g.quarters).toEqual({ AAA: [7, 0, 0, 0], BBB: [0, 3, 0, 0] });
-    expect([g.lines.AAA.offense_qb_hits_beside_sacks, g.lines.BBB.defense_qb_hits_beside_sacks]).toEqual([1, 1]);
-    expect(g.lines.AAA.kneels).toEqual({ '00-1': { n: 1, yards: 25 } });
+    expect(g.lines.AAA.kneels).toEqual({ '00-1': 1 });
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {

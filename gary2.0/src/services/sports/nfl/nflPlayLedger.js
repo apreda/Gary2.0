@@ -46,8 +46,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // and got hurt; the line named Lock alone).
 // 6 (Oct 13 2026, audit): drives that start with a kickoff the kicking team recovers, and drives that start at a
 // bare "50", are counted; temperature and wind fall back to the weather text when their columns are empty.
-// 7 (Oct 23 2026 data audit): each game's score by quarter, the QB hits that were not sacks, kneel-downs by who took
-// them, and drives that ran out the half, ended in a safety or began in the opponent's territory (and their points).
+// 7 (Oct 23 2026 data audit): each game's score by quarter, kneel-downs by who took them, and drives that ran out the
+// half, ended in a safety or began in the opponent's territory (and their points).
 const LEDGER_SCHEMA = 7;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
@@ -491,7 +491,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     if (!gameTeamLines.has(gameId)) gameTeamLines.set(gameId, new Map());
     const perGame = gameTeamLines.get(gameId);
     for (const [code, role] of [[posteam, 'offense'], [defteam, 'defense']]) {
-      const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0, hitsBesideSacks: 0 });
+      const unit = () => ({ epa: 0, n: 0, succ: 0, sn: 0, runs: 0, runYards: 0, passes: 0, passYards: 0, sacks: 0, turnovers: 0 });
       if (!perGame.has(code)) perGame.set(code, { offense: unit(), defense: unit(), extra: extraUnit(), kneels: {} });
       const slot = perGame.get(code)[role];
       const e = num(g('epa'));
@@ -504,20 +504,16 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         // pass play here is a dropback: sacks and their lost yards included.
         const yards = num(g('yards_gained')) ?? 0;
         if (g('play_type') === 'run') { slot.runs += 1; slot.runYards += yards; }
-        else {
-          slot.passes += 1; slot.passYards += yards; if (flag(g('sack'))) slot.sacks += 1;
-          // The quarterback hit on a play that was not a sack (Oct 23 2026 data audit: nflverse flags 408 of its 434
-          // sacks as hits too, so a hit count with the sacks in it said the same pressure twice).
-          if (flag(g('qb_hit')) && !flag(g('sack'))) slot.hitsBesideSacks += 1;
-        }
+        else { slot.passes += 1; slot.passYards += yards; if (flag(g('sack'))) slot.sacks += 1; }
         if (flag(g('interception')) || flag(g('fumble_lost'))) slot.turnovers += 1;
       }
     }
 
-    // Kneel-downs by who took them: the weekly stats count them as carries (Oct 23 2026 data audit).
+    // Kneel-downs by who took them (GSIS id): the weekly stats count them as carries (Oct 23 2026 data audit: Mahomes's
+    // 7 carries in Week 1 were 3 kneel-downs and 4 runs).
     if (playType === 'qb_kneel' && g('rusher_player_id') && g('rusher_player_id') !== 'NA') {
       const k = perGame.get(posteam).kneels; const who = g('rusher_player_id');
-      k[who] = { n: (k[who]?.n || 0) + 1, yards: (k[who]?.yards || 0) + (num(g('yards_gained')) ?? 0) };
+      k[who] = (k[who] || 0) + 1;
     }
     addGameDetail(perGame, playType, posteam, defteam, g);
     addDriveRow(drives, gameId, posteam, g, playType);
@@ -639,7 +635,6 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           defense_runs: slot.defense.runs, defense_run_yards_allowed: slot.defense.runYards,
           defense_pass_plays: slot.defense.passes, defense_pass_yards_allowed: slot.defense.passYards,
           defense_sacks: slot.defense.sacks, defense_takeaways: slot.defense.turnovers,
-          offense_qb_hits_beside_sacks: slot.offense.hitsBesideSacks, defense_qb_hits_beside_sacks: slot.defense.hitsBesideSacks,
           kneels: slot.kneels,
           ...finishGameDetail(slot.extra),
           ...driveTotals(gameDrives.filter((d) => d.team === code))
