@@ -11,6 +11,8 @@
 // and the date. Nothing weighs, scores or projects for him. The scout report stays the source of the injury report
 // and the starting quarterbacks; this file decides what he reads and in what order.
 import { createHash } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { loadBettorData, strength, gameByGame, quarterbacks, deskStarter, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
@@ -143,6 +145,13 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
 
     const read = await ask(nflGameMessage(story, research.news));
     console.log(`[NFL Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
+    // What he was asked and answered, as college and the NBA keep it: the morning data check reads it (Oct 23 2026).
+    try {
+      const dir = `${homedir()}/Library/Logs/gary-nfl-read`;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/${etDate(game.commence_time || new Date())}_${awayTeam.split(' ').pop()}_at_${homeTeam.split(' ').pop()}.md`,
+        `########## SYSTEM\n${system}\n\n########## ASKED\n${messages[1].content}\n\n########## ANSWERED\n${read}`);
+    } catch (e) { console.warn(`[NFL Read] transcript not saved: ${e.message}`); }
     let answer = await ask(nflCardMessage(line));
     let pick = parse(answer);
     if (!pick) {

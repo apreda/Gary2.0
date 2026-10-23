@@ -30,8 +30,18 @@ export async function loadBettorData(season) {
 
 const played = (d, season, before) => d.schedule.filter((r) => r.season === String(season) && r.game_type === 'REG'
   && r.home_score !== '' && r.away_score !== '' && (!before || r.gameday < before));
-const yards = (r) => n(r.passing_yards) - n(r.sack_yards_lost) + n(r.rushing_yards);
-const starterOf = (x) => (x.home ? x.g.home_qb_name : x.g.away_qb_name) || null;
+// Net yards: passing less the yards lost on sacks, plus rushing. The feed carries sack yards as a negative number, so
+// subtracting it as printed added them back (Oct 23 2026 data check: the Patriots read 390 gained and 338 allowed
+// against the official 374 and 301; the more sacks, the bigger the error).
+const yards = (r) => n(r.passing_yards) - Math.abs(n(r.sack_yards_lost)) + n(r.rushing_yards);
+// Who played quarterback in a game: everyone who threw 5 or more passes for the team, most first, from the weekly
+// player stats. The schedule's own quarterback field named Case Keenum for the Bears' Week 4 game that Tyson Bagent
+// played start to finish (Oct 23 2026 data check), so it is only the fallback.
+function passersOf(d, g, code) {
+  return (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) >= 5)
+    .sort((a, b) => n(b.attempts) - n(a.attempts));
+}
+const starterOf = (x) => x.qb || null;
 
 /** One team's season before `before`: each game's result, score, yards both ways and who started at quarterback. */
 export function teamGames(d, code, season, before) {
@@ -40,7 +50,9 @@ export function teamGames(d, code, season, before) {
     const home = g.home_team === code; const opp = home ? g.away_team : g.home_team;
     const us = tw.find((r) => r.game_id === g.game_id && r.team === code); const them = tw.find((r) => r.game_id === g.game_id && r.team === opp);
     const pf = n(home ? g.home_score : g.away_score), pa = n(home ? g.away_score : g.home_score);
-    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday,
+    const passers = passersOf(d, g, code);
+    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers,
+      qb: passers[0]?.player_display_name || (home ? g.home_qb_name : g.away_qb_name) || null,
       off: us ? { yards: yards(us) } : null, def: them ? { yards: yards(them) } : null };
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -53,7 +65,7 @@ function perGame(gs) {
 }
 
 /** HOW GOOD THEY ARE: this season to date; when this week's starter (`qb`) missed games, the team with him apart from
- * the games someone else started. */
+ * the games someone else played quarterback (whoever threw the most passes). */
 export function strength(d, team, before, qb = null) {
   const gs = teamGames(d, codeOf(team), d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
@@ -63,18 +75,20 @@ export function strength(d, team, before, qb = null) {
   const his = last ? gs.filter((x) => String(starterOf(x) || '').endsWith(last)) : []; const rest = gs.filter((x) => !his.includes(x));
   if (his.length && rest.length) {
     const others = [...new Set(rest.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
-    lines.push(`  With ${qb} starting, ${his.length} game${his.length === 1 ? '' : 's'}: ${record(his)}, ${perGame(his)}`,
-      `  With ${others} starting, ${rest.length} game${rest.length === 1 ? '' : 's'}: ${record(rest)}, ${perGame(rest)}`);
+    lines.push(`  With ${qb} at quarterback, ${his.length} game${his.length === 1 ? '' : 's'}: ${record(his)}, ${perGame(his)}`,
+      `  With ${others} at quarterback, ${rest.length} game${rest.length === 1 ? '' : 's'}: ${record(rest)}, ${perGame(rest)}`);
   }
   return lines.join('\n');
 }
 
-/** THIS SEASON GAME BY GAME: result and score, who started at quarterback, yards both ways; the opponent's record now. */
+/** THIS SEASON GAME BY GAME: result and score, who played quarterback (everyone with 5+ passes), yards both ways; the
+ * opponent's record now. */
 export function gameByGame(d, team, before) {
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   return [`${team}, newest first:`, ...gs.slice().reverse().map((x) => {
-    const qb = starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
+    const qb = x.passers.length ? ` · QB ${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}`).join(', ')}`
+      : starterOf(x) ? ` · ${starterOf(x)} at QB` : '';
     const how = x.off && x.def ? ` · ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : '';
     return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(teamGames(d, x.opp, d.season, before))}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${qb}${how}`;
   })].join('\n');
@@ -96,14 +110,14 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
   for (const team of [awayTeam, homeTeam]) {
     const qb = deskStarter(deskQbSection, team);
     const gs = teamGames(d, codeOf(team), season, before);
-    const starts = {}; for (const x of gs) { const nm = x.home ? x.g.home_qb_name : x.g.away_qb_name; if (nm) starts[nm] = (starts[nm] || 0) + 1; }
+    const starts = {}; for (const x of gs) { const nm = starterOf(x); if (nm) starts[nm] = (starts[nm] || 0) + 1; }
     const who = Object.entries(starts).sort((a, b) => b[1] - a[1]).map(([nm, k]) => `${nm} ${k}`).join(', ');
     const last = qb ? qb.split(' ').at(-1) : null;
     const hasStarted = qb && Object.keys(starts).some((nm) => nm.endsWith(last));
     const ids = new Set(played(d, season, before).map((g) => g.game_id));
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && r.player_display_name === qb && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
-    if (gs.length) lines.push(`  started this season: ${who || 'not recorded'}${qb && !hasStarted ? ` · this is ${qb}'s first start of the season` : ''}`);
+    if (gs.length) lines.push(`  at quarterback this season (most passes in a game): ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
     if (qb) lines.push(`  ${qb} this season: ${passing(his) || 'no games with 8+ passes'}`);
     out.push(lines.join('\n'));
   }

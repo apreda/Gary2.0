@@ -228,8 +228,11 @@ export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest) {
     
     const parts = [];
     
-    // Days of rest (simple number)
-    parts.push(`${rest.daysRest} days rest`);
+    // Days off since the last game. daysRest counts calendar days between games, so a Tuesday-Thursday turn is 2 and a
+    // back-to-back is 1; printed as "days rest" it read one day long (Oct 23 2026 data check: "2 days rest" for a team
+    // that played Tuesday and Thursday).
+    const off = rest.daysRest - 1;
+    parts.push(off <= 0 ? `no day off since its last game (${rest.lastGameDate})` : `${off} day${off === 1 ? '' : 's'} off since its last game (${rest.lastGameDate})`);
     
     // Back-to-back status with home/away context
     if (rest.isBackToBack) {
