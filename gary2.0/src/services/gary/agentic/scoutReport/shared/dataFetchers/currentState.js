@@ -31,6 +31,7 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const todayFull = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const seasonContext = formatSeason(seasonForSport(sport));
 
+    const isNBA = sport === 'NBA' || sport === 'basketball_nba';
     const sportName = {
       'NFL': 'NFL', 'americanfootball_nfl': 'NFL',
       'NBA': 'NBA', 'basketball_nba': 'NBA',
@@ -39,17 +40,19 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
       'NCAAF': 'college football', 'americanfootball_ncaaf': 'college football'
     }[sport] || sport;
 
-    const isNBA = sport === 'NBA' || sport === 'basketball_nba';
-
     console.log(`[Scout Report] Fetching CURRENT STATE for ${awayTeam} @ ${homeTeam} (2-phase: Flash search → narrative)...`);
     const startTime = Date.now();
 
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const recentWindow = `${sevenDaysAgo.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} to ${now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
+    // The NBA's searches ask for regular-season games only: in the season's first week the last seven days' "recent
+    // games" were exhibitions, and a team yet to play reached Gary through its preseason box scores (Oct 23 2026 data
+    // audit: "Jokić 7-for-8", "Evan was elite").
+    const gamesAsked = isNBA ? 'Regular-season games only (no preseason or exhibition games): results, scores, who played and who sat' : 'Recent games, results, scores, who played and who sat';
     const searchQueries = [
-      `${homeTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, who played and who sat, trades, roster moves, injuries and returns.`,
-      `${awayTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, who played and who sat, trades, roster moves, injuries and returns.`,
+      `${homeTeam} ${sportName} news ${recentWindow}. ${gamesAsked}, trades, roster moves, injuries and returns.`,
+      `${awayTeam} ${sportName} news ${recentWindow}. ${gamesAsked}, trades, roster moves, injuries and returns.`,
       `${awayTeam} vs ${homeTeam} ${sportName} game ${today}. Tip time, venue, broadcast, who is expected to play and who is out, breaking news.`
     ];
     const queryLabels = ['HOME', 'AWAY', 'MATCHUP'];
@@ -134,8 +137,9 @@ ${availabilityContext ? `\n--- GAME-DAY AVAILABILITY ---\n${availabilityContext}
 Based on the search results above, write the current state report. For EACH team, cover:
 
 **${homeTeam} — What's going on with this team right now?**
-- **RECENT GAMES:** This season's record, and each of the last few games: the date, the score, who played and who didn't, and the key performances.
-- **LAST GAME:** What happened, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances.
+${isNBA ? `- **RECENT GAMES:** This season's regular-season record, and each of the last few regular-season games: the date, the score, who played and who didn't, and the key performances. A team that has not played a regular-season game yet has no recent games: say so in one line and report none.
+- **LAST GAME:** Its last regular-season game, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances. None yet: say so.` : `- **RECENT GAMES:** This season's record, and each of the last few games: the date, the score, who played and who didn't, and the key performances.
+- **LAST GAME:** What happened, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances.`}
 - **TOP STORYLINES & HEADLINES:** The big stories around this team RIGHT NOW:
   * Recent trades, acquisitions, roster moves
   * Coaching news, fines, controversies, front office moves
@@ -161,7 +165,8 @@ RULES:
 - Use specific details — names, dates, scores, quotes. No vague generalities.
 - Only use information from the search results above. Do not make anything up.
 - Write in a knowledgeable, factual tone. Think beat writer, not hype man.
-- THIS SEASON ONLY: nothing about last season, earlier seasons or the preseason (no last-season records, finishes, playoff runs, averages or rankings, and no preseason games or numbers).
+- THIS SEASON ONLY: nothing about last season, earlier seasons or the preseason (no last-season records, finishes, playoff runs, averages or rankings, and no preseason games or numbers).${isNBA ? `
+- REGULAR-SEASON GAMES ONLY: every score, stat line, minutes count and performance you report is from a regular-season game. Leave out preseason, exhibition, scrimmage, summer-league and training-camp games entirely, even for a team that has not played yet: for that team report roster moves, availability, the tip and TV only. Leave out who left the roster last season or over the summer and last season's awards.` : ''}
 - Report what happened, each item with its date. No opinions, analysis, predictions or takes from anyone, no "the key question tonight is" framing, and no game plans or scheme breakdowns.
 - No rates from a game or a short stretch (points per 100 possessions, shooting or efficiency percentages over a few games). Scores and box-score lines from specific games are fine.`;
 
