@@ -48,15 +48,18 @@ export async function leagueRatingsAt(asOf = new Date(), season = nbaSeason()) {
   for (const g of games) {
     const b = boxes.get(g.id); if (!b) continue;
     const h = sum(b.home_team), v = sum(b.visitor_team); const p = (half(h, v) + half(v, h)) / 2; if (!(p > 0)) continue;
+    // Pace is per 48 minutes, as BDL's is: an overtime game's possessions scaled to regulation.
+    const mins = (b.home_team?.players || []).reduce((a, x) => a + minutesOf(x), 0) / 5;
+    const pace = mins > 0 ? (p * 48) / mins : p;
     for (const [team, us, them] of [[g.home_team?.full_name, g.home_team_score, g.visitor_team_score], [g.visitor_team?.full_name, g.visitor_team_score, g.home_team_score]]) {
-      const t = (acc[team] ||= { gp: 0, w: 0, l: 0, pts: 0, opp: 0, poss: 0 });
-      t.gp += 1; t.w += us > them ? 1 : 0; t.l += us > them ? 0 : 1; t.pts += us; t.opp += them; t.poss += p;
+      const t = (acc[team] ||= { gp: 0, w: 0, l: 0, pts: 0, opp: 0, poss: 0, pace: 0 });
+      t.gp += 1; t.w += us > them ? 1 : 0; t.l += us > them ? 0 : 1; t.pts += us; t.opp += them; t.poss += p; t.pace += pace;
     }
   }
   const out = {};
   for (const [team, t] of Object.entries(acc)) {
     const off = (100 * t.pts) / t.poss, def = (100 * t.opp) / t.poss;
-    out[team] = { gp: t.gp, w: t.w, l: t.l, off, def, net: off - def, pace: t.poss / t.gp };
+    out[team] = { gp: t.gp, w: t.w, l: t.l, off, def, net: off - def, pace: t.pace / t.gp };
   }
   return out;
 }
@@ -90,22 +93,25 @@ export function strengthLine(league, team) {
 // nights a star sat). Each of the newest games lists the minutes and points of the eight who played most, and anyone
 // who played 20+ minutes in another of these games but not this one.
 const BOX_GAMES = 5;
-const minutesOf = (p) => parseInt(String(p?.min ?? '0'), 10) || 0;
+// "34:30" or "34.5" to the nearest minute (parseInt read 34:59 as 34).
+const minutesOf = (p) => { const [m, sec] = String(p?.min ?? '0').split(':'); return Math.round((Number(m) || 0) + (Number(sec) || 0) / 60); };
 async function boxSide(g, teamId) {
   const date = String(g.date || g.datetime || '').slice(0, 10);
   const boxes = await ballDontLieService.getNbaBoxScores(date, 24 * 60).catch(() => null);
   const box = (boxes || []).find((b) => b.id === g.id)
     || (boxes || []).find((b) => [b.home_team?.id, b.visitor_team?.id].includes(teamId) && [b.home_team?.id, b.visitor_team?.id].includes(g.home_team?.id === teamId ? g.visitor_team?.id : g.home_team?.id));
   if (!box) return null;
-  const side = box.home_team?.id === teamId ? box.home_team : box.visitor_team;
-  return (side?.players || []).map((p) => ({ name: `${p.player?.first_name} ${p.player?.last_name}`, min: minutesOf(p), pts: Number(p.pts) || 0 }));
+  const mine = box.home_team?.id === teamId;
+  const list = (side) => (side?.players || []).map((p) => ({ name: `${p.player?.first_name} ${p.player?.last_name}`, min: minutesOf(p), pts: Number(p.pts) || 0 }));
+  return Object.assign(list(mine ? box.home_team : box.visitor_team), { opponent: list(mine ? box.visitor_team : box.home_team) });
 }
 function whoPlayed(box, others) {
   if (!box) return '      who played: box score not on file';
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
     .filter((nm) => !played.some((p) => p.name === nm));
-  return `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${p.pts} pts)`).join(', ')}${missed.length ? `\n      did not play: ${missed.join(', ')}` : ''}`;
+  return `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${p.pts} pts)`).join(', ')}${missed.length ? `\n      did not play: ${missed.join(', ')}` : ''}`
+    + (box.opponent?.length ? `\n      their top minutes: ${box.opponent.filter((p) => p.min > 0).sort((a, b) => b.min - a.min).slice(0, 5).map((p) => `${p.name} ${p.min}`).join(', ')}` : '');
 }
 
 /** THIS SEASON GAME BY GAME: each finished game before `before`, newest first, with the opponent's record now; the
