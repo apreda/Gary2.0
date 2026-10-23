@@ -126,7 +126,11 @@ export function withoutPastSeasons(text, season = nbaSeason()) {
 
 // How good both teams are: the standings, then each team per 100 possessions with ranks, or, before its first game,
 // the desk's BEFORE THE FIRST GAME block.
+// Ratings that did not load are said to be missing; an empty set read as two teams with no games yet (Oct 23 2026
+// source audit).
+const RATINGS_MISSING = Symbol('ratings missing');
 function howGood(desk, ratings, homeTeam, awayTeam) {
+  if (ratings[RATINGS_MISSING]) return `${standings(desk, {})}\n\nThe teams' ratings and records are not on file (${ratings[RATINGS_MISSING]}).`;
   return [standings(desk, ratings), ...[awayTeam, homeTeam].map((team) => {
     const before = ratings[team] ? '' : beforeFirstGame(desk, team);
     return before ? `${team}: no games yet this season. Before the first game:\n${before}` : strengthLine(ratings, team);
@@ -149,11 +153,11 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
   const [lines, ratings] = await Promise.all([
     linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba', book).catch(() => null),
-    league ? Promise.resolve(league) : leagueRatingsAt(asOf).catch(() => ({})),
+    league ? Promise.resolve(league) : leagueRatingsAt(asOf).catch((e) => ({ [RATINGS_MISSING]: e.message })),
   ]);
   const line = nbaLineOf(desk);
   const how = howGood(desk, ratings, homeTeam, awayTeam);
-  const [awayGames, homeGames] = await Promise.all([awayTeam, homeTeam].map((team) => (ratings[team]
+  const [awayGames, homeGames] = await Promise.all([awayTeam, homeTeam].map((team) => (ratings[RATINGS_MISSING] ? Promise.resolve(`${team}: games not on file.`) : ratings[team]
     ? gameByGame(team, ratings, asOf).catch(() => `${team}: games not on file.`)
     : Promise.resolve(`${team}: no games played yet this season.`))));
   const parts = [

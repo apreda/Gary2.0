@@ -24,6 +24,8 @@ export const nbaTeamsMethods = {
       ]);
 
       if (!homeTeam?.id || !awayTeam?.id) {
+        // A failure, recorded as one: empty lists read as two rosters with nobody on them (Oct 23 2026 source audit).
+        recordPickDataFailure('BDL:getNbaRosterDepth', new Error(`no team id for ${homeTeamName} or ${awayTeamName}`));
         console.warn(`[Ball Don't Lie] Could not find team IDs for ${homeTeamName} or ${awayTeamName}`);
         return { home: [], away: [] };
       }

@@ -860,8 +860,14 @@ VENUE: [arena name, city]
     const awayRosterNames = buildRosterNames((nbaRosterDepth.awayActive || []).map((name) => ({ name })).concat(nbaRosterDepth.away || []));
     const allRosterNames = [...homeRosterNames, ...awayRosterNames];
 
+    // With a team's roster missing the filter would delete every injury row as "traded" (Oct 23 2026 source audit);
+    // the league's report already lists players by team, so the filter stands down instead.
     const filterInjuriesToRoster = (injuryList, teamLabel) => {
       if (!injuryList || injuryList.length === 0) return injuryList;
+      if (!homeRosterNames.length || !awayRosterNames.length) {
+        console.warn(`[Scout Report] NBA roster missing for a team; the injury list stands as the league reported it (${teamLabel})`);
+        return injuryList;
+      }
       return injuryList.filter(inj => {
         const injName = typeof inj.player === 'string' ? inj.player :
           `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
