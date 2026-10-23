@@ -143,8 +143,11 @@ export async function loadNcaafLeagueContext({ season, cutoff = null, teams = nu
     const list = teams || await ballDontLieService.getTeams('americanfootball_ncaaf');
     const fbs = (list || []).filter((t) => t?.id != null && FBS.has(Number(ncaafTeamConferenceId(t))));   // 2026 membership
     const before = (r) => !cutoff || new Date(r.date) < new Date(cutoff);
+    // Games against FBS teams only (Oct 23 2026 data audit): Oklahoma State's "allows 21.4, scores 38.2" held a 59-0
+    // win over FCS Murray State while the team's own season line leaves FCS games out.
+    const fbsIds = new Set(fbs.map((t) => Number(t.id)));
     const rows = fbs.map((t) => {
-      const results = toTeamResults(games, t.id).filter(before);
+      const results = toTeamResults(games, t.id).filter(before).filter((r) => fbsIds.has(Number(r.opponentId)));
       if (!results.length) return null;
       const mean = (field) => results.reduce((sum, r) => sum + r[field], 0) / results.length;
       return { id: Number(t.id), name: t.full_name || t.name || null, games: results.length, allowed: mean('allowed'), scored: mean('scored') };
@@ -166,7 +169,7 @@ export async function loadNcaafLeagueContext({ season, cutoff = null, teams = nu
       yardsGained: null,
       turnoverDiff: null
     }]));
-    return { byTeamId, teams: byTeamId.size };
+    return { byTeamId, teams: byTeamId.size, fbsOnly: true };
   } catch {
     return null;
   }
@@ -202,6 +205,6 @@ export function opponentSeasonClause(context, opponentTeamId) {
   if (!entry?.pointsAllowed || !entry?.pointsScored) return null;
   const allowed = entry.pointsAllowed;
   const scored = entry.pointsScored;
-  return `allows ${allowed.value.toFixed(1)} pts/game (${ordinal(allowed.rank)} of ${allowed.of}), `
+  return `allows ${allowed.value.toFixed(1)} pts/game${context.fbsOnly ? ` vs FBS (${entry.games} game${entry.games === 1 ? '' : 's'}; ` : ' ('}${ordinal(allowed.rank)} of ${allowed.of}), `
     + `scores ${scored.value.toFixed(1)} (${ordinal(scored.rank)})`;
 }

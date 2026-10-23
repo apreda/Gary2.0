@@ -110,7 +110,7 @@ export function seasonGames(desk) {
     const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
     if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }
     const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), opponent: g[5], fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
+    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
     if (q) game.qb = q[1].trim();
@@ -163,7 +163,7 @@ function whoElsePlays(desk) {
 
 function situation(desk) {
   const road = sectionOf(desk, 'HOME AND ROAD').split('\n')
-    .filter((l) => /^(?:Site|Local kickoff|Trip|Kickoff weather):/.test(l) || /: \d+(?:st|nd|rd|th) (?:home|road) game of the season today\.$/.test(l));
+    .filter((l) => /^(?:Site|Local kickoff|Trip):|^Kickoff weather\b/.test(l) || /: \d+(?:st|nd|rd|th) (?:home|road) game of the season today\.$/.test(l));
   return [...road, sectionOf(desk, 'REST & SCHEDULE SITUATION')].filter(Boolean).join('\n');
 }
 

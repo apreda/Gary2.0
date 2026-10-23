@@ -125,9 +125,11 @@ function opponentLabel(opponentId, { teamsById, records, apRankOf, league = null
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
   const rank = team ? apRankOf(team.full_name, team) : null;
+  // The rank is this week's, like the record, and says so: on a past game's line "AP No. 22" read as the rank that day
+  // (Kentucky beat No. 10 LSU; Oct 23 2026 data audit).
+  const record = records.get(Number(opponentId));
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
-    records.get(Number(opponentId)) ? `now ${records.get(Number(opponentId))}` : null,
-    rank ? `AP No. ${rank}` : null,
+    record || rank ? `now ${[record, rank ? `No. ${rank} in the AP poll` : null].filter(Boolean).join(' and ')}` : null,
     full ? opponentSeasonClause(league, opponentId) : null].filter(Boolean).join(', ');
 }
 
@@ -239,12 +241,15 @@ async function unitLinesBuilder(season, weeks) {
     const own = stats(game.teams.find((t) => cfbdTeamMatches(t.team, team)));
     const opp = stats(game.teams.find((t) => !cfbdTeamMatches(t.team, team)));
     const count = (n, word) => `${n ?? '—'} ${word}${String(n) === '1' ? '' : 's'}`;
-    const side = (unit, box, label) => `${unit.plays} plays, ${rate(unit.successRate)} success${label}`
-      + ` · ${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'} (${box.get('yardsPerRushAttempt') ?? '—'}), ${rate(unit.rushingPlays?.successRate)} success${label}, ${rate(unit.stuffRate)} stuffed`
+    // College box scores count sacks as runs (Oct 23 2026 data audit: Virginia's "40 runs for 37" held 10 sacks for 68
+    // yards), so the run line says how many of them were sacks.
+    const sacked = (n) => (Number(n) > 0 ? `, ${n} of them sack${String(n) === '1' ? '' : 's'}` : '');
+    const side = (unit, box, label, sacks) => `${unit.plays} plays, ${rate(unit.successRate)} success${label}`
+      + ` · ${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'} (${box.get('yardsPerRushAttempt') ?? '—'}${sacked(sacks)}), ${rate(unit.rushingPlays?.successRate)} success${label}, ${rate(unit.stuffRate)} stuffed`
       + ` · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'} (${box.get('yardsPerPass') ?? '—'} per attempt), ${rate(unit.passingPlays?.successRate)} success${label}`;
     return [
-      `      offense: ${side(line.offense, own, '')} · ${count(own.get('turnovers'), 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'}`,
-      `      defense: ${side(line.defense, opp, ' allowed')} · ${count(own.get('sacks'), 'sack')}, ${own.get('tacklesForLoss') ?? '—'} tackles for loss · ${count(opp.get('turnovers'), 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'}`,
+      `      offense: ${side(line.offense, own, '', opp.get('sacks'))} · ${count(own.get('turnovers'), 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'}`,
+      `      defense: ${side(line.defense, opp, ' allowed', own.get('sacks'))} · ${count(own.get('sacks'), 'sack')}, ${own.get('tacklesForLoss') ?? '—'} tackles for loss · ${count(opp.get('turnovers'), 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'}`,
     ];
   };
 }
