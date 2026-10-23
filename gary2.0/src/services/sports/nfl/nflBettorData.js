@@ -225,29 +225,42 @@ export async function linePath(db, gameId, until = new Date(), sport = 'american
   const data = vendor ? rows.filter((r) => r.line_vendor === vendor) : rows;
   const latest = new Map(); const path = []; let last = null;
   const board = (at) => { const rs = [...latest.values()]; return { at, spread_home: half(median(rs.map((x) => x.spread_home))), total: half(median(rs.map((x) => x.total))), ml_home: median(rs.map((x) => x.moneyline_home)), ml_away: median(rs.map((x) => x.moneyline_away)), books: rs.length }; };
+  // A moneyline move of 15 cents or more is a point on the path too (Oct 23 2026 data audit: Thunder -300 to -335 with
+  // the spread unchanged read as "a settled number").
+  const mlMoved = (b, l) => Math.abs((Number(b.ml_home) || 0) - (Number(l.ml_home) || 0)) >= 15 || Math.abs((Number(b.ml_away) || 0) - (Number(l.ml_away) || 0)) >= 15;
   for (const r of data) {
     latest.set(r.line_vendor, r); const b = board(r.seen_at);
-    if (!last || b.spread_home !== last.spread_home || b.total !== last.total) { path.push(b); last = b; }
+    if (!last || b.spread_home !== last.spread_home || b.total !== last.total || mlMoved(b, last)) { path.push(b); last = b; }
   }
-  return { path, now: board(new Date(until).toISOString()) };
+  return { path, now: board(new Date(until).toISOString()), book: vendor || null };
 }
 
 /** The path in words: where it opened, each spread move (one per poll) and where it is now. The ticket's own book is
  * not set against the median: a note that it was half a point better became the main reason for 8 of 23 test board
  * bets, and half a point decides only the games that land on the number. */
+const BOOK_NAMES = { fanduel: 'FanDuel', draftkings: 'DraftKings', betrivers: 'BetRivers', caesars: 'Caesars', betmgm: 'BetMGM', fanatics: 'Fanatics', betway: 'Betway', ballybet: 'Bally Bet', betparx: 'betPARX', rebet: 'ReBet' };
+// "Opened" was our first look, not the market's opening line (every Oct 17 college game "opened" Sunday 6:00 AM, when
+// the line watch first polled), and no book was named; each move is when we first saw it, and moneyline moves of 15
+// cents or more print with the spread's (Oct 23 2026 data audit).
 export function lineStory(lines, homeTeam, awayTeam) {
   if (!lines?.now || !lines.path?.length) return 'No line history on file for this game.';
   const side = (h) => (h == null ? '?' : h === 0 ? "pick'em" : h < 0 ? `${homeTeam} ${h}` : `${awayTeam} -${h}`);
   const when = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const ml = (x) => (x == null ? '?' : x > 0 ? `+${Math.round(x)}` : `${Math.round(x)}`);
+  const mls = (b) => `moneylines ${awayTeam} ${ml(b.ml_away)}, ${homeTeam} ${ml(b.ml_home)}`;
   const open = lines.path[0];
   // Books update seconds apart; moves inside the same minute collapse to the last.
   const polls = [];
   for (const p of lines.path.slice(1)) { const k = p.at.slice(0, 16); if (polls.length && polls.at(-1).k === k) polls[polls.length - 1] = { k, p }; else polls.push({ k, p }); }
-  const moves = []; let prev = open.spread_home;
-  for (const { p } of polls) { if (p.spread_home !== prev) { moves.push(`  ${when(p.at)}: ${side(p.spread_home)}`); prev = p.spread_home; } }
+  const moves = []; let prev = open;
+  for (const { p } of polls) {
+    const spread = p.spread_home !== prev.spread_home;
+    const money = Math.abs((Number(p.ml_home) || 0) - (Number(prev.ml_home) || 0)) >= 15 || Math.abs((Number(p.ml_away) || 0) - (Number(prev.ml_away) || 0)) >= 15;
+    if (spread || money) { moves.push(`  seen ${when(p.at)}: ${side(p.spread_home)} · ${mls(p)}`); prev = p; }
+  }
   const kept = moves.length > 12 ? [...moves.slice(0, 4), `  … ${moves.length - 8} more moves …`, ...moves.slice(-4)] : moves;
-  return [`Opened (${when(open.at)}): ${side(open.spread_home)}, total ${open.total}`,
-    kept.length ? `Spread moves since:\n${kept.join('\n')}` : 'The spread has not moved since it opened.',
-    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (opened ${open.total}) · moneylines ${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}`].join('\n');
+  const book = lines.book ? `at ${BOOK_NAMES[lines.book] || lines.book}` : "across the books (median)";
+  return [`The line ${book}, first on file ${when(open.at)} (when the line watch first saw it, not necessarily the market's opening): ${side(open.spread_home)}, total ${open.total} · ${mls(open)}`,
+    kept.length ? `Moves since (spread, and moneyline moves of 15 cents or more):\n${kept.join('\n')}` : 'Neither the spread nor the moneyline has moved since.',
+    `Now: ${side(lines.now.spread_home)}, total ${lines.now.total} (first on file ${open.total}) · ${mls(lines.now)}`].join('\n');
 }
