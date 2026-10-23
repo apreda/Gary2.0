@@ -198,13 +198,15 @@ function quarterbackOfGame(rows, result) {
 
 // The player rows against the team's own box (Oct 23 2026 source audit: BDL's college player rows missed overtime
 // and disagreed with the team line in 6 of 9 games, Minchey 22-of-34 for 224 against 23-of-36 for 246). When the
-// passers' attempts differ from the team's by more than one, the line says so and shows the team's numbers.
+// passers' completions or attempts differ from the team's, or their yards by more than 5, the line says so and shows
+// the team's numbers.
 function checkedQuarterback(text, rows, result, units) {
   const team = String(units?.[0] || '').match(/passing (\d+)-(\d+) for (-?\d+)/);
   if (!team || /no passing rows/.test(text)) return text;
   const passers = (rows || []).filter((row) => String(row?.game?.id) === String(result.gameId) && Number(row.passing_attempts) > 0);
-  const attempts = passers.reduce((sum, row) => sum + Number(row.passing_attempts || 0), 0);
-  return Math.abs(attempts - Number(team[2])) > 1
+  const sum = (k) => passers.reduce((total, row) => total + Number(row[k] || 0), 0);
+  // Completions and attempts must match; yards within 5 (Oregon Oct 10: 34 of 35 attempts passed, 169 against 199 did not).
+  return sum('passing_completions') !== Number(team[1]) || sum('passing_attempts') !== Number(team[2]) || Math.abs(sum('passing_yards') - Number(team[3])) > 5
     ? `${text} (these player lines do not match the team's passing, ${team[1]}-of-${team[2]} for ${team[3]}; the player numbers are not reliable for this game)`
     : text;
 }
@@ -308,6 +310,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
     + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0));
   const lines = [];
   const reportedKeys = new Set((reported || []).map((i) => nameKey(i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`)));
+  const shownPositions = new Set();
   for (const injury of reported || []) {
     const name = injury.name || `${injury.player?.first_name || ''} ${injury.player?.last_name || ''}`.trim();
     const found = [...byPlayer].find(([player]) => nameKey(player) === nameKey(name));
@@ -317,9 +320,13 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
         : kicking(position) ? 'kickers and punters record no counted stats in this feed'
         : 'no stat row in any game this season (no pass, carry, catch or tackle recorded)'}`);
     if (!position) continue;
-    const others = [...byPlayer].filter(([player, entry]) => entry.position === position && nameKey(player) !== nameKey(name) && weight(entry) > 0)
+    // "Others at" once per position, without players already on the report (each has his own line): the same logs
+    // printed two and five times (Oct 23 2026 audit).
+    if (shownPositions.has(position)) continue;
+    shownPositions.add(position);
+    const others = [...byPlayer].filter(([player, entry]) => entry.position === position && !reportedKeys.has(nameKey(player)) && weight(entry) > 0)
       .sort((a, b) => weight(b[1]) - weight(a[1])).slice(0, 3)
-      .map(([player, entry]) => `${player}${reportedKeys.has(nameKey(player)) ? ' (also on the report)' : ''}: ${gameByGame(entry)}`);
+      .map(([player, entry]) => `${player}: ${gameByGame(entry)}`);
     if (others.length) lines.push(`    others at ${position}: ${others.join(' || ')}`);
   }
   // An empty list is "no absences" only when the side's availability was checked (college review, Oct 13 2026: BYU,

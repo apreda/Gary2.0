@@ -70,6 +70,11 @@ function quarterbacksAndCoaches(desk) {
     // "Availability source:" stays: it says whether each side's absences were checked, and when a conference report
     // could not be read, that they are not on file (Oct 23 2026 source audit).
     if (/^Observed |^\[[a-z0-9_]+\] |^\[official\] |^UNCERTAINTY:|^Availability designations are/.test(lines[i])) continue;
+    // A context note about another season, a former player, a scheme, or someone's assessment leaves (Oct 23 2026
+    // audit: "Elliott described Duke as structurally similar to last season", "credited Duke's protection" carried a
+    // live read). Quarterback and role lines stay.
+    const note = !/^(?:Quarterback|head coach|offensive coordinator|defensive coordinator|co-offensive coordinator|co-defensive coordinator|offensive play caller|defensive play caller|play caller|Availability source|Official report):/i.test(lines[i]) && !/^[A-Z][\w.&' -]+$/.test(lines[i].trim());
+    if (note && /last season|\b20(?:1\d|2[0-5])\b|\bformer\b|\bprevious\b|\bdescribed\b|\bcredited\b|\bscheme|\bformation|\bpersonnel group|similar to|\bpraised\b|\bemphasi[sz]ed\b/i.test(lines[i])) continue;
     out.push(lines[i]);
   }
   return out.join('\n').trim();
@@ -118,7 +123,7 @@ export function seasonGames(desk) {
     const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
     if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }
     const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
+    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
     if (q) game.qb = q[1].trim();
@@ -133,7 +138,7 @@ const one = (x) => (Math.round(x * 10) / 10).toFixed(1);
 // who the team is; Oct 23 2026 data check).
 function perGame(gs) {
   const n = gs.length;
-  if (n <= 5) return gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
+  if (n <= 5) return gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.ot ? ' OT' : ''} ${g.at || 'vs'} ${g.opponent}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
   const pts = `${one(gs.reduce((a, g) => a + g.pf, 0) / n)} points a game, ${one(gs.reduce((a, g) => a + g.pa, 0) / n)} allowed`;
   const y = gs.filter((g) => g.off != null && g.def != null);
   if (!y.length) return pts;

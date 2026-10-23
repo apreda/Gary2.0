@@ -38,7 +38,7 @@ describe('college season lines', () => {
 
   it('keeps FCS games out, lists five games or fewer one by one, and splits by quarterback', () => {
     const text = seasonLines('Oregon Ducks', teams[0].games, 'Brock Thomas');
-    expect(text).toMatch(/against FBS teams, 2 games: 1-1, L 15-17 \(272 yards, allowed 345\), W 34-27\n/);
+    expect(text).toMatch(/against FBS teams, 2 games: 1-1, L 15-17 vs UCLA Bruins \(272 yards, allowed 345\), W 34-27 vs Boise State Broncos\n/);
     expect(text).toMatch(/against FCS teams: W 84-0 vs Portland State Vikings/);
     expect(text).toMatch(/Brock Thomas, this week's quarterback, threw the most passes in none/);
     expect(text).toMatch(/With Dante Moore throwing the most passes, 1 game: 1-0/);
