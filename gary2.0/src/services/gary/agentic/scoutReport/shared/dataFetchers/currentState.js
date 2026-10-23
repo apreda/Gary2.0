@@ -48,9 +48,9 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     const recentWindow = `${sevenDaysAgo.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} to ${now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
     const searchQueries = [
-      `${homeTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
-      `${awayTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, storylines, trades, roster moves, headlines, beat writer articles, coach quotes.`,
-      `${awayTeam} vs ${homeTeam} ${sportName} game ${today}. Game preview, matchup analysis, storylines, broadcast info, breaking news.`
+      `${homeTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, who played and who sat, trades, roster moves, injuries and returns.`,
+      `${awayTeam} ${sportName} news ${recentWindow}. Recent games, results, scores, who played and who sat, trades, roster moves, injuries and returns.`,
+      `${awayTeam} vs ${homeTeam} ${sportName} game ${today}. Tip time, venue, broadcast, who is expected to play and who is out, breaking news.`
     ];
     const queryLabels = ['HOME', 'AWAY', 'MATCHUP'];
 
@@ -138,7 +138,6 @@ Based on the search results above, write the current state report. For EACH team
 - **LAST GAME:** What happened, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances.
 - **TOP STORYLINES & HEADLINES:** The big stories around this team RIGHT NOW:
   * Recent trades, acquisitions, roster moves
-  * Breakout performances or slumps from key players
   * Coaching news, fines, controversies, front office moves
   * Players RETURNING tonight who missed recent games (rest, minor injury, suspension)
   * Anything a knowledgeable fan would know about this team this week
@@ -149,8 +148,7 @@ Based on the search results above, write the current state report. For EACH team
 ${footballNarrativeInstructions}
 **TODAY'S MATCHUP NEWS (${today}):**
 - Game preview context: time, broadcast, venue
-- Key matchup storylines specific to THIS game
-- Coach or player quotes about tonight
+- Announcements about who plays tonight (starters, returns, rest)
 - Any breaking news affecting tonight's game
 
 RULES:

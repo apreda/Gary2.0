@@ -110,8 +110,11 @@ function whoPlayed(box, others) {
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
     .filter((nm) => !played.some((p) => p.name === nm));
-  return `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${p.pts} pts)`).join(', ')}${missed.length ? `\n      did not play: ${missed.join(', ')}` : ''}`
-    + (box.opponent?.length ? `\n      their top minutes: ${box.opponent.filter((p) => p.min > 0).sort((a, b) => b.min - a.min).slice(0, 5).map((p) => `${p.name} ${p.min}`).join(', ')}` : '');
+  // Everyone who played, the first eight with points; the opponent's players with 15+ minutes (the top five left out a
+  // starter at 24 minutes; Oct 23 2026 audit).
+  const rest = played.slice(8).map((p) => `${p.name} ${p.min}`);
+  return `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${p.pts} pts)`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}${missed.length ? `\n      did not play: ${missed.join(', ')}` : ''}`
+    + (box.opponent?.length ? `\n      theirs with 15+ minutes: ${box.opponent.filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min}`).join(', ')}` : '');
 }
 
 /** THIS SEASON GAME BY GAME: each finished game before `before`, newest first, with the opponent's record now; the
@@ -130,7 +133,7 @@ export async function gameByGame(team, league, before = new Date(), season = nba
     const home = g.home_team?.id === t.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
     const us = home ? g.home_team_score : g.visitor_team_score; const them = home ? g.visitor_team_score : g.home_team_score;
-    const rec = league[opp] ? ` (${league[opp].w}-${league[opp].l})` : '';
+    const rec = league[opp] ? ` (${league[opp].w}-${league[opp].l} now)` : '';
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}`;
     return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i))}` : line;
   });

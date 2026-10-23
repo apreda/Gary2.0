@@ -77,6 +77,13 @@ function rotation(desk, ratings = {}) {
   return out.join('\n').trim();
 }
 
+// The starting fives come from a web search's projection; the read says so above them (Oct 23 2026 audit: the
+// desk's heading never reached Gary).
+function projectedStarters(desk) {
+  const five = sectionOf(desk, 'STARTING LINEUPS');
+  return five ? `Projected starters (a web search's projection, not confirmed):\n${five}` : '';
+}
+
 // Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-0").
 // Before a team's tenth game, its record only: a conference rank among teams tied at 1-0 or 0-0 is the feed's tie
 // order ("Cavaliers #15 in East (0-0)"), and home and road splits are a game or two (Oct 23 2026 data audit).
@@ -117,10 +124,12 @@ export function deskNews(desk) {
 // attempts", Oct 21 2026); a paragraph or bullet that does leaves whole (founder, Oct 23 2026, every sport: "last season
 // is old news"). Dropping one sentence left the next one's numbers under the wrong game (Oct 23 2026 data audit: a
 // preseason "5-for-36" read as the opener). A season written "2025-26" counts only when it isn't this one.
-const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star selection\b|\bsummer league\b/i;
-const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)-(\d\d)\b/g)].some((m) => Number(m[1]) < season);
+const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious season\b|\bprior season\b|\ba year ago\b|\bpreseason\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star selection\b|\bsummer league\b|\bscrimmage\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b/i;
+const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)[-–](\d\d)\b/g)].some((m) => Number(m[1]) < season);
+// A rate from a game or two (Oct 23 2026 audit: "84.7 points per 100 possessions during Embiid's 33 minutes").
+const SHORT_RATE = /per 100 possessions|offensive rating|defensive rating|net rating|true shooting|effective field goal/i;
 export function withoutPastSeasons(text, season = nbaSeason()) {
-  return String(text || '').split('\n').filter((p) => !PAST_SEASON.test(p) && !pastSeasonLabel(p, season))
+  return String(text || '').split('\n').filter((p) => !PAST_SEASON.test(p) && !pastSeasonLabel(p, season) && !SHORT_RATE.test(p))
     .filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
@@ -131,9 +140,11 @@ export function withoutPastSeasons(text, season = nbaSeason()) {
 const RATINGS_MISSING = Symbol('ratings missing');
 function howGood(desk, ratings, homeTeam, awayTeam) {
   if (ratings[RATINGS_MISSING]) return `${standings(desk, {})}\n\nThe teams' ratings and records are not on file (${ratings[RATINGS_MISSING]}).`;
+  // Under six games the standings line is the record; the strength line would repeat it (Oct 23 2026 audit).
   return [standings(desk, ratings), ...[awayTeam, homeTeam].map((team) => {
     const before = ratings[team] ? '' : beforeFirstGame(desk, team);
-    return before ? `${team}: no games yet this season. Before the first game:\n${before}` : strengthLine(ratings, team);
+    if (before) return `${team}: no games yet this season. Before the first game:\n${before}`;
+    return ratings[team]?.gp < 6 ? null : strengthLine(ratings, team);
   })].filter(Boolean).join('\n\n');
 }
 
@@ -143,7 +154,7 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
   const lines = await linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba').catch(() => null);
   return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
     lineStory(lines, homeTeam, awayTeam), '',
-    'Who is playing:', [sectionOf(desk, 'STARTING LINEUPS'), injuriesAsReported(desk)].filter(Boolean).join('\n\n'), '',
+    'Who is playing:', [projectedStarters(desk), injuriesAsReported(desk)].filter(Boolean).join('\n\n'), '',
     'How good they are:', howGood(desk, ratings, homeTeam, awayTeam), '',
     'The situation:', sectionOf(desk, 'REST & SCHEDULE SITUATION') || 'Nothing unusual.'].join('\n');
 }
@@ -163,7 +174,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
-    ['WHO IS PLAYING', [sectionOf(desk, 'STARTING LINEUPS'), injuriesAsReported(desk)].filter(Boolean).join('\n\n')],
+    ['WHO IS PLAYING', [projectedStarters(desk), injuriesAsReported(desk)].filter(Boolean).join('\n\n')],
     ['HOW GOOD THEY ARE', how],
     ['THIS SEASON, GAME BY GAME', `${awayGames}\n\n${homeGames}`],
     ['THE ROTATION THIS SEASON', rotation(desk, ratings)],
