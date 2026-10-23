@@ -75,7 +75,7 @@ function report(rows) {
     lines.push(`## ${r.league} · ${r.matchup} · ${r.pick} (${r.result}, ${r.finalScore || '?'})${r.source ? ` · data ${r.source}` : ''}`);
     if (!r.check) { lines.push(`Unchecked: ${r.skipped || r.error || 'no JSON in the answer'}`, ''); continue; }
     lines.push(r.check.data_sound ? 'Data sound.' : `${r.check.issues.length} issue(s):`);
-    for (const i of r.check.issues) lines.push(`- **${i.kind}** (${i.section}): data said ${i.data_said}; truth: ${i.truth}. Mattered: ${i.mattered}. Fix: ${i.fix}. Evidence: ${i.evidence}`);
+    for (const i of r.check.issues) lines.push(`- **${i.kind}${i.question ? `/${i.question}` : ''}** (${i.section}): data said ${i.data_said}; truth: ${i.truth}. Mattered: ${i.mattered}. Fix: ${i.fix}. Evidence: ${i.evidence}`);
     lines.push(`- Line: ${r.check.line}`, `- Decided: ${r.check.decided}`, '');
   }
   return lines.join('\n');

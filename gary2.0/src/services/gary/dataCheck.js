@@ -77,14 +77,15 @@ Search the web for what was true BEFORE kickoff (injury reports, who started, de
    - Against whom? Results against weak (or FCS) opponents read as strength.
    - Measured fairly? A rank or rate that turns a tiny gap into a big one, one blowout carrying an average, totals over unequal numbers of games.
    - Current? Last season, preseason, or games from before a change.
-2. The line: can the data explain each spread move of a point or more? If not, what did the market know that the data didn't carry?
-3. After the game: what decided it? Was that knowable before kickoff, and was it in the data or the news?
+2. Up to date at the moment of the pick? A season number is an accumulation; it is not where the team is now. Did the data show what happened in each team's last game (who played, who got hurt in it, how it went), and every change since (lineups, injuries, returns, news)? Where did a season total stand in for what was true that day?
+3. The line: can the data explain each spread move of a point or more? If not, what did the market know that the data didn't carry?
+4. After the game: what decided it? Was that knowable before kickoff, and was it in the data or the news?
 
-Report only problems in the data: something it stated that was wrong or misleading, or something knowable before kickoff that mattered and was missing. Say nothing about whether the pick was right. If the data was sound, say so and report no issues. Give evidence (a source and its date) for each issue.
+Report only problems in the data, each as one kind: wrong (a number or fact that was false), needs_context (true but misleading without context, like a season total that blends games a different quarterback played), not_current (stale at the moment of the pick), or missing (knowable before kickoff, mattered, absent). Say nothing about whether the pick was right. If the data was sound, say so and report no issues. Give evidence (a source and its date) for each issue.
 
 End with this JSON block and nothing after it:
 \`\`\`json
-{"data_sound": true, "issues": [{"kind": "same_team|opponents|measured|current|missing|wrong", "section": "where in the data", "data_said": "what the data showed", "truth": "what was true before kickoff", "evidence": "source and date", "mattered": "how it bore on this game", "fix": "what the data should show instead"}], "line": "one sentence on whether the data explained the line's moves", "decided": "one sentence on what decided the game and whether it was knowable before kickoff"}
+{"data_sound": true, "issues": [{"kind": "wrong|needs_context|not_current|missing", "question": "same_team|opponents|measured|current|line|after_game", "section": "where in the data", "data_said": "what the data showed", "truth": "what was true before kickoff", "evidence": "source and date", "mattered": "how it bore on this game", "fix": "what the data should show instead"}], "line": "one sentence on whether the data explained the line's moves", "decided": "one sentence on what decided the game and whether it was knowable before kickoff"}
 \`\`\``;
 
 /** Parses the checker's closing JSON block; null when there isn't one. */
