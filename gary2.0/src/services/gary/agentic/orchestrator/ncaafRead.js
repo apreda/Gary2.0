@@ -40,14 +40,8 @@ export function withoutBettingLines(text) {
   return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“])/).filter((s) => !BETTING.test(s)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
 }
 
-// What a scoreboard says about the next game (Oct 18 2026, founder: "it's common sports betting sense that this
-// logic is flawed"): how the halves went, comebacks and turnover counts are left out of the season he reads. Each game
-// keeps its final score, its opponent and how every unit played.
-const HALVES = / — (?:led|trailed|tied) \d+-\d+ at half, outscored \d+-\d+ after(?:, overtime included)?| — won after trailing at half| — lost a halftime lead/g;
-const TURNOVER_COUNT = / · \d+ (?:giveaways?|takeaways?)(?= · |$)/gm;
-export function withoutScoreboardNoise(text) {
-  return String(text || '').replace(HALVES, '').replace(TURNOVER_COUNT, '');
-}
+// The halves and the turnovers stay in each game's line (Oct 23 2026): a 42-3 halftime lead explains the yards after
+// it, and a box score without turnovers hid why games went the way they did (Oregon's 15 points came with 7 giveaways).
 
 // A section's rows without the desk's opening paragraph that explains them ("Every completed game ...", "Each player ...").
 function afterIntro(section) {
@@ -92,6 +86,34 @@ function injuriesAsReported(desk) {
 // went. Both blended games against FCS teams and games another quarterback played: Oregon's 317 passing yards a game on
 // Oct 17 were mostly Dante Moore's, with Moore out and Brock Thomas (15 passes all year) starting, and an 84-0 win
 // over Portland State sat inside its averages. Every game's own unit lines stay in the season game by game.
+// Each team's game log opens with its record (and against FBS teams), its conference and its place in the AP poll, and,
+// when this week's quarterback did not throw the most passes in every game, the record by who did. A separate HOW GOOD
+// THEY ARE section repeated the log's scores and yards under a heading that told him what to conclude (Oct 23 2026).
+function qbSplit(gs, qb) {
+  const by = new Map();
+  for (const g of gs) { const k = g.qb || 'not on file'; by.set(k, [...(by.get(k) || []), g]); }
+  const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
+  if (!gs.length || (mine && by.size === 1)) return null;
+  const parts = [...by].sort(([a], [b]) => (a === mine ? -1 : b === mine ? 1 : 0))
+    .map(([k, list]) => `${k}${k === mine ? " (this week's quarterback)" : ''} ${record(list)} (${list.map((g) => `${g.at} ${g.opponent}`).join(', ')})`);
+  if (qb && !mine) parts.push(`${qb}, this week's quarterback, in none`);
+  return `  most passes thrown by: ${parts.join('; ')}`;
+}
+function gameLog(desk) {
+  const byTeam = (section, strip = (l) => l) => new Map(sectionOf(desk, section).split('\n').map(strip).map((l) => l.match(/^(.+?): (.+)$/)).filter(Boolean).map((m) => [m[1].trim(), m[2].trim()]));
+  const poll = byTeam('AP TOP 25'), conf = byTeam('NCAAF CONFERENCE CONTEXT', (l) => (/^\[(?:HOME|AWAY)\] /.test(l) ? l.replace(/^\[(?:HOME|AWAY)\] /, '') : ''));
+  const teams = seasonGames(desk);
+  const starters = thisWeeksQuarterbacks(desk, teams.map((t) => t.team));
+  const log = afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME'));
+  return log.replace(/^(\S.*) \((\d+-\d+(?:-\d+)?)\):$/gm, (whole, team, rec) => {
+    const t = teams.find((x) => x.team === team);
+    if (!t) return whole;
+    const fbs = t.games.filter((g) => !g.fcs);
+    const head = `${team} (${rec}${fbs.length < t.games.length ? `; ${record(fbs)} against FBS teams` : ''})${conf.get(team) ? ` · ${conf.get(team)}` : ''}${poll.get(team) ? ` · ${poll.get(team)}` : ''}, newest first:`;
+    return [head, qbSplit(t.games, starters.get(team))].filter(Boolean).join('\n');
+  });
+}
+
 function howGood(desk) {
   const poll = sectionOf(desk, 'AP TOP 25');
   const conferences = sectionOf(desk, 'NCAAF CONFERENCE CONTEXT').split('\n').filter((l) => /^\[(?:HOME|AWAY)\]/.test(l)).map((l) => l.replace(/^\[(?:HOME|AWAY)\] /, '')).join('\n');
@@ -190,8 +212,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
     ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk)],
     ['THE AVAILABILITY REPORT', injuriesAsReported(desk)],
     ['WHAT THE PLAYERS ON THE REPORT HAVE DONE, AND WHO ELSE PLAYS THERE', whoElsePlays(desk)],
-    ['HOW GOOD THEY ARE', howGood(desk)],
-    ['THIS SEASON, GAME BY GAME', withoutScoreboardNoise(afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME')))],
+    ['THIS SEASON, GAME BY GAME', gameLog(desk)],
     ['THE SITUATION', situation(desk)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
@@ -207,7 +228,7 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
     lineStory(lines, homeTeam, awayTeam), '',
     'Quarterbacks and coaches:', quarterbacksAndCoaches(desk) || 'Not on the desk.', '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
-    'How good they are:', howGood(desk), '',
+    'This season:', howGood(desk), '',
     'The situation:', situation(desk) || 'Nothing unusual.',
     news ? `\nThe news desk:\n${news}` : ''].join('\n');
 }

@@ -24,7 +24,7 @@
  */
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
-  getWeekAdvancedStats, getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
+  getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -230,8 +230,6 @@ function quarterbackLines(team, quarterback, rows, results) {
     ...(games.some((g) => g.result.neutral) ? [site('neutral')] : [])];
 }
 
-const rate = (value) => (Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 100)}%` : '—');
-
 /**
  * Each unit's game on its own line (founder GO, Oct 4 2026: season totals
  * "only tell a small amount of the story"). One week of the schedule
@@ -244,30 +242,27 @@ async function unitLinesBuilder(season, weeks) {
   const through = Math.max(1, ...weeks) + 1;
   // One week at a time: CFBD refuses concurrent requests to one endpoint (Oct 13 2026 college review: a parallel
   // burst lost four of six weeks of unit lines on five desks).
-  const all = [];
-  for (let week = 0; week <= through; week++) {
-    all.push([await getWeekAdvancedStats(season, week).catch(() => null), await getWeekBoxScores(season, week).catch(() => null)]);
-  }
-  const advancedRows = all.flatMap(([advanced]) => advanced?.rows || []);
-  const boxRows = all.flatMap(([, boxes]) => boxes?.rows || []);
+  const boxRows = [];
+  for (let week = 0; week <= through; week++) boxRows.push(...((await getWeekBoxScores(season, week).catch(() => null))?.rows || []));
   return (team, result) => {
-    const line = advancedRows.find((row) => cfbdTeamMatches(row.team, team) && cfbdTeamMatches(row.opponent, result.opponent));
     const game = boxRows.find((row) => (row.teams || []).some((t) => cfbdTeamMatches(t.team, team))
       && (row.teams || []).some((t) => cfbdTeamMatches(t.team, result.opponent)));
-    if (!line || !game) return ['      units: the per-game unit lines are not available for this game'];
+    if (!game) return ['      units: the per-game unit lines are not available for this game'];
     const stats = (entry) => new Map((entry?.stats || []).map((row) => [row.category, row.stat]));
     const own = stats(game.teams.find((t) => cfbdTeamMatches(t.team, team)));
     const opp = stats(game.teams.find((t) => !cfbdTeamMatches(t.team, team)));
     const count = (n, word) => `${n ?? '—'} ${word}${String(n) === '1' ? '' : 's'}`;
     // College box scores count sacks as runs (Oct 23 2026 data audit: Virginia's "40 runs for 37" held 10 sacks for 68
     // yards), so the run line says how many of them were sacks.
-    const sacked = (n) => (Number(n) > 0 ? `, ${n} of them sack${String(n) === '1' ? '' : 's'}` : '');
-    const side = (unit, box, label, sacks) => `${unit.plays} plays, ${rate(unit.successRate)} success${label}`
-      + ` · ${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'} (${box.get('yardsPerRushAttempt') ?? '—'}${sacked(sacks)}), ${rate(unit.rushingPlays?.successRate)} success${label}, ${rate(unit.stuffRate)} stuffed`
-      + ` · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'} (${box.get('yardsPerPass') ?? '—'} per attempt), ${rate(unit.passingPlays?.successRate)} success${label}`;
+    const sacked = (n) => (Number(n) > 0 ? ` (${n} of them sack${String(n) === '1' ? '' : 's'})` : '');
+    // Box-score counts only: the play-by-play success and stuff rates and the per-carry and per-attempt averages are gone
+    // (founder, Oct 23 2026: "just use stats, not play by play data"), and so is the play-by-play play count (it ran 1 to
+    // 7 off the box score).
+    const side = (box, sacks) => `${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'}${sacked(sacks)}`
+      + ` · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'}`;
     return [
-      `      offense: ${side(line.offense, own, '', opp.get('sacks'))} · ${count(own.get('turnovers'), 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'}`,
-      `      defense: ${side(line.defense, opp, ' allowed', own.get('sacks'))} · ${count(own.get('sacks'), 'sack')}, ${own.get('tacklesForLoss') ?? '—'} tackles for loss · ${count(opp.get('turnovers'), 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'}`,
+      `      offense: ${side(own, opp.get('sacks'))} · ${count(own.get('turnovers'), 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'}`,
+      `      defense: ${side(opp, own.get('sacks'))} · ${count(own.get('sacks'), 'sack')}, ${own.get('tacklesForLoss') ?? '—'} tackles for loss · ${count(opp.get('turnovers'), 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'}`,
     ];
   };
 }
@@ -302,7 +297,18 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
     if (!byPlayer.has(name)) byPlayer.set(name, { position: row.player.position_abbreviation || row.player.position || '', games: new Map() });
     byPlayer.get(name).games.set(String(row.game.id), row);
   }
-  const gameByGame = (entry) => games.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${entry.games.has(String(r.gameId)) ? productionLine(entry.games.get(String(r.gameId))) : 'no stat row'}`).join(' | ');
+  // One line per player: the games he has a stat row in, the last one, and his season's totals (Oct 23 2026 data review:
+  // every defender's tackles game by game, and three backups' logs at every position, buried the report under noise).
+  const day = (r) => etDay(r.date).replace(/^\w+, /, '');
+  const SUMMED = ['passing_attempts', 'passing_completions', 'passing_yards', 'passing_touchdowns', 'passing_interceptions', 'rushing_attempts', 'rushing_yards',
+    'rushing_touchdowns', 'receptions', 'receiving_yards', 'receiving_touchdowns', 'total_tackles', 'sacks', 'tackles_for_loss', 'interceptions'];
+  const gameByGame = (entry) => {
+    const played = games.filter((r) => entry.games.has(String(r.gameId)));
+    if (!played.length) return 'no stat row in any game this season';
+    const sinceLast = games.length - 1 - games.indexOf(played.at(-1));
+    const totals = Object.fromEntries(SUMMED.map((k) => [k, [...entry.games.values()].reduce((a, row) => a + (Number(row[k]) || 0), 0)]));
+    return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`})` : ''}; season: ${productionLine(totals)}`;
+  };
   // Kickers and punters record no counted stats here, so they weigh by the games they have a row in (Oct 23 2026 data
   // audit: with no "others at PK", a reserve kicker on the report read as "both teams list theirs out").
   const kicking = (position) => /^(PK|K|P|LS)$/i.test(position || '');
@@ -321,11 +327,13 @@ function availabilityLines(team, reported, rows, results, state = 'checked') {
         : 'no stat row in any game this season (no pass, carry, catch or tackle recorded)'}`);
     if (!position) continue;
     // "Others at" once per position, without players already on the report (each has his own line): the same logs
-    // printed two and five times (Oct 23 2026 audit).
-    if (shownPositions.has(position)) continue;
+    // printed two and five times (Oct 23 2026 audit). Only where the box score says who carries the load: quarterback,
+    // running back, receiver and tight end. A defender's or kicker's "others" were tackle counts and "played, no counted
+    // stats", which say nothing about who replaces him.
+    if (shownPositions.has(position) || !/^(QB|RB|FB|WR|TE)$/i.test(position)) continue;
     shownPositions.add(position);
     const others = [...byPlayer].filter(([player, entry]) => entry.position === position && !reportedKeys.has(nameKey(player)) && weight(entry) > 0)
-      .sort((a, b) => weight(b[1]) - weight(a[1])).slice(0, 3)
+      .sort((a, b) => weight(b[1]) - weight(a[1])).slice(0, 2)
       .map(([player, entry]) => `${player}: ${gameByGame(entry)}`);
     if (others.length) lines.push(`    others at ${position}: ${others.join(' || ')}`);
   }
