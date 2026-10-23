@@ -3,6 +3,12 @@
 Gary picks every game for the Picks page; Winners holds the ones he bets. The worker is
 `scripts/run-winners-board.js --watch` (always on).
 
+**Since Oct 23 2026, game bets are the big games only** (`winners_big_games`, written with the daily slate in
+`dailySlateService.js`): MLB playoff games, TNF/SNF/MNF, college's top two ranked games (`ncaafBigGameIds`), and
+the NBA's national-TV games, up to two a night (`nbaNationalGames.js`, ESPN's scoreboard). Each goes on at Gary's
+amount or his number after the late-news check. The card and the boards below no longer seat anything; the worker
+does not run them and their code is kept. Props are unchanged (clear only).
+
 - **NFL** (`nflBoard.js`, Oct 19 2026): about 110 minutes before the first kickoff he hasn't boarded, he sees every
   picked game still to start, fresh, and names the ones he would bet, in order. `seat_nfl_board` (SQL) seats his top
   five whose pick is on the same side, 75 minutes before kickoff, after late news.
