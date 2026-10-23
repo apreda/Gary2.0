@@ -121,6 +121,9 @@ struct HomeSheetRowView: View {
         switch league.uppercased() {
         case "MLB": return Color(hex: "#2E9A45")
         case "NFL": return Color(hex: "#2A6DBE")
+        // NBA's own blue (Sport.accentColor), not gold: the league read as the app's accent (founder, Oct 23 2026).
+        // Left at full brightness so it stays lighter than NFL's blue.
+        case "NBA": return Color(hex: "#3B82F6")
         case "NCAAF": return Color(hex: "#B8322E")
         default: return GaryColors.gold.opacity(0.8)
         }
