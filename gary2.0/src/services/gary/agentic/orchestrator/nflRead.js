@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -31,11 +31,6 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 
 const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
 
-let _db = null;
-async function db() {
-  if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
-  return _db;
-}
 
 // Regulars who missed or left the last game and are not on this week's report, under it (nflBettorData notOnReport).
 function backOffReport(data, desk, awayTeam, homeTeam, before) {
@@ -55,11 +50,9 @@ export function injuriesAsReported(desk) {
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date, line moves up to it. */
 export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null } = {}) {
   const before = etDate(asOf);
-  // The line's path at the ticket's own book, as college and the NBA read it (Oct 23 2026 source audit).
-  const [data, lines] = await Promise.all([
-    loadBettorData(season),
-    linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_nfl', book).catch(() => null),
-  ]);
+  // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,
+  // Oct 23 2026: the market is other people's opinions, and Gary reads the game; see nflKnowledge.js).
+  const data = await loadBettorData(season);
   data.asOf = asOf;   // same-day finals count once over (nflBettorData played())
   const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const line = lineOf(desk);
@@ -68,13 +61,12 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ? String(matchupHeader(desk)).replace(/^Venue: .*$/m, `Venue: ${where.neutral} (neutral site; ${homeTeam} are the designated home team)`)
     : matchupHeader(desk);
   const situation = [where.text, (desk.match(/^Kickoff: [^\n]*/m) || [])[0], (desk.match(/^Kickoff weather[^\n]*/m) || [])[0]].filter(Boolean).join('\n');
-  // The order a bettor reads a game in: the line and how it moved; who plays (the quarterbacks, the injury report, who is
+  // The order a bettor reads a game in: the spread; who plays (the quarterbacks, the injury report, who is
   // back); each team's season game by game; the players the ball goes to; the schedule, travel and weather. Headings
   // name the data, never what to make of it (Oct 23 2026 section review: "WHO THE OFFENSE RUNS THROUGH" and "THE
   // SITUATION" went the way of "HOW GOOD THEY ARE").
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
@@ -87,16 +79,15 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }
 
-/** One game on Gary's morning board (winners/nflBoard.js): the line's path, the quarterbacks, who's out, how good, the
+/** One game on Gary's morning board (winners/nflBoard.js): the spread, the quarterbacks, who's out, how good, the
  * spot and the news desk's report. `data` is loadBettorData's, shared across the board. */
 export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameId, gameDate, kickoff, asOf = new Date(), data }) {
   const before = etDate(asOf);
-  const lines = await linePath(await db().catch(() => null), gameId, asOf).catch(() => null);
   const qbs = sectionOf(desk, 'STARTING QUARTERBACKS THIS WEEK');
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   const where = spot(data, homeTeam, awayTeam, gameDate || before);
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}${where.neutral ? ` · ${where.neutral}` : ''}`,
-    lineStory(lines, homeTeam, awayTeam), '',
+    spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
     'Quarterbacks:', quarterbacks(data, qbs, homeTeam, awayTeam, before), '',
     'Injury report:', injuriesAsReported(desk), '',
     'This season:', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`, '',

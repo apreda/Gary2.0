@@ -12,7 +12,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { ncaafSystemPrompt, ncaafGameMessage, ncaafCardMessage, NCAAF_FORMAT_ONLY } from './ncaafKnowledge.js';
 import { RULE, isTitle, sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
 import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
@@ -27,11 +27,6 @@ import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agent
 
 const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
 
-let _db = null;
-async function db() {
-  if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
-  return _db;
-}
 
 // A sentence that carries a betting line (a spread, an opening number, a book's odds) never reaches him from an
 // article: the market appears once, as THE LINE AND HOW IT GOT HERE.
@@ -258,15 +253,14 @@ function situation(desk) {
   return [...road, sectionOf(desk, 'REST & SCHEDULE SITUATION')].filter(Boolean).join('\n');
 }
 
-/** The game as Gary reads it. `asOf` cuts the line's path at the moment of the pick; `book` is the ticket's book. */
-export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date() } = {}) {
-  const lines = await linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_ncaaf', book).catch(() => null);
+/** The game as Gary reads it: the spread he bets, said once, and the football (founder, Oct 23 2026: not the line's
+ * path, the opener, the total or the moneylines; see ncaafKnowledge.js). */
+export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
   const line = lineOf(desk);
-  // The order (founder, Oct 23 2026): the line and how it moved, who plays, each team's season game by game, the players
+  // The order (founder, Oct 23 2026): the spread, who plays, each team's season game by game, the players
   // who carry the offense, the situation.
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk, { availability: false })],
     ['THE AVAILABILITY REPORT', availabilityReport(desk)],
     // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
@@ -280,13 +274,12 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId, bo
 }
 
 /** One game on Gary's college board (winners/ncaafBoard.js), read the way the pick reads it, without his write-up: the
- * line and how it got here, the quarterbacks and coaches, the availability report, how good both teams are, the
+ * spread, the quarterbacks and coaches, the availability report, each team's season, the
  * situation and the news desk's report. */
 export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gameId, kickoff, asOf = new Date() } = {}) {
-  const lines = await linePath(await db().catch(() => null), gameId, asOf, 'americanfootball_ncaaf').catch(() => null);
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}`,
-    lineStory(lines, homeTeam, awayTeam), '',
+    spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
     'Quarterbacks and coaches:', quarterbacksAndCoaches(desk) || 'Not on the desk.', '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
     'This season:', howGood(desk), '',

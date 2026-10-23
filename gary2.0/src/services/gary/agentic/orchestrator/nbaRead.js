@@ -15,7 +15,7 @@ import { homedir } from 'node:os';
 import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
-import { linePath, lineStory, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, ratingsLine, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock, RATED_FROM_GAMES } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, listingHistory, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
@@ -30,11 +30,6 @@ import { moneylinePastCap } from './agentLoop.js';
 
 const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
 
-let _db = null;
-async function db() {
-  if (!_db) { const m = await import('../../../../supabaseClient.js'); _db = m.supabaseAdmin || m.supabase; }
-  return _db;
-}
 
 /** THE LINE, held for the card: the spread, the moneylines and the tickets, from the desk's BETTING CONTEXT. */
 export function nbaLineOf(desk) {
@@ -580,17 +575,16 @@ export function newsForGary(desk, { facts = null, start = null, asOf = new Date(
   return lines.filter((_, k) => !drop[k]).filter((p, k, a) => p.trim() || (k > 0 && a[k - 1].trim())).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/** One game on Gary's NBA board (winners/nbaBoard.js), read the way the pick reads it, without his write-up: the line
- * and how it got here, who's playing, each team's season so far and the situation. */
+/** One game on Gary's NBA board (winners/nbaBoard.js), read the way the pick reads it, without his write-up: the spread,
+ * who's playing, each team's season so far and the situation. */
 export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
-  const lines = await linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba').catch(() => null);
   const tipAt = tipOf(desk, asOf);
   const [injuries, seasons] = await Promise.all([
     injurySection(desk, { homeTeam, awayTeam, tip: tipAt, asOf }),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
   return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
-    lineStory(lines, homeTeam, awayTeam), '',
+    spreadInWords(nbaLineOf(desk)) || 'The spread is not on file.', '',
     'Who is playing:', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n'), '',
     'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => teamHead(desk, ratings, t, ts).text).join('\n\n'), '',
     'The situation:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
@@ -599,8 +593,9 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
 /** The game as Gary reads it. `asOf` cuts the line's path and the season at the moment of the pick; `book` is the
  * ticket's book; `league` (tests only) stands in for the league's ratings. */
 export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book = null, asOf = new Date(), league = null } = {}) {
-  const [lines, ratings, seasons] = await Promise.all([
-    linePath(await db().catch(() => null), gameId, asOf, 'basketball_nba', book).catch(() => null),
+  // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,
+  // Oct 23 2026: the market is other people's opinions, and Gary reads the game; see nbaKnowledge.js).
+  const [ratings, seasons] = await Promise.all([
     league ? Promise.resolve(league) : leagueRatingsAt(asOf).catch((e) => ({ [RATINGS_MISSING]: e.message })),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
@@ -613,7 +608,6 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE LINE AND HOW IT GOT HERE', lineStory(lines, homeTeam, awayTeam)],
     ['WHO IS PLAYING', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],

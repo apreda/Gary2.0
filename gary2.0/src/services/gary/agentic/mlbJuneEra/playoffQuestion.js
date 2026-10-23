@@ -17,7 +17,7 @@ import { createGeminiSession, sendToSessionWithRetry } from './sessionManager.js
 import { createCostTracker } from '../orchestrator/costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale, buildStatAuditRetryMessage } from './statAudit.js';
-import { linePath, moneylineMoved } from '../../../sports/nfl/nflBettorData.js';
+import { linePath } from '../../../sports/nfl/nflBettorData.js';
 import { getMlbStandingsContext, getMlbTeams } from '../../../providers/mlbStatsApiService.js';
 import { withOptionalData } from '../../pickDataIntegrity.js';
 
@@ -459,31 +459,17 @@ export function bullpensInWords(desk, snapshot = null) {
   }).join('\n');
 }
 
-// ── The line and how it got here ──────────────────────────────────────────────────────────────────────────────────
-// The moneyline and the total from the line watch (founder, Oct 23 2026: the market's number in Gary's read, the way
-// the other sports show it; the audit's case: Brewers -158 the morning before, -196 once the Rays named Martinez).
+// ── Tonight's moneyline ────────────────────────────────────────────────────────────────────────────────────────────
+// The number he bets, now, at the ticket's book: not the line's path, the opener or the total (founder, Oct 23 2026: the
+// market is other people's opinions and Gary reads the game; the line watch keeps recording every move for the data
+// check, where a move the story cannot explain points at missing data).
 const BOOK_NAMES = { fanduel: 'FanDuel', draftkings: 'DraftKings', betrivers: 'BetRivers', caesars: 'Caesars', betmgm: 'BetMGM', fanatics: 'Fanatics', betway: 'Betway', ballybet: 'Bally Bet', betparx: 'betPARX', rebet: 'ReBet' };
 export function mlbLineStory(lines, homeTeam, awayTeam) {
   const book = (b) => BOOK_NAMES[b] || b;
-  if (lines?.missing) return `Line history at ${book(lines.book)} not on file for this game.`;
-  if (!lines?.now || !lines.path?.length) return 'Line history not on file for this game.';
+  if (lines?.missing) return `The moneyline at ${book(lines.book)} is not on file for this game.`;
+  if (!lines?.now) return 'The moneyline is not on file for this game.';
   const ml = (x) => (x == null ? 'not on file' : x > 0 ? `+${Math.round(x)}` : `${Math.round(x)}`);
-  const board = (b) => `${awayTeam} ${ml(b.ml_away)}, ${homeTeam} ${ml(b.ml_home)} · total ${b.total ?? 'not on file'}`;
-  const when = (iso) => `${new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} ET`;
-  const open = lines.path[0];
-  // Books update seconds apart; moves inside the same minute collapse to the last. A run-line-only change is not shown.
-  const polls = [];
-  for (const p of lines.path.slice(1)) { const k = p.at.slice(0, 16); if (polls.length && polls.at(-1).k === k) polls[polls.length - 1] = { k, p }; else polls.push({ k, p }); }
-  const moves = []; let prev = open;
-  for (const { p } of polls) {
-    if (moneylineMoved(p, prev) || p.total !== prev.total) { moves.push(`  seen ${when(p.at)}: ${board(p)}`); prev = p; }
-  }
-  const kept = moves.length > 12 ? [...moves.slice(0, 4), `  … ${moves.length - 8} more moves …`, ...moves.slice(-4)] : moves;
-  // No "has not moved" line when nothing crossed the mark: a drift under it still moves the number, and the first and
-  // the current numbers both print (Oct 23 2026 data audit: "Neither has moved" sat over Rays -152 to -156).
-  return [`The moneyline${lines.book ? ` at ${book(lines.book)}` : ' across the books (median)'}, first on file ${when(open.at)} (when the line watch first saw it, not necessarily the market's opening): ${board(open)}`,
-    kept.length ? `Moves since (moneyline moves of 2.5 points or more of implied chance, and every change in the total):\n${kept.join('\n')}` : null,
-    `Now: ${board(lines.now)}`].filter(Boolean).join('\n');
+  return `${awayTeam} ${ml(lines.now.ml_away)}, ${homeTeam} ${ml(lines.now.ml_home)}${lines.book ? ` at ${book(lines.book)}` : ''}`;
 }
 
 let _db = null;
@@ -537,7 +523,7 @@ export function buildSeriesStory(desk, price = '', { lines = null, standings = n
   // season, then the situation and the week's storylines.
   return [
     header.filter((l) => !/^(?:Venue|Weather): /.test(l)).join('\n'),
-    `THE LINE AND HOW IT GOT HERE\n${mlbLineStory(lines, homeTeam || home || 'Home', awayTeam || away || 'Away')}`,
+    `TONIGHT'S MONEYLINE\n${mlbLineStory(lines, homeTeam || home || 'Home', awayTeam || away || 'Away')}`,
     starters ? `TONIGHT'S STARTERS\n${starters}` : null,
     workload ? `THE STARTERS' WORKLOAD, AS REPORTED\n${workload}` : null,
     `TONIGHT'S LINEUPS\n${lineups.text}`,

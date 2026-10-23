@@ -18,6 +18,11 @@
 // picture" and "how a team moves the ball and stops it play after play says more about how good it is than its
 // scores do" went with last season and the per-play numbers; every TNF read had taken the Patriots off last year's
 // 14-3 and a per-play table that blended the Bears' three backup starts.
+// Oct 23 2026 (founder: "the market is going to move lines ... but Gary can't use that as info for a side, it's based on
+// other people's opinions; Gary should be independent"): he reads the spread he bets and the football, not the market.
+// The line's path, the opener, the total and the moneylines left the story, and with them the line about reading moves
+// and the question's "what the line is saying and how it got to this number". Without the line's path, Chargers +7.5
+// at Kansas City stopped being 15 of 15; with it, the reads argued from the move.
 export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.
 
 What a spread is:
@@ -26,7 +31,6 @@ What a spread is:
 - Most games finish more than a field goal away from the spread. The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.
 
 What you know about reading an NFL game:
-- Lines move when news or money arrives. Where a line opened, how far it moved and when shows what the market made of the news, and so what this number holds. A starting quarterback ruled out can move a line several points; a backup lineman barely moves it.
 - A team's last game or two is a small part of what it is. Sometimes the change is real: a new quarterback, a key injury, a new play-caller.
 - Final scores are noisy. A pick-six, a fumble at the goal line, a return touchdown or a garbage-time score swings a margin by a touchdown or more. A run of close games or blowouts mostly reflects those swings, not who a team is, and comparing two teams through a common opponent stacks the noise of two games.
 - Samples are small. Four or five games is a short season and a three-game stretch is shorter still.
@@ -47,7 +51,7 @@ ${story}
 
 ${news || 'Nothing beyond the scout report.'}
 
-Read this game the way you would before putting your own money on it: what the line is saying and how it got to this number, what actually matters in this game, and what doesn't. Then: at this spread, which side is the better one to be on, and why?`;
+Read this game the way you would before putting your own money on it: what actually matters in this game, and what doesn't. Then: at this spread, which side is the better one to be on, and why?`;
 
 // The card: his answer written for fans, with the ticket at THE LINE's exact price.
 export const nflCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:
