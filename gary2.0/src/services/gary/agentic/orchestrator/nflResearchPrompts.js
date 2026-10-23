@@ -26,20 +26,25 @@ const isCollege = (sport) => sport === 'NCAAF' || sport === 'americanfootball_nc
  * extra-point rate is a real risk"). The desk carries the numbers; the news desk carries the news. It reads the game
  * as Gary has it, so it knows what is already there. College has its own news desk since Oct 21 2026 (college's
  * read, ncaafRead.js), with college's news: availability reports, suspensions, players leaving the team.
+ * Oct 23 2026 (founder): it also reports the week's storylines, the things anyone following the teams knows going
+ * in ("the Bears' first home game since Mike Ditka passed away"). The articles that used to carry them were cut to
+ * one side's game plan; the storylines come as dated facts for both teams, with no past seasons and no takes.
  */
 const NEWS_DESK_ITEMS = {
   NFL: 'game-day statuses and inactives, a starting-quarterback decision, late-week practice participation, a player activated, placed on injured reserve, signed, released or traded, a coordinator or play-caller change, and a weather change',
   NCAAF: 'the latest availability report and game-day statuses, a starting-quarterback decision, a player suspended, ruled out, returning or leaving the team, a head coach, coordinator or play-caller change, and a weather change',
 };
-const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor named Gary. Gary already has the game below: the line and how it moved, the quarterbacks, the ${isCollege(sport) ? 'availability' : 'injury'} report, both teams' season and the week's reporting. Your job is the latest news on who plays.
+const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor named Gary. Gary already has the game below: the line and how it moved, the quarterbacks, the ${isCollege(sport) ? 'availability' : 'injury'} report and both teams' season. Your job is two things.
 
-For BOTH teams, find reporting newer than what is below or missing from it: ${NEWS_DESK_ITEMS[isCollege(sport) ? 'NCAAF' : 'NFL']}. Give each item its date.
+1. The latest news on who plays. For BOTH teams, find reporting newer than what is below or missing from it: ${NEWS_DESK_ITEMS[isCollege(sport) ? 'NCAAF' : 'NFL']}. Give each item its date.
 
-Report news only: no statistics, no opinions or assessments from anyone, no description of what the week is about, no prediction and no betting conclusion. If there is nothing new, say so; that is a complete answer.
+2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons.
+
+Report what happened only: no statistics, no opinions, analysis or predictions from anyone, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
 
 Return one JSON object:
-{"factor": "The latest news", "findings": "Each item for both teams, one per line, with its date", "sources": "URL and publication date for each item", "uncertainties": "Conflicting or unconfirmed reports, or none"}
-Keep the whole answer under 3,000 characters.
+{"factor": "The latest news", "findings": "Each item on who plays for both teams, one per line, with its date", "storylines": "Each storyline for both teams, one per line, with its date, or none", "sources": "URL and publication date for each item", "uncertainties": "Conflicting or unconfirmed reports, or none"}
+Keep the whole answer under 3,500 characters.
 
 ## THE GAME, AS GARY HAS IT
 ${game}`;
@@ -70,7 +75,7 @@ export const researchSubjectsFor = (sport = 'NFL') => [
 ];
 
 export function buildNflFactorPrompt() {
-  return 'Search now for the latest news on who plays, for BOTH teams, and return the one JSON object.';
+  return 'Search now for the latest news on who plays and the week\'s storylines, for BOTH teams, and return the one JSON object.';
 }
 
 export function buildNflFollowUpSystemPrompt(desk, briefing, sport = 'NFL') {
@@ -109,6 +114,7 @@ export function renderNflResearchBriefing(factors = []) {
     };
     // The news desk's items and what it could not confirm (NFL Oct 19, college Oct 21 2026); sources stay in the logs.
     const open = text(f.uncertainties);
-    return `${text(f.findings, f.keyFinding, f.finding)}${open && !/^(none|not supplied)\.?$/i.test(open.trim()) ? `\nNot confirmed: ${open}` : ''}`;
+    const story = typeof f.storylines === 'string' ? f.storylines.trim() : '';
+    return `${text(f.findings, f.keyFinding, f.finding)}${open && !/^(none|not supplied)\.?$/i.test(open.trim()) ? `\nNot confirmed: ${open}` : ''}${story && !/^none\.?$/i.test(story) ? `\n\nThis week's storylines:\n${story}` : ''}`;
   }).join('\n\n');
 }
