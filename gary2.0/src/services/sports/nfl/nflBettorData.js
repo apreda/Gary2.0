@@ -187,7 +187,7 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
     if (gs.length) lines.push(`  games at quarterback this season: ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
-    if (qb) lines.push(`  ${qb} this season: ${passing(his) || 'no games with 8+ passes'}`);
+    if (qb) lines.push(`  ${qb} this season: ${!d.playerWeek ? 'not on file (the weekly player stats did not load)' : passing(his) || 'no games with 8+ passes'}`);
     out.push(lines.join('\n'));
   }
   return out.join('\n');
