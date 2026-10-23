@@ -317,6 +317,18 @@ extension SupabaseAPI {
         return board
     }
 
+    /// Today's and yesterday's boards, asked for at launch before any page's
+    /// reads (founder, Oct 23 2026: a fresh open spun about six seconds on
+    /// Winners, its board queued behind the launch's other work).
+    /// They land in the disk cache, so the first tap paints from it; a tap
+    /// while they are still out joins the same requests.
+    static func prewarmLabBoards() async {
+        let today = GaryTour.winnersDay ?? todayEST()
+        async let todayRead = try? fetchLabBoard(date: today)
+        async let yesterdayRead = try? fetchLabBoard(date: LabFormat.yesterday(of: today))
+        _ = await (todayRead, yesterdayRead)
+    }
+
     /// The last board this account read for the day, from disk; nil when there
     /// is none or it no longer parses. Shown while the fresh read is in flight.
     static func cachedLabBoard(date: String, account: String?) -> LabBoard? {

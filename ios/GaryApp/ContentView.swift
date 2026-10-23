@@ -252,9 +252,11 @@ struct ContentView: View {
     /// Mount hidden content tabs progressively instead of making the user's
     /// first tap pay for view construction plus its network request. Staggering
     /// keeps launch responsive and lets shared API caches absorb overlapping
-    /// Home/Winners/Picks reads.
+    /// Home/Winners/Picks reads. Winners goes first (founder, Oct 23 2026: it
+    /// was last, mounted about four seconds in, and a fresh open's first tap
+    /// on it spun about six seconds).
     private func prewarmContentTabs(excluding initialTab: Int) async {
-        for index in [0, 3, 2, 1] where index != initialTab {
+        for index in [1, 0, 3, 2] where index != initialTab {
             try? await Task.sleep(nanoseconds: 900_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {

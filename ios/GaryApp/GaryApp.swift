@@ -14,6 +14,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set notification center delegate
         UNUserNotificationCenter.current().delegate = self
 
+        // Winners' board goes out first, ahead of every page's launch reads.
+        Task { @MainActor in await SupabaseAPI.prewarmLabBoards() }
+
         // Firebase Installations raises an Objective-C exception (not a Swift
         // Error) when a redacted/malformed API key is bundled. That exception
         // used to abort the app before its first frame. Validate the plist first:

@@ -611,9 +611,7 @@ struct WinnersLabView: View {
 
     @ViewBuilder
     private var content: some View {
-        if loading && board == nil {
-            HStack { Spacer(); ProgressView().tint(GaryColors.gold).scaleEffect(1.2); Spacer() }.padding(.top, 60)
-        } else if let error, board == nil {
+        if let error, board == nil {
             VStack(spacing: 8) {
                 Text(error).font(GaryFonts.ui(12)).foregroundStyle(LabInk.dim).multilineTextAlignment(.center)
                 Button("TRY AGAIN") { Task { await load() } }
@@ -636,7 +634,7 @@ struct WinnersLabView: View {
                     resultRows(yesterdayPlays.map(\.lead), section: "yesterday")
                     // The morning page stays full too (founder, Oct 15 2026): today's
                     // three COMING SOON packs sit under yesterday's plays.
-                    VStack(alignment: .leading, spacing: 12) { comingSoonPacks }.padding(.top, 18)
+                    VStack(alignment: .leading, spacing: 12) { packsToCome }.padding(.top, 18)
                 } else {
                     todayHead
                     if !streakSettledToday, let ticket = todayStreakTicket { streakCard(ticket) }
@@ -674,8 +672,8 @@ struct WinnersLabView: View {
                         timeHead(slot.clock)
                         ForEach(slot.groups) { group in module(group, sealable: true) }
                     }
-                    comingSoonPacks
-                    if filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
+                    packsToCome
+                    if board != nil, filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
                         Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
@@ -760,6 +758,19 @@ struct WinnersLabView: View {
                             action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = activeSport; showPlans = true })
                     .id("filler-\(i)")
             }
+        }
+    }
+
+    /// Until today's board comes back the page is drawn anyway (founder,
+    /// Oct 23 2026: a fresh open was a blank spinner for about six seconds):
+    /// three sealed packs hold today's place, each turning in the pack.
+    @ViewBuilder private var packsToCome: some View {
+        if board == nil {
+            ForEach(0..<3, id: \.self) { i in
+                LabPackCard(league: activeSport ?? "WINNERS", clock: nil, word: "", waiting: true).id("waiting-\(i)")
+            }
+        } else {
+            comingSoonPacks
         }
     }
 
@@ -1322,6 +1333,8 @@ struct StreakBox: View {
 struct LabPack: View {
     let word: String
     var lock: Bool = false
+    /// Today's board is still on its way: the pack turns where its word goes.
+    var waiting: Bool = false
 
     var body: some View {
         ZStack {
@@ -1350,8 +1363,12 @@ struct LabPack: View {
                                 .offset(x: 6, y: 6)
                         }
                     }
-                    Text(word).font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
-                        .fitsOneLine()
+                    if waiting {
+                        ProgressView().tint(GaryColors.warmGold)
+                    } else {
+                        Text(word).font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
+                            .fitsOneLine()
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1369,6 +1386,7 @@ struct LabPackCard: View {
     let clock: String?
     let word: String
     var lock: Bool = false
+    var waiting: Bool = false
     var action: (() -> Void)? = nil
     @ScaledMetric(relativeTo: .body) private var headRow: CGFloat = 18
     @ScaledMetric(relativeTo: .body) private var titleRow: CGFloat = 40
@@ -1383,7 +1401,7 @@ struct LabPackCard: View {
             }
             .frame(height: headRow)
             .padding(.horizontal, 16).padding(.top, 13)
-            LabPack(word: word, lock: lock)
+            LabPack(word: word, lock: lock, waiting: waiting)
                 .frame(height: titleRow + 12 + stateRow)
                 .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
         }
@@ -1392,7 +1410,7 @@ struct LabPackCard: View {
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { action?() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(lock ? "\(league) play, unlock" : "\(league) play at \(clock ?? ""), coming soon")
+        .accessibilityLabel(waiting ? "Loading today's plays" : lock ? "\(league) play, unlock" : "\(league) play at \(clock ?? ""), coming soon")
         .accessibilityAddTraits(action == nil ? [] : .isButton)
     }
 }
