@@ -759,11 +759,10 @@ export async function buildMlbScoutReport(game, options = {}) {
     }
     oddsSection = lines.join('\n');
     console.log(`[Scout Report] MLB: Using structured BDL odds`);
-  } else if (gameContextGrounding) {
-    oddsSection = '(See Game Context section below — odds included in grounding results)';
-    console.log(`[Scout Report] MLB: Odds included in consolidated grounding`);
   } else {
-    oddsSection = 'No odds data available.';
+    // No price from a search (Oct 23 2026 source audit: no fallback that gives different data); the market gate
+    // refuses a game without a priced ticket before the desk is built.
+    oddsSection = 'Price not on file.';
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -819,13 +818,9 @@ export async function buildMlbScoutReport(game, options = {}) {
       } else if (playerTeamId === awayTeamBdlId) {
         awayInjuries.push(formatted);
       } else {
-        // Fallback: try matching team name
-        const playerTeamName = (inj.player?.team?.display_name || inj.player?.team?.full_name || '').toLowerCase();
-        if (playerTeamName.includes(homeTeam.toLowerCase().split(' ').pop())) {
-          homeInjuries.push(formatted);
-        } else {
-          awayInjuries.push(formatted);
-        }
+        // A row that matches neither team by id is left out and logged; it used to land under the away team by
+        // default (Oct 23 2026 source audit).
+        console.warn(`[Scout Report] MLB injury row matched neither team, left out: ${inj.player?.first_name || ''} ${inj.player?.last_name || ''} (team id ${playerTeamId ?? 'none'})`);
       }
     }
 
@@ -873,13 +868,9 @@ export async function buildMlbScoutReport(game, options = {}) {
   let awayData = null;
   const homeLineupAbbr = game.home_team?.abbreviation || game.home_team_data?.abbreviation || '';
   const awayLineupAbbr = game.away_team?.abbreviation || game.away_team_data?.abbreviation || '';
-  if (confirmedLineups?.source === 'bdl' && confirmedLineups.data) {
-    homeData = matchLineupSide(confirmedLineups.data, homeLineupAbbr, homeTeam);
-    awayData = matchLineupSide(confirmedLineups.data, awayLineupAbbr, awayTeam);
-    console.log(`[Scout Report] MLB lineups from BDL: ${homeTeam}=${homeData?.batters?.length || 0} batters, ${awayTeam}=${awayData?.batters?.length || 0} batters`);
-  }
-
-  if (gamePk && (lineupShort(homeData) || lineupShort(awayData))) {
+  // The league's own feed is the lineup source (Oct 23 2026 source audit: BDL came back empty for 5 of 32 lineups and
+  // MLB Stats API had every one); a side it does not have yet reads as not posted, with no other source behind it.
+  if (gamePk) {
     const statsLineups = await getMlbGameLineups(gamePk).catch(() => null);
     if (statsLineups) {
       // Pre-game boxscores can omit the pitcher — complete the side from the
@@ -890,9 +881,9 @@ export async function buildMlbScoutReport(game, options = {}) {
           : side;
       const homeFb = completeSide(matchLineupSide(statsLineups, homeLineupAbbr, homeTeam), probablePitchersData?.home);
       const awayFb = completeSide(matchLineupSide(statsLineups, awayLineupAbbr, awayTeam), probablePitchersData?.away);
-      if (lineupShort(homeData) && homeFb && !lineupShort(homeFb)) homeData = homeFb;
-      if (lineupShort(awayData) && awayFb && !lineupShort(awayFb)) awayData = awayFb;
-      console.log(`[Scout Report] MLB lineups after MLB Stats API fallback: ${homeTeam}=${homeData?.batters?.length || 0} batters, ${awayTeam}=${awayData?.batters?.length || 0} batters`);
+      if (homeFb && !lineupShort(homeFb)) homeData = homeFb;
+      if (awayFb && !lineupShort(awayFb)) awayData = awayFb;
+      console.log(`[Scout Report] MLB lineups from MLB Stats API: ${homeTeam}=${homeData?.batters?.length || 0} batters, ${awayTeam}=${awayData?.batters?.length || 0} batters`);
     }
   }
 
