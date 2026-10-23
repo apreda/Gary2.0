@@ -68,7 +68,10 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
   const sameDayFinals = new Set([...enriched.values()].filter(r=>r.date===date).map(r=>String(r.gamePk)));
   const pitchers = await mapLimit(roster,4,async p=>{
     const id=p.person.id;
-    const logData=await get(`v1/people/${id}/stats?stats=gameLog&group=pitching&season=${season}`,`${p.person.fullName} MLB log`);
+    // The postseason rides in the same log: without gameType the feed returns the regular season only, so a playoff
+    // outing older than the 14-day box window was missing (Oct 23 2026 data audit: Aaron Ashby's three NLDS games, 5.2
+    // scoreless innings, were not in his log, and his "late innings, last 30 days" read 5 games where he had pitched 8).
+    const logData=await get(`v1/people/${id}/stats?stats=gameLog&group=pitching&season=${season}&gameType=R,F,D,L,W`,`${p.person.fullName} MLB log`);
     let log=null;
     try { if(logData)log=logsFrom(logData); } catch(e) { gaps.push(`${p.person.fullName}: ${e.message}`); }
     const safe = (log || []).filter(r=>r.game?.gamePk && !excludedGames.has(String(r.game.gamePk)) && r.date && validGame({gameType:r.gameType||'R'}) && (r.date<date || (r.date===date && sameDayFinals.has(String(r.game.gamePk)))))
@@ -117,6 +120,9 @@ export async function buildBullpenTeam({ teamId, teamName, opponentId, starterId
       season:{...summarize(relief),complete:log!=null}, recent7:summarize(relief.filter(r=>dayGap(r.date,date)>=0&&dayGap(r.date,date)<7)),
       recent30:summarize(relief.filter(r=>dayGap(r.date,date)>=0&&dayGap(r.date,date)<30)),
       usage:roleHistory(relief), lastStart:mlb.filter(r=>r.role==='starter').map(({pitchDetails,faced,...r})=>r).at(-1) || null,
+      // His whole postseason, starts and relief (Oct 23 2026 data audit: the playoff story named each reliever with no
+      // October line; Ashby's 12.1 scoreless innings were on no page Gary read).
+      postseason:{...summarize(mlb.filter(r=>r.gameType && r.gameType!=='R')),starts:mlb.filter(r=>r.gameType && r.gameType!=='R' && r.role==='starter').length,complete:log!=null},
       // This club only: a traded arm's old club had another manager and another schedule.
       late30:lateInnings(withClub,date), nextDay:nextDayPattern(withClub,teamDates,date),
       pitchTrend:{ recentGames:newest.map(r=>r.date), comparisonGames:prior.map(r=>r.date),
