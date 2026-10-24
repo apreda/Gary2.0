@@ -12,6 +12,7 @@
 import { loadNflverseFile, NFLVERSE_TEAM_CODES } from '../../providers/nflverseService.js';
 import { getNflSchedule, sideFacts, restPhrase, tripPhrase } from './nflSchedule.js';
 import { getPlayLedger } from './nflPlayLedger.js';
+import { loadNflGameWeather, gameWeatherLine } from './nflGameWeather.js';
 
 const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
 export const codeOf = (team) => NFLVERSE_TEAM_CODES[team];
@@ -33,9 +34,13 @@ export async function loadBettorData(season) {
   // data audit). Only games already played are ever looked up in it.
   const ledger = led && !led.unavailable && Number(led.schema) >= 7 ? led : null;
   // A schedule that did not load is said to be missing, never read as a season with no games (Oct 23 2026 source audit).
-  return { season, schedule: schedule && !schedule.unavailable ? schedule.rows : [], scheduleMissing: !schedule || Boolean(schedule.unavailable),
+  const scheduleRows = schedule && !schedule.unavailable ? schedule.rows : [];
+  // Rain and snow over each played outdoor game (nflGameWeather.js); a failed lookup says so on those games' lines.
+  const playedRows = scheduleRows.filter((r) => r.season === String(season) && r.home_score !== '' && r.away_score !== '');
+  const weather = await loadNflGameWeather(playedRows, kickoffMs).catch((e) => { console.warn(`[NFL data] game weather not on file: ${e.message}`); return null; });
+  return { season, schedule: scheduleRows, scheduleMissing: !schedule || Boolean(schedule.unavailable),
     teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc), rosterWeekly: rows(rw),
-    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null };
+    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather };
 }
 
 // The schedule's kickoff (Eastern date and time) as an instant: try standard time, then correct by the hour Eastern
@@ -442,8 +447,9 @@ export function gameByGame(d, team, before) {
     const ot = x.ot ? ` in overtime${q ? ` (${regulation(c, x.pf)}-${regulation(x.opp, x.pa)} after four quarters)` : ''}` : '';
     const kicking = x.off && x.def ? `kicking: ${nickname(c)} ${kicks(x.off.kicking)}; ${nickname(x.opp)} ${kicks(x.def.kicking)}` : null;
     const scoring = !d.ledgerGames ? null : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, c);
+    const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
     const detail = [without, boxLine(x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
-      d.ledgerGames && x.ledger ? driveLine(x, c) : null, changes.get(x.g.game_id) || null].filter(Boolean);
+      d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(oppGames)} now${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
 }

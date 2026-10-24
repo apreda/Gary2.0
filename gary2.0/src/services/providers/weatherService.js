@@ -32,6 +32,9 @@ const WMO = new Map([
   [95, 'thunderstorm'], [96, 'thunderstorm with hail'], [99, 'severe thunderstorm with hail']
 ]);
 
+/** A WMO weather code in words ("heavy rain"), or null. */
+export const weatherCodeWords = (code) => WMO.get(code) ?? null;
+
 function compassPoint(degrees) {
   if (!Number.isFinite(degrees)) return null;
   const points = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
