@@ -11,7 +11,7 @@ import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/football
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { nflverseCode } from '../../../../providers/nflverseService.js';
 import { getNflSchedule, scheduleRowFor, siteFor, sideFacts, restPhrase, tripPhrase, headCoach, zoneName, markNeutralSites } from '../../../../sports/nfl/nflSchedule.js';
-import { getKickoffWeather, windDescription } from '../../../../providers/weatherService.js';
+import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { getNflHeadCoach } from '../../../../providers/espnNflCoaches.js';
 // A failed source is logged before it falls away (round 2 audit, Oct 13 2026: these fell away without a word).
 const warnAs = (what, fallback) => (e) => { console.warn(`[Scout Report] NFL ${what} unavailable: ${e?.message || e}`); return fallback; };
@@ -94,9 +94,9 @@ async function siteLines({ homeTeam, awayTeam, game, season }) {
       else {
         const r = (v) => (Number.isFinite(v) ? Math.round(v) : null);
         const facts = [r(w.temperature_f) != null ? `${r(w.temperature_f)}°F` : null, w.conditions,
-          windDescription(w) ? `wind ${windDescription(w)}` : null,
-          r(w.precip_chance_pct) != null ? `${r(w.precip_chance_pct)}% chance of precipitation` : null].filter(Boolean);
-        lines.push(`${lead}, forecast for the kickoff hour: ${facts.length ? facts.join(', ') : 'no readings'}.`);
+          windDescription(w) ? `wind ${windDescription(w)}` : null].filter(Boolean);
+        const hours = gameHoursDescription(w);
+        lines.push(`${lead}, forecast for the kickoff hour: ${facts.length ? facts.join(', ') : 'no readings'}${hours ? `; ${hours}` : ''}.`);
       }
     }
   }

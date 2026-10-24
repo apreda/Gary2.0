@@ -261,7 +261,7 @@ function lineupChanges(d, code, gs) {
       fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? ', off reserve' : ''))}` : null,
     ].filter(Boolean);
     out.set(g.g.game_id, parts.join(' · '));
-    out.missing = { names: [...missing, ...limited].map((id) => ({ name: name.get(id).name, pos: name.get(id).pos, limited: limited.includes(id) })) };
+    out.missing = { names: [...missing, ...limited].map((id) => ({ name: name.get(id).name, pos: name.get(id).pos, limited: limited.includes(id), why: missing.includes(id) ? why(g, id) : null })) };
   });
   return out;
 }
@@ -294,7 +294,10 @@ export function skillPlayers(d, team, before, reportText = '') {
     const played = new Map(rs.map((r) => [r.game_id, r]));
     const recent = gs.slice().reverse().slice(0, VALUES_UP_TO).map((x) => `Wk ${x.week} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
     const season = gs.length > VALUES_UP_TO ? ` · season, ${rs.length} games: ${game(Object.fromEntries(['carries', 'rushing_yards', 'rushing_tds', 'receptions', 'targets', 'receiving_yards', 'receiving_tds'].map((k) => [k, total(rs, k)])))}` : '';
-    const listed = text.includes(sameKey(last.player_display_name)) ? ' · on this week\'s injury report' : '';
+    // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
+    const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
+    const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];
+    const listed = text.includes(sameKey(last.player_display_name)) ? ` · ${status ? `${status} on` : 'on'} this week\'s injury report` : '';
     return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}${season}`;
   });
   return [`${team}:`, ...lines].join('\n');
@@ -312,8 +315,8 @@ export function notOnReport(d, team, before, reportText = '') {
   const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
   const back = (changes.missing?.names || []).filter((p) => !text.includes(sameKey(p.name)));
   if (!back.length) return null;
-  // Why he missed it (inactive, on reserve, active and did not play) is on that game's line in the game log, once.
-  return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? 'left early or limited' : 'missed'} Wk ${gs.at(-1).week})`).join(', ')}`;
+  // How he missed it, as the game log says it (Oct 24 2026: "missed Wk 6" for a safety who played special teams only).
+  return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? 'left early or limited' : p.why === 'special teams only' ? 'special teams only' : 'missed'} Wk ${gs.at(-1).week})`).join(', ')}`;
 }
 const sameKey = (x) => qbKey(x).join('');
 

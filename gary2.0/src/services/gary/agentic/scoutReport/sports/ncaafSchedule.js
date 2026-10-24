@@ -28,7 +28,7 @@ import { teamReportHistory, historyLine, backFromReports, outOnGameDay } from '.
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
-import { getKickoffWeather, windDescription } from '../../../../providers/weatherService.js';
+import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
@@ -90,10 +90,10 @@ async function weatherLine(site, game) {
   const facts = [round(weather.temperature_f) != null ? `${round(weather.temperature_f)}°F` : null,
     round(weather.feels_like_f) != null && round(weather.feels_like_f) !== round(weather.temperature_f) ? `feels like ${round(weather.feels_like_f)}°F` : null,
     weather.conditions, windDescription(weather) ? `wind ${windDescription(weather)}` : null,
-    round(weather.precip_chance_pct) != null ? `${round(weather.precip_chance_pct)}% chance of precipitation` : null,
     round(weather.humidity_pct) != null ? `humidity ${round(weather.humidity_pct)}%` : null].filter(Boolean);
   if (!facts.length) return 'Kickoff weather: the forecast carried no readings for this kickoff.';
-  return `Kickoff weather (forecast for the kickoff hour, issued about ${plural(weather.forecast_lead_hours, 'hour')} ahead): ${facts.join(', ')}.`;
+  const hours = gameHoursDescription(weather);
+  return `Kickoff weather (forecast for the kickoff hour, issued about ${plural(weather.forecast_lead_hours, 'hour')} ahead): ${facts.join(', ')}${hours ? `; ${hours}` : ''}.`;
 }
 
 function siteLines(site, { homeTeam, awayTeam, game }) {

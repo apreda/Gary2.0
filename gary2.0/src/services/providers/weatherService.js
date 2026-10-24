@@ -107,6 +107,20 @@ export async function getKickoffWeather(venue, kickoff, { fetchImpl = globalThis
     return Number.isFinite(value) ? value : null;
   };
 
+  // The game's hours, not only the kickoff hour: the kickoff hour and the three after it (Oct 24 2026 data audit: a
+  // Seattle night game read "light rain" for the kickoff hour with no word on the rest of the game).
+  const span = [0, 1, 2, 3].map((k) => index + k).filter((i) => i < hours.length);
+  const seriesAt = (key, i) => { const v = payload.hourly[key]?.[i]; return Number.isFinite(v) ? v : null; };
+  const wet = span.map((i) => seriesAt('precipitation', i)).filter((v) => v != null);
+  const game = {
+    hours: span.length,
+    precip_inches: wet.length ? Math.round(wet.reduce((a, v) => a + v, 0) * 100) / 100 : null,
+    wet_hours: wet.filter((v) => v >= 0.01).length,
+    max_wind_mph: Math.max(...span.map((i) => seriesAt('wind_speed_10m', i) ?? -Infinity)),
+    max_gust_mph: Math.max(...span.map((i) => seriesAt('wind_gusts_10m', i) ?? -Infinity)),
+    conditions: [...new Set(span.map((i) => WMO.get(seriesAt('weather_code', i))).filter(Boolean))],
+  };
+
   const windSpeed = at('wind_speed_10m');
   const gusts = at('wind_gusts_10m');
   const direction = at('wind_direction_10m');
@@ -123,6 +137,7 @@ export async function getKickoffWeather(venue, kickoff, { fetchImpl = globalThis
     precip_inches: at('precipitation'),
     humidity_pct: at('relative_humidity_2m'),
     conditions: WMO.get(at('weather_code')) ?? null,
+    game,
     // Open-Meteo reports the elevation it actually resolved the coordinates
     // to. It doubles as a coordinate check: a stadium that comes back at the
     // wrong elevation is a stadium in the wrong place.
@@ -130,6 +145,21 @@ export async function getKickoffWeather(venue, kickoff, { fetchImpl = globalThis
     forecast_lead_hours: Number.isFinite(leadHours) ? leadHours : null,
     provenance: `Open-Meteo hourly forecast for the kickoff hour, issued ~${leadHours}h ahead`
   };
+}
+
+/**
+ * The game's hours in words: the rain or snow forecast over the kickoff hour and the three after it, and the wind's
+ * high. The forecast's chance-of-precipitation figure is left out: it comes from a different model than the conditions
+ * and amounts, and read "light rain, 10% chance" for one hour (Oct 24 2026 data audit).
+ */
+export function gameHoursDescription(weather) {
+  const g = weather?.game;
+  if (!g || !g.hours) return null;
+  const wet = g.precip_inches == null ? null
+    : g.precip_inches >= 0.01 ? `${g.precip_inches.toFixed(2)} in. of precipitation forecast, in ${g.wet_hours} of the ${g.hours} hours` : 'no precipitation forecast';
+  const wind = Number.isFinite(g.max_wind_mph) ? `wind up to ${Math.round(g.max_wind_mph)} mph${Number.isFinite(g.max_gust_mph) && g.max_gust_mph > g.max_wind_mph + 3 ? `, gusts to ${Math.round(g.max_gust_mph)}` : ''}` : null;
+  const facts = [wet, g.conditions.length > 1 ? g.conditions.join(', then ') : null, wind].filter(Boolean);
+  return facts.length ? `over the kickoff hour and the ${g.hours - 1} after it: ${facts.join('; ')}` : null;
 }
 
 /**
