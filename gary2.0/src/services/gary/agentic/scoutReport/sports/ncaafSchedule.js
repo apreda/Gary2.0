@@ -322,7 +322,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -373,13 +373,20 @@ async function playerGames(sides, boxes) {
         const ended = ds.length - counted.length;
         return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;
       };
+      // Who played quarterback for the opponent that day, everyone with five or more passes (Oct 24 2026: a win over a
+      // team playing its backup is not a win over the team; the NFL's line has said so since Oct 23).
+      if (oppId) {
+        const passers = playerGameRows(box, oppId, r.gameId, positions).filter((x) => Number(x.passing_attempts) >= 5)
+          .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
+        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds`).join('; '));
+      }
       if (oppId) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
         const mineD = driveLine(found.teamId), theirsD = driveLine(oppId);
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
       }
     }
-    return { rows, onFile, points, kicking, drives };
+    return { rows, onFile, points, kicking, drives, oppQb };
   }));
 }
 
@@ -685,7 +692,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
       const units = boxes.lines(s.team, r);
       const points = played[i].points.get(String(r.gameId));
-      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}\n${units.join('\n')}`
+      const theirQb = played[i].oppQb?.get(String(r.gameId));
+      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
