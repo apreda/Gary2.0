@@ -247,7 +247,7 @@ async function gameLog(desk, ratings, team, asOf, ts) {
   return h.rated ? log.replace(/^(.*)\n/, `$1\n  ${h.rated}\n`) : log;
 }
 
-// THE SITUATION from the same games as the log: days off since each team's last game, where that game was, tonight's
+// SCHEDULE AND TRAVEL (the heading names the data; Oct 24 2026) from the same games as the log: days off since each team's last game, where that game was, tonight's
 // trip and a tip outside the usual evening (Oct 23 2026 data audit). A team before its first game is left out (its
 // log says so).
 function situation(seasons, homeTeam, awayTeam, tip, asOf) {
@@ -611,7 +611,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     ['WHO IS PLAYING', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
-    ['THE SITUATION', situation(seasons, homeTeam, awayTeam, tip, asOf)],
+    ['SCHEDULE AND TRAVEL', situation(seasons, homeTeam, awayTeam, tip, asOf)],
   ];
   const [starts, teams] = await Promise.all([
     Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null))).then((d) => d.filter(Boolean).sort()),

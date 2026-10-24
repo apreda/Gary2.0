@@ -279,7 +279,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
     ['THIS SEASON, GAME BY GAME', gameLog(desk)],
     ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
-    ['THE SITUATION', situation(desk)],
+    ['SCHEDULE, TRAVEL AND WEATHER', situation(desk)],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
 }

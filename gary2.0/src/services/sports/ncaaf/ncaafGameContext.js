@@ -230,6 +230,23 @@ export function markOfficialMissing(context, official, { game } = {}) {
   return out;
 }
 
+// A side whose absences come from the news search says so, and whether its conference publishes a report at all (Oct 24
+// 2026: "availability source: checked" read the same for Notre Dame, which has no report, as for an official one).
+export function labelSearchedAvailability(context, { game } = {}) {
+  if (!context?.sides) return context;
+  const out = structuredClone(context);
+  for (const side of ['home', 'away']) {
+    const row = out.sides[side];
+    if (!row || row.official_report || row.availability !== 'checked') continue;
+    const team = side === 'home' ? game?.home_team : (game?.away_team ?? game?.visitor_team);
+    const conference = REPORTING_CONFERENCES[ncaafTeamConferenceId(team)];
+    row.availability = 'searched news reporting';
+    row.availability_note = conference ? `the ${CONFERENCE_LABEL[conference] || conference} availability report was not read for this game`
+      : 'its conference publishes no availability report';
+  }
+  return out;
+}
+
 export function applyOfficialReport(context, official, { game, rosters } = {}) {
   if (!official?.found || !context?.sides) return context;
   const out = structuredClone(context);
@@ -301,7 +318,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
     // The conference's own report, when the game has one, comes before any search for it.
     const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch((e) => ({ found: false, errors: [`all: ${e.message}`] }));
-    const withOfficial = ctx => markOfficialMissing(applyOfficialReport(ctx, official, { game, rosters }), official, { game });
+    const withOfficial = ctx => labelSearchedAvailability(markOfficialMissing(applyOfficialReport(ctx, official, { game, rosters }), official, { game }), { game });
     const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' }));
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
     // for Iowa State but not for BYU, the same report). A team left without a
