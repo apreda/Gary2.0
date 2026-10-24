@@ -85,7 +85,14 @@ export function sameQb(a, b) {
 const box = (r) => (r ? { yards: yards(r), rushing: n(r.rushing_yards), carries: n(r.carries), ints: n(r.passing_interceptions),
   fumbles: n(r.fumbles_total), fumblesLost: n(r.fumbles_lost_total), giveaways: n(r.passing_interceptions) + n(r.fumbles_lost_total), sacked: n(r.sacks_suffered),
   hitsMade: n(r.def_qb_hits),
-  kicking: { fgMade: n(r.fg_made), fgAtt: n(r.fg_att), missed: String(r.fg_missed_list || '').split(';').filter(Boolean), blocked: String(r.fg_blocked_list || '').split(';').filter(Boolean), xpMade: n(r.pat_made), xpAtt: n(r.pat_att) } } : null);
+  kicking: { fgMade: n(r.fg_made), fgAtt: n(r.fg_att), made: String(r.fg_made_list || '').split(';').filter(Boolean), missed: String(r.fg_missed_list || '').split(';').filter(Boolean), blocked: String(r.fg_blocked_list || '').split(';').filter(Boolean), xpMade: n(r.pat_made), xpAtt: n(r.pat_att) } } : null);
+
+// The kicker on each side, from the weekly player stats (anyone with a field goal or extra point try that game).
+function withKickers(b, d, g, code) {
+  if (!b) return b;
+  const names = (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && (n(r.fg_att) > 0 || n(r.pat_att) > 0)).map((r) => r.player_display_name);
+  return { ...b, kicking: { ...b.kicking, kickers: [...new Set(names)] } };
+}
 
 /** One team's season before `before`: each game's result, score, box score both ways and who played quarterback. */
 export function teamGames(d, code, season, before) {
@@ -103,7 +110,7 @@ export function teamGames(d, code, season, before) {
       // Overtime from the schedule (Oct 23 2026 data audit: Kansas City's 3-point win over Indianapolis read as a
       // regulation win), and the game's play-ledger entry, when the ledger has it.
       ot: g.overtime === '1', ledger: d.ledgerGames?.get(g.game_id) || null,
-      off: box(us), def: box(them) };
+      off: withKickers(box(us), d, g, code), def: withKickers(box(them), d, g, opp) };
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
 const record = (gs) => { const w = gs.filter((x) => x.won).length, t = gs.filter((x) => x.tied).length; return `${w}-${gs.length - w - t}${t ? `-${t}` : ''}`; };
@@ -387,7 +394,9 @@ const quarterLine = (x, code) => {
   return `by quarter: ${side(code)}; ${side(x.opp)}`;
 };
 // Field goals made of tried, with the distance of each miss and block, and extra points (Oct 23 2026 data audit).
-const kicks = (k) => [k.fgAtt ? `FG ${k.fgMade}-of-${k.fgAtt}${k.missed.length || k.blocked.length ? ` (${[k.missed.length ? `missed ${k.missed.join(', ')}` : null, k.blocked.length ? `blocked ${k.blocked.join(', ')}` : null].filter(Boolean).join('; ')})` : ''}` : 'no field goal tries',
+// Who kicked and every try's distance (founder, Oct 24 2026: "FG 0-of-2" invites "they can't kick" when the misses were
+// from 50-plus, or by a kicker who is not kicking today).
+const kicks = (k) => [k.fgAtt ? `FG ${k.kickers?.length ? `${k.kickers.join(' and ')} ` : ''}${k.fgMade}-of-${k.fgAtt}${k.made?.length || k.missed.length || k.blocked.length ? ` (${[k.made?.length ? `made ${k.made.join(', ')}` : null, k.missed.length ? `missed ${k.missed.join(', ')}` : null, k.blocked.length ? `blocked ${k.blocked.join(', ')}` : null].filter(Boolean).join('; ')})` : ''}` : 'no field goal tries',
   k.xpAtt ? `XP ${k.xpMade}-of-${k.xpAtt}` : null].filter(Boolean).join(', ');
 // How each side's drives ended, red-zone trips, drives that began in the other side's territory and their points, and
 // touchdowns the offense did not score: counts from the play ledger, never its average start or per-play numbers
