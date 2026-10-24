@@ -204,7 +204,7 @@ export async function teamReportHistory(team, { date } = {}, options = {}) {
     for (const r of mine.sort((a, b) => b.week - a.week)) {
       const k = playerKey(r.player);
       if (!byPlayer.has(k)) byPlayer.set(k, []);
-      byPlayer.get(k).push({ week: r.week, opponent: r.opponent, gameDay: r.gameDay || r.initial || 'listed' });
+      byPlayer.get(k).push({ week: r.week, opponent: r.opponent, date: r.date, name: r.player, gameDay: r.gameDay || r.initial || 'listed' });
     }
     return { found: true, conference, byPlayer, weeks: [...new Set(mine.map((r) => r.week))].sort((a, b) => b - a) };
   }
@@ -221,4 +221,21 @@ export function historyLine(history, name, { short = false } = {}) {
   }
   return short ? `earlier: ${rows.map((r) => `Wk ${r.week} ${r.gameDay}`).join(', ')}`
     : `earlier game-day reports: ${rows.map((r) => `Wk ${r.week} ${r.gameDay}${r.opponent ? ` (${r.opponent})` : ''}`).join(', ')}`;
+}
+
+/**
+ * Players out on an earlier game day this season who are not on this week's report (`reportedNames`): the ones coming
+ * back, or already back. [{ name, outWeeks: [week], lastOutDate }], the most recent absence first.
+ */
+export function backFromReports(history, reportedNames = []) {
+  if (!history?.found) return [];
+  const listed = new Set(reportedNames.map(playerKey));
+  const out = [];
+  for (const [k, rows] of history.byPlayer) {
+    if (listed.has(k)) continue;
+    const outs = rows.filter((r) => /^out/i.test(r.gameDay));
+    if (!outs.length) continue;
+    out.push({ name: outs[0].name, outWeeks: outs.map((r) => r.week), lastOutDate: outs[0].date });
+  }
+  return out.sort((a, b) => String(b.lastOutDate).localeCompare(String(a.lastOutDate)));
 }

@@ -24,7 +24,7 @@
  * Facts only. Nothing here says what a home field, a trip or a schedule is
  * worth; a source that does not answer is named as missing, never left out.
  */
-import { teamReportHistory, historyLine } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
+import { teamReportHistory, historyLine, backFromReports } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
@@ -488,6 +488,15 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   const empty = state === 'checked' ? '  No player on the availability report for this game.'
     : state === 'partial' ? '  Availability only partly retrieved: the reported absences could not be verified; absences unknown.'
       : '  Availability report not retrieved for this team; absences unknown.';
+  // Back, or coming back (Oct 24 2026 read check: Indiana's starting corner A.J. Harris had returned two games earlier,
+  // and the story only said his replacement was missing): out on an earlier game day, not on this week's report, and
+  // the games he has played since.
+  const back = backFromReports(history, (reported || []).map(reportName)).slice(0, 8).map((b) => {
+    const entry = [...byPlayer].find(([player]) => nameKey(player) === nameKey(b.name));
+    const since = entry ? games.filter((r) => entry[1].games.has(String(r.gameId)) && (!b.lastOutDate || String(r.date).slice(0, 10) > b.lastOutDate)) : [];
+    return `${b.name}${entry?.[1].position ? ` ${entry[1].position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${since.length ? `stat rows since: ${since.map(day).join(', ')}` : 'no stat row since'})`;
+  });
+  if (back.length) lines.push(`  out on an earlier report, not on this week's: ${back.join('; ')}`);
   return [`${team}${lines.length ? notOnFile(results, onFile) : ''}`, ...(lines.length ? lines : [empty])];
 }
 
