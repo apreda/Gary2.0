@@ -26,7 +26,7 @@
  */
 import { teamReportHistory, historyLine, backFromReports, outOnGameDay } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
-import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
+import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
@@ -77,6 +77,23 @@ async function resolveSite({ homeTeam, awayTeam, season, game, seasonGames }) {
     capacity: homeStadium.capacity, surface: homeStadium.surface, dome: homeStadium.roof === 'dome',
     elevationFt: Number.isFinite(homeStadium.elevation_m) ? Math.round(homeStadium.elevation_m * 3.281 / 10) * 10 : null,
     tz: homeStadium.tz, lat: homeStadium.lat, lon: homeStadium.lon, homeStadium, awayStadium };
+}
+
+/**
+ * A played game's weather at kickoff, as CFBD recorded it, when it was more than a dry, calm day (Oct 24 2026 read check:
+ * SMU's 25 points against Boston College came in heavy rain, BYU's 62 passing yards at TCU in rain, and the game log
+ * read them as ordinary games). Indoors or ordinary weather: null.
+ */
+export function playedInWeather(row) {
+  if (!row || row.gameIndoors) return null;
+  const condition = String(row.weatherCondition || '').trim();
+  const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const precip = n(row.precipitation), snow = n(row.snowfall), wind = n(row.windSpeed), temp = n(row.temperature);
+  const wet = /rain|drizzle|snow|sleet|thunder|storm|shower|freez|hail/i.test(condition) || (precip ?? 0) >= 0.05 || (snow ?? 0) > 0;
+  if (!wet && !((wind ?? 0) >= 15) && !(temp != null && temp <= 32)) return null;
+  return `weather at kickoff: ${[condition ? condition.toLowerCase() : (precip ?? 0) >= 0.05 ? 'precipitation' : null,
+    (precip ?? 0) >= 0.01 ? `${precip.toFixed(2)} in. of precipitation that hour` : null,
+    temp != null ? `${Math.round(temp)}°F` : null, wind != null ? `wind ${Math.round(wind)} mph` : null].filter(Boolean).join(', ')}`;
 }
 
 /** The kickoff-hour forecast at the site, as one line of facts. */
@@ -635,7 +652,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
   if (!home?.id || !away?.id) throw new Error('college team identities unavailable for the schedule sections');
 
-  const leagueGames = await getSeasonGames(season).catch(() => null);
+  const [leagueGames, leagueWeather] = await Promise.all([getSeasonGames(season).catch(() => null), getSeasonWeather(season).catch(() => null)]);
   const [homeResults, awayResults, site] = await Promise.all([
     loadTeamResults(SPORT, home.id, season), loadTeamResults(SPORT, away.id, season),
     resolveSite({ homeTeam, awayTeam, season, game, seasonGames: leagueGames }).catch((e) => ({ missing: true, reason: e.message })),
@@ -690,12 +707,13 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
 
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
-Every completed game this season, newest first: date, site, score, how the
-halves went, the opponent's conference, current record and AP rank, what the
+Every completed game this season, newest first: date, site, score, the
+score by quarter, the opponent's conference, current record and AP rank, what the
 opponent allows and scores per game this season with its rank among FBS
 teams, who played quarterback (the most pass attempts), each unit's box
 score (runs, passing, turnovers, third and fourth downs, penalties) and where
-each side's points came from.
+each side's points came from, and the weather at kickoff when it was rain,
+snow, a storm, wind of 15 mph or more, or freezing.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
@@ -706,7 +724,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
-        + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '');
+        + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '')
+        + (playedInWeather(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date)) ? `\n      ${playedInWeather(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date))}` : '');
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;

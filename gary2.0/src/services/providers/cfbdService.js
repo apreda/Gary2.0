@@ -184,6 +184,21 @@ export function seasonGameFor(gamesResult, homeTeam, awayTeam, kickoff) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+/** Each FBS game's weather this season: recorded at kickoff for games played, a forecast for games ahead. */
+export async function getSeasonWeather(season, opts = {}) {
+  return bulkGet(`/games/weather?year=${season}&seasonType=regular&classification=fbs`, `weather_${season}`, opts);
+}
+
+/** One played game's weather row, by its two teams and date (either one home); null when not exactly one matches. */
+export function gameWeatherFor(weatherResult, team, opponent, date) {
+  if (!weatherResult || weatherResult.unavailable || !Array.isArray(weatherResult.rows)) return null;
+  const at = Date.parse(date || '');
+  const near = (row) => Number.isFinite(at) && Math.abs(Date.parse(row.startTime || '') - at) <= 36 * 60 * 60 * 1000;
+  const sides = (row, a, b) => cfbdTeamMatches(row.homeTeam, a) && cfbdTeamMatches(row.awayTeam, b);
+  const matches = weatherResult.rows.filter((row) => near(row) && (sides(row, team, opponent) || sides(row, opponent, team)));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 /** One venue by provider id. */
 export function venueById(venuesResult, id) {
   if (!venuesResult || venuesResult.unavailable || !Array.isArray(venuesResult.rows) || id == null) return null;
