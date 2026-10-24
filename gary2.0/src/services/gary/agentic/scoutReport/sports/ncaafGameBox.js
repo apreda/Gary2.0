@@ -142,7 +142,7 @@ export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.f
 const sumOf = (players, category, key) => players.reduce((total, p) => total + (Number(p.stats?.[category]?.[key]) || 0), 0);
 
 /**
- * Whether one team's player lines add up to its CFBD team line: carries, catches and pass attempts must all match
+ * Whether one team's player lines add up to its CFBD team line: carries, catches and pass attempts each within one
  * (the check the source audit asked for before any player line is shown). `teamLine` is CFBD's category-to-stat map.
  */
 export function boxAddsUp(box, teamId, teamLine) {
@@ -150,8 +150,12 @@ export function boxAddsUp(box, teamId, teamLine) {
   const [completions, attempts] = String(teamLine?.get?.('completionAttempts') ?? '').split('-').map(Number);
   const carries = Number(teamLine?.get?.('rushingAttempts'));
   if (!players.length || ![completions, attempts, carries].every(Number.isFinite)) return false;
-  return sumOf(players, 'rushing', 'rushingAttempts') === carries && sumOf(players, 'receiving', 'receptions') === completions
-    && sumOf(players, 'passing', 'passingAttempts') === attempts;
+  // Within one of each: the two sources score the odd play differently (a shovel pass as a run, a scramble as a pass),
+  // and an exact match threw out whole games over one carry (Oct 24 2026 read check: Texas Tech at Oregon State, Clemson
+  // and California, San Diego State at Toledo). A wider gap is a different box, and the game reads "not on file".
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  return near(sumOf(players, 'rushing', 'rushingAttempts'), carries) && near(sumOf(players, 'receiving', 'receptions'), completions)
+    && near(sumOf(players, 'passing', 'passingAttempts'), attempts);
 }
 
 /**

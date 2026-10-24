@@ -167,7 +167,16 @@ export async function getWeekAdvancedStats(season, week, opts = {}) {
 
 /** Every FBS game's box score for one week (rushing, passing, turnovers, sacks, third downs), in one request. */
 export async function getWeekBoxScores(season, week, opts = {}) {
-  return bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fbs`, `boxweek_${season}_${week}`, opts);
+  // FBS games, and FBS teams' games against FCS teams, which CFBD lists under FCS only (Oct 24 2026 read check: Baylor's
+  // game against Prairie View had no team line, so its player lines and units read "not on file").
+  const [fbs, fcs] = await Promise.all([
+    bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fbs`, `boxweek_${season}_${week}`, opts),
+    bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fcs`, `boxweek_fcs_${season}_${week}`, opts),
+  ]);
+  if (!fbs || fbs.unavailable || !Array.isArray(fbs.rows)) return fbs;
+  const seen = new Set(fbs.rows.map((g) => g.id));
+  const mixed = fcs && !fcs.unavailable && Array.isArray(fcs.rows) ? fcs.rows.filter((g) => !seen.has(g.id)) : [];
+  return { ...fbs, rows: [...fbs.rows, ...mixed] };
 }
 
 /**

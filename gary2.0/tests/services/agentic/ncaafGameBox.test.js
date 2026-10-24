@@ -41,8 +41,9 @@ describe('player lines against the team line', () => {
   ];
   const line = (carries) => new Map([['completionAttempts', '24-41'], ['rushingAttempts', String(carries)]]);
 
-  it('uses a game\'s player lines only when carries, catches and attempts add up', () => {
+  it('uses a game\'s player lines only when carries, catches and attempts are within one of the team line', () => {
     expect(boxAddsUp({ players }, '150', line(29))).toBe(true);
-    expect(boxAddsUp({ players }, '150', line(30))).toBe(false);
+    expect(boxAddsUp({ players }, '150', line(30))).toBe(true);
+    expect(boxAddsUp({ players }, '150', line(31))).toBe(false);
   });
 });
