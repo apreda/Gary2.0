@@ -109,6 +109,26 @@ export const nbaPlayerStatsMethods = {
   },
 
   /**
+   * Who started each game: BDL's lineups rows ({ game_id, starter, position, player, team }), about 23 a game, so ask for four games or fewer.
+   * Oct 24 2026: the game log showed minutes but not who started, so a starter moved to the bench read the same.
+   */
+  async getNbaLineups(gameIds = [], ttlMinutes = 24 * 60) {
+    const ids = [...new Set((gameIds || []).filter(Boolean))].sort();
+    if (!ids.length) return [];
+    try {
+      return await getCachedOrFetch(`nba_lineups_${ids.join('_')}`, async () => {
+        const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/lineups?${ids.map((id) => `game_ids[]=${id}`).join('&')}&per_page=100`;
+        const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+        return Array.isArray(resp?.data?.data) ? resp.data.data : [];
+      }, ttlMinutes);
+    } catch (e) {
+      recordPickDataFailure('BDL:getNbaLineups', e);
+      console.error('[Ball Don\'t Lie] getNbaLineups error:', e.message);
+      return [];
+    }
+  },
+
+  /**
    * Get NBA player season stats formatted for props analysis
    * ENHANCED: Now fetches base stats + usage/advanced stats in parallel
    * Returns: pts, reb, ast, stl, blk, fg3m (threes), min + usage_pct, ts_pct, efg_pct, etc.
