@@ -3,15 +3,18 @@
 Gary picks every game for the Picks page; Winners holds the ones he bets. The worker is
 `scripts/run-winners-board.js --watch` (always on).
 
-**Since Oct 23 2026, game bets are the big games only** (`winners_big_games`, written with the daily slate in
-`dailySlateService.js`): MLB playoff games, TNF/SNF/MNF, college's top two ranked games (`ncaafBigGameIds`), and
-the NBA's national-TV games, up to two a night (`nbaNationalGames.js`, ESPN's scoreboard). Each goes on at Gary's
-amount or his number after the late-news check. The card and the boards below no longer seat anything; the worker
-does not run them and their code is kept. Props are unchanged (clear only).
+**Since Oct 23 2026 (evening), game bets are the big games plus a few of Gary's best** (founder: entertain and win).
+The big games (`winners_big_games`, written with the daily slate in `dailySlateService.js`) follow the TV: MLB playoff
+games; TNF/SNF/MNF and Sunday's best 1 PM and 4:05/4:25 games by ESPN's FPI (`powerRatings.js`); college's top two
+ranked games and up to three on ABC/CBS/FOX/NBC (`ncaafNationalGames.js`); the NBA's national-TV games, up to two a
+night (`nbaNationalGames.js`). Each goes on at Gary's amount or his number after the late-news check. Gary's boards add
+his best: two a day for the NFL, two a night for the NBA, three a day for college (migration
+`20261023230000_winners_boards_back_small.sql`); big games and, for the NFL and NBA, the slate's two worst matchups of
+bottom-third teams by ESPN's power index stay off the boards. Gary's card seats nothing. Props are unchanged (clear only).
 
 - **NFL** (`nflBoard.js`, Oct 19 2026): about 110 minutes before the first kickoff he hasn't boarded, he sees every
   picked game still to start, fresh, and names the ones he would bet, in order. `seat_nfl_board` (SQL) seats his top
-  five whose pick is on the same side, 75 minutes before kickoff, after late news.
+  two whose pick is on the same side (since Oct 23 2026), 75 minutes before kickoff, after late news.
 - **NBA** (`nbaBoard.js`, from Oct 21 2026): the same look about 50 minutes before the first tip he hasn't boarded,
   each game read the way the NBA pick reads it (`buildNbaBoardEntry` in `nbaRead.js`, Oct 22 2026);
   `seat_nba_board` seats five a night, 28 minutes before tip, spread over the night (Oct 21 2026): the first third of
