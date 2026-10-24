@@ -57,13 +57,25 @@ export function gameBoxFromSummary(summary, eventId) {
   if (!teams.length || !players.length) return { unavailable: true, reason: `ESPN game ${eventId} has no box score` };
   const scoring = (summary?.scoringPlays || []).map((p) => ({ type: p?.type?.text ?? null, scoringType: p?.scoringType?.name ?? null,
     text: String(p?.text || ''), home: num(p?.homeScore), away: num(p?.awayScore) }));
-  return { eventId: String(eventId), teams, players, scoring };
+  // Every field goal try with its distance and result, from the play-by-play (Oct 24 2026: "FG 0-of-2" needs the 32 and
+  // the 55 behind it). Only the drives' plays are read.
+  const fieldGoals = [];
+  for (const drive of summary?.drives?.previous || []) {
+    const teamId = String(drive?.team?.id ?? '');
+    for (const play of drive?.plays || []) {
+      const type = String(play?.type?.text || '');
+      if (!/field goal/i.test(type)) continue;
+      const yards = num(String(play?.text || '').match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
+      fieldGoals.push({ teamId, yards, made: /good/i.test(type) && !/no good|missed|blocked/i.test(type), blocked: /blocked/i.test(type) });
+    }
+  }
+  return { eventId: String(eventId), teams, players, scoring, fieldGoals };
 }
 
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v1:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v2:${eventId}`, async () => {
     try {
       return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
     } catch (error) {

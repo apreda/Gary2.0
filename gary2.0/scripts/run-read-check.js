@@ -20,6 +20,11 @@ const { BACKGROUND_GPT } = await import('../src/services/gary/agentic/orchestrat
 
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
 const date = arg('--date') || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+// A loop with an end (founder, Oct 24 2026: pick, check, fix "for a couple weeks for each sport until all the data and
+// context gaps are filled", not every 20 minutes forever). The schedule's runs stop here after this date; a run with
+// --date still works.
+const RUNS_UNTIL = '2026-11-07';
+if (!arg('--date') && date > RUNS_UNTIL) { console.log(`Read check: the loop ended ${RUNS_UNTIL}; unload com.gary.read-check`); process.exit(0); }
 const only = arg('--only');
 const LEAGUES = { ncaaf: 'NCAAF', nba: 'NBA', nfl: 'NFL' };
 const dir = `${homedir()}/Library/Logs/Gary2.0/data-checks/read-checks`; mkdirSync(dir, { recursive: true });

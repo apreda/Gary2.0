@@ -345,7 +345,12 @@ async function playerGames(sides, boxes) {
         const rs = playerGameRows(box, teamId, r.gameId, positions);
         const sum = (k) => rs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
         const fga = sum('field_goal_attempts'), xpa = sum('extra_point_attempts');
-        return fga || xpa ? `${fga ? `FG ${sum('field_goals_made')}-of-${fga}` : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
+        // Each try's distance when the play-by-play has them all (made 26, 29; missed 32, 55; blocked 41).
+        const tries = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
+        const yards = (list) => list.map((f) => f.yards ?? '?').join(', ');
+        const distances = tries.length === fga && fga ? ` (${[['made', tries.filter((f) => f.made)], ['missed', tries.filter((f) => !f.made && !f.blocked)], ['blocked', tries.filter((f) => f.blocked)]]
+          .filter(([, list]) => list.length).map(([word, list]) => `${word} ${yards(list)}`).join('; ')})` : '';
+        return fga || xpa ? `${fga ? `FG ${sum('field_goals_made')}-of-${fga}${distances}` : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
       };
       if (oppId) kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
     }
