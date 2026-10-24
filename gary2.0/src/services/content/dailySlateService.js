@@ -322,9 +322,12 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         : list.filter((g) => ids.has(idOf(g)));
       if (!hasNamedGames) {
         const { fetchNationalNcaafGames } = await import('../winners/ncaafNationalGames.js');
-        const national = await fetchNationalNcaafGames(etDateStr, list).catch((e) => { console.warn(`[Daily Slate] college national TV games unavailable: ${e.message}`); return []; });
+        // Up to three beyond the ranked games (Oct 24 2026: Ole Miss-Texas was both, and the day got two TV games, not three).
+        const national = await fetchNationalNcaafGames(etDateStr, list, { max: 20 }).catch((e) => { console.warn(`[Daily Slate] college national TV games unavailable: ${e.message}`); return []; });
+        let added = 0;
         for (const { row, networks } of national) {
-          if (bigs.some((b) => idOf(b) === idOf(row))) continue;
+          if (added >= 3 || bigs.some((b) => idOf(b) === idOf(row))) continue;
+          added++;
           bigs.push(row);
           reasonById.set(idOf(row), `national TV: ${networks.join(', ')}`);
         }
