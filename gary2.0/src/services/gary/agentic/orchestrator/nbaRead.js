@@ -577,6 +577,19 @@ export function newsForGary(desk, { facts = null, start = null, asOf = new Date(
 
 /** One game on Gary's NBA board (winners/nbaBoard.js), read the way the pick reads it, without his write-up: the spread,
  * who's playing, each team's season so far and the situation. */
+// Each game on the board, newest first, with the opponent's record now (Oct 24 2026: the NFL and college boards list
+// their games; the NBA's gave the record alone).
+function boardGames(ts, league = {}) {
+  if (!ts?.games?.length) return null;
+  return `  games, newest first: ${ts.games.map((g) => {
+    const home = g.home_team?.id === ts.id;
+    const opp = home ? g.visitor_team : g.home_team;
+    const us = home ? g.home_team_score : g.visitor_team_score, them = home ? g.visitor_team_score : g.home_team_score;
+    const o = league[opp?.full_name];
+    return `${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp?.name || opp?.full_name}${o ? ` (${o.w}-${o.l} now)` : ''}${g.postseason ? ' (postseason)' : ''}`;
+  }).join(', ')}`;
+}
+
 export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
   const tipAt = tipOf(desk, asOf);
   const [injuries, seasons] = await Promise.all([
@@ -586,7 +599,7 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
   return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
     spreadInWords(nbaLineOf(desk)) || 'The spread is not on file.', '',
     'Who is playing:', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n'), '',
-    'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => teamHead(desk, ratings, t, ts).text).join('\n\n'), '',
+    'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => [teamHead(desk, ratings, t, ts).text, boardGames(ts, ratings)].filter(Boolean).join('\n')).join('\n\n'), '',
     'Schedule and travel:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
 }
 
