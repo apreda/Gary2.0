@@ -92,7 +92,7 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
     'Quarterbacks:', quarterbacks(data, qbs, homeTeam, awayTeam, before), '',
     'Injury report:', injuriesAsReported(desk), '',
     'This season:', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`, '',
-    'The spot:', where.text || 'Nothing unusual.',
+    'Schedule, travel and weather:', where.text || 'Nothing unusual.',
     news ? `\nThe news desk:\n${news}` : ''].join('\n');
 }
 

@@ -213,7 +213,10 @@ export function seasonGames(desk) {
     const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
     if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }
     const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
+    // The opponent's conference and record now, from the line's opponent label (Oct 24 2026: the board read "W 24-21 @
+    // Michigan State" without Michigan State being 2-5).
+    const o = l.match(/— opponent: ([^,—]+?), now (\d+-\d+(?:-\d+)?)/);
+    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? `${o[1].trim()}, ${o[2]} now` : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
     if (q) {
@@ -228,7 +231,10 @@ export function seasonGames(desk) {
 
 // Every game listed, at every count (Oct 23 2026 data audit: from six games on the board averaged the season, and
 // Virginia's last three, about 250 yards gained and 433 allowed, read as "346 yards a game, 344 allowed").
-const perGame = (gs) => gs.map((g) => `${g.result} ${g.pf}-${g.pa}${g.ot ? ' OT' : ''} ${g.at || 'vs'} ${g.opponent}${g.off != null && g.def != null ? ` (${g.off} yards, allowed ${g.def})` : ''}`).join(', ');
+const perGame = (gs) => gs.map((g) => {
+  const facts = [g.oppNow, g.off != null && g.def != null ? `${g.off} yards, allowed ${g.def}` : null].filter(Boolean);
+  return `${g.result} ${g.pf}-${g.pa}${g.ot ? ' OT' : ''} ${g.at || 'vs'} ${g.opponent}${facts.length ? ` (${facts.join('; ')})` : ''}`;
+}).join(', ');
 const record = (gs) => { const w = gs.filter((g) => g.result === 'W').length, l = gs.filter((g) => g.result === 'L').length, t = gs.length - w - l; return `${w}-${l}${t ? `-${t}` : ''}`; };
 const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
 // A game whose box score's player lines are not on file (or carry no passer) names no quarterback.
@@ -294,7 +300,7 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
     'Quarterbacks and coaches:', quarterbacksAndCoaches(desk) || 'Not on the desk.', '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
     'This season:', howGood(desk), '',
-    'The situation:', situation(desk) || 'Nothing unusual.',
+    'Schedule, travel and weather:', situation(desk) || 'Nothing unusual.',
     news ? `\nThe news desk:\n${news}` : ''].join('\n');
 }
 

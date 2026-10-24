@@ -587,7 +587,7 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
     spreadInWords(nbaLineOf(desk)) || 'The spread is not on file.', '',
     'Who is playing:', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n'), '',
     'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => teamHead(desk, ratings, t, ts).text).join('\n\n'), '',
-    'The situation:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
+    'Schedule and travel:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
 }
 
 /** The game as Gary reads it. `asOf` cuts the season at the moment of the pick; `league` (tests only) stands in for the
