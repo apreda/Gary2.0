@@ -124,8 +124,13 @@ const record = (gs) => { const w = gs.filter((x) => x.won).length, t = gs.filter
 // (Oct 23 2026 data check: "with Williams, 31.0 points a game" was 59, 3 and 31), and from six games on the board read
 // blended averages (Oct 23 2026 data audit: the Bears' three backup starts inside one points-a-game number).
 const nickname = (code) => teamName(code).split(' ').at(-1);
-function perGame(gs) {
-  return gs.slice().reverse().map((x) => `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)}${x.off && x.def ? ` (${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)})` : ''}`).join(', ');
+// Each game with the opponent's record now and who played quarterback for it that day, as the game log gives them (Oct
+// 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
+function perGame(d, before, gs) {
+  return gs.slice().reverse().map((x) => {
+    const opp = `${record(teamGames(d, x.opp, d.season, before))} now${x.oppQb ? `, ${x.oppQb} at QB` : ''}`;
+    return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} (${opp}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
+  }).join(', ');
 }
 
 /** HOW GOOD THEY ARE: this season to date; when this week's starter (`qb`) missed games, the team with him apart from
@@ -148,7 +153,7 @@ export function strength(d, team, before, qb = null) {
   const gs = teamGames(d, codeOf(team), d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   const games = (k) => `${k} game${k === 1 ? '' : 's'}`;
-  const season = `  This season, ${games(gs.length)}: ${perGame(gs)}`;
+  const season = `  This season, ${games(gs.length)}: ${perGame(d, before, gs)}`;
   // No home and road records: two or three games each, and every game says where it was (Oct 23 2026 data review).
   const lines = [`${team} (${record(gs)})`];
   const by = (role) => (qb ? gs.filter((x) => qbRole(x, qb) === role) : []);
@@ -157,9 +162,9 @@ export function strength(d, team, before, qb = null) {
   if (unknown.length) return [...lines, season].join('\n');
   if (!qb || (!without.length && !both.length)) return [...lines, season].join('\n');
   const others = [...new Set(without.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
-  if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(his)}`);
+  if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(d, before, his)}`);
   else lines.push(`  ${qb} has not played a full game at quarterback this season.`);
-  if (without.length) lines.push(`  Without him (${others} at quarterback), ${games(without.length)}: ${record(without)}, ${perGame(without)}`);
+  if (without.length) lines.push(`  Without him (${others} at quarterback), ${games(without.length)}: ${record(without)}, ${perGame(d, before, without)}`);
   if (both.length) lines.push(`  Shared at quarterback, ${games(both.length)}: ${both.map((x) => `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} (${passerLine(x)})`).join('; ')}`);
   // The quarterback split replaces the season line: it covered three quarterbacks and repeated the lists (Oct 23 2026
   // audit); every score is in the game log.
