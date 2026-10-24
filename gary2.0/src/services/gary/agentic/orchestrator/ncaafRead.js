@@ -277,7 +277,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
     // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
-    ['THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)', gameLog(desk)],
+    ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", gameLog(desk)],
     ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
     ['SCHEDULE, TRAVEL AND WEATHER', situation(desk)],
   ];
