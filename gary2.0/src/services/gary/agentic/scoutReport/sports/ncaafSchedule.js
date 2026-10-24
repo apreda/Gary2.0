@@ -193,7 +193,9 @@ function quarterbackOfGame(rows, result, onFile) {
     .filter((row) => String(row?.game?.id) === String(result.gameId) && row?.player?.first_name && Number(row.passing_attempts) > 0)
     .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
   if (!passers.length) return 'quarterback: no passing rows for this game';
-  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 10);
+  // Everyone with five or more passes, as the NFL's line reads (Oct 24 2026: Michigan's Tommy Carr played the second half
+  // against Penn State, 7 passes, and the 10-pass floor left the only look at today's starter out of the line).
+  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5);
   // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine
   // games); college box scores count sacks as runs, so the line says so.
   const runs = (row) => (Number(row.rushing_attempts) > 0 ? `; ${plural(row.rushing_attempts, 'run')} for ${row.rushing_yards ?? '?'} yds${Number(row.rushing_touchdowns) > 0 ? `, ${row.rushing_touchdowns} TD` : ''} (sacks included)` : '');

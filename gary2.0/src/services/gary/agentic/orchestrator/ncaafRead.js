@@ -156,7 +156,12 @@ function qbSplit(gs, qb) {
   if (!gs.length || (mine && by.size === 1)) return null;
   const parts = [...by].sort(([a], [b]) => (a === mine ? -1 : b === mine ? 1 : 0))
     .map(([k, list]) => `${k}${k === mine ? " (this week's quarterback)" : ''} ${record(list)} (${list.map((g) => `${g.at} ${g.opponent}`).join(', ')})`);
-  if (qb && !mine) parts.push(`${qb}, this week's quarterback, in none`);
+  if (qb && !mine) {
+    // A game he played in without throwing the most passes is named (Oct 24 2026: Michigan's Tommy Carr, today's
+    // starter, played the second half against Penn State).
+    const also = gs.filter((g) => (g.passers || []).some((n) => nameKey(n) === nameKey(qb)));
+    parts.push(`${qb}, this week's quarterback, in none${also.length ? `; he also threw in ${also.map((g) => `${g.at} ${g.opponent}`).join(', ')}` : ''}`);
+  }
   return `  most passes thrown by: ${parts.join('; ')}`;
 }
 function gameLog(desk) {
@@ -208,7 +213,10 @@ export function seasonGames(desk) {
     if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
-    if (q) game.qb = q[1].trim();
+    if (q) {
+      game.qb = q[1].trim();
+      game.passers = [...l.matchAll(/(?:quarterback: |; )([A-Z][^;:]*?) \d+-of-\d+/g)].map((m) => m[1].trim());
+    }
     else if (/^\s+offense: /.test(l)) game.off = yards(l);
     else if (/^\s+defense: /.test(l)) game.def = yards(l);
   }
