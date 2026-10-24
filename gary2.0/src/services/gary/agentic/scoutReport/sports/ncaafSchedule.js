@@ -348,9 +348,15 @@ async function playerGames(sides, boxes) {
         // Each try's distance when the play-by-play has them all (made 26, 29; missed 32, 55; blocked 41).
         const tries = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
         const yards = (list) => list.map((f) => f.yards ?? '?').join(', ');
-        const distances = tries.length === fga && fga ? ` (${[['made', tries.filter((f) => f.made)], ['missed', tries.filter((f) => !f.made && !f.blocked)], ['blocked', tries.filter((f) => f.blocked)]]
-          .filter(([, list]) => list.length).map(([word, list]) => `${word} ${yards(list)}`).join('; ')})` : '';
-        return fga || xpa ? `${fga ? `FG ${sum('field_goals_made')}-of-${fga}${distances}` : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
+        const split = (list) => [['made', list.filter((f) => f.made)], ['missed', list.filter((f) => !f.made && !f.blocked)], ['blocked', list.filter((f) => f.blocked)]]
+          .filter(([, l]) => l.length).map(([word, l]) => `${word} ${yards(l)}`).join('; ');
+        // By kicker, each try's distance and result (made 26, 29; missed 32, 55), when the play-by-play has every try.
+        const kickers = [...new Set(tries.map((f) => f.kicker || 'kicker not named'))];
+        const byKicker = tries.length === fga && fga ? kickers.map((k) => {
+          const mine = tries.filter((f) => (f.kicker || 'kicker not named') === k);
+          return `${k} ${mine.filter((f) => f.made).length}-of-${mine.length} (${split(mine)})`;
+        }).join(', ') : null;
+        return fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
       };
       // How the drives ended, and the ones that began in the other team's half with how they ended.
       const WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 'BLOCKED FG': 'blocked FG', PUNT: 'punt', 'BLOCKED PUNT': 'blocked punt',

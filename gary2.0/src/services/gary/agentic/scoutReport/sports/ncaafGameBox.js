@@ -65,8 +65,14 @@ export function gameBoxFromSummary(summary, eventId) {
     for (const play of drive?.plays || []) {
       const type = String(play?.type?.text || '');
       if (!/field goal/i.test(type)) continue;
-      const yards = num(String(play?.text || '').match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
-      fieldGoals.push({ teamId, yards, made: /good/i.test(type) && !/no good|missed|blocked/i.test(type), blocked: /blocked/i.test(type) });
+      const text = String(play?.text || '');
+      const yards = num(text.match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
+      // Who kicked it (founder, Oct 24 2026: a miss says nothing about today if someone else kicks today).
+      const named = (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:yd|yards?)\s+)?field goal/i)?.[1] || '').trim();
+      // One spelling per kicker: ESPN writes both "D.Kelly" and "Dieter Kelly" in one game.
+      const parts = named.split(/\s+/);
+      const kicker = !named ? null : parts.length > 1 && !named.includes('.') ? `${parts[0][0]}.${parts.slice(1).join(' ')}` : named;
+      fieldGoals.push({ teamId, yards, kicker, made: /good/i.test(type) && !/no good|missed|blocked/i.test(type), blocked: /blocked/i.test(type) });
     }
   }
   // How each drive ended and where it began (Oct 24 2026 read check: Indiana's first touchdown against Ohio State came
@@ -82,7 +88,7 @@ export function gameBoxFromSummary(summary, eventId) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v3:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v5:${eventId}`, async () => {
     try {
       return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
     } catch (error) {
