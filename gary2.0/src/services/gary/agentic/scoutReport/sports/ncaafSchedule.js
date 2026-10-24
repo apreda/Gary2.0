@@ -24,6 +24,7 @@
  * Facts only. Nothing here says what a home field, a trip or a schedule is
  * worth; a source that does not answer is named as missing, never left out.
  */
+import { teamReportHistory, historyLine } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
@@ -414,7 +415,7 @@ const UNDER_OFFENSE = 'game by game under CARRIES AND CATCHES, GAME BY GAME';
  * player lines on file are left out of the counts and named once beside the
  * team.
  */
-function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map()) {
+function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
   const byPlayer = playersOf(rows, games);
   // One line per player: the games he has a stat row in, the last one, and his season's totals (Oct 23 2026 data review:
@@ -446,7 +447,10 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     const position = found?.[1].position || injury.player?.position_abbreviation || injury.player?.position || '';
     if (found) {
       const said = note(injury);
-      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}`);
+      // Whether the absence is new or already in the numbers (Oct 24 2026): his game-day status on the season's earlier
+      // reports, from the conference's report archive.
+      const earlier = historyLine(history, name);
+      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}${earlier ? ` · ${earlier}` : ''}`);
       if (!positions.includes(position)) positions.push(position);
       continue;
     }
@@ -454,7 +458,8 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // with their status (Oct 23 2026 data audit: Virginia's 24-player report printed "no stat row in any game this season
     // (no pass, carry, catch or tackle recorded)" on ten lines; the searched notes beside them only restated the status,
     // "listed out Friday; reason unspecified").
-    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)})`;
+    const earlier = historyLine(history, name, { short: true });
+    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)}${earlier ? `; ${earlier}` : ''})`;
     if (/^(OL|OT|OG|T|G|C|LT|RT|LG|RG|IOL)$/i.test(position)) linemen.push(entry); else none.push(entry);
   }
   if (none.length) lines.push(`  ${games.length ? 'no stat row this season' : 'player lines not on file for any game this season'}: ${none.join(', ')}`);
@@ -629,13 +634,16 @@ ${RULE}`;
 
   const reportOf = (s) => availability[s.atHome ? 'home' : 'away'];
   const cores = sides.map((s, i) => offenseCore(rows[i], s.results, played[i].onFile));
+  // Each side's earlier conference reports this season (the SEC, ACC, Big Ten and Big 12 keep an archive).
+  const reportDate = game?.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+  const histories = await Promise.all(sides.map((s) => teamReportHistory(s.atHome ? home : away, { date: reportDate }).catch(() => ({ found: false }))));
   const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
 ${RULE}
 Each player on this game's availability report beside what he did this
 season, and the other players at his position with theirs. College publishes
 no snap counts; these stat rows are the record of who played.
 
-${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i]).join('\n')).join('\n\n')}
 ${RULE}`;
 
   // One intro paragraph each, which the read leaves out: "no stat row" says what the box score shows and no more.

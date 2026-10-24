@@ -128,7 +128,10 @@ function availabilitySources(desk) {
 function availabilityReport(desk) {
   const teams = teamsOf(desk), source = availabilitySources(desk);
   const lines = quarterbackSectionLines(desk);
-  const notes = new Map(teams.map((t) => [t, lines.filter((l) => l.team === t && l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, t))).map((l) => `  reporting: ${l.text.trim()}`)]));
+  // The researcher's own working ("after the requested 9:07 a.m. research cutoff") is not news (Oct 24 2026).
+  const withoutProcess = (text) => text.split(/(?<=[.!?])\s+/).filter((x) => !/\bcutoff\b|\bresearch\b|\brequested\b/i.test(x)).join(' ').trim();
+  const notes = new Map(teams.map((t) => [t, lines.filter((l) => l.team === t && l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, t)))
+    .map((l) => withoutProcess(l.text)).filter(Boolean).map((text) => `  reporting: ${text}`)]));
   const rows = afterIntro(sectionOf(desk, 'WHO PRODUCED IT'));
   if (!rows) {
     return [...teams.filter((t) => source.get(t) || notes.get(t).length).map((t) => [`${t}${source.get(t) ? ` — ${source.get(t)}` : ''}`, ...notes.get(t)].join('\n')),

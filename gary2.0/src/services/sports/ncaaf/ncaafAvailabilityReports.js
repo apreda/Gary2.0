@@ -155,3 +155,70 @@ export async function officialAvailabilityForGame({ homeTeam, awayTeam, date }, 
     away: sideOf(awayHit, 'away'),
   };
 }
+
+// THE REPORT HISTORY (Oct 24 2026, founder: an injury matters by whether it is new or old enough that the team's numbers
+// already reflect it, on the line and in the secondary as much as anywhere). The same service keeps every report of the
+// season with each player's Initial, Update and Game Day statuses (get-archive-public; the SEC, ACC, Big Ten and Big 12).
+const ARCHIVE_URL = 'https://app.hdintelligence.com/api/get-archive-public';
+const ARCHIVE_CONFERENCES = ['SEC', 'ACC', 'B10', 'B12'];
+
+async function fetchArchive(conference, { fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(ARCHIVE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
+    body: JSON.stringify({ conference, sport: 'Football', source: conference }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`Availability archive unavailable (${response.status})`);
+  const data = await response.json();
+  if (!Array.isArray(data?.data)) throw new Error('Availability archive returned no rows');
+  return data.data.map((r) => ({ team: r.Team, player: r.Player, opponent: r.OpponentDisplay || r.Opponent, week: Number(r.WeekNum),
+    date: r.Week ? new Date(r.Week).toISOString().slice(0, 10) : null, gameDay: String(r['Game Day'] || '').trim(),
+    initial: String(r.Initial || '').trim() }));
+}
+
+/** One conference's archived report rows, cached for an hour. */
+export async function conferenceArchive(conference, options = {}) {
+  if (options.fetchImpl) return fetchArchive(conference, options);
+  const result = await cachedResearch(`ncaaf-availability-archive-v1:${conference}`, async () => {
+    try { return { rows: await fetchArchive(conference) }; } catch (error) { return { unavailable: true, reason: error.message }; }
+  }, { ttlMs: (value) => (value?.unavailable ? 60_000 : 60 * 60_000), valid: (value) => Boolean(value) });
+  if (result?.unavailable) throw new Error(result.reason);
+  return result?.rows || [];
+}
+
+const playerKey = (name) => String(name || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+
+/**
+ * A team's earlier reports this season, before `date`: { found, byPlayer: Map playerKey → [{ week, opponent, gameDay }]
+ * newest first, weeks: the report weeks on file }. Reports cover conference games only. `found: false` when the
+ * team's conference keeps no archive or none could be read.
+ */
+export async function teamReportHistory(team, { date } = {}, options = {}) {
+  for (const conference of options.conferences || ARCHIVE_CONFERENCES) {
+    let rows;
+    try { rows = await conferenceArchive(conference, options); } catch { continue; }
+    const mine = rows.filter((r) => sameSchool(r.team, team) && (!date || !r.date || r.date < date));
+    if (!rows.some((r) => sameSchool(r.team, team))) continue;
+    const byPlayer = new Map();
+    for (const r of mine.sort((a, b) => b.week - a.week)) {
+      const k = playerKey(r.player);
+      if (!byPlayer.has(k)) byPlayer.set(k, []);
+      byPlayer.get(k).push({ week: r.week, opponent: r.opponent, gameDay: r.gameDay || r.initial || 'listed' });
+    }
+    return { found: true, conference, byPlayer, weeks: [...new Set(mine.map((r) => r.week))].sort((a, b) => b - a) };
+  }
+  return { found: false };
+}
+
+/** "earlier reports: Wk 7 Out (vs Penn State), Wk 6 Out (at Minnesota)" or "first on a report this week", in words. */
+export function historyLine(history, name, { short = false } = {}) {
+  if (!history?.found) return null;
+  const rows = history.byPlayer.get(playerKey(name)) || [];
+  if (!rows.length) {
+    if (!history.weeks.length) return null;
+    return short ? 'new this week' : `first on a report this week (${history.weeks.length} earlier conference report week${history.weeks.length === 1 ? '' : 's'} on file)`;
+  }
+  return short ? `earlier: ${rows.map((r) => `Wk ${r.week} ${r.gameDay}`).join(', ')}`
+    : `earlier game-day reports: ${rows.map((r) => `Wk ${r.week} ${r.gameDay}${r.opponent ? ` (${r.opponent})` : ''}`).join(', ')}`;
+}
