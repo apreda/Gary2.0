@@ -322,7 +322,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -352,9 +352,28 @@ async function playerGames(sides, boxes) {
           .filter(([, list]) => list.length).map(([word, list]) => `${word} ${yards(list)}`).join('; ')})` : '';
         return fga || xpa ? `${fga ? `FG ${sum('field_goals_made')}-of-${fga}${distances}` : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
       };
-      if (oppId) kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
+      // How the drives ended, and the ones that began in the other team's half with how they ended.
+      const WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 'BLOCKED FG': 'blocked FG', PUNT: 'punt', 'BLOCKED PUNT': 'blocked punt',
+        INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', 'INT TD': 'interception returned for a TD',
+        'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD',
+        'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD' };
+      const driveLine = (teamId) => {
+        const ds = (box.drives || []).filter((d) => d.teamId === String(teamId));
+        if (!ds.length) return null;
+        const counted = ds.filter((d) => !/^END OF/.test(d.result));
+        const tally = (list) => [...list.reduce((m, d) => m.set(WORD[d.result] || d.result.toLowerCase(), (m.get(WORD[d.result] || d.result.toLowerCase()) || 0) + 1), new Map())]
+          .map(([w, n]) => `${n} ${w}${n > 1 && !/on downs|TD$|FG$/.test(w) ? 's' : ''}`).join(', ');
+        const short = counted.filter((d) => d.oppHalf);
+        const ended = ds.length - counted.length;
+        return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;
+      };
+      if (oppId) {
+        kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
+        const mineD = driveLine(found.teamId), theirsD = driveLine(oppId);
+        if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
+      }
     }
-    return { rows, onFile, points, kicking };
+    return { rows, onFile, points, kicking, drives };
   }));
 }
 
@@ -637,7 +656,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
       const points = played[i].points.get(String(r.gameId));
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}\n${units.join('\n')}`
         + `\n      ${points || 'points from: not on file for this game'}`
-        + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`;
+        + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
+        + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`;
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;

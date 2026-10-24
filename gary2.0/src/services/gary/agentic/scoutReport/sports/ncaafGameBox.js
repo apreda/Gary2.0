@@ -69,13 +69,20 @@ export function gameBoxFromSummary(summary, eventId) {
       fieldGoals.push({ teamId, yards, made: /good/i.test(type) && !/no good|missed|blocked/i.test(type), blocked: /blocked/i.test(type) });
     }
   }
-  return { eventId: String(eventId), teams, players, scoring, fieldGoals };
+  // How each drive ended and where it began (Oct 24 2026 read check: Indiana's first touchdown against Ohio State came
+  // from the Ohio State 7 after an interception, and nothing showed it). Counts only.
+  const drives = (summary?.drives?.previous || []).map((d) => {
+    const at = String(d?.start?.text || '').match(/^([A-Za-z&]+)\s+(\d+)$/);
+    return { teamId: String(d?.team?.id ?? ''), result: String(d?.result || d?.displayResult || '').toUpperCase(),
+      oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
+  });
+  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives };
 }
 
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v2:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v3:${eventId}`, async () => {
     try {
       return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
     } catch (error) {
