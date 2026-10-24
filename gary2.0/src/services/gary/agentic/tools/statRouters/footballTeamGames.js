@@ -131,6 +131,10 @@ export function toTeamResults(games, teamId) {
         halftimeAgainst,
         secondHalfFor,
         secondHalfAgainst,
+        quartersFor: [own.q1, own.q2, own.q3, own.q4],
+        quartersAgainst: [opp.q1, opp.q2, opp.q3, opp.q4],
+        overtimeFor: own.ot,
+        overtimeAgainst: opp.ot,
         // Quarter data is only usable when the sides reconcile to the finals.
         shapeKnown: (halftimeFor + secondHalfFor === scored)
           && (halftimeAgainst + secondHalfAgainst === allowed)
@@ -191,16 +195,11 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
 
   const parts = [head];
 
-  if (result.shapeKnown) {
-    const htFor = result.halftimeFor;
-    const htAgainst = result.halftimeAgainst;
-    const ht = htFor === htAgainst
-      ? `tied ${htFor}-${htAgainst} at half`
-      : `${htFor > htAgainst ? 'led' : 'trailed'} ${htFor}-${htAgainst} at half`;
-    const after = `outscored ${result.secondHalfFor}-${result.secondHalfAgainst} after${result.overtime ? ', overtime included' : ''}`;
-    // The halves only: "won after trailing at half" and "lost a halftime lead" restated these numbers as a label (Oct 23
-    // 2026 data review).
-    parts.push(`${ht}, ${after}`);
+  if (result.shapeKnown && result.quartersFor) {
+    // Each quarter's score, as the NFL's game lines give it (Oct 24 2026 read check: the halves hid Rutgers' two
+    // fourth-quarter touchdowns against UMass after trailing 30-7, and a "21-point floor" was read from them).
+    const ot = result.overtimeFor + result.overtimeAgainst > 0 ? `, overtime ${result.overtimeFor}-${result.overtimeAgainst}` : '';
+    parts.push(`by quarter ${result.quartersFor.join('-')}, opponent ${result.quartersAgainst.join('-')}${ot}`);
   } else {
     parts.push('quarter detail not available for this game');
   }

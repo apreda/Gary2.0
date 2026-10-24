@@ -112,8 +112,7 @@ describe('football game ledger — summaries', () => {
       visitor_team_q1: 7, visitor_team_q2: 3, visitor_team_q3: 14, visitor_team_q4: 7
     }], 10);
     const line = gameStoryLine(blownLead[0]);
-    expect(line).toContain('led 24-10 at half');
-    expect(line).toContain('outscored 0-21 after');
+    expect(line).toContain('by quarter 10-14-0-0, opponent 7-3-14-7');
   });
 
   it('reads a scoreless quarter as zero, not as missing data', () => {
@@ -131,7 +130,7 @@ describe('football game ledger — summaries', () => {
     expect(shutoutHalf[0].shapeKnown).toBe(true);
     expect(shutoutHalf[0].halftimeFor).toBe(7);
     expect(shutoutHalf[0].halftimeAgainst).toBe(0);
-    expect(gameStoryLine(shutoutHalf[0])).toContain('led 7-0 at half');
+    expect(gameStoryLine(shutoutHalf[0])).toContain('by quarter 0-7-0-7, opponent 0-0-0-0');
   });
 
   it('attaches how good the opponent was, when league context is supplied', () => {
