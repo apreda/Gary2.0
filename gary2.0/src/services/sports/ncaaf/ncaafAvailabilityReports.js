@@ -239,3 +239,14 @@ export function backFromReports(history, reportedNames = []) {
   }
   return out.sort((a, b) => String(b.lastOutDate).localeCompare(String(a.lastOutDate)));
 }
+
+/** The players a team listed Out on one game day (`date`, YYYY-MM-DD), from its report history; [] when none. */
+export function outOnGameDay(history, date) {
+  if (!history?.found || !date) return [];
+  const names = [];
+  for (const rows of history.byPlayer.values()) {
+    const hit = rows.find((r) => r.date === date && /^out/i.test(r.gameDay));
+    if (hit) names.push(hit.name);
+  }
+  return names;
+}

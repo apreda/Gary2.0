@@ -24,7 +24,7 @@
  * Facts only. Nothing here says what a home field, a trip or a schedule is
  * worth; a source that does not answer is named as missing, never left out.
  */
-import { teamReportHistory, historyLine, backFromReports } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
+import { teamReportHistory, historyLine, backFromReports, outOnGameDay } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
@@ -647,6 +647,31 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   });
   const rows = played.map((p) => p.rows);
 
+  // Who each side was without on each game day (Oct 24 2026: the college game log never said who was missing, the
+  // Bears' blended-season problem in college form): the conferences' report archives, for the team and each opponent.
+  const reportDate = game?.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+  const histories = await Promise.all(sides.map((s) => teamReportHistory(s.atHome ? home : away, { date: reportDate }).catch(() => ({ found: false }))));
+  const opponentHistory = new Map();
+  for (const s of sides) for (const r of s.results) {
+    const id = Number(r.opponentId);
+    if (!Number.isFinite(id) || opponentHistory.has(id)) continue;
+    const team = teamsById.get(id);
+    opponentHistory.set(id, team ? await teamReportHistory(team, { date: reportDate }).catch(() => ({ found: false })) : { found: false });
+  }
+  // A report exists only for a game against a team of the same conference (the Big Ten and Big 12 report conference games
+  // only), so outside one there is no list, not an empty one.
+  const outLine = (i, r) => {
+    const day = String(r.date || '').slice(0, 10);
+    const sameConference = ncaafTeamConferenceId(sides[i].atHome ? home : away) === ncaafTeamConferenceId(teamsById.get(Number(r.opponentId)));
+    if (!sameConference) return null;
+    const mine = histories[i]?.found ? outOnGameDay(histories[i], day) : null;
+    const theirs = opponentHistory.get(Number(r.opponentId));
+    const opp = theirs?.found ? outOnGameDay(theirs, day) : null;
+    if (mine == null && opp == null) return null;
+    const list = (names) => (names.length ? `${names.slice(0, 8).join(', ')}${names.length > 8 ? ` and ${names.length - 8} more` : ''}` : 'nobody');
+    return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)} · opponent: ${opp == null ? 'not on file' : list(opp)}`;
+  };
+
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
 Every completed game this season, newest first: date, site, score, how the
@@ -663,7 +688,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}\n${units.join('\n')}`
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
-        + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`;
+        + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
+        + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '');
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
@@ -685,9 +711,7 @@ ${RULE}`;
 
   const reportOf = (s) => availability[s.atHome ? 'home' : 'away'];
   const cores = sides.map((s, i) => offenseCore(rows[i], s.results, played[i].onFile));
-  // Each side's earlier conference reports this season (the SEC, ACC, Big Ten and Big 12 keep an archive).
-  const reportDate = game?.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
-  const histories = await Promise.all(sides.map((s) => teamReportHistory(s.atHome ? home : away, { date: reportDate }).catch(() => ({ found: false }))));
+
   const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
 ${RULE}
 Each player on this game's availability report beside what he did this
