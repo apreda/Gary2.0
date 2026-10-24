@@ -4,18 +4,21 @@
 // he sees every picked game of the day still to start, fresh (no write-ups, no picks shown): the line and how it moved,
 // the quarterbacks, who's out, how good both teams are, the spot and the news desk's report. He names the games he
 // would put his own money on, in the order he likes them, any number or none. The answer is saved per game
-// (winners_nfl_board); SQL seat_nfl_board seats a bet whose pick is on the same side, his top five, 75 minutes before
-// kickoff, after the late-news check. A game picked after its slate was boarded gets its own board. Never fatal.
+// (winners_nfl_board); SQL seat_nfl_board seats a bet whose pick is on the same side, his top two beside the big games
+// (Oct 23 2026), 75 minutes before kickoff, after the late-news check. Big games and the slate's two worst matchups
+// stay off the board (powerRatings.js). A game picked after its slate was boarded gets its own board. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 import { nflSystemPrompt, nflBoardMessage, NFL_BOARD_FORMAT_ONLY } from '../gary/agentic/orchestrator/nflKnowledge.js';
 import { buildNflBoardEntry } from '../gary/agentic/orchestrator/nflRead.js';
 import { loadBettorData, etDate } from '../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../utils/dateUtils.js';
+import { offTheBoard } from './powerRatings.js';
 
 export const BOARD_LEAD_MS = 110 * 60_000;   // board the slate this long before its first kickoff
 const LAST_CALL_MS = 25 * 60_000;            // a game this close to kickoff is past boarding
 let running = false;
+const offLogged = new Set();   // each game left off is logged once a day
 
 const nick = (team) => String(team || '').trim().split(/\s+/).pop().toLowerCase();
 const city = (team) => String(team || '').trim().split(/\s+/).slice(0, -1).join(' ').toLowerCase();
@@ -66,7 +69,12 @@ export async function runNflBoard(client, date, { now = new Date(), log = consol
     const { data: boarded, error: e2 } = await client.from('winners_nfl_board').select('game_id').in('game_id', cands.map((c) => String(c.game_id)));
     if (e2) throw e2;
     const done = new Set((boarded || []).map((b) => String(b.game_id)));
-    const open = cands.filter((c) => !done.has(String(c.game_id)) && Date.parse(c.commence_time) > now.getTime() + LAST_CALL_MS && c.home && c.away);
+    // Off the board (Oct 23 2026, winners/powerRatings.js): the day's big games, which go on Winners as big games, and
+    // for the NFL and NBA the slate's two worst matchups of bottom-third teams. Worked out from the whole day's slate.
+    const slate = [...new Map(cands.filter((c) => c.home && c.away).map((c) => [String(c.game_id), { gameId: String(c.game_id), home: c.home, away: c.away }])).values()];
+    const off = await offTheBoard(client, { date, league: 'NFL', slate, log });
+    for (const [id, why] of off) if (!offLogged.has(`${date}|${id}`)) { offLogged.add(`${date}|${id}`); const g = slate.find((x) => x.gameId === id); if (g) log.log(`[NFL Board] ${g.away} @ ${g.home} stays off the board: ${why}`); }
+    const open = cands.filter((c) => !done.has(String(c.game_id)) && !off.has(String(c.game_id)) && Date.parse(c.commence_time) > now.getTime() + LAST_CALL_MS && c.home && c.away);
     // One row per game: a game picked twice (a re-run) boards once.
     const games = [...new Map(open.map((c) => [String(c.game_id), c])).values()];
     if (!games.length) return 'nothing_open';
