@@ -427,8 +427,9 @@ struct CompactPickRow: View {
         var lead = 0
         while lead < words.count, teamWords.contains(words[lead].lowercased()) { lead += 1 }
         let bet = words[lead...].joined(separator: " ")
-        let pickedRank = isNCAAF ? (homeIsPicked ? homeSeedTag : awaySeedTag) : nil
-        let headlineTeam = [pickedRank, pickedShort.uppercased()].compactMap { $0 }.joined(separator: " ")
+        // The headline is the team and the bet, in every sport (founder, Oct 24 2026: college's raised rank before the
+        // name read as a stray "1"); a college rank prints in the line below it.
+        let headlineTeam = pickedShort.uppercased()
         return bet.isEmpty ? headlineTeam : "\(headlineTeam)\n\(bet.uppercased())"
     }
 
@@ -479,13 +480,17 @@ struct CompactPickRow: View {
         return parts.joined(separator: " · ")
     }
 
-    // NCAAF uses the same card frame and opponent line as other sports.
-    // Its picked rank lives in the headline; its opponent rank stays here.
+    // NCAAF uses the same card frame and opponent line as other sports. When either team is ranked, both sides print
+    // with their ranks ("#1 MIA vs PITT"), so the picked team's rank shows here rather than in the headline.
     private var ncaafOpponentLine: String {
         func label(home: Bool) -> String {
             let rank = home ? homeSeedTag : awaySeedTag
             let name = isRankedMatchup ? metaTeamAbbrev(homeSide: home) : (home ? homeName : awayName)
             return [rank, name].compactMap { $0 }.joined(separator: " ")
+        }
+        if isRankedMatchup {
+            if homeIsPicked { return "\(label(home: true)) vs \(label(home: false))" }
+            if awayIsPicked { return "\(label(home: false)) @ \(label(home: true))" }
         }
         if homeIsPicked { return "vs \(label(home: false))" }
         if awayIsPicked { return "@ \(label(home: true))" }
@@ -570,7 +575,7 @@ struct CompactPickRow: View {
                 VStack(alignment: .leading, spacing: heroLineSpacing) {
                     ForEach(Array((heroOneLine ? [heroLines.replacingOccurrences(of: "\n", with: " ")]
                                                 : heroLines.components(separatedBy: "\n")).enumerated()), id: \.offset) { _, line in
-                        (isNCAAF ? CollegeRankText.label(line, size: heroFontSize, hero: true) : Text(line))
+                        Text(line)
                             .font(GaryFonts.display(heroFontSize))
                             .accessibilityLabel(line)
                             .fitsOneLine()
@@ -598,7 +603,7 @@ struct CompactPickRow: View {
                         .fitsOneLine()
                         .layoutPriority(1)
                     // Keep the full betting price visible when opponent names are long.
-                    (isNCAAF ? CollegeRankText.label(metaLine, size: 13.5) : Text(metaLine))
+                    Text(metaLine)
                         .foregroundColor(metaBodyTint)
                         .font(GaryFonts.text(13.5, .medium))
                         .accessibilityLabel(metaLine)
@@ -670,12 +675,6 @@ struct CompactPickRow: View {
                                 Text(t)
                                     .font(GaryFonts.mono(11, bold: true)).tracking(0.5)
                                     .foregroundStyle(footerTint)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if isNCAAF, let tag = significanceTag, tag != "NCAAF" {
-                                Text(tag)
-                                    .font(GaryFonts.mono(10, bold: true)).tracking(0.5)
-                                    .foregroundStyle(leagueTint)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
