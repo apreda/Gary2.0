@@ -322,7 +322,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -338,8 +338,18 @@ async function playerGames(sides, boxes) {
       if (mine && theirs && mine.points === r.scored && theirs.points === r.allowed) {
         points.set(String(r.gameId), `points from: ${kindsInWords(mine.kinds)} · opponent's points from: ${kindsInWords(theirs.kinds)}`);
       }
+      // Both kickers' field goals and extra points (Oct 24 2026 read check: Indiana's kicker missed from 32 and 55 in a
+      // four-point loss to Ohio State, and nothing Gary read had kicking).
+      const oppId = scored ? Object.keys(scored).find((id) => id !== String(found.teamId)) : null;
+      const kicks = (teamId) => {
+        const rs = playerGameRows(box, teamId, r.gameId, positions);
+        const sum = (k) => rs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+        const fga = sum('field_goal_attempts'), xpa = sum('extra_point_attempts');
+        return fga || xpa ? `${fga ? `FG ${sum('field_goals_made')}-of-${fga}` : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
+      };
+      if (oppId) kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
     }
-    return { rows, onFile, points };
+    return { rows, onFile, points, kicking };
   }));
 }
 
@@ -612,7 +622,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
       const units = boxes.lines(s.team, r);
       const points = played[i].points.get(String(r.gameId));
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}\n${units.join('\n')}`
-        + `\n      ${points || 'points from: not on file for this game'}`;
+        + `\n      ${points || 'points from: not on file for this game'}`
+        + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`;
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;
