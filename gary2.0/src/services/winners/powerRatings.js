@@ -72,3 +72,30 @@ export async function offTheBoard(client, { date, league, slate, log = console }
   }
   return off;
 }
+
+const etClock = (iso) => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false })
+    .formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
+  return { dow: parts.weekday, minutes: (Number(parts.hour) % 24) * 60 + Number(parts.minute) };
+};
+
+/**
+ * NFL SUNDAY'S BIG AFTERNOON GAMES (founder, Oct 23 2026: "always include like a 4:25 big game" beside the prime-time
+ * games): of Sunday's 1 PM games and of its 4:05/4:25 games, the one with the highest combined power rating (ESPN's FPI)
+ * in each window. `slate`: rows with away_team, home_team, commence_time and an id. Returns [{ row, window }].
+ */
+export function nflAfternoonBigGames(slate, ratings) {
+  const ranked = [...ratings];
+  const ratingOf = (name) => ranked.find((r) => espnNbaTeamIs(r.team, name))?.rating;
+  const windows = [['the 1 PM window', (m) => m >= 12 * 60 + 55 && m < 14 * 60], ['the 4:05/4:25 window', (m) => m >= 16 * 60 && m < 17 * 60]];
+  const out = [];
+  for (const [window, inWindow] of windows) {
+    const best = (slate || []).map((row) => {
+      const when = etClock(row.commence_time);
+      const h = ratingOf(row.home_team), a = ratingOf(row.away_team);
+      return when.dow === 'Sun' && inWindow(when.minutes) && Number.isFinite(h) && Number.isFinite(a) ? { row, sum: h + a } : null;
+    }).filter(Boolean).sort((x, y) => y.sum - x.sum)[0];
+    if (best) out.push({ row: best.row, window });
+  }
+  return out;
+}

@@ -312,12 +312,35 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
     const networksById = new Map();
     const overrides = loadBigGameOverrides();
     const hasNamedGames = Boolean(overrides?.[etDateStr]?.[sport.league]);
+    // Oct 23 2026 evening (founder: follow the TV): college adds up to three games on the broadcast networks (ABC, CBS,
+    // FOX, NBC), and the NFL the best Sunday 1 PM and 4:05/4:25 games by ESPN's FPI, beside the prime-time games.
+    const idOf = (g) => String(g?.bdl_game_id ?? g?.id);
+    const reasonById = new Map();
     if (sport.league === 'NCAAF') {
       const ids = new Set(ncaafBigGameIds(list, 2));
       bigs = hasNamedGames ? list.filter(g => namedBigGame(overrides, etDateStr, sport.league, g))
-        : list.filter((g) => ids.has(String(g?.bdl_game_id ?? g?.id)));
+        : list.filter((g) => ids.has(idOf(g)));
+      if (!hasNamedGames) {
+        const { fetchNationalNcaafGames } = await import('../winners/ncaafNationalGames.js');
+        const national = await fetchNationalNcaafGames(etDateStr, list).catch((e) => { console.warn(`[Daily Slate] college national TV games unavailable: ${e.message}`); return []; });
+        for (const { row, networks } of national) {
+          if (bigs.some((b) => idOf(b) === idOf(row))) continue;
+          bigs.push(row);
+          reasonById.set(idOf(row), `national TV: ${networks.join(', ')}`);
+        }
+      }
     } else if (sport.league === 'NFL' || sport.league === 'MLB') {
       bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr, overrides }));
+      if (sport.league === 'NFL') {
+        const { fetchPowerRatings, nflAfternoonBigGames } = await import('../winners/powerRatings.js');
+        try {
+          for (const { row, window } of nflAfternoonBigGames(list, await fetchPowerRatings('NFL'))) {
+            if (bigs.some((b) => idOf(b) === idOf(row))) continue;
+            bigs.push(row);
+            reasonById.set(idOf(row), `the best game of ${window} by ESPN's FPI`);
+          }
+        } catch (e) { console.warn(`[Daily Slate] NFL afternoon big games unavailable: ${e.message}`); }
+      }
     } else if (sport.league === 'NBA') {
       const { fetchNationalNbaGames } = await import('../winners/nbaNationalGames.js');
       for (const { row, networks } of await fetchNationalNbaGames(etDateStr, list)) {
@@ -332,10 +355,10 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         league: sport.league,
         game_id: String(big.bdl_game_id ?? big.id),
         matchup: `${big.away_team} @ ${big.home_team}`,
-        reason: namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
+        reason: reasonById.get(idOf(big)) || (namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
           : sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
           : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
-          : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball',
+          : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball'),
       });
       console.log(`[Daily Slate] 🏆 ${sport.league} big game today: ${big.away_team} @ ${big.home_team}`);
     }
