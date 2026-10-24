@@ -705,6 +705,8 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)} · opponent: ${opp == null ? 'not on file' : list(opp)}`;
   };
 
+  // A game with no weather row says so: without the line, silence would read as a dry, calm day.
+  const weatherLine_ = (row) => (!row ? '\n      weather: not on file' : playedInWeather(row) ? `\n      ${playedInWeather(row)}` : '');
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
 Every completed game this season, newest first: date, site, score, the
@@ -725,7 +727,7 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
         + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '')
-        + (playedInWeather(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date)) ? `\n      ${playedInWeather(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date))}` : '');
+        + weatherLine_(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date));
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}
 ${RULE}`;

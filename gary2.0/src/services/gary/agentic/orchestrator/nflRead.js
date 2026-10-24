@@ -72,7 +72,7 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
-    ['THIS SEASON, GAME BY GAME', `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
+    ['THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)', `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
     ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season, quarterbacks aside)",
       `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'))}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'))}`],
     ['SCHEDULE, TRAVEL AND WEATHER', situation],

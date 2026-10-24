@@ -67,7 +67,7 @@ export async function loadNflGameWeather(rows, kickoffOf, { fetchImpl = globalTh
  */
 export function gameWeatherLine(row, w) {
   if (!row || !OUTSIDE.has(row.roof)) return null;
-  if (w?.missing) return 'weather: rain and snow not on file';
+  if (!w || w.missing) return 'weather: rain and snow not on file';
   const temp = row.temp === '' || row.temp == null ? null : Number(row.temp);
   const wind = row.wind === '' || row.wind == null ? null : Number(row.wind);
   const wet = w && (w.precip >= 0.05 || w.snow > 0);
