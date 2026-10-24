@@ -82,13 +82,32 @@ export function gameBoxFromSummary(summary, eventId) {
     return { teamId: String(d?.team?.id ?? ''), result: String(d?.result || d?.displayResult || '').toUpperCase(),
       oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
   });
-  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives };
+  // Everyone the play-by-play names ("#99 R.Porter" on a tackle, "#13 C.Durr Jr." on a target), as jersey|name keys
+  // (Oct 24 2026 read check: the box score lists only players with a stat, so a starting lineman with no tackle and a
+  // receiver with no catch read as absent; Rutgers' Rondo Porter made a tackle for loss the box never credited).
+  const named = new Set();
+  for (const drive of summary?.drives?.previous || []) {
+    for (const play of drive?.plays || []) {
+      for (const m of String(play?.text || '').matchAll(/#(\d{1,2})\s+([A-Z])[A-Za-z'-]*\.\s?([A-Z][A-Za-z'-]+)/g)) named.add(`${Number(m[1])}|${playKey(m[2], m[3])}`);
+    }
+  }
+  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, named: [...named] };
+}
+
+/** A player's play-by-play key: first initial and the first word of the last name, letters only ("r|porter"). */
+export const playKey = (first, last) => `${String(first || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 1)}|${String(last || '').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '')}`;
+
+/** Whether a game's play-by-play names this player: by jersey and name when his jersey is known, else by name. */
+export function namedInPlays(named, { first, last, jersey } = {}) {
+  if (!named?.length || !first || !last) return false;
+  const key = playKey(first, last);
+  return jersey != null && jersey !== '' ? named.includes(`${Number(jersey)}|${key}`) : named.some((k) => k.endsWith(`|${key}`));
 }
 
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v5:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v6:${eventId}`, async () => {
     try {
       return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
     } catch (error) {
@@ -98,15 +117,21 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   }, { ttlMs: BOX_TTL_MS, enabled: fetchImpl === globalThis.fetch && !process.env.VITEST });
 }
 
-/** ESPN's roster positions for one team, by athlete id: { positions: { id: 'RB' } } or { unavailable }. */
+/** ESPN's roster positions and jerseys for one team, by athlete id: { positions: { id: 'RB' }, jerseys: { id: '99' } }
+ * or { unavailable }. */
 export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.fetch } = {}) {
   if (teamId == null) return { unavailable: true, reason: 'no team id' };
-  return cachedResearch(`espn_cfb_roster_v1:${teamId}`, async () => {
+  return cachedResearch(`espn_cfb_roster_v2:${teamId}`, async () => {
     try {
       const roster = await getJson(`${SITE}/teams/${teamId}/roster`, fetchImpl);
-      const positions = {};
-      for (const group of roster?.athletes || []) for (const a of group?.items || []) if (a?.id && a?.position?.abbreviation) positions[String(a.id)] = a.position.abbreviation;
-      return Object.keys(positions).length ? { positions } : { unavailable: true, reason: 'ESPN roster empty' };
+      const positions = {}, jerseys = {};
+      for (const group of roster?.athletes || []) {
+        for (const a of group?.items || []) {
+          if (a?.id && a?.position?.abbreviation) positions[String(a.id)] = a.position.abbreviation;
+          if (a?.id && a?.jersey != null) jerseys[String(a.id)] = String(a.jersey);
+        }
+      }
+      return Object.keys(positions).length ? { positions, jerseys } : { unavailable: true, reason: 'ESPN roster empty' };
     } catch (error) {
       console.warn(`[NCAAF box] ESPN roster for team ${teamId} not retrieved: ${error.message}`);
       return { unavailable: true, reason: error.message };

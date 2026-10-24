@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays } from './ncaafGameBox.js';
 
 const SPORT = 'americanfootball_ncaaf';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -322,11 +322,12 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
       if (!box || box.unavailable) continue;
+      if (box.named?.length) named.set(String(r.gameId), box.named);
       if (boxAddsUp(box, found.teamId, found.own)) {
         rows.push(...playerGameRows(box, found.teamId, r.gameId, positions));
         onFile.add(String(r.gameId));
@@ -386,7 +387,7 @@ async function playerGames(sides, boxes) {
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb };
+    return { rows, onFile, points, kicking, drives, oppQb, named, jerseys: roster?.jerseys || {} };
   }));
 }
 
@@ -428,7 +429,7 @@ function playersOf(rows, results) {
   for (const row of rows || []) {
     if (!row?.player?.first_name || !inGames.has(String(row?.game?.id))) continue;
     const name = `${row.player.first_name} ${row.player.last_name}`.trim();
-    if (!byPlayer.has(name)) byPlayer.set(name, { position: row.player.position_abbreviation || row.player.position || '', games: new Map() });
+    if (!byPlayer.has(name)) byPlayer.set(name, { id: row.player.id, first: row.player.first_name, last: row.player.last_name, position: row.player.position_abbreviation || row.player.position || '', games: new Map() });
     byPlayer.get(name).games.set(String(row.game.id), row);
   }
   return byPlayer;
@@ -454,6 +455,9 @@ function offenseCore(rows, results, onFile) {
 }
 const UNDER_OFFENSE = 'game by game under CARRIES AND CATCHES, GAME BY GAME';
 
+/** Whether a game's play-by-play names this player (a tackle, a target, a return): `plays` is { named, jerseys }. */
+const playedPerPlays = (plays, gameId, entry) => namedInPlays(plays?.named?.get(String(gameId)), { first: entry.first, last: entry.last, jersey: plays?.jerseys?.[String(entry.id)] });
+
 /**
  * The availability report's players beside what they did this season, and
  * the other players at the position (founder GO, Oct 4 2026: a number is only
@@ -462,7 +466,7 @@ const UNDER_OFFENSE = 'game by game under CARRIES AND CATCHES, GAME BY GAME';
  * player lines on file are left out of the counts and named once beside the
  * team.
  */
-function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null) {
+function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
   const byPlayer = playersOf(rows, games);
   // One line per player: the games he has a stat row in, the last one, and his season's totals (Oct 23 2026 data review:
@@ -471,7 +475,10 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   const gameByGame = (name, entry) => {
     const played = games.filter((r) => entry.games.has(String(r.gameId)));
     const sinceLast = games.length - 1 - games.indexOf(played.at(-1));
-    return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`})` : ''}; `
+    // A game with no stat row whose play-by-play names him: he played in it (Oct 24 2026 read check).
+    const inPlays = sinceLast ? games.slice(-sinceLast).filter((r) => playedPerPlays(plays, r.gameId, entry)) : [];
+    const plays_ = inPlays.length ? `; the play-by-play names him in ${inPlays.length === sinceLast ? (sinceLast === 1 ? 'it' : 'each of them') : inPlays.map(day).join(', ')}` : '';
+    return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`}${plays_})` : ''}; `
       + (core.has(name) ? UNDER_OFFENSE : `season: ${productionLine(totalsOf(entry))}`);
   };
   // What the report itself says beyond the status: a conference report's row only repeats it ("RB #2 listed Doubtful on
@@ -583,7 +590,7 @@ function offenseLines(team, reported, rows, results, onFile, core) {
  * whether he is on this week's report; a player on it has his season beside his status in the availability section,
  * so here he gets his status only.
  */
-function regularsLines(team, reported, rows, results, onFile, core) {
+function regularsLines(team, reported, rows, results, onFile, core, plays = null) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
   const last = games.at(-1);
   if (!last) return [`${team}: no completed games this season.`];
@@ -601,7 +608,9 @@ function regularsLines(team, reported, rows, results, onFile, core) {
   const regular = new Set([...leaders(1, 'passing_attempts'), ...leaders(2, 'rushing_attempts'), ...leaders(4, 'receptions'), ...leaders(11, 'total_tackles'),
     ...(someoneDid('field_goal_attempts', 'extra_point_attempts') ? leaders(1, 'field_goal_attempts', 'extra_point_attempts') : []),
     ...(someoneDid('punts') ? leaders(1, 'punts') : [])]);
-  const kept = before.filter(([name]) => regular.has(name) && !lastGame.has(name))
+  // One the last game's play-by-play names played it without a stat (Oct 24 2026 read check: Rutgers' Rondo Porter and
+  // Northwestern's Brendan Flakes read as absent; Porter made a tackle for loss, Flakes blocked a field goal).
+  const kept = before.filter(([name, entry]) => regular.has(name) && !lastGame.has(name) && !playedPerPlays(plays, last.gameId, entry))
     .map(([name, entry]) => ({ name, entry, played: earlier.filter((r) => entry.games.has(String(r.gameId))) }))
     .filter((p) => p.played.length >= 2 && p.played.length * 2 > earlier.length)
     .sort((a, b) => b.played.length - a.played.length || a.name.localeCompare(b.name));
@@ -726,7 +735,7 @@ Each player on this game's availability report beside what he did this
 season, and the other players at his position with theirs. College publishes
 no snap counts; these stat rows are the record of who played.
 
-${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i]).join('\n')).join('\n\n')}
 ${RULE}`;
 
   // One intro paragraph each, which the read leaves out: "no stat row" says what the box score shows and no more.
@@ -751,7 +760,7 @@ availability report. A stat row is the player's line in the game's box score;
 college publishes no snap counts, so "no stat row" is not proof that a player
 did not play.
 
-${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], played[i]).join('\n')).join('\n\n')}
 ${RULE}`;
 
   const behind = (s) => (s.results.length
