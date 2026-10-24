@@ -13,11 +13,15 @@
 import { cachedResearch } from '../../gary/sharedResearchCache.js';
 
 const PUBLIC_REPORTS_URL = 'https://app.hdintelligence.com/api/get-publish-public';
+// The Big Ten and Big 12 publish through the same service under the codes B10 and B12 (Oct 24 2026: the Big Ten's
+// reports page embeds app.hdintelligence.com/?conf=B10; their games had been read from a web search instead).
 export const REPORT_CONFERENCES = Object.freeze({
-  SEC: { key: 'SEC', page: 'https://www.secsports.com/fbreports' },
-  ACC: { key: 'ACC', page: 'https://theacc.com' },
-  American: { key: 'American', page: 'https://theamerican.org' },
-  MAC: { key: 'MAC', page: 'https://getsomemaction.com' },
+  SEC: { key: 'SEC', label: 'SEC', page: 'https://www.secsports.com/fbreports' },
+  ACC: { key: 'ACC', label: 'ACC', page: 'https://theacc.com' },
+  American: { key: 'American', label: 'American', page: 'https://theamerican.org' },
+  MAC: { key: 'MAC', label: 'MAC', page: 'https://getsomemaction.com' },
+  B10: { key: 'B10', label: 'Big Ten', page: 'https://bigten.org/sports/2026/9/10/FB_Availability_Reports.aspx' },
+  B12: { key: 'B12', label: 'Big 12', page: 'https://big12sports.com' },
 });
 const USER_AGENT = 'GaryAI-availability-reader/1.0 (+https://betwithgary.ai)';
 const CACHE_MS = 15 * 60_000;
@@ -40,7 +44,8 @@ export function schoolKey(name) {
 }
 
 // Report names that differ from BDL's school name beyond abbreviations.
-const ALIASES = new Map([['army west point', 'army'], ['miami fl', 'miami']]);   // the ACC report writes 'Miami (FL)'
+// The ACC report writes 'Miami (FL)'; the Big Ten's writes 'Southern California' for USC.
+const ALIASES = new Map([['army west point', 'army'], ['miami fl', 'miami'], ['southern california', 'usc']]);
 
 /** The report's team is this BDL team: the same school, never a prefix (North Carolina is not NC State). */
 export function sameSchool(reportTeam, team) {
@@ -140,7 +145,7 @@ export async function officialAvailabilityForGame({ homeTeam, awayTeam, date }, 
   const sideOf = (hit, side) => (hit ? { team: hit[side].team, listed: listed(hit[side]), players: hit[side].rows.length } : null);
   return {
     found: true,
-    conference: report.conference,
+    conference: REPORT_CONFERENCES[report.conference]?.label || report.conference,
     page: REPORT_CONFERENCES[report.conference]?.page || null,
     reportType: report.reportType,
     published: [report.publishDate, report.postedTime].filter(Boolean).join(' '),

@@ -212,7 +212,8 @@ function officialStatus(raw) {
 // A conference that publishes an availability report and failed to give one leaves that side's absences not on file:
 // the search's rows do not stand in for the official report (Oct 23 2026 source audit; founder: no fallback that gives
 // different data when the original source fails).
-const REPORTING_CONFERENCES = { 1: 'ACC', 2: 'American', 7: 'MAC', 10: 'SEC' };
+const REPORTING_CONFERENCES = { 1: 'ACC', 2: 'American', 3: 'B12', 4: 'B10', 7: 'MAC', 10: 'SEC' };
+const CONFERENCE_LABEL = { B10: 'Big Ten', B12: 'Big 12' };
 export function markOfficialMissing(context, official, { game } = {}) {
   if (!context?.sides || !official || official.found || !official.errors?.length) return context;
   const out = structuredClone(context);
@@ -223,7 +224,7 @@ export function markOfficialMissing(context, official, { game } = {}) {
     if (!error || !out.sides[side]) continue;
     out.sides[side].injuries = [];
     out.sides[side].availability = 'unavailable';
-    out.sides[side].availability_note = `the ${conference} availability report was not retrieved (${error.replace(/^[^:]+: /, '')}); absences not on file`;
+    out.sides[side].availability_note = `the ${CONFERENCE_LABEL[conference] || conference} availability report was not retrieved (${error.replace(/^[^:]+: /, '')}); absences not on file`;
     out.sides[side].official_missing = true;
   }
   return out;
