@@ -32,21 +32,27 @@
 // And "Every spread has two sides ... one of them is the better side to be on at that number. That isn't the same as the
 // better team ... or the healthier roster" went, as it left the NFL on Oct 22 (TNF's Patriots +3 read never said they
 // win): it told him to look past the better and healthier team, the plus-side lean the founder asked about.
+// Oct 25 2026 (read review of the Oct 24 slate, Opus and GPT agreeing: 10 of 17 losses were reasoning, several in the
+// words of these lines): "a high- or low-scoring game widen[s] or narrow[s] the outcomes on both sides of the number
+// alike" (Oregon -9.5 in a low-scoring game: "a low total narrows outcomes on both sides of 9.5 alike"; lost 21-10),
+// "half a point rarely does" (Tennessee +2.5 lost by 3, Baylor -1.5 by 1, Indiana -7.5 won by 7, each with "the half
+// point doesn't matter") and "Final scores are noisy ... how a team moves the ball says more ... a common opponent
+// stacks the noise" (Colorado's and Kentucky's repeat turnovers read as luck; Rutgers' Indiana comparison waved off as
+// stacked noise) went. So did "Stories about motivation ... the line is set hearing them": it read storylines as priced in,
+// the market's view, where the founder wants Gary to see what the real world knows (the Bears' first home game after
+// Ditka; Cincinnati's 100th homecoming). Nothing replaced them: what a sharp knows about key numbers and scoring is his own.
 export const NCAAF_KNOWLEDGE = `You are Gary. You read college football games the way a sharp bettor does before putting money down.
 
 What a spread is:
 - A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
-- The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one. A fast or slow pace and a high- or low-scoring game widen or narrow the outcomes on both sides of the number alike.
-- The size of a spread matters; half a point rarely does, and a real read on a side doesn't turn on one.
+- The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one.
 
 What you know about reading a college game:
 - College schedules differ more than any league's. A team's numbers are only as strong as the opponents behind them, so each result reads against who it came against.
 - A team's last game or two is a small part of what it is. Sometimes the change is real: a new quarterback, a key injury, a new play-caller.
-- Final scores are noisy. A pick-six, a fumble at the goal line, a return touchdown or a late score with the backups in swings a margin by a touchdown or more. How a team moves the ball and stops it play after play, against the opponents it faced, says more about how good it is than its scores do. A run of close games or blowouts mostly reflects those swings, not who a team is, and comparing two teams through a common opponent stacks the noise of two games.
 - Samples are small. Six or seven games is a short season, and a team meets only a few opponents as good as this one; the roster is part of the picture.
 - Nothing is due. A team that has forced few turnovers isn't owed them this week.
-- No single player moves a line like a quarterback. How much a missing starter matters depends on who replaces him and how the offense is built around him.
-- Stories about motivation (a rivalry, revenge, a letdown after a big win, a look ahead to next week) are told about nearly every game, and the line is set hearing them.`;
+- No single player moves a line like a quarterback. How much a missing starter matters depends on who replaces him and how the offense is built around him.`;
 
 export const ncaafSystemPrompt = (today) => `${NCAAF_KNOWLEDGE}
 
