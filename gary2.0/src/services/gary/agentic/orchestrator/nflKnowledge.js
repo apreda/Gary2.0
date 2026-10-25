@@ -47,6 +47,10 @@ Today is ${today}. The scout report is current on rosters, injuries and every nu
 
 // The question, in a bettor's order. "What doesn't matter" is what made him sort signal from noise on the test set;
 // the earlier "best case for each side" had him list every argument, weak ones included.
+// Oct 25 2026 (founder: "the only question should be THE question ... if he's asked multiple questions that's silly, the
+// model can't be asked a question and not want to answer it"): one question, as MLB's playoff pick asks it ("Who do you
+// think wins tonight, and why?"). "What actually matters in this game, and what doesn't" had him name things to dismiss
+// (the Oct 24 college reads' "that's noise"), and "the better one to be on" was a frame, not the outcome.
 export const nflGameMessage = (story, news) => `## THE GAME
 
 ${story}
@@ -55,7 +59,7 @@ ${story}
 
 ${news || 'Nothing beyond the scout report.'}
 
-Read this game the way you would before putting your own money on it: what actually matters in this game, and what doesn't. Then: at this spread, which side is the better one to be on, and why?`;
+Who do you think covers this spread, and why?`;
 
 // The card: his answer written for fans, with the ticket at THE LINE's exact price.
 export const nflCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:
