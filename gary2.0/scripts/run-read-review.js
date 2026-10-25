@@ -7,7 +7,8 @@
  * (a gap or a misleading number), from the reasoning (the data had it and the read weighed it wrong, or reasoned from a
  * pattern), or from variance. It never reaches Gary and fixes nothing itself.
  *
- *   node scripts/run-read-review.js --date 2026-10-24 [--league NCAAF] [--only "Ducks"] [--opus]
+ *   node scripts/run-read-review.js [--date 2026-10-24] [--league NCAAF] [--only "Ducks"] [--opus]
+ * The morning schedule (com.gary.read-review, 9:30 ET) runs it with --opus for yesterday, through Nov 7.
  * Report: ~/Library/Logs/Gary2.0/data-checks/read-reviews/<date>.md (and .json). Already-reviewed reads are skipped.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
@@ -17,8 +18,11 @@ const { subscriptionSearch } = await import('../src/services/gary/agentic/orches
 const { BACKGROUND_GPT } = await import('../src/services/gary/agentic/orchestrator/subscriptionRoutes.js');
 
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
-const date = arg('--date');
-if (!date) { console.log('--date is required'); process.exit(1); }
+// Without --date, yesterday (Eastern): the morning run reviews the slate that just finished, until RUNS_UNTIL.
+const yesterday = new Date(Date.now() - 24 * 3600_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+const date = arg('--date') || yesterday;
+const RUNS_UNTIL = '2026-11-07';
+if (!arg('--date') && date > RUNS_UNTIL) { console.log(`Read review: the loop ended ${RUNS_UNTIL}; unload com.gary.read-review`); process.exit(0); }
 const only = arg('--only');
 const LEAGUES = Object.fromEntries(Object.entries({ ncaaf: 'NCAAF', nba: 'NBA', nfl: 'NFL' }).filter(([, l]) => !arg('--league') || l === arg('--league')));
 // --opus: the reviewer is Opus (founder, Oct 25 2026: "run this on opus too ... I don't trust chat gpt as much"); its
