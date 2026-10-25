@@ -208,7 +208,8 @@ function thisWeeksQuarterbacks(desk, teams) {
 // the yards each side gained (runs plus passing; null when the game's unit lines are missing).
 export function seasonGames(desk) {
   const teams = []; let cur = null; let game = null;
-  const yards = (l) => { const r = l.match(/(\d+) runs for (-?\d+)/), p = l.match(/passing \d+-\d+ for (-?\d+)/); return r && p ? Number(r[2]) + Number(p[1]) : null; };
+  // Sacks shown apart from the runs (Oct 25 2026) count in the yards, as the box counts them.
+  const yards = (l) => { const r = l.match(/(\d+) runs for (-?\d+)/), p = l.match(/passing \d+-\d+ for (-?\d+)/), k = l.match(/\d+ sacks? for (-?\d+) yards/); return r && p ? Number(r[2]) + Number(p[1]) + (k ? Number(k[1]) : 0) : null; };
   for (const l of sectionOf(desk, 'THIS SEASON GAME BY GAME').split('\n')) {
     const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
     if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }

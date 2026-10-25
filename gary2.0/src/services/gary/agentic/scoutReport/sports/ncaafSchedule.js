@@ -284,7 +284,7 @@ async function teamBoxBuilder(season, weeks) {
     const ownEntry = game.teams.find((t) => cfbdTeamMatches(t.team, team));
     return { game, teamId: ownEntry?.teamId, own: stats(ownEntry), opp: stats(game.teams.find((t) => !cfbdTeamMatches(t.team, team))) };
   };
-  const lines = (team, result) => {
+  const lines = (team, result, sackPlays = null) => {
     const found = find(team, result);
     if (!found) return ['      units: the per-game unit lines are not available for this game'];
     const { own, opp } = found;
@@ -295,8 +295,16 @@ async function teamBoxBuilder(season, weeks) {
     // Box-score counts only: the play-by-play success and stuff rates and the per-carry and per-attempt averages are gone
     // (founder, Oct 23 2026: "just use stats, not play by play data"), and so is the play-by-play play count (it ran 1 to
     // 7 off the box score).
-    const side = (box, sacks) => `${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'}${sacked(sacks)}`
-      + ` · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'}`;
+    // With the play-by-play's sack yards (when its count matches the box's), the runs without the sacks and the sacks
+    // apart (Oct 25 2026 read review).
+    const runs = (box, sacks, plays) => {
+      const att = Number(box.get('rushingAttempts')), yds = Number(box.get('rushingYards'));
+      if (plays && plays.n === Number(sacks) && Number.isFinite(att) && Number.isFinite(yds)) {
+        return `${att - plays.n} runs for ${yds - plays.yards}${plays.n ? ` · ${plays.n === 1 ? '1 sack' : `${plays.n} sacks`} for ${plays.yards} yards` : ''}`;
+      }
+      return `${box.get('rushingAttempts') ?? '—'} runs for ${box.get('rushingYards') ?? '—'}${sacked(sacks)}`;
+    };
+    const side = (box, sacks, plays) => `${runs(box, sacks, plays)} · passing ${box.get('completionAttempts') ?? '—'} for ${box.get('netPassingYards') ?? '—'}`;
     // How each side gave the ball away (Oct 23 2026 data audit: Oregon's 7 giveaways against UCLA were 5 lost fumbles and
     // 2 interceptions). In CFBD's box `interceptions` are the ones a team threw and `passesIntercepted` the ones its
     // defense made: turnovers equal fumblesLost plus interceptions in all 358 team-games of weeks 5-7. The split shows
@@ -313,8 +321,8 @@ async function teamBoxBuilder(season, weeks) {
     // Virginia; third downs alone undercounted how drives were kept alive). Penalties are the whole team's, every unit.
     const penalties = (box) => { const m = String(box.get('totalPenaltiesYards') ?? '').match(/^(\d+)-(-?\d+)$/); return m ? `${m[1]} for ${m[2]} yards` : '—'; };
     return [
-      `      offense: ${side(own, opp.get('sacks'))} · ${lost(own, 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'} · fourth down ${own.get('fourthDownEff') ?? '—'} · team penalties ${penalties(own)}`,
-      `      defense: ${side(opp, own.get('sacks'))} · ${count(own.get('sacks'), 'sack')}, ${count(own.get('tacklesForLoss'), 'tackle')} for loss · ${lost(opp, 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'} · opponent fourth down ${opp.get('fourthDownEff') ?? '—'} · opponent penalties ${penalties(opp)}`,
+      `      offense: ${side(own, opp.get('sacks'), sackPlays?.mine)} · ${lost(own, 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'} · fourth down ${own.get('fourthDownEff') ?? '—'} · team penalties ${penalties(own)}`,
+      `      defense: ${side(opp, own.get('sacks'), sackPlays?.theirs)} · ${count(own.get('sacks'), 'sack')}, ${count(own.get('tacklesForLoss'), 'tackle')} for loss · ${lost(opp, 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'} · opponent fourth down ${opp.get('fourthDownEff') ?? '—'} · opponent penalties ${penalties(opp)}`,
     ];
   };
   return { find, lines };
@@ -339,12 +347,17 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
       if (!box || box.unavailable) continue;
       if (box.named?.length) named.set(String(r.gameId), box.named);
+      if (box.sacks) {
+        const oppSide = (box.teams || []).find((t) => t.id !== String(found.teamId))?.id;
+        const none = { n: 0, yards: 0 };
+        sackPlays.set(String(r.gameId), { mine: box.sacks[String(found.teamId)] || none, theirs: (oppSide && box.sacks[oppSide]) || none });
+      }
       if (boxAddsUp(box, found.teamId, found.own)) {
         rows.push(...playerGameRows(box, found.teamId, r.gameId, positions));
         onFile.add(String(r.gameId));
@@ -404,7 +417,7 @@ async function playerGames(sides, boxes) {
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb, named, jerseys: roster?.jerseys || {} };
+    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, jerseys: roster?.jerseys || {} };
   }));
 }
 
@@ -719,7 +732,7 @@ snow, a storm, wind of 15 mph or more, or freezing.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
-      const units = boxes.lines(s.team, r);
+      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
       const theirQb = played[i].oppQb?.get(String(r.gameId));
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`

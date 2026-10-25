@@ -82,6 +82,22 @@ export function gameBoxFromSummary(summary, eventId) {
     return { teamId: String(d?.team?.id ?? ''), result: String(d?.result || d?.displayResult || '').toUpperCase(),
       oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
   });
+  // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
+  // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
+  // The team is the play's own possession (a drive's team was wrong on some sacks) and the yards are the play's words
+  // ("sacked for loss of 14 yards"; its yardage field read 0 on that one). A sack whose yards the text doesn't give
+  // leaves the game's sacks not on file.
+  let sacks = {};
+  for (const drive of summary?.drives?.previous || []) {
+    for (const play of drive?.plays || []) {
+      if (!sacks || !/^sack$/i.test(String(play?.type?.text || '').trim())) continue;
+      const teamId = String(play?.start?.team?.id ?? drive?.team?.id ?? '');
+      const m = String(play?.text || '').match(/loss of (\d+) yards?/i);
+      if (!m) { sacks = null; continue; }
+      const s = sacks[teamId] || (sacks[teamId] = { n: 0, yards: 0 });
+      s.n += 1; s.yards -= Number(m[1]);
+    }
+  }
   // Everyone the play-by-play names ("#99 R.Porter" on a tackle, "#13 C.Durr Jr." on a target), as jersey|name keys
   // (Oct 24 2026 read check: the box score lists only players with a stat, so a starting lineman with no tackle and a
   // receiver with no catch read as absent; Rutgers' Rondo Porter made a tackle for loss the box never credited).
@@ -91,7 +107,7 @@ export function gameBoxFromSummary(summary, eventId) {
       for (const m of String(play?.text || '').matchAll(/#(\d{1,2})\s+([A-Z])[A-Za-z'-]*\.\s?([A-Z][A-Za-z'-]+)/g)) named.add(`${Number(m[1])}|${playKey(m[2], m[3])}`);
     }
   }
-  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, named: [...named] };
+  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
 }
 
 /** A player's play-by-play key: first initial and the first word of the last name, letters only ("r|porter"). */
@@ -107,7 +123,7 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v6:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v8:${eventId}`, async () => {
     try {
       return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
     } catch (error) {
