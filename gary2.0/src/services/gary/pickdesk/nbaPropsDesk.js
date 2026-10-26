@@ -101,6 +101,11 @@ async function publishedCall(game) {
   } catch { return null; }
 }
 
+// THE GAME-BY-GAME SHEET (Oct 26 2026 side-by-side test, test runs only): GARY_PROP_SHEETS=games lists each of the last
+// ten games with its date and opponent and no season average (founder: "all they do is play games"; a guess, to be
+// tested before props change: "71, 44, 92, 58, 66" against a line may tell more than one average).
+export const propSheetsByGame = () => process.env.GARY_PROP_SHEETS === 'games';
+const etDayShort = (d) => new Date(`${String(d).slice(0, 10)}T16:00:00Z`).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
 const n1 = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : v.toFixed(1));
 const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
 
@@ -116,6 +121,11 @@ async function playerSheet(player, markets, asOf) {
   if (!games.length) { lines.push('  No games yet this season.'); return lines.join('\n'); }
   if (games.length < 3) {
     lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent || '?'} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
+    return lines.join('\n');
+  }
+  if (propSheetsByGame()) {
+    lines.push(`  This season, ${games.length} games; the last ${Math.min(10, games.length)}, newest first:`);
+    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent || '?'}: ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`);
     return lines.join('\n');
   }
   lines.push(`  This season, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);

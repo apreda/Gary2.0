@@ -558,6 +558,16 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
     const cost = (usage.in * inRate + usage.out * outRate) / 1e6;
     console.log(`   [Props Brain] one call (${responder}), ${usage.in.toLocaleString()} in / ${usage.out.toLocaleString()} out ≈ $${cost.toFixed(3)} — ${parsed.picks.length} pick(s)`);
 
+    // A test run's transcript (GARY_PROPS_TRANSCRIPT_DIR, Oct 26 2026 side-by-side sheets test): what was asked and the
+    // answer, so the founder and the session can read both arms' reads.
+    if (process.env.GARY_PROPS_TRANSCRIPT_DIR) {
+      try {
+        const { mkdirSync, writeFileSync } = await import('node:fs');
+        const dir = process.env.GARY_PROPS_TRANSCRIPT_DIR; mkdirSync(dir, { recursive: true });
+        const name = (String(userMessage).match(/## THE DESK — ([^\n]+)/)?.[1] || `props-${Date.now()}`).replace(/[^\w@ -]+/g, '').replace(/\s+/g, '_');
+        writeFileSync(`${dir}/${name}.${process.env.GARY_PROP_SHEETS || 'current'}.md`, `########## ASKED\n${userMessage}\n\n########## ANSWER\n${res.content}\n`);
+      } catch (e) { console.warn(`[Props Brain] transcript not written: ${e.message}`); }
+    }
     return { parsed, audits, usage, explicitPass, respondingModel: responder };
   };
 

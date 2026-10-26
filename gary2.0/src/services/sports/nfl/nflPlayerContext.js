@@ -86,14 +86,15 @@ export function defenseLine(cur, prev, defense, position, season) {
 /** "Wk 2 Sep 14 vs DAL: 7 targets, 5 catches, 72 yards, 1 TD; 2 carries, 9 yards; 54 of 66 snaps" — newest first. */
 // `defenses`: team code → the defense that week's opponent is this season ("allowing 26.3 points a game, 5th most"),
 // so "120 yards vs DAL" says whether Dallas was a soft defense (Oct 26 2026, as the game lines show it).
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null } = {}) {
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null } = {}) {
   return (rows || []).slice(0, limit).map((r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`);
     const bits = [];
     if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`);
     if (n(r.carries)) bits.push(`${n(r.carries)} carries, ${n(r.rushing_yards)} yards${n(r.rushing_tds) ? `, ${n(r.rushing_tds)} TD` : ''}`);
-    if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
+    const teamTotal = teamTargets?.get(`${r.season}|${r.week}|${r.team}`);
+    if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
     const faced = defenses?.get(r.opponent_team);

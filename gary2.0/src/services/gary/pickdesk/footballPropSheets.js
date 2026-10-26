@@ -65,8 +65,13 @@ export function seasonClause(games, propType, label) {
     const scored = values.filter((v) => Number(v) > 0).length;
     return `${label}: ${printed} (${values.length} g, scored in ${scored})`;
   }
+  if (propSheetsByGame()) return `${label}: ${printed} (${values.length} g)`;
   return `${label}: ${printed} (${values.length} g, ${fmtRate(total / values.length)} per game)`;
 }
+// THE GAME-BY-GAME SHEET (Oct 26 2026 side-by-side test, test runs only): GARY_PROP_SHEETS=games drops the per-game
+// rates (each market's average, the volume a game in the head, the targets share over three games and the season) and
+// lists every game, each with its opponent, his touches and his share of the team's targets that day.
+const propSheetsByGame = () => process.env.GARY_PROP_SHEETS === 'games';
 
 /**
  * LAST SEASON, TOLD HONESTLY (founder GO, Oct 7 2026): last season's numbers sit beside this season's on every
@@ -183,7 +188,7 @@ export function buildFootballPropSheets({
     if (!lines.length) return null;
     const roleNote = priorRoleNote(current, prior, priorSeasonLabel || 'last season');
     if (roleNote) lines.push(`   ${roleNote}`);
-    const usage = current.length
+    const usage = propSheetsByGame() ? null : current.length
       ? usageLine(current, seasonLabel || 'this season')
       : usageLine(prior, priorSeasonLabel || 'last season');
     const position = positionByName?.get(key);
@@ -196,12 +201,13 @@ export function buildFootballPropSheets({
     for (const m of entry.markets) { const h = priceHistoryLine(context.history, entry.name, m.prop_type); if (h) facts.push(h); }
     const weeks = context.weeksByName?.get(normName(entry.name)) || [];
     const pos = String(position || '').toUpperCase();
-    if (['WR', 'TE', 'RB'].includes(pos)) { const sh = targetShareLine(weeks, context.teamTargets); if (sh) facts.push(sh); }
+    if (['WR', 'TE', 'RB'].includes(pos) && !propSheetsByGame()) { const sh = targetShareLine(weeks, context.teamTargets); if (sh) facts.push(sh); }
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
     const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name); if (out) facts.push(out);
-    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses });
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses,
+      ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     return [head, ...lines, ...facts.map((f) => `   ${f}`)];
   };
