@@ -16,7 +16,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, ratingsLine, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock, RATED_FROM_GAMES } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, listingHistory, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
@@ -221,8 +221,9 @@ function beforeFirstGame(desk, team) {
 // The head of each team's game log (Oct 23 2026: HOW GOOD THEY ARE went, a heading that told Gary what to conclude;
 // what it held that the log does not is here): the record from the team's own games, from the tenth game the
 // conference place and the home and road records (before that a place among teams tied at 1-0 is the feed's tie order,
-// "Cavaliers #15 in East (0-0)", and a split is a game or two), and from the sixth game the per-possession numbers with
-// ranks. A team before its first game says so once, here, with this season's roster.
+// "Cavaliers #15 in East (0-0)", and a split is a game or two). No per-possession numbers (Oct 26 2026: a season rate
+// blends the nights a starter sat with the nights he played, the NBA's version of the Bears' backup-quarterback games;
+// the games themselves are in the log). A team before its first game says so once, here, with this season's roster.
 const RATINGS_MISSING = Symbol('ratings missing');
 const STANDINGS_FROM_GAMES = 10;
 function teamHead(desk, ratings, team, ts) {
@@ -237,7 +238,7 @@ function teamHead(desk, ratings, team, ts) {
   const more = s && regular.length >= STANDINGS_FROM_GAMES ? `; ${s.place}${s.home ? `; home ${s.home}, road ${s.road}` : ''}` : '';
   const head = `${team} (${w}-${regular.length - w}${more})`;
   const missing = ratings[RATINGS_MISSING];
-  const rated = missing ? `opponents' records${regular.length >= RATED_FROM_GAMES ? ' and per 100 possessions' : ''}: not on file (the league's ratings did not load: ${missing})` : ratingsLine(ratings, team);
+  const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
 }
 async function gameLog(desk, ratings, team, asOf, ts) {

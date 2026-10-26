@@ -11,9 +11,6 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 
-const one = (x) => (Math.round(Number(x) * 10) / 10).toFixed(1);
-const signed = (x) => `${Number(x) > 0 ? '+' : ''}${one(x)}`;
-const ord = (k) => `${k}${['th', 'st', 'nd', 'rd'][(k % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][k % 100] || 'th'}`;
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
 /** Every team's regular-season ratings this season: { [full_name]: { gp, w, l, off, def, net, pace } }. */
@@ -62,29 +59,6 @@ export async function leagueRatingsAt(asOf = new Date(), season = nbaSeason()) {
     out[team] = { gp: t.gp, w: t.w, l: t.l, off, def, net: off - def, pace: t.pace / t.gp };
   }
   return out;
-}
-
-const rankOf = (league, team, key, high) => {
-  const order = Object.entries(league).filter(([, t]) => Number.isFinite(t[key])).sort((a, b) => (high ? b[1][key] - a[1][key] : a[1][key] - b[1][key]));
-  return order.findIndex(([name]) => name === team) + 1;
-};
-
-// A rank among the league means little before a team has played this many games (Oct 22 2026: after one game the
-// read quoted "14th in the league" for a single night's offense), so the numbers stand alone until then.
-const RANKED_FROM_GAMES = 5;
-
-// Five games or fewer show no per-possession numbers: one night's per-100 numbers read as who the team is, and the
-// game log lists each game with who played (Oct 23 2026 data audit).
-export const RATED_FROM_GAMES = 6;
-/** A team's per-possession numbers with ranks, for the head of its game log; null under RATED_FROM_GAMES games. The
- * record is the head's own (Oct 23 2026: HOW GOOD THEY ARE went; what it held that the log does not heads the log). */
-export function ratingsLine(league, team) {
-  const t = league[team];
-  if (!t || t.gp < RATED_FROM_GAMES) return null;
-  const teams = Object.keys(league).length;
-  const ranked = t.gp >= RANKED_FROM_GAMES;
-  const rank = (key, high, ofAll = false) => (ranked ? ` (${ord(rankOf(league, team, key, high))}${ofAll ? ` of ${teams}` : ''})` : '');
-  return `per 100 possessions: offense ${one(t.off)} points${rank('off', true, true)}, defense ${one(t.def)} allowed${rank('def', false)}, net ${signed(t.net)}${rank('net', true)}, pace ${one(t.pace)}`;
 }
 
 // Who played in a game, from its box score (Oct 23 2026, founder: Gary needs "what happened last game" and the most
@@ -190,9 +164,25 @@ export async function teamSeason(team, before = new Date(), season = nbaSeason()
   return { team, id: t.id, city: t.city === 'LA' ? 'Los Angeles' : t.city, nickname: t.name, games, boxes };
 }
 
-/** THIS SEASON GAME BY GAME: each finished game before `before`, newest first, with the opponent's record now; the
- * newest BOX_GAMES with both teams' box, who played and who the opponent was missing. `head` opens the log (the read's
- * record and standings line); `data` is the team's teamSeason when already loaded. */
+// The score by quarter, from the game's own row (Oct 26 2026: "W 128-111" read the same whether it was close until the
+// last minutes or decided by halftime; the founder's "how the game went"). Overtime periods follow the fourth.
+function quarterLine(g, home, us, them) {
+  const side = (k) => [1, 2, 3, 4].map((q) => g[`${k}_q${q}`]);
+  const ot = (k) => [1, 2, 3].map((q) => g[`${k}_ot${q}`]).filter((v) => v != null);
+  const [a, b] = home ? ['home', 'visitor'] : ['visitor', 'home'];
+  const sum = (k) => [...side(k), ...ot(k)].reduce((x, v) => x + (Number(v) || 0), 0);
+  if (side(a).some((v) => v == null) || side(b).some((v) => v == null) || sum(a) !== us || sum(b) !== them) return null;
+  const line = (k, name) => `${name} ${side(k).join('-')}${ot(k).length ? `, overtime ${ot(k).join('-')}` : ''}`;
+  return `by quarter: ${line(a, (home ? g.home_team : g.visitor_team)?.name)}; ${line(b, (home ? g.visitor_team : g.home_team)?.name)}`;
+}
+// The last GAMES_SHOWN games (Oct 26 2026, agreed with the founder: older games mostly should not count, and an
+// 82-game season listed in full buries the recent ones). The record above the log covers the whole season.
+const GAMES_SHOWN = 15;
+
+/** THIS SEASON GAME BY GAME: the last GAMES_SHOWN finished games before `before`, newest first, each with the
+ * opponent's record now and the score by quarter; the newest BOX_GAMES with both teams' box, who played and who the
+ * opponent was missing. `head` opens the log (the read's record and standings line); `data` is the team's teamSeason
+ * when already loaded. */
 export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data } = {}) {
   const ts = data === undefined ? await teamSeason(team, before, season) : data;
   if (!ts) return `${head}: games not on file.`;
@@ -202,7 +192,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
   const starters = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => (await ballDontLieService.getNbaLineups([g.id]).catch(() => []))
     .filter((r) => r.starter && r.team?.id === ts.id).map((r) => `${r.player?.first_name} ${r.player?.last_name}`)));
-  const rows = games.map((g, i) => {
+  const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
     const us = home ? g.home_team_score : g.visitor_team_score; const them = home ? g.visitor_team_score : g.home_team_score;
@@ -210,8 +200,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     // read as a weak team when the one loss was this game).
     const o = league[opp];
     const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : ''})` : '';
-    const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}`;
+    const q = quarterLine(g, home, us, them);
+    const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i])}` : line;
   });
-  return [`${head}, newest first:`, ...rows].join('\n');
+  return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }
