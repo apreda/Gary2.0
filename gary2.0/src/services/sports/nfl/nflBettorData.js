@@ -124,11 +124,45 @@ const record = (gs) => { const w = gs.filter((x) => x.won).length, t = gs.filter
 // (Oct 23 2026 data check: "with Williams, 31.0 points a game" was 59, 3 and 31), and from six games on the board read
 // blended averages (Oct 23 2026 data audit: the Bears' three backup starts inside one points-a-game number).
 const nickname = (code) => teamName(code).split(' ').at(-1);
-// Each game with the opponent's record now and who played quarterback for it that day, as the game log gives them (Oct
-// 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
+// Who an opponent is this season: its points scored and allowed a game across the league's games before the pick,
+// placed among the teams ("2nd fewest", "5th most"). Oct 26 2026 read review: "422 yards" came against a winless
+// Chargers team and "allowed 506 and 523" against Baltimore and Kansas City, and nothing beside the numbers said who
+// the opponent was; Gary carried them into games against defenses and offenses nothing like them. As college shows it.
+const tables = new WeakMap();
+function leagueTable(d, before) {
+  const byDay = tables.get(d) || new Map(); tables.set(d, byDay);
+  const key = `${before}|${d.asOf ?? ''}`;
+  if (byDay.has(key)) return byDay.get(key);
+  const sums = new Map();
+  for (const g of played(d, d.season, before)) {
+    for (const [code, pf, pa] of [[g.home_team, n(g.home_score), n(g.away_score)], [g.away_team, n(g.away_score), n(g.home_score)]]) {
+      const s = sums.get(code) || { games: 0, pf: 0, pa: 0 }; s.games += 1; s.pf += pf; s.pa += pa; sums.set(code, s);
+    }
+  }
+  const table = new Map([...sums].map(([code, s]) => [code, { scores: s.pf / s.games, allows: s.pa / s.games }]));
+  byDay.set(key, table);
+  return table;
+}
+const ordinal = (k) => `${k}${k % 100 >= 11 && k % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][k % 10] || 'th'}`;
+// Where a value sits among the teams, from whichever end is nearer: "the most", "5th most", "tied for 2nd fewest".
+function place(values, v) {
+  const more = values.filter((x) => x > v + 1e-9).length, fewer = values.filter((x) => x < v - 1e-9).length;
+  const tied = values.length - more - fewer > 1 ? 'tied for ' : '';
+  const [k, end] = more <= fewer ? [more + 1, 'most'] : [fewer + 1, 'fewest'];
+  return k === 1 ? `${tied ? 'tied for ' : ''}the ${end}` : `${tied}${ordinal(k)} ${end}`;
+}
+function opponentSeason(d, before, code) {
+  const table = leagueTable(d, before); const t = table.get(code);
+  if (!t) return null;
+  const all = [...table.values()];
+  return `scoring ${t.scores.toFixed(1)} points a game, ${place(all.map((x) => x.scores), t.scores)}, and allowing ${t.allows.toFixed(1)}, ${place(all.map((x) => x.allows), t.allows)}`;
+}
+// Each game with the opponent's record and season now and who played quarterback for it that day, as the game log gives
+// them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
 function perGame(d, before, gs) {
   return gs.slice().reverse().map((x) => {
-    const opp = `${record(teamGames(d, x.opp, d.season, before))} now${x.oppQb ? `, ${x.oppQb} at QB` : ''}`;
+    const season = opponentSeason(d, before, x.opp);
+    const opp = `${record(teamGames(d, x.opp, d.season, before))} now${season ? `, ${season}` : ''}${x.oppQb ? `; ${x.oppQb} at QB` : ''}`;
     return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} (${opp}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
   }).join(', ');
 }
@@ -331,8 +365,8 @@ export function notOnReport(d, team, before, reportText = '') {
 const sameKey = (x) => qbKey(x).join('');
 
 /** THIS SEASON GAME BY GAME: each game newest first, its first line the result and score (overtime said), the
- * opponent's record now and quarterback that day, and who played quarterback (everyone with 5+ passes); under it, the
- * opponent's regulars who did not play, the box score both ways, the score by quarter and the kicking, how each side's
+ * opponent's record and points scored and allowed a game now, its quarterback that day, and who played quarterback
+ * (everyone with 5+ passes); under it, the opponent's regulars who did not play, the box score both ways, the score by quarter and the kicking, how each side's
  * drives ended, and which of the team's own regulars were missing or back. One game's facts on one line each, so a
  * line stays readable (Oct 23 2026 data audit). */
 // The record and the kickers head the log. Who played quarterback, with the record with this week's starter and
@@ -455,7 +489,8 @@ export function gameByGame(d, team, before) {
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
     const detail = [without, boxLine(x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(oppGames)} now${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
+    const season = opponentSeason(d, before, x.opp);
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(oppGames)} now${season ? `, ${season}` : ''}${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
 }
 
