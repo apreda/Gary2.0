@@ -113,19 +113,22 @@ const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v !=
 async function playerSheet(player, markets, asOf) {
   const season = nbaSeason(asOf);
   const cur = await ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf }).catch(() => null);
-  const games = cur?.games || [];
+  // The stats feed's games carry team ids, not names (Oct 26 2026: every opponent printed "?"); the league's teams
+  // name them.
+  const teamsById = new Map(((await ballDontLieService.getTeams('basketball_nba').catch(() => [])) || []).map((t) => [String(t.id), t.abbreviation]));
+  const games = (cur?.games || []).map((g) => ({ ...g, opponent: g.opponent || teamsById.get(String(g.opponentId)) || 'opponent not on file' }));
   const fields = [...new Set(['min', ...markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)])])];
   const name = (f) => ({ min: 'min', pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' }[f]);
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];
   if (!cur) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
   if (!games.length) { lines.push('  No games yet this season.'); return lines.join('\n'); }
   if (games.length < 3) {
-    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent || '?'} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
+    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
     return lines.join('\n');
   }
   if (propSheetsByGame()) {
     lines.push(`  This season, ${games.length} games; the last ${Math.min(10, games.length)}, newest first:`);
-    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent || '?'}: ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`);
+    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`);
     return lines.join('\n');
   }
   lines.push(`  This season, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);
