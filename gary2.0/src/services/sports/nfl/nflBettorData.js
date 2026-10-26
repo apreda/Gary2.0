@@ -501,18 +501,6 @@ export function gameByGame(d, team, before) {
   })].join('\n');
 }
 
-// His own carries in the same games, kneel-downs counted apart when the play ledger has the game (Oct 23 2026 data
-// audit: a quarterback's scrambles sat inside the team's rushing).
-const passing = (rows, kneelsOf = () => 0) => {
-  const g = rows.filter((r) => n(r.attempts) >= 8); if (!g.length) return null;
-  const s = (k) => g.reduce((a, r) => a + n(r[k]), 0);
-  const relief = rows.filter((r) => n(r.attempts) > 0 && n(r.attempts) < 8);
-  const short = relief.length ? ` (plus ${relief.length} game${relief.length === 1 ? '' : 's'} with fewer passes: ${relief.reduce((a, r) => a + n(r.completions), 0)}-of-${relief.reduce((a, r) => a + n(r.attempts), 0)}, ${relief.reduce((a, r) => a + n(r.passing_interceptions), 0)} INT)` : '';
-  const kneels = g.reduce((a, r) => a + kneelsOf(r), 0);
-  const runs = s('carries') ? ` · ${s('carries')} ${s('carries') === 1 ? 'carry' : 'carries'} for ${s('rushing_yards')} yds${kneels ? ` (${kneelDowns(kneels)})` : ''}` : ' · no carries';
-  // Totals, not rates: a completion rate over two or three games read as a level (Oct 23 2026 audit).
-  return `${g.length} game${g.length === 1 ? '' : 's'} with 8+ passes · ${s('completions')}-of-${s('attempts')}, ${s('passing_yards')} yds, ${s('passing_tds')} TD, ${s('passing_interceptions')} INT${runs}${short}`;
-};
 /** The desk's starter for a team ("[HOME] Team: Name (…"), or null. */
 export function deskStarter(deskQbSection, team) {
   const m = String(deskQbSection || '').match(new RegExp(`\\] ${team.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}: ([^(\\n]+?)(?: \\(|\\s*$)`, 'm'));
@@ -521,7 +509,10 @@ export function deskStarter(deskQbSection, team) {
 /** The desk's starter for each team, the starts so far and his own passing this season. */
 // When this week's starter missed or shared games, each group carries its weeks and its record: the game log's header
 // carried the same split a section below and repeated these counts (Oct 23 2026 section review).
-export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
+// His passing, game by game (`byGame`, the board, which has no game log) or not at all (the read: each game's line in the
+// game log carries his passing beside who it came against). A season total stood beside the game log with no opponent
+// in it (Oct 26 2026 blind review: Cousins's "14 TD, 5 INT", 9 of them against Miami, the Chargers and the Saints).
+export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byGame = false } = {}) {
   const { season } = d; const out = [];
   for (const team of [awayTeam, homeTeam]) {
     const qb = deskStarter(deskQbSection, team);
@@ -542,7 +533,14 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before) {
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
     const lines = [`${team}: ${qb || 'starter not on the desk'}`];
     if (gs.length) lines.push(`  games at quarterback this season: ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
-    if (qb) lines.push(`  ${qb} this season: ${!d.playerWeek ? 'not on file (the weekly player stats did not load)' : passing(his, (r) => d.ledgerGames?.get(r.game_id)?.lines?.[r.team]?.kneels?.[r.player_id] || 0) || 'no games with 8+ passes'}`);
+    if (qb && byGame) {
+      const at = new Map(gs.map((x) => [x.g.game_id, x]));
+      const each = his.filter((r) => at.has(r.game_id) && n(r.attempts) > 0).sort((a, b) => n(b.week) - n(a.week)).map((r) => {
+        const x = at.get(r.game_id);
+        return `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`;
+      });
+      lines.push(`  ${qb} by game, newest first: ${!d.playerWeek ? 'not on file (the weekly player stats did not load)' : each.join('; ') || 'no passes this season'}`);
+    }
     out.push(lines.join('\n'));
   }
   return out.join('\n');

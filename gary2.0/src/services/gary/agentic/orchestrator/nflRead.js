@@ -89,7 +89,7 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
   const where = spot(data, homeTeam, awayTeam, gameDate || before);
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}${where.neutral ? ` · ${where.neutral}` : ''}`,
     spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
-    'Quarterbacks:', quarterbacks(data, qbs, homeTeam, awayTeam, before), '',
+    'Quarterbacks:', quarterbacks(data, qbs, homeTeam, awayTeam, before, { byGame: true }), '',
     'Injury report:', injuriesAsReported(desk), '',
     'This season:', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`, '',
     'Schedule, travel and weather:', where.text || 'Nothing unusual.',

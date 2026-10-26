@@ -480,7 +480,10 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       const missedWeeks = [];
       for (let i = weeks.length - 1; i >= 0 && !shares.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
       const lastPlayedWeek = Math.max(...shares.keys());
-      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: shares.get(lastPlayedWeek) };
+      // The games before his last one, newest first (Oct 26 2026 blind review: Kobie Turner read "32% of snaps" from the
+      // game he was hurt in, after 59-79% in every game before it, and the read took him for a rotation player).
+      const earlier = [...shares.keys()].filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5).map((w) => shares.get(w));
+      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: shares.get(lastPlayedWeek), earlier };
     }
     // A listed player with no offensive or defensive snap all season says so (Oct 23 2026 data audit: Kansas City's 4-0
     // was all without Josh Simmons and his row carried no tag). Decided only on an exact name match in this team's
