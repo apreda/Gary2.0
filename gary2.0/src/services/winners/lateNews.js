@@ -1,7 +1,8 @@
 // LATE NEWS (founder GO, Oct 13 2026): every game pick's availability is recorded when it publishes, from the feed the
 // sport's desk reads (NFL: the BDL injury feed with this week's notes; NBA: the league's official report; MLB: the starting
 // pitchers and posted lineups; college: the conference's official availability report), and read again when the pick is
-// due on Winners (75 minutes before an NFL, college or MLB start, after the NFL inactives; 28 minutes before an NBA tip).
+// near the start (75 minutes before an NFL, college or MLB start, after the NFL inactives; 28 minutes before an NBA tip).
+// It no longer gates Winners: a qualifying pick seats as soon as it posts (Oct 25 2026, migration 20261025160000).
 // What changed, and who was still undecided, is recorded for the data check.
 //
 // A published pick is final (founder, Oct 23 2026: "Gary can't scratch it ... he has to make his best pick with the

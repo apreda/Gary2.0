@@ -5,7 +5,7 @@
 // the quarterbacks, who's out, how good both teams are, the spot and the news desk's report. He names the games he
 // would put his own money on, in the order he likes them, any number or none. The answer is saved per game
 // (winners_nfl_board); SQL seat_nfl_board seats a bet whose pick is on the same side, his top two beside the big games
-// (Oct 23 2026), 75 minutes before kickoff, after the late-news check. Big games and the slate's two worst matchups
+// (Oct 23 2026), when the board names them (Oct 25 2026; no later than 20 minutes before kickoff). Big games and the slate's two worst matchups
 // stay off the board (powerRatings.js). A game picked after its slate was boarded gets its own board. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';

@@ -191,7 +191,7 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  // The late-news check, 75 minutes before each kickoff (28 before an NBA tip): a big game goes on only once it is
+  // The late-news check, 75 minutes before each kickoff (28 before an NBA tip), records what changed; since Oct 25 2026 it no longer holds a pick back (a big game seats when it posts). Before that, a big game went on only once it was
   // cleared or Gary has kept it (lateNews.js). The card backstop still places picks on his card; the card seats nothing.
   const card=async()=>{
     while(true) {
@@ -209,7 +209,7 @@ async function main() {
     }
   };
   // GARY'S NFL BOARD (Oct 19 2026, nflBoard.js): about 110 minutes before a slate's first kickoff he picks his bets
-  // from the board fresh; his bets on the same side as the pick seat 75 minutes out after the late-news check (SQL
+  // from the board fresh; his bets on the same side as the pick seat when the board names them (Oct 25 2026) (SQL
   // seat_nfl_board). The card no longer seats NFL. Its late-news checks run in the card loop above.
   const nflBoard=async()=>{
     while(true) {
@@ -225,7 +225,7 @@ async function main() {
     }
   };
   // GARY'S NBA BOARD (Oct 19 2026, from Oct 21, nbaBoard.js): about 50 minutes before the first tip he hasn't boarded
-  // he picks his bets from the picked games still to tip; his bets on the pick's side seat 28 minutes out after the
+  // he picks his bets from the picked games still to tip; his bets on the pick's side seat when the board names them (Oct 25 2026), not after the
   // late-news check (SQL seat_nba_board).
   const nbaBoard=async()=>{
     while(true) {
@@ -241,7 +241,7 @@ async function main() {
     }
   };
   // GARY'S COLLEGE BOARD (Oct 22 2026, from Oct 23, ncaafBoard.js): about 110 minutes before the first kickoff he
-  // hasn't boarded he picks his bets from the picked college games still to start; his bets on the pick's side seat 75
+  // hasn't boarded he picks his bets from the picked college games still to start; his bets on the pick's side seat when named (Oct 25 2026), not 75
   // minutes out after the late-news check, three a day spread over the kickoffs (SQL seat_ncaaf_board).
   const ncaafBoard=async()=>{
     while(true) {

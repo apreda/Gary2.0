@@ -6,7 +6,7 @@
 // teams are, the situation and the news desk's report. He names the games he would put his own money on, in his order,
 // any number or none. Saved per game (winners_ncaaf_board); SQL seat_ncaaf_board seats a bet whose pick is on the same
 // side, three a day beside the big games (Oct 23 2026; one at most from the first third of kickoff times, two through
-// the second), 75 minutes before kickoff, after the late-news check. Big games stay off the board (powerRatings.js). It replaces the card's bottom five, the big-game sweep
+// the second), when the board names them (Oct 25 2026; no later than 20 minutes before kickoff). Big games stay off the board (powerRatings.js). It replaces the card's bottom five, the big-game sweep
 // and the daily floor for college. A game picked after its wave was boarded gets its own board. Never fatal.
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';

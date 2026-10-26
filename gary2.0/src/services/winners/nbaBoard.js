@@ -5,7 +5,7 @@
 // Oct 22 2026): the line and how it got here, who's playing, how good both teams are, the situation. He names the
 // games he would put his own money on, in his order, any number or none.
 // Saved per game (winners_nba_board); SQL seat_nba_board seats a bet whose pick is on the same side, two a night beside
-// the national-TV big games (Oct 23 2026; one at most from the first third of tip times), 28 minutes before tip, after
+// the national-TV big games (Oct 23 2026; one at most from the first third of tip times), when the board names them (Oct 25 2026; no later than 10 minutes before tip), as
 // the late-news check. Big games and the night's two worst matchups stay off the board (powerRatings.js).
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
