@@ -445,12 +445,14 @@ function productionLine(row) {
 }
 
 const day = (r) => etDay(r.date).replace(/^\w+, /, '');
-const SUMMED = ['passing_attempts', 'passing_completions', 'passing_yards', 'passing_touchdowns', 'passing_interceptions', 'rushing_attempts', 'rushing_yards',
-  'rushing_touchdowns', 'receptions', 'receiving_yards', 'receiving_touchdowns', 'fumbles_lost', 'total_tackles', 'sacks', 'tackles_for_loss', 'interceptions',
-  'passes_defended', 'qb_hurries', 'fumbles_recovered',
-  'field_goals_made', 'field_goal_attempts', 'extra_points_made', 'extra_point_attempts', 'punts', 'kick_returns', 'punt_returns'];
-const totalsOf = (entry) => Object.fromEntries(SUMMED.map((k) => [k, [...entry.games.values()].reduce((a, row) => a + (Number(row[k]) || 0), 0)]));
 const reportName = (i) => i.name || `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim();
+// A player's last three games with a stat row, newest first, each with its opponent, in place of a season total
+// (Oct 26 2026, founder: "all they do is play games"; a total says nothing of who it came against or whether his role
+// has changed since). Three, not every game: every defender game by game buried the report (Oct 23 2026 data review).
+function recentGames(entry, games) {
+  const mine = games.filter((r) => entry.games.has(String(r.gameId))).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+  return `${mine.length === 1 ? 'his game' : `his last ${mine.length} games, newest first`}: ${mine.map((r) => `${day(r)} ${versus(r)}: ${productionLine(entry.games.get(String(r.gameId)))}`).join('; ')}`;
+}
 
 /** Each player's rows in these games: name to { position, games: Map game id -> row }. */
 function playersOf(rows, results) {
@@ -499,7 +501,7 @@ const playedPerPlays = (plays, gameId, entry) => namedInPlays(plays?.named?.get(
 function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
   const byPlayer = playersOf(rows, games);
-  // One line per player: the games he has a stat row in, the last one, and his season's totals (Oct 23 2026 data review:
+  // One line per player: the games he has a stat row in, the last one, and his last three games (Oct 23 2026 data review:
   // every defender's tackles game by game, and three backups' logs at every position, buried the report under noise).
   // A player CARRIES AND CATCHES, GAME BY GAME lists game by game is pointed there, not repeated.
   const gameByGame = (name, entry) => {
@@ -509,7 +511,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     const inPlays = sinceLast ? games.slice(-sinceLast).filter((r) => playedPerPlays(plays, r.gameId, entry)) : [];
     const plays_ = inPlays.length ? `; the play-by-play names him in ${inPlays.length === sinceLast ? (sinceLast === 1 ? 'it' : 'each of them') : inPlays.map(day).join(', ')}` : '';
     return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`}${plays_})` : ''}; `
-      + (core.has(name) ? UNDER_OFFENSE : `season: ${productionLine(totalsOf(entry))}`);
+      + (core.has(name) ? UNDER_OFFENSE : recentGames(entry, games));
   };
   // What the report itself says beyond the status: a conference report's row only repeats it ("RB #2 listed Doubtful on
   // the ACC Update 2 report"), so only a searched report's note is kept.
@@ -582,8 +584,8 @@ function onReport(name, reported) {
 
 /**
  * CARRIES AND CATCHES, GAME BY GAME (Oct 23 2026 data audit: Duke read as a 40-pass team with Nate Sheppard, 20 carries
- * and 11 catches against North Carolina, nowhere in the story). The offenseCore players, each game newest first: every
- * game when there are five or fewer, else the latest five and the season's totals. A game with no row for him reads
+ * and 11 catches against North Carolina, nowhere in the story). The offenseCore players, every game newest first, with
+ * no season total (Oct 26 2026: the total was the games added up and said nothing of who they came against). A game with no row for him reads
  * "no stat row" (college publishes no snap counts, so it is not "did not play"); a game whose player lines are not on
  * file says so.
  */
@@ -603,10 +605,9 @@ function offenseLines(team, reported, rows, results, onFile, core) {
   const lines = [...core].map(([name, entry]) => {
     const report = onReport(name, reported);
     const position = entry.position || report?.position;
-    const list = games.slice(0, 5).map((r) => `${day(r)} ${versus(r)}: ${!onFile.has(String(r.gameId)) ? 'player lines not on file'
+    const list = games.map((r) => `${day(r)} ${versus(r)}: ${!onFile.has(String(r.gameId)) ? 'player lines not on file'
       : entry.games.has(String(r.gameId)) ? cell(entry.games.get(String(r.gameId))) : 'no stat row'}`);
-    const season = games.length > 5 ? ` | season, ${plural(counted.length, 'game')} with player lines: ${cell(totalsOf(entry))}` : '';
-    return `  ${name}${position ? ` (${position})` : ''}${report ? `, ${report.status} on this week's availability report` : ''} — ${list.join(' | ')}${season}`;
+    return `  ${name}${position ? ` (${position})` : ''}${report ? `, ${report.status} on this week's availability report` : ''} — ${list.join(' | ')}`;
   });
   return [`${team}${notOnFile(results, onFile)}`, ...(lines.length ? lines : ['  no carries or catches by anyone but the quarterbacks'])];
 }
@@ -617,7 +618,7 @@ function offenseLines(team, reported, rows, results, onFile, core) {
  * games before the last one: the most passes, the two most carries, the four most catches, the eleven most tackles,
  * the most kicks and the most punts, each with a stat row in more than half of those games (and at least two). A
  * looser "most earlier games" listed fifteen Nebraska players, most of them backups with a tackle or two. Each says
- * whether he is on this week's report; a player on it has his season beside his status in the availability section,
+ * whether he is on this week's report; a player on it has his last games beside his status in the availability section,
  * so here he gets his status only.
  */
 function regularsLines(team, reported, rows, results, onFile, core, plays = null) {
@@ -649,7 +650,7 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
     const who = `  ${p.name}${p.entry.position || report?.position ? ` (${p.entry.position || report.position})` : ''}`;
     if (report) return `${who}: ${report.status} on this week's availability report`;
     return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}; `
-      + `${core.has(p.name) ? UNDER_OFFENSE : `season: ${productionLine(totalsOf(p.entry))}`} · not on this week's availability report`;
+      + `${core.has(p.name) ? UNDER_OFFENSE : recentGames(p.entry, earlier)} · not on this week's availability report`;
   }) : ['  none'])];
 }
 
@@ -765,8 +766,8 @@ ${RULE}`;
 
   const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
 ${RULE}
-Each player on this game's availability report beside what he did this
-season, and the other players at his position with theirs. College publishes
+Each player on this game's availability report beside his last three games,
+and the other players at his position with theirs. College publishes
 no snap counts; these stat rows are the record of who played.
 
 ${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i]).join('\n')).join('\n\n')}
@@ -776,8 +777,8 @@ ${RULE}`;
   const offense = `CARRIES AND CATCHES, GAME BY GAME
 ${RULE}
 Each team's two players with the most carries and three with the most catches
-this season, quarterbacks left out, each game newest first (the latest five
-and the season's totals after five games). A stat row is the player's line
+this season, quarterbacks left out, every game newest first. A stat row is
+the player's line
 in the game's box score; college publishes no snap counts, so "no stat row" is
 not proof that a player did not play.
 
