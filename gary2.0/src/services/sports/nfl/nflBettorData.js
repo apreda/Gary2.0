@@ -115,6 +115,9 @@ export function teamGames(d, code, season, before) {
       // Overtime from the schedule (Oct 23 2026 data audit: Kansas City's 3-point win over Indianapolis read as a
       // regulation win), and the game's play-ledger entry, when the ledger has it.
       ot: g.overtime === '1', ledger: d.ledgerGames?.get(g.game_id) || null,
+      // A neutral site (Oct 26 2026: the Eagles' London game read "@ Jacksonville Jaguars", a road game, and eight games
+      // this season are at neutral sites).
+      neutral: g.location === 'Neutral', stadium: g.stadium || null,
       off: withKickers(box(us), d, g, code), def: withKickers(box(them), d, g, opp) };
   }).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -124,6 +127,9 @@ const record = (gs) => { const w = gs.filter((x) => x.won).length, t = gs.filter
 // (Oct 23 2026 data check: "with Williams, 31.0 points a game" was 59, 3 and 31), and from six games on the board read
 // blended averages (Oct 23 2026 data audit: the Bears' three backup starts inside one points-a-game number).
 const nickname = (code) => teamName(code).split(' ').at(-1);
+// "vs Bills", "@ Bills", or "vs Jaguars at a neutral site (Tottenham Hotspur Stadium)"; `short` for a line of many games.
+const versus = (x, name, short = false) => (!x.neutral ? `${x.home ? 'vs' : '@'} ${name}`
+  : short ? `vs ${name} (neutral site)` : `vs ${name} at a neutral site${x.stadium ? ` (${x.stadium})` : ''}`);
 // Who an opponent is this season: its points scored and allowed a game across the league's games before the pick,
 // placed among the teams ("2nd fewest", "5th most"). Oct 26 2026 read review: "422 yards" came against a winless
 // Chargers team and "allowed 506 and 523" against Baltimore and Kansas City, and nothing beside the numbers said who
@@ -189,7 +195,7 @@ export function defensesFaced(schedule, season, before, asOf = null) {
 // them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
 function perGame(d, before, gs) {
   return gs.slice().reverse().map((x) => {
-    return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} (${opponentThatDay(d, before, x)}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
+    return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${versus(x, nickname(x.opp), true)} (${opponentThatDay(d, before, x)}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
   }).join(', ');
 }
 
@@ -363,7 +369,7 @@ export function skillPlayers(d, team, before, reportText = '') {
     const last = rs.slice().sort((a, b) => n(b.week) - n(a.week))[0];
     const played = new Map(rs.map((r) => [r.game_id, r]));
     // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
-    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
+    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
     const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];
@@ -515,7 +521,7 @@ export function gameByGame(d, team, before) {
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
     const detail = [without, boxLine(x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
 }
 
@@ -555,7 +561,7 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byG
       const at = new Map(gs.map((x) => [x.g.game_id, x]));
       const each = his.filter((r) => at.has(r.game_id) && n(r.attempts) > 0).sort((a, b) => n(b.week) - n(a.week)).map((r) => {
         const x = at.get(r.game_id);
-        return `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`;
+        return `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`;
       });
       lines.push(`  ${qb} by game, newest first: ${!d.playerWeek ? 'not on file (the weekly player stats did not load)' : each.join('; ') || 'no passes this season'}`);
     }

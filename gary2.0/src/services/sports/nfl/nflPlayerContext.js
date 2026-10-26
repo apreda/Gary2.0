@@ -17,11 +17,16 @@ const once = (key, fn) => { if (!memo.has(key)) memo.set(key, fn().catch(() => n
 /** One season's weekly player rows (nflverse stats_player_week), regular season. */
 export const weeklyRows = (season) => once(`week|${season}`, async () => (await fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`)).filter((r) => r.season_type === 'REG'));
 
-/** "season|week|TEAM" → game date, from the nflverse schedule. */
+/** "season|week|TEAM" → game date, from the nflverse schedule; `.site` has where the team played it ("vs", "@" or
+ * "vs ... (neutral site)"). Oct 26 2026: every prop log line read "vs" the opponent, road games included. */
 export const gameDays = () => once('days', async () => {
-  const out = new Map();
+  const out = new Map(); out.site = new Map();
   for (const g of await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`)) {
-    for (const t of [g.home_team, g.away_team]) out.set(`${g.season}|${Number(g.week)}|${t}`, g.gameday);
+    for (const t of [g.home_team, g.away_team]) {
+      const key = `${g.season}|${Number(g.week)}|${t}`;
+      out.set(key, g.gameday);
+      out.site.set(key, g.location === 'Neutral' ? 'neutral' : t === g.home_team ? 'home' : 'away');
+    }
   }
   return out;
 });
@@ -89,7 +94,7 @@ export function defenseLine(cur, prev, defense, position, season) {
 export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null } = {}) {
   return (rows || []).slice(0, limit).map((r) => {
     const wk = n(r.week);
-    const date = days?.get(`${season}|${wk}|${r.team}`);
+    const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
     const bits = [];
     if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`);
     if (n(r.carries)) bits.push(`${n(r.carries)} carries, ${n(r.rushing_yards)} yards${n(r.rushing_tds) ? `, ${n(r.rushing_tds)} TD` : ''}`);
@@ -98,7 +103,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
     const faced = defenses?.get(r.opponent_team);
-    return `Wk ${wk}${date ? ` ${day(date)}` : ''} vs ${r.opponent_team}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
+    const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
+    return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
   });
 }
 
