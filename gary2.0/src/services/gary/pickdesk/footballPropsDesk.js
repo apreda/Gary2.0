@@ -51,7 +51,8 @@ import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals }
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
 import { buildNflReadStory } from '../agentic/orchestrator/nflRead.js';
-import { etDate } from '../../sports/nfl/nflBettorData.js';
+import { etDate, defensesFaced } from '../../sports/nfl/nflBettorData.js';
+import { getNflSchedule } from '../../sports/nfl/nflSchedule.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -264,11 +265,15 @@ async function loadNflSheetContext({ season, game, players }) {
   if (supabase) await refreshNflRedZone({ supabase, seasons: [season], log: { warn: () => {} } }).catch(() => 0);
   // This season only, and no prop price history: a prop's line and price before today are the market's opinion, and
   // Gary reads the player and the game (founder, Oct 23 2026). The board still prints today's line he bets.
-  const [rz, days, snaps, defCur, rows, injuries] = await Promise.all([
+  const [rz, days, snaps, defCur, rows, injuries, schedule] = await Promise.all([
     supabase ? loadNflRedZone({ supabase, seasons: [season] }).catch(() => null) : null,
     gameDays(), snapCounts(season), defenseByPosition(season), weeklyRows(season),
     ballDontLieService.getNflPlayerInjuries().catch(() => []),
+    getNflSchedule().catch(() => null),
   ]);
+  // Who each game's defense is this season, beside the player's games (Oct 26 2026); a schedule that did not load
+  // leaves the rows as they were.
+  const defenses = schedule && !schedule.unavailable ? defensesFaced(schedule.rows, season, etDate(), new Date().toISOString()) : null;
   const defPrev = null, history = null;
   const weeksByName = new Map();
   // Keyed the way the sheets look players up (normName strips Jr./Sr./III: nflverse writes "Michael Pittman",
@@ -279,7 +284,7 @@ async function loadNflSheetContext({ season, game, players }) {
     weeksByName.get(k).push(r);
   }
   const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
-  return { season, rz, days, snaps, defCur, defPrev, weeksByName, teamTargets: teamTargetTotals(rows), injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
+  return { season, rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(rows), injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
 }
 
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */

@@ -157,6 +157,12 @@ function opponentSeason(d, before, code) {
   const all = [...table.values()];
   return `scoring ${t.scores.toFixed(1)} points a game, ${place(all.map((x) => x.scores), t.scores)}, and allowing ${t.allows.toFixed(1)}, ${place(all.map((x) => x.allows), t.allows)}`;
 }
+/** The defense a player faced, for the prop sheets: "allowing 26.3 points a game, 5th most" for each team code. */
+export function defensesFaced(schedule, season, before, asOf = null) {
+  const d = { schedule: schedule || [], season, asOf };
+  const table = leagueTable(d, before); const all = [...table.values()].map((x) => x.allows);
+  return new Map([...table].map(([code, t]) => [code, `allowing ${t.allows.toFixed(1)} points a game, ${place(all, t.allows)}`]));
+}
 // Each game with the opponent's record and season now and who played quarterback for it that day, as the game log gives
 // them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
 function perGame(d, before, gs) {
@@ -336,7 +342,8 @@ export function skillPlayers(d, team, before, reportText = '') {
   const lines = chosen.map((rs) => {
     const last = rs.slice().sort((a, b) => n(b.week) - n(a.week))[0];
     const played = new Map(rs.map((r) => [r.game_id, r]));
-    const recent = gs.slice().reverse().slice(0, VALUES_UP_TO).map((x) => `Wk ${x.week} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
+    // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
+    const recent = gs.slice().reverse().slice(0, VALUES_UP_TO).map((x) => `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
     const season = gs.length > VALUES_UP_TO ? ` · season, ${rs.length} games: ${game(Object.fromEntries(['carries', 'rushing_yards', 'rushing_tds', 'receptions', 'targets', 'receiving_yards', 'receiving_tds'].map((k) => [k, total(rs, k)])))}` : '';
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));

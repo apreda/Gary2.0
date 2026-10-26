@@ -84,7 +84,9 @@ export function defenseLine(cur, prev, defense, position, season) {
 
 
 /** "Wk 2 Sep 14 vs DAL: 7 targets, 5 catches, 72 yards, 1 TD; 2 carries, 9 yards; 54 of 66 snaps" — newest first. */
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8 } = {}) {
+// `defenses`: team code → the defense that week's opponent is this season ("allowing 26.3 points a game, 5th most"),
+// so "120 yards vs DAL" says whether Dallas was a soft defense (Oct 26 2026, as the game lines show it).
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null } = {}) {
   return (rows || []).slice(0, limit).map((r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`);
@@ -94,7 +96,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8 } = {}) {
     if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
-    return `Wk ${wk}${date ? ` ${day(date)}` : ''} vs ${r.opponent_team}: ${bits.join('; ') || 'no touches'}`;
+    const faced = defenses?.get(r.opponent_team);
+    return `Wk ${wk}${date ? ` ${day(date)}` : ''} vs ${r.opponent_team}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
   });
 }
 

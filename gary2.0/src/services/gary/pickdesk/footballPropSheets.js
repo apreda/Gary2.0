@@ -201,7 +201,7 @@ export function buildFootballPropSheets({
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
     const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name); if (out) facts.push(out);
-    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [] });
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     return [head, ...lines, ...facts.map((f) => `   ${f}`)];
   };
