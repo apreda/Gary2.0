@@ -157,6 +157,28 @@ function opponentSeason(d, before, code) {
   const all = [...table.values()];
   return `scoring ${t.scores.toFixed(1)} points a game, ${place(all.map((x) => x.scores), t.scores)}, and allowing ${t.allows.toFixed(1)}, ${place(all.map((x) => x.allows), t.allows)}`;
 }
+// Who the opponent was that day: its record now and its points with the quarterback who played that day (Oct 26 2026:
+// "Packers scoring 20.6 a game" can blend a starter's games with a backup's, the Bears read's problem from the other
+// side). When he played all its games, the season is his. When it has had others, its points allowed stay the season's
+// (the defense is the same whoever throws) and its scoring and record are his other full games (75%+ of the passes),
+// as counts with no place among the teams: the game being described is left out, or a backup's one start reads as the
+// opponent's level (the Bears with Case Keenum read "scoring 27.0, allowing 7.0", the Eagles game itself).
+function opponentThatDay(d, before, x) {
+  const games = teamGames(d, x.opp, d.season, before);
+  const now = `${record(games)} now`;
+  const season = opponentSeason(d, before, x.opp);
+  if (!x.oppQb) return `${now}${season ? `, ${season}` : ''}`;
+  const roles = games.map((g) => qbRole(g, x.oppQb));
+  if (roles.includes('unknown')) return `${now}${season ? `, ${season}` : ''}; ${x.oppQb} at QB that day`;
+  if (roles.every((r) => r === 'with')) return `${now}${season ? `, ${season}` : ''}; ${x.oppQb} at QB that day and in every game`;
+  const table = leagueTable(d, before); const t = table.get(x.opp);
+  const allows = t ? `, allowing ${t.allows.toFixed(1)} points a game, ${place([...table.values()].map((v) => v.allows), t.allows)}` : '';
+  const others = games.filter((g, i) => roles[i] === 'with' && g.g.game_id !== x.g.game_id);
+  const sharedThatDay = qbRole(games.find((g) => g.g.game_id === x.g.game_id) || { passers: [] }, x.oppQb) === 'shared' ? ', sharing it' : '';
+  if (!others.length) return `${now}${allows}; ${x.oppQb} at QB that day${sharedThatDay}, with no other full game for them this season`;
+  const scored = others.reduce((a, g) => a + g.pf, 0) / others.length;
+  return `${now}${allows}; ${x.oppQb} at QB that day${sharedThatDay}: ${record(others)} in his ${others.length} other full game${others.length === 1 ? '' : 's'}, scoring ${scored.toFixed(1)} points a game`;
+}
 /** The defense a player faced, for the prop sheets: "allowing 26.3 points a game, 5th most" for each team code. */
 export function defensesFaced(schedule, season, before, asOf = null) {
   const d = { schedule: schedule || [], season, asOf };
@@ -167,9 +189,7 @@ export function defensesFaced(schedule, season, before, asOf = null) {
 // them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
 function perGame(d, before, gs) {
   return gs.slice().reverse().map((x) => {
-    const season = opponentSeason(d, before, x.opp);
-    const opp = `${record(teamGames(d, x.opp, d.season, before))} now${season ? `, ${season}` : ''}${x.oppQb ? `; ${x.oppQb} at QB` : ''}`;
-    return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} (${opp}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
+    return `${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} (${opponentThatDay(d, before, x)}${x.off && x.def ? `; ${Math.round(x.off.yards)} yards, allowed ${Math.round(x.def.yards)}` : ''})`;
   }).join(', ');
 }
 
@@ -317,11 +337,11 @@ function lineupChanges(d, code, gs) {
 }
 
 /** WHO THE OFFENSE RUNS THROUGH: beyond the quarterback, the two players with the most carries and the four with the
- * most targets this season, each game's touches and yards newest first (five games or fewer, else the latest five and
- * the season's totals), and whether he is on this week's injury report (`reportText`). Counts, not rates (Oct 23 2026:
+ * most targets this season, every game's touches and yards newest first with no season total (Oct 26 2026: the total
+ * was the rows added up plus the games past the latest five, and a total says nothing of who or when; founder: "all they
+ * do is play games"), and whether he is on this week's injury report (`reportText`). Counts, not rates (Oct 23 2026:
  * Kenneth Walker led the league in rushing and carried Kansas City past the Chargers; Gary read only quarterbacks, and
  * called Kansas City thin without Rice and Thornton without knowing who was left). */
-const VALUES_UP_TO = 5;
 export function skillPlayers(d, team, before, reportText = '') {
   if (d.scheduleMissing || !d.playerWeek) return `${team}: the players' weekly stats are not on file.`;
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
@@ -343,13 +363,12 @@ export function skillPlayers(d, team, before, reportText = '') {
     const last = rs.slice().sort((a, b) => n(b.week) - n(a.week))[0];
     const played = new Map(rs.map((r) => [r.game_id, r]));
     // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
-    const recent = gs.slice().reverse().slice(0, VALUES_UP_TO).map((x) => `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
-    const season = gs.length > VALUES_UP_TO ? ` · season, ${rs.length} games: ${game(Object.fromEntries(['carries', 'rushing_yards', 'rushing_tds', 'receptions', 'targets', 'receiving_yards', 'receiving_tds'].map((k) => [k, total(rs, k)])))}` : '';
+    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${x.home ? 'vs' : '@'} ${nickname(x.opp)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
     const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];
     const listed = text.includes(sameKey(last.player_display_name)) ? ` · ${status ? `${status} on` : 'on'} this week\'s injury report` : '';
-    return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}${season}`;
+    return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}`;
   });
   return [`${team}:`, ...lines].join('\n');
 }
@@ -496,8 +515,7 @@ export function gameByGame(d, team, before) {
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
     const detail = [without, boxLine(x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
-    const season = opponentSeason(d, before, x.opp);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${record(oppGames)} now${season ? `, ${season}` : ''}${x.oppQb ? `; ${x.oppQb} at QB that day` : ''}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${x.home ? 'vs' : '@'} ${teamName(x.opp)} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
 }
 
