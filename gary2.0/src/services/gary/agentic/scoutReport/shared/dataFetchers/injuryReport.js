@@ -114,7 +114,8 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       shownStatus = reconciled.status || i.status;
       const rawStatus = String(reconciled.status || 'Unknown').trim().toUpperCase() || 'UNKNOWN';
       const status = (({ Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT' })[rawStatus] || rawStatus)
-        + (reconciled.feed ? ` per this week's note; the feed still reads ${String(reconciled.feed).toUpperCase()}` : '');
+        + (reconciled.feed ? reconciled.official ? ` per a note after the official report, which reads ${String(reconciled.feed).toUpperCase()}`
+          : ` per this week's note; the feed still reads ${String(reconciled.feed).toUpperCase()}` : '');
       const oldNote = i.noteCurrent === false && i.reportDateStr ? ` (note from ${i.reportDateStr}, before the last game)` : '';
       const p = i.participation;
       const before = p?.earlier?.length ? `; the games before, newest first: ${p.earlier.map((x) => `${x}%`).join(', ')}` : '';
