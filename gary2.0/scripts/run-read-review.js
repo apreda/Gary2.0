@@ -56,8 +56,9 @@ function reads() {
       if (!asked || !answered) continue;
       const matchup = (asked.match(/^## THE GAME\s*\n+(.+)$/m) || [])[1]?.trim() || file;
       const kickoff = (asked.match(/^## THE GAME\s*\n+.+\n(.+)$/m) || [])[1]?.trim() || '';
-      const pick = (answered.match(/"final_pick":\s*"([^"]+)"/) || [])[1] || (answered.match(/^#+ .*?(?:pick|side)[^:\n]*:\s*(.+)$/im) || [])[1]
-        || (answered.match(/^#+ [^\n]*?:\s*(?:take|taking)\s+(.+)$/im) || [])[1] || '';
+      // The read's own headline names the pick ("Chiefs +3", "Lean: Thunder -16.5"); the card's JSON is not in the
+      // transcript.
+      const pick = (answered.match(/"final_pick":\s*"([^"]+)"/) || [])[1] || (answered.match(/^#+\s*(.+?)\s*$/m) || [])[1] || '';
       out.push({ league, file, matchup, kickoff, pick, asked, answered });
     }
   }
