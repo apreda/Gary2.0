@@ -70,8 +70,20 @@ function playerLines(box, teamId, positions = {}) {
       s(p, 'defensive', 'sacks') ? plural(s(p, 'defensive', 'sacks'), 'sack') : null, s(p, 'defensive', 'hurries') ? plural(s(p, 'defensive', 'hurries'), 'hurry', 'hurries') : null,
       s(p, 'interceptions', 'interceptions') ? `${s(p, 'interceptions', 'interceptions')} INT` : null, s(p, 'defensive', 'passesDefended') ? plural(s(p, 'defensive', 'passesDefended'), 'pass defended', 'passes defended') : null,
       s(p, 'fumbles', 'fumblesRecovered') ? plural(s(p, 'fumbles', 'fumblesRecovered'), 'fumble recovery', 'fumble recoveries') : null].filter(Boolean).join(', ')}`);
+  // Every field goal try's distance, as the live read gives them (founder, Oct 24 2026: "FG 0-of-2" needs the 32 and
+  // the 55 behind it); the tries come from the play-by-play, a team's own kicker's when it used one.
+  const tries = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
+  const kickers = ps.filter((p) => s(p, 'kicking', 'fieldGoalAttempts'));
+  const triesOf = (p) => (kickers.length === 1 ? tries : tries.filter((f) => String(f.kicker || '').toLowerCase().replace(/[^a-z.]/g, '') === `${String(p.first || '').charAt(0)}.${p.last}`.toLowerCase().replace(/[^a-z.]/g, '')));
+  const distances = (p) => {
+    const t = triesOf(p);
+    if (t.length !== s(p, 'kicking', 'fieldGoalAttempts') || t.some((f) => f.yards == null)) return 'distances not on file';
+    const list = (xs) => xs.map((f) => f.yards).join(', ');
+    return [t.some((f) => f.made) ? `made ${list(t.filter((f) => f.made))}` : null, t.some((f) => !f.made && !f.blocked) ? `missed ${list(t.filter((f) => !f.made && !f.blocked))}` : null,
+      t.some((f) => f.blocked) ? `blocked ${list(t.filter((f) => f.blocked))}` : null].filter(Boolean).join('; ');
+  };
   const kick = ps.filter((p) => s(p, 'kicking', 'fieldGoalAttempts') || s(p, 'kicking', 'extraPointAttempts') || s(p, 'punting', 'punts'))
-    .map((p) => `${p.name} ${[s(p, 'kicking', 'fieldGoalAttempts') ? `FG ${s(p, 'kicking', 'fieldGoalsMade')}-of-${s(p, 'kicking', 'fieldGoalAttempts')} (long ${s(p, 'kicking', 'longFieldGoalMade') || 0})` : null,
+    .map((p) => `${p.name} ${[s(p, 'kicking', 'fieldGoalAttempts') ? `FG ${s(p, 'kicking', 'fieldGoalsMade')}-of-${s(p, 'kicking', 'fieldGoalAttempts')} (${distances(p)})` : null,
       s(p, 'kicking', 'extraPointAttempts') ? `XP ${s(p, 'kicking', 'extraPointsMade')}-of-${s(p, 'kicking', 'extraPointAttempts')}` : null,
       s(p, 'punting', 'punts') ? `${plural(s(p, 'punting', 'punts'), 'punt')} for ${s(p, 'punting', 'puntYards')} yds, ${s(p, 'punting', 'puntsInside20') || 0} inside the 20` : null].filter(Boolean).join(', ')}`);
   return { off, def, kick, onFile: ps.length > 0 };
