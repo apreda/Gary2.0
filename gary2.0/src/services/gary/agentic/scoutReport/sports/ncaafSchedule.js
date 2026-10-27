@@ -249,7 +249,7 @@ function checkedQuarterback(text, rows, result, units) {
 }
 
 /** The named starter's games this season, split by site. */
-function quarterbackLines(team, quarterback, rows, results, onFile) {
+function quarterbackLines(team, quarterback, rows, results, onFile, starts = new Map()) {
   if (!quarterback?.name) return [`${team}: this week's starting quarterback is not established, so no quarterback site split is shown. The game-by-game lines above name who played quarterback in each game.`];
   const byGame = new Map(results.map((r) => [String(r.gameId), r]));
   const games = (rows || [])
@@ -260,9 +260,12 @@ function quarterbackLines(team, quarterback, rows, results, onFile) {
   const missing = results.filter((r) => !onFile.has(String(r.gameId)));
   const head = `${quarterback.name} (${team}, ${quarterback.status} starter in this week's reporting)${missing.length ? ` (player lines not on file for ${missing.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${versus(r)}`).join(', ')})` : ''}`;
   if (!games.length) return [`${head}: no passing rows in this team's games this season.`];
+  // Whether he started each of them, where the game's lineup is on file (Oct 27 2026 data loop: Dylan Raiola's 19-of-25
+  // at USC came in relief of Dante Moore, and read like a start).
+  const tag = (g) => { const lineup = starts.get(String(g.result.gameId)); return !lineup ? '' : startedIn(lineup, quarterback.name) ? ' (started)' : ' (came in; did not start)'; };
   const site = (label) => {
     const list = games.filter((g) => siteOf(g.result) === label);
-    return `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map(passingLine).join('; ') : 'none'}`;
+    return `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map((g) => `${passingLine(g)}${tag(g)}`).join('; ') : 'none'}`;
   };
   return [`${head}, games with a pass attempt this season by site:`, site('road'), site('home'),
     ...(games.some((g) => g.result.neutral) ? [site('neutral')] : [])];
@@ -807,7 +810,7 @@ ${sides.map((s) => {
       at('neutral').length ? splitLine(s.team, 'at neutral sites', at('neutral'), label) : null].filter(Boolean).join('\n');
   }).join('\n\n')}
 
-${sides.map((s, i) => quarterbackLines(s.team, quarterbacks[s.atHome ? 'home' : 'away'], rows[i], s.results, played[i].onFile).join('\n')).join('\n')}
+${sides.map((s, i) => quarterbackLines(s.team, quarterbacks[s.atHome ? 'home' : 'away'], rows[i], s.results, played[i].onFile, starts[i]).join('\n')).join('\n')}
 ${RULE}`;
 
   const reportOf = (s) => availability[s.atHome ? 'home' : 'away'];
