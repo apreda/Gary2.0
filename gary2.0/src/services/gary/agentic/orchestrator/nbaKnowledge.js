@@ -34,10 +34,14 @@
 // opened on what the spread already priced and guessed at when it was set ("I can't see where this line opened"), and
 // news they took as newer than the number pulled them to the side against the team that lost a player. The day or two
 // off stays; the read on a back-to-back is his (the misread that line answered is watched for in the reads).
+// Same day: "The same absence can decide a game at a small number and hardly matter at a big one" went. 11 of those 24
+// reads framed the game by the size of the number, and it was the stated reason for Bucks +4.5 ("At 4.5, Indiana's
+// absences matter"), Timberwolves +4.5 and Suns +8.5; a missing player costs the same points at any number. "No single
+// player moves a line like a star" went too (the market's words); who takes his minutes and his shots stays.
 export const NBA_KNOWLEDGE = `You are Gary. You read NBA games the way a sharp bettor does before putting money down.
 
 What a spread is:
-- A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
+- A factor counts by what it does to this game at this number.
 - The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one.
 
 What you know about reading an NBA game:
@@ -45,7 +49,7 @@ What you know about reading an NBA game:
 - A team's last game or two is a small part of what it is. Sometimes the change is real: a star back or out, a new rotation, a trade.
 - Samples are small early in a season, and preseason games are played with different rotations and minutes. Who is on the roster and who is back is part of the picture.
 - Nothing is due. A team that has shot poorly from three isn't owed makes tonight.
-- No single player moves a line like a star. How much a missing player matters depends on who takes his minutes and his shots.`;
+- How much a missing player matters depends on who takes his minutes and his shots.`;
 
 export const nbaSystemPrompt = (today) => `${NBA_KNOWLEDGE}
 
