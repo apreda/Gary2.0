@@ -71,7 +71,7 @@ function reportText(rec, side, before) {
 }
 
 function playerRow(p) {
-  const q = p.min <= 0 ? '' : p.quarters ? ` · quarters (min/pts) ${p.quarters.map((x) => `${Math.round(x.min)}/${x.pts}`).join(' ')}` : ' · quarters not on file';
+  const q = p.min < 1 ? '' : p.quarters ? ` · quarters (min/pts) ${p.quarters.map((x) => `${Math.round(x.min)}/${x.pts}`).join(' ')}` : ' · quarters not on file';
   return `    ${p.name}${p.starter ? '*' : ''} ${mins(p.min)} min · ${p.pts} pts, ${p.reb} reb (${p.oreb} off), ${p.ast} ast, ${p.stl} stl, ${p.blk} blk, ${p.turnover} TO, ${p.pf} PF · ${p.fgm}-${p.fga} FG, ${p.fg3m}-${p.fg3a} 3PT, ${p.ftm}-${p.fta} FT · ${signed(p.pm)}${q}`;
 }
 
