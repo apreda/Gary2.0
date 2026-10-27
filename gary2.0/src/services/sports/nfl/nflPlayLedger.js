@@ -49,7 +49,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 7 (Oct 23 2026 data audit): each game's score by quarter, kneel-downs by who took them, and drives that ran out the
 // half, ended in a safety or began in the opponent's territory (and their points).
 // 8 (Oct 27 2026 data loop): a kickoff the receiving team fumbled away is its drive, ending in a turnover; a blocked
-// punt returned for a touchdown ends the drive as a punt, and a fourth-down kneel-down as the half running out.
+// punt returned for a touchdown ends the drive as a punt, and a fourth-down kneel-down as the half running out; a
+// drive that reached the 20 and ran out the half is a red-zone trip.
 const LEDGER_SCHEMA = 8;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
@@ -361,7 +362,10 @@ function driveTotals(list) {
     if (d.start == null) continue;
     const pts = d.scoreStart != null && d.scoreEnd != null ? Math.max(0, d.scoreEnd - d.scoreStart) : 0;
     if (d.start > 50) { t.opp_territory_drives += 1; t.opp_territory_points += pts; }
-    if (d.result === 'End of half') { t.drive_end_of_half += 1; continue; }
+    // A drive that reached the 20 and ran out the half is a red-zone trip that came up empty (Oct 27 2026 data loop: 14
+    // team games read a trip short of ESPN's count, the Bears' drive to the 4 before halftime among them); a kneel-down
+    // to end it is not.
+    if (d.result === 'End of half') { t.drive_end_of_half += 1; if (d.inside20 && d.lastType !== 'qb_kneel') t.red_zone_trips += 1; continue; }
     t.drives += 1;
     t.drive_points += pts;
     if (d.result === 'Touchdown') t.drive_tds += 1;
