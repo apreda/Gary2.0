@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, espnNameKey } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 12;
+export const NBA_RECORD_VERSION = 13;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -144,7 +144,7 @@ export function closingOf(plays, players, periods) {
  * when he was not subbed back in, or the end of the last quarter he played in. */
 export function lastOffOf(plays, players, periods) {
   const out = {};
-  const ordered = [...(plays || [])].filter((p) => p.type === 'Substitution').sort((a, b) => a.order - b.order);
+  const ordered = [...(plays || [])].filter((p) => p.type === 'Substitution').sort((a, b) => a.period - b.period || clockSeconds(b.clock) - clockSeconds(a.clock) || a.order - b.order);
   for (const pl of players.filter((x) => x.min > 0 && x.quarters)) {
     const lastQ = [...pl.quarters].reverse().find((x) => x.min > 0)?.q;
     if (!lastQ) continue;
