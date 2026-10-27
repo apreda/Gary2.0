@@ -7,7 +7,7 @@
  */
 import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY, getCachedOrFetch } from '../../providers/bdl/transport.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
-import { latestOfficialReport, gameListing, playerKey } from '../../providers/nbaOfficialInjuryReport.js';
+import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
@@ -151,7 +151,7 @@ async function playedFor(teamId, before) {
     .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date)).slice(0, PLAYED_FROM_GAMES);
   const boxes = await Promise.all(games.map((g) => boxOf(g, teamId).then((b) => withOfficialPlayerLines(g, b)).then((b) => boxSides(b, teamId)).catch(() => null)));
   if (boxes.some((b) => !b)) return null;
-  return { n: games.length, keys: new Set(boxes.flatMap((b) => b.filter((p) => p.min > 0).map((p) => playerKey(p.name)))) };
+  return { n: games.length, names: [...new Set(boxes.flatMap((b) => b.filter((p) => p.min > 0).map((p) => p.name)))] };
 }
 
 // The opponent's Out list, those who had played for it apart from those who had not played in any of its games before
@@ -170,8 +170,10 @@ async function opponentOut(g, team, opp, oppId) {
     const before = await playedFor(oppId, tip).catch(() => null);
     if (!before) return `      their Out on ${when}: ${out.map(said).join(', ')} (who of them had played for them before: not on file)`;
     if (!before.n) return `      their Out on ${when}, their first game of the season: ${out.map(said).join(', ')}`;
-    const played = out.filter((r) => before.keys.has(playerKey(r.name)));
-    const not = out.filter((r) => !before.keys.has(playerKey(r.name)));
+    // The report's names against the box's, which can differ ("Alex Sarr", "Alexandre Sarr").
+    const hadPlayed = (r) => Boolean(samePlayerIn(r.name, before.names, [...side.values()].map((x) => x.name)));
+    const played = out.filter(hadPlayed);
+    const not = out.filter((r) => !hadPlayed(r));
     const games = before.n === 1 ? 'their one game' : `any of their ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
     if (!not.length) return `      their Out on ${when}: ${played.map(said).join(', ')}`;
     return `      their Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;

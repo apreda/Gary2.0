@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOfficialReport, reportUrlFor } from '../../src/services/providers/nbaOfficialInjuryReport.js';
+import { parseOfficialReport, reportUrlFor, samePlayerIn } from '../../src/services/providers/nbaOfficialInjuryReport.js';
 
 // The shape `pdftotext -layout` gives the league's report: wrapped reasons print above and below their row, later
 // pages drop the header and shift left, and a reason can run past a page break.
@@ -35,5 +35,23 @@ describe('the NBA official injury report reader', () => {
   it('names the report for an instant on the Eastern quarter hour', () => {
     expect(reportUrlFor(new Date('2026-04-10T21:07:00Z'))).toBe('https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-04-10_05_00PM.pdf');
     expect(reportUrlFor(new Date('2026-10-21T03:59:00Z'))).toBe('https://ak-static.cms.nba.com/referee/injury/Injury-Report_2026-10-20_11_45PM.pdf');
+  });
+
+  it('reads a suffix written between the last and first names', () => {
+    const { rows } = parseOfficialReport([
+      'Game Date    Game Time    Matchup   Team                        Player Name           Current Status   Reason',
+      '10/26/2026   07:00 (ET)   MIN@CLE   Cleveland Cavaliers          Udeh, Jr., Ernest    Out              G League - Two-Way',
+    ].join('\n'));
+    expect(rows.map((r) => r.player)).toEqual(['Ernest Udeh Jr.']);
+  });
+
+  it("finds the report's player under the stats feed's name, only when one player fits", () => {
+    const feed = ['Alexandre Sarr', 'Airious Bailey', 'Jalen Williams', 'Jaylin Williams', 'Karim Lopez'];
+    expect(samePlayerIn('Alex Sarr', feed)).toBe('Alexandre Sarr');
+    expect(samePlayerIn('Ace Bailey', feed)).toBe('Airious Bailey');
+    expect(samePlayerIn('Karim López', feed)).toBe('Karim Lopez');
+    expect(samePlayerIn('J. Williams', feed)).toBeNull();
+    expect(samePlayerIn('Wendell Carter Jr.', ['Jevon Carter'])).toBeNull();
+    expect(samePlayerIn('Ace Bailey', ['Airious Bailey'], ['Ace Bailey', 'Amari Bailey'])).toBeNull();
   });
 });

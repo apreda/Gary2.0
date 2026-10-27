@@ -37,9 +37,12 @@ function pdfToText(buffer) {
   return run('pdftotext').catch(() => run('/opt/homebrew/bin/pdftotext')).finally(() => rmSync(dir, { recursive: true, force: true }));
 }
 
+// "Udeh, Jr., Ernest" is Ernest Udeh Jr. (Oct 27 2026 data loop: it read "Jr. Udeh").
+const SUFFIX = /^(jr|sr|ii|iii|iv|v)\.?$/i;
 const flipName = (name) => {
-  const [last, first] = String(name || '').split(/,\s*/);
-  return first ? `${first.trim()} ${last.trim()}` : String(name || '').trim();
+  const [last, ...rest] = String(name || '').split(/,\s*/).map((x) => x.trim()).filter(Boolean);
+  if (!rest.length) return String(name || '').trim();
+  return [...rest.filter((x) => !SUFFIX.test(x)), last, ...rest.filter((x) => SUFFIX.test(x))].join(' ');
 };
 
 /**
@@ -129,6 +132,27 @@ export async function latestOfficialReport({ now = new Date(), lookbackHours = 3
 const teamKey = (name) => String(name || '').trim().split(/\s+/).pop().toLowerCase();
 export const playerKey = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   .replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+
+const nameParts = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/\s+/)
+  .map((w) => w.replace(/[^a-z'-]/g, '')).filter((w) => w && !SUFFIX.test(w));
+/**
+ * The one name among `candidates` that is this player (Oct 27 2026 data loop: the league's report says "Alex Sarr" and
+ * "Ace Bailey", the stats feed "Alexandre Sarr" and "Airious Bailey"): the same letters; else the same last name with
+ * one first name the start of the other; else the same last name and first initial, when no other candidate has both
+ * and no other name in `peers` (the list `name` comes from) does either. Null when none or several.
+ */
+export function samePlayerIn(name, candidates, peers = [name]) {
+  const exact = candidates.find((c) => playerKey(c) === playerKey(name));
+  if (exact) return exact;
+  const [first, ...rest] = nameParts(name); const last = rest.join('');
+  if (!first || !last) return null;
+  const firstOf = (n) => { const [f, ...r] = nameParts(n); return f && r.join('') === last ? f : null; };
+  const only = (xs) => (xs.length === 1 ? xs[0] : null);
+  const short = only(candidates.filter((c) => { const f = firstOf(c); return f && Math.min(f.length, first.length) >= 2 && (f.startsWith(first) || first.startsWith(f)); }));
+  if (short) return short;
+  const initial = (xs) => xs.filter((c) => firstOf(c)?.[0] === first[0]);
+  return initial(peers.includes(name) ? peers : [...peers, name]).length === 1 ? only(initial(candidates)) : null;
+}
 
 /**
  * One game's listing on a report, for each of its two teams: a Map of player key -> { name, status, reason }, or

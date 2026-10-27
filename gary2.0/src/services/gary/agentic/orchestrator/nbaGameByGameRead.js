@@ -12,7 +12,7 @@
 import { matchupHeader, spreadInWords } from './footballDeskText.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { nbaLineOf, injuriesAsReported, projectedStarters, reportOfDesk, reportDay, tipOf, availableListed } from './nbaRead.js';
-import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
+import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../../providers/nbaOfficialInjuryReport.js';
 import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { findTeam } from '../scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
@@ -75,7 +75,9 @@ function whatsDifferent(team, records, listing) {
   const last = shown[0];
   const lines = [];
   for (const e of [...regulars.values()].filter((x) => x.starts > 0 || x.big >= 2)) {
-    const tonight = listing === 'unfiled' || !listing ? null : listing.get(playerKey(e.name));
+    // The report's name for him, which can differ from the feed's ("Ace Bailey", "Airious Bailey").
+    const listed = listing === 'unfiled' || !listing ? null : samePlayerIn(e.name, [...listing.values()].map((r) => r.name), [...regulars.keys()]);
+    const tonight = listed ? listing.get(playerKey(listed)) : null;
     const status = tonight?.status && tonight.status !== 'Available' ? tonight.status : null;
     const playedLast = last.players.some((p) => p.side === sideOf(last, team.id) && p.name === e.name && p.min > 0);
     const games = `played ${e.played.length} of the ${shown.length} games below${e.missed.length ? `, not in ${e.missed.join(', ')}` : ''}`;

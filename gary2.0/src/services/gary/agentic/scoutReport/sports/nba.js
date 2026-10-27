@@ -20,6 +20,7 @@ import { groundedWebSearch, fetchStandingsSnapshot } from '../shared/grounding.j
 import { buildVerifiedTaleOfTape } from '../shared/taleOfTape.js';
 import { fetchNbaArticlesAsWritten } from './nbaArticlesAsWritten.js';
 import { nbaOpeningNightSection } from '../../../../sports/nba/nbaOpeningNight.js';
+import { samePlayerIn } from '../../../../providers/nbaOfficialInjuryReport.js';
 import { fetchTeamProfile, fetchInjuries, fetchRecentGames, fetchH2HData, fetchCurrentState, formatInjuryReport, formatStartingLineups, formatOdds, formatRestSituation, calculateRestSituation, formatRecentFormWithBoxScores, fetchNbaBoxScoresForGames, formatH2HSection, detectReturningPlayers } from '../shared/dataFetchers.js';
 
 
@@ -571,6 +572,7 @@ export async function buildNbaScoutReport(game, options = {}) {
 
       // Every player line in these games, all pages (about 300 rows; one paginated read instead of ten calls).
       const allStats = await ballDontLieService.getNbaGameStats(gameIds);
+      const teamId = findTeam(await ballDontLieService.getTeams('basketball_nba'), teamName)?.id ?? null;
       if (!allStats || allStats.length === 0) {
         throw new Error(`[Scout Report] CRITICAL: No box-score data returned for ${teamName} recent games — cannot resolve injury durations`);
       }
@@ -581,11 +583,15 @@ export async function buildNbaScoutReport(game, options = {}) {
         if (!injName) continue;
         const pName = `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
 
-        // Find this player's entries in the box scores
-        const playerEntries = allStats.filter(s => {
-          const statName = `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.toLowerCase().trim();
-          return playerNamesMatch(injName, statName) && parseFloat(s.min || '0') > 0;
-        });
+        // Find this player's entries in the box scores; else his name as the stats feed spells it, among his team's
+        // players (Oct 27 2026 data loop: the report's "Ace Bailey" is the feed's "Airious Bailey").
+        const statName = (s) => `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim();
+        let playerEntries = allStats.filter(s => playerNamesMatch(injName, statName(s).toLowerCase()) && parseFloat(s.min || '0') > 0);
+        if (!playerEntries.length && teamId != null) {
+          const mine = [...new Set(allStats.filter((s) => s.team?.id === teamId).map(statName))];
+          const named = samePlayerIn(pName, mine, injuryList.map((i) => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()));
+          if (named) playerEntries = allStats.filter((s) => statName(s) === named && parseFloat(s.min || '0') > 0);
+        }
 
         if (playerEntries.length > 0) {
           // Sort by game date descending to find most recent appearance
@@ -846,64 +852,17 @@ VENUE: [arena name, city]
     }
   }
 
-  // Post-process: Filter injuries against BDL active roster
-  // The injury feed can have stale team assignments (e.g., traded players still listed under old team)
-  // BDL active roster is ground truth for who is actually on each team RIGHT NOW
-  if (injuries && nbaRosterDepth) {
-    const buildRosterNames = (players) => {
-      if (!players || !Array.isArray(players)) return [];
-      return players.map(p => (p.name || `${p.first_name || ''} ${p.last_name || ''}`).toLowerCase().trim()).filter(n => n);
-    };
-    // The active rosters, not the rotation lists: those keep only players with minutes this season, so on opening
-    // night every listed player was filtered out as traded (audit, Oct 13 2026).
-    const homeRosterNames = buildRosterNames((nbaRosterDepth.homeActive || []).map((name) => ({ name })).concat(nbaRosterDepth.home || []));
-    const awayRosterNames = buildRosterNames((nbaRosterDepth.awayActive || []).map((name) => ({ name })).concat(nbaRosterDepth.away || []));
-    const allRosterNames = [...homeRosterNames, ...awayRosterNames];
-
-    // With a team's roster missing the filter would delete every injury row as "traded" (Oct 23 2026 source audit);
-    // the league's report already lists players by team, so the filter stands down instead.
-    const filterInjuriesToRoster = (injuryList, teamLabel) => {
-      if (!injuryList || injuryList.length === 0) return injuryList;
-      if (!homeRosterNames.length || !awayRosterNames.length) {
-        console.warn(`[Scout Report] NBA roster missing for a team; the injury list stands as the league reported it (${teamLabel})`);
-        return injuryList;
-      }
-      return injuryList.filter(inj => {
-        const injName = typeof inj.player === 'string' ? inj.player :
-          `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim();
-        const onRoster = allRosterNames.some(rn => playerNamesMatch(rn, injName));
-        if (!onRoster) {
-          console.log(`[Scout Report] FILTERED injury: ${injName} (${inj.status}) — NOT on BDL active roster for ${teamLabel} (likely traded)`);
-        }
-        return onRoster;
-      });
-    };
-
-    const homeBefore = injuries.home?.length || 0;
-    const awayBefore = injuries.away?.length || 0;
-    injuries.home = filterInjuriesToRoster(injuries.home, homeTeam);
-    injuries.away = filterInjuriesToRoster(injuries.away, awayTeam);
-    const filtered = (homeBefore - (injuries.home?.length || 0)) + (awayBefore - (injuries.away?.length || 0));
-    if (filtered > 0) {
-      console.log(`[Scout Report] Roster filter removed ${filtered} stale injury entry/entries (traded players)`);
-      // Rebuild groundingRaw to reflect filtered injuries
-      injuries.groundingRaw = [
-        `=== ${awayTeam} ===`, `${awayTeam} INJURY REPORT:`,
-        injuries.away.length > 0
-          ? injuries.away.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
-          : 'No injuries reported',
-        '', `=== ${homeTeam} ===`, `${homeTeam} INJURY REPORT:`,
-        injuries.home.length > 0
-          ? injuries.home.map(i => `${i.player.first_name} ${i.player.last_name} - ${i.status} (${i.durationContext})`).join('\n')
-          : 'No injuries reported'
-      ].join('\n');
-    }
-  }
+  // No roster filter on the injury list (Oct 27 2026 data loop): the league's report is the only NBA injury source and
+  // each team files it for the game, so no row is a traded player's. Checked against the stats feed's active rosters,
+  // it dropped Blake Hinson (out, hamstring) and two-way players the feed doesn't list, and Karim López, questionable,
+  // for an accent.
 
   // Post-process: Cross-reference API injuries against roster depth
   // This catches name mismatches and truncated grounding responses
   // (e.g., "Shai Alexander" in API vs "Shai Gilgeous-Alexander" in BDL)
   if (injuries && nbaRosterDepth) {
+    const outNamesOf = (list) => (list || []).filter((inj) => /^out$|out for season/i.test(String(inj.status || '').trim()))
+      .map((inj) => (typeof inj.player === 'string' ? inj.player : `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim())).filter(Boolean);
     const apiOutNames = [...(injuries.home || []), ...(injuries.away || [])]
       .filter(inj => {
         const s = (inj.status || '').toLowerCase();
@@ -917,11 +876,11 @@ VENUE: [arena name, city]
       .filter(n => n);
 
     if (apiOutNames.length > 0) {
-      const filterOutFromRoster = (players) => {
+      const filterOutFromRoster = (players, sideOut) => {
         if (!players) return players;
         return players.filter(p => {
           const pName = (p.name || '').toLowerCase();
-          const isOut = apiOutNames.some(outName => playerNamesMatch(pName, outName));
+          const isOut = apiOutNames.some(outName => playerNamesMatch(pName, outName)) || Boolean(samePlayerIn(p.name || '', sideOut, players.map((x) => x.name || '')));
           if (isOut) {
             if ((p.pts || p.ppg || 0) >= 10) {
               console.log(`[Scout Report] Post-filter excluded ${p.name} (${(p.pts || p.ppg || 0).toFixed?.(1) || '?'} PPG) from roster - API injury match`);
@@ -930,8 +889,8 @@ VENUE: [arena name, city]
           return !isOut;
         });
       };
-      nbaRosterDepth.home = filterOutFromRoster(nbaRosterDepth.home);
-      nbaRosterDepth.away = filterOutFromRoster(nbaRosterDepth.away);
+      nbaRosterDepth.home = filterOutFromRoster(nbaRosterDepth.home, outNamesOf(injuries.home));
+      nbaRosterDepth.away = filterOutFromRoster(nbaRosterDepth.away, outNamesOf(injuries.away));
     }
   }
 

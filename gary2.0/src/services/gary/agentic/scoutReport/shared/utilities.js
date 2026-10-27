@@ -26,8 +26,10 @@ export function seasonForSport(sport) {
  * e.g., "Shai Alexander" (RapidAPI) vs "Shai Gilgeous-Alexander" (BDL)
  */
 export function playerNamesMatch(name1, name2) {
-  const a = (name1 || '').toLowerCase().trim();
-  const b = (name2 || '').toLowerCase().trim();
+  // Accents aside (Oct 27 2026 data loop: the league's "Karim López" missed the roster's "Karim Lopez").
+  const plain = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const a = plain(name1);
+  const b = plain(name2);
   if (!a || !b) return false;
   if (a === b) return true;
 
