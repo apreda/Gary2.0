@@ -96,14 +96,16 @@ function whoPlayed(box, others, out, starters) {
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
     .filter((nm) => !played.some((p) => p.name === nm));
-  // Everyone who played, the first eight with points and shooting; the opponent's players with 15+ minutes and their
-  // points (the top five left out a starter at 24 minutes; Oct 23 2026 audit).
+  // Everyone who played, the first eight with points, rebounds, assists, turnovers and shooting; the opponent's players
+  // with 15+ minutes and their points (the top five left out a starter at 24 minutes; Oct 23 2026 audit). Rebounds,
+  // assists and turnovers reached Gary only through the news until Oct 27 2026 ("16 Cunningham turnovers", Towns' 14
+  // rebounds).
   const rest = played.slice(8).map((p) => `${p.name} ${p.min}`);
   const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${p.pts} pts)`);
   return [`      box: ${boxLine(box)} · ${boxLine(box.opponent)}`,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
-    `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, shooting(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
+    `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
     missed.length ? `      did not play: ${missed.join(', ')}` : null,
     theirs.length ? `      theirs with 15+ minutes: ${theirs.join(', ')}` : null,
     out].filter(Boolean).join('\n');
