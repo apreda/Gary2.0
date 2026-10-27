@@ -70,8 +70,24 @@ const yards = (r) => n(r.passing_yards) - Math.abs(n(r.sack_yards_lost)) + n(r.r
 // played start to finish (Oct 23 2026 data check), and it is never used in its place (founder, Oct 23: no fallback that
 // gives different data when the source fails): without the player stats, who played says "not on file".
 function passersOf(d, g, code) {
-  return (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) >= 5)
+  const list = (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) >= 5)
     .sort((a, b) => n(b.attempts) - n(a.attempts));
+  // The quarterback who started and left early is on the list whatever his attempts (Oct 27 2026 data loop: Darnold,
+  // Murray, Dart and Mariota each started a game and threw under five passes, and their games read as games they missed).
+  const starter = startedEarlyExit(d, g, code);
+  return starter && !list.includes(starter) ? [...list, starter] : list;
+}
+// The player-stat row of a game's starting quarterback when someone else threw most of its passes (the play ledger names
+// him "S.Darnold": first initial and last name), or null.
+function startedEarlyExit(d, g, code) {
+  const st = d.ledgerGames?.get(g.game_id)?.starters?.[code]?.started;
+  if (!st) return null;
+  const [initial, ...rest] = String(st).toLowerCase().split('.');
+  const last = rest.join('').replace(/[^a-z]/g, '');
+  const rows = (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) > 0
+    && String(r.player_display_name).toLowerCase().charAt(0) === initial
+    && String(r.player_display_name).toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').trim().split(/\s+/).pop().replace(/[^a-z]/g, '') === last);
+  return rows.length === 1 ? rows[0] : null;
 }
 const starterOf = (x) => x.qb || null;
 // The same quarterback under two spellings: suffixes and punctuation aside, the same last name and first initial
@@ -114,7 +130,8 @@ export function teamGames(d, code, season, before) {
     // (Oct 23 2026 data check).
     const oppQb = passersOf(d, g, opp)[0]?.player_display_name || null;
     return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers, oppQb,
-      qb: passers[0]?.player_display_name || null,
+      qb: passers[0]?.player_display_name || null, startedQb: startedEarlyExit(d, g, code)?.player_display_name || null,
+      oppStartedQb: startedEarlyExit(d, g, opp)?.player_display_name || null,
       // Overtime from the schedule (Oct 23 2026 data audit: Kansas City's 3-point win over Indianapolis read as a
       // regulation win), and the game's play-ledger entry, when the ledger has it.
       ot: g.overtime === '1', ledger: d.ledgerGames?.get(g.game_id) || null,
@@ -739,7 +756,7 @@ export function nflGameFull(d, x, code, before) {
   const scoring = !d.ledgerGames ? 'score by quarter and drives: not on file' : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, code);
   const kicking = x.off && x.def ? `kicking: ${nickname(code)} ${kicks(x.off.kicking)}; ${nickname(o)} ${kicks(x.def.kicking)}` : null;
   const theirs = teamGames(d, o, d.season, before).find((g) => g.g.game_id === x.g.game_id);
-  const qb = (sideCode, gx) => { const ps = passersOf(d, x.g, sideCode); return ps.length ? ps.map((r) => `${r.player_display_name} ${passLine(r)}`).join('; ') : 'not on file'; };
+  const qb = (sideCode) => { const st = startedEarlyExit(d, x.g, sideCode); const ps = passersOf(d, x.g, sideCode); return ps.length ? ps.map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : ''} ${passLine(r)}`).join('; ') : 'not on file'; };
   const ourGames = teamGames(d, code, d.season, before), oppGames = teamGames(d, o, d.season, before);
   const absent = (c, gs) => { const a = lineupChanges(d, c, gs).absent?.get(x.g.game_id) || []; return a.length ? a.map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ') : 'none of its regulars'; };
   const changesUs = lineupChanges(d, code, ourGames).get(x.g.game_id), changesThem = lineupChanges(d, o, oppGames).get(x.g.game_id);
@@ -769,7 +786,8 @@ export function nflGameFull(d, x, code, before) {
 /** An older game in one line, from `code`'s side: result, score, both quarterbacks, who it was without. */
 export function nflGameShort(d, x, code, before) {
   const a = lineupChanges(d, code, teamGames(d, code, d.season, before)).absent?.get(x.g.game_id) || [];
-  return `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} ${versus(x, teamName(x.opp), true)} · QB ${x.qb || 'not on file'} · theirs ${x.oppQb || 'not on file'} · without: ${a.length ? a.map((p) => p.name).join(', ') : 'none of its regulars'}`;
+  const qbOf = (name, started) => `${name || 'not on file'}${started ? ` (${started} started, left early)` : ''}`;
+  return `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} ${versus(x, teamName(x.opp), true)} · QB ${qbOf(x.qb, x.startedQb)} · theirs ${qbOf(x.oppQb, x.oppStartedQb)} · without: ${a.length ? a.map((p) => p.name).join(', ') : 'none of its regulars'}`;
 }
 
 /** Every team's record before `before`, best first, as one table. */
