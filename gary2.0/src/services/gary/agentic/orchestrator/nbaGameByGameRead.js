@@ -30,7 +30,11 @@ const ord = (n) => `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 
 export async function ensureNbaRecords(season = nbaSeason()) {
   const games = ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], per_page: 100, paginateAll: true })) || []).filter((g) => /final/i.test(String(g.status)));
   const stored = await storedGameIds('NBA', season);
-  const missing = games.filter((g) => stored.get(String(g.id)) !== NBA_RECORD_VERSION);
+  // A game of the last two days is built again while a part that posts after the final is missing (the advanced box,
+  // ESPN's official box and venue, the report at tip).
+  const recent = new Date(Date.now() - 2 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const LATE = ['the advanced box is on file', 'the official team box is on file', 'the venue is on file', 'the injury report at tip is on file'];
+  const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
   for (const g of missing) {
     try { await saveGameRecord((await buildNbaGameRecord(g.id)).row); } catch (e) { failed.push(`${g.id}: ${e.message}`); }

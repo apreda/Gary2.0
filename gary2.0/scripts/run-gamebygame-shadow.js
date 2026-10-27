@@ -87,6 +87,13 @@ async function writeReport(day) {
   const lines = [`# Game-by-game test, NBA, ${day}`, ''];
   const tally = (k) => { const w = rows.filter((r) => r[k] === 'won').length, l = rows.filter((r) => r[k] === 'lost').length; return `${w}-${l}`; };
   if (rows.some((r) => r.result)) lines.push(`Graded: live ${tally('live_result')}, game-by-game ${tally('result')}`, '');
+  // The test so far: every graded game, and the games the two systems took different sides on.
+  const { data: all } = await db.from('gamebygame_picks').select('pick, live_pick, result, live_result').eq('league', 'NBA').lte('game_date', day).not('result', 'is', null);
+  if (all?.length) {
+    const t = (xs, k) => `${xs.filter((r) => r[k] === 'won').length}-${xs.filter((r) => r[k] === 'lost').length}`;
+    const apart = all.filter((r) => side(r.pick) !== side(r.live_pick));
+    lines.push(`Since the test began: live ${t(all, 'live_result')}, game-by-game ${t(all, 'result')} (${all.length} games); on the ${apart.length} games they took different sides: live ${t(apart, 'live_result')}, game-by-game ${t(apart, 'result')}`, '');
+  }
   const differ = rows.filter((r) => side(r.pick) !== side(r.live_pick));
   lines.push(`${rows.length} games · ${differ.length} where the two systems took different sides`, '');
   for (const r of [...differ, ...rows.filter((x) => !differ.includes(x))]) {

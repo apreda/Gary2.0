@@ -17,13 +17,13 @@ export async function saveGameRecord(row) {
   if (error) throw new Error(`game records store: save ${row.league} ${row.game_id} failed: ${error.message}`);
 }
 
-/** The ids of a season's games already in the store, with their version. */
+/** A season's games already in the store: Map(game id -> { version, date, failed: the checks that did not hold }). */
 export async function storedGameIds(league, season) {
   const out = new Map();
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db().from(TABLE).select('game_id, version').eq('league', league).eq('season', season).range(from, from + 999);
+    const { data, error } = await db().from(TABLE).select('game_id, version, game_date, checks').eq('league', league).eq('season', season).range(from, from + 999);
     if (error) throw new Error(`game records store: list failed: ${error.message}`);
-    for (const r of data || []) out.set(String(r.game_id), r.version);
+    for (const r of data || []) out.set(String(r.game_id), { version: r.version, date: r.game_date, failed: (r.checks || []).filter((c) => !c.ok).map((c) => c.check) });
     if (!data || data.length < 1000) return out;
   }
 }

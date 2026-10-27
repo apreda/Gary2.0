@@ -23,7 +23,7 @@ const games = only ? [{ id: Number(only), status: 'Final' }]
   : ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], per_page: 100, paginateAll: true })) || [])
     .filter((g) => /final/i.test(String(g.status)));
 const stored = await storedGameIds(league, season);
-const todo = games.filter((g) => rebuild || only || stored.get(String(g.id)) !== NBA_RECORD_VERSION)
+const todo = games.filter((g) => rebuild || only || stored.get(String(g.id))?.version !== NBA_RECORD_VERSION)
   .sort((a, b) => Date.parse(a.datetime || a.date) - Date.parse(b.datetime || b.date));
 console.log(`${league} ${season}: ${games.length} finished games, ${stored.size} stored, ${todo.length} to build`);
 
