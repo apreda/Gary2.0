@@ -17,7 +17,7 @@ import { findTeam } from '../scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { saveGameRecord, storedGameIds, teamRecords, seasonSummaries } from '../../../gamebygame/gameRecordStore.js';
 import { buildNbaGameRecord, NBA_RECORD_VERSION, settingOf } from '../../../sports/nba/nbaGameRecord.js';
-import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine } from '../../../sports/nba/nbaGameRecordText.js';
+import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine, wonLost } from '../../../sports/nba/nbaGameRecordText.js';
 
 export const NBA_WINDOW = 10;
 const SHORT_LINES = 15;
@@ -166,7 +166,15 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
       older.length ? `Older games, one line each:\n${older.map((r) => shortGameText(r, team.id)).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
 
+  // Every team's record before tonight, by conference, best first: what any team named anywhere in the read has done
+  // (a count of its games; no averages).
+  const conf = (c) => teams.filter((t) => t.conference === c && byTeam.has(String(t.id)))
+    .map((t) => { const rows = byTeam.get(String(t.id)); const [w, l] = wonLost(rows, t.id).split('-').map(Number); return { t, w, l }; })
+    .sort((a, b) => (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)) || b.w - a.w)
+    .map(({ t, w, l }) => `${t.abbreviation} ${t.name} ${w}-${l}`).join(' · ');
+  const standings = `LEAGUE RECORDS BEFORE TONIGHT\nEast: ${conf('East')}\nWest: ${conf('West')}`;
+
   const finals = new Set(summaries.map((r) => `${r.summary.home.score}-${r.summary.away.score}`));
-  const story = [header, tonightPart, meetingPart, teamPart(away, awayRecs), teamPart(home, homeRecs)].join('\n\n');
+  const story = [header, tonightPart, standings, meetingPart, teamPart(away, awayRecs), teamPart(home, homeRecs)].join('\n\n');
   return { line: nbaLineOf(desk), story, news: newsWithoutRecaps(news, finals) };
 }

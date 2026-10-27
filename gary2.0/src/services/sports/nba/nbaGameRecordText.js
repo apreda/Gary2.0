@@ -25,6 +25,13 @@ export function summariesByTeam(rows) {
 }
 const summarySide = (s, teamId) => (String(s.home.id) === String(teamId) ? 'home' : 'away');
 
+const OPPONENT_GAMES = 10;
+/** A team's wins and losses in these games. */
+export function wonLost(rows, teamId) {
+  const w = rows.filter((r) => { const s = r.summary; const us = summarySide(s, teamId); return s[us].score > s[other(us)].score; }).length;
+  return `${w}-${rows.length - w}`;
+}
+
 /** One game of a team's season in a line: date, opponent, result, score. */
 export function resultLine(row, teamId) {
   const s = row.summary; const us = summarySide(s, teamId); const them = other(us);
@@ -108,8 +115,12 @@ export function fullGameText(rec, teamId, byTeam) {
     }
   }
   lines.push(teamBox(rec, us), teamBox(rec, them));
+  // The opponent around this game: its last OPPONENT_GAMES games before it, its record then and now (a count of the
+  // games; the league's records tonight are at the head of the read).
   const season = (byTeam.get(String(rec[them].id)) || []);
-  lines.push(`  ${possessive(rec[them].short)} season: ${season.map((r) => `${r.game_id === String(rec.gameId) ? '[this game] ' : ''}${resultLine(r, rec[them].id)}`).join('; ')}`);
+  const prior = season.filter((r) => r.game_date < rec.date);
+  const shown = prior.slice(-OPPONENT_GAMES);
+  lines.push(`  ${rec[them].short} coming in: ${wonLost(prior, rec[them].id)}${shown.length ? `; ${prior.length > shown.length ? `last ${shown.length}: ` : ''}${shown.map((r) => resultLine(r, rec[them].id)).join('; ')}` : ' (their first game)'} · ${wonLost(season, rec[them].id)} before tonight`);
   return lines.join('\n');
 }
 
