@@ -91,8 +91,20 @@ export function boxSides(box, teamId) {
 // Each team's box, from its players' rows (team turnovers and team rebounds are not in the feed's box).
 const boxLine = (side) => { const t = side.totals; return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.oreb} offensive rebounds, ${t.turnover} turnovers, ${t.pf} fouls`; };
 const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null].filter(Boolean).join(', ');
-function whoPlayed(box, others, out, starters) {
-  if (!box) return ['      who played: box score not on file', out].filter(Boolean).join('\n');
+// Where each team's points came from, its players' rows in BDL's advanced box summed (Oct 27 2026, founder GO: the reads
+// quoted "60 points in the paint", "26 second-chance points" and "38 points off 26 turnovers" from the news, unchecked;
+// summed, the feed gives the same numbers).
+function scoringLine(rows, teams) {
+  const side = (t) => {
+    const mine = (rows || []).filter((r) => r.team?.id === t?.id);
+    const sum = (k) => mine.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+    return mine.length ? `${t.name} ${sum('points_paint')} in the paint, ${sum('points_second_chance')} second-chance, ${sum('points_fast_break')} fast-break, ${sum('points_off_turnovers')} off turnovers` : null;
+  };
+  const both = teams.map(side);
+  return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
+}
+function whoPlayed(box, others, out, starters, scoring) {
+  if (!box) return ['      who played: box score not on file', scoring, out].filter(Boolean).join('\n');
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
     .filter((nm) => !played.some((p) => p.name === nm));
@@ -103,6 +115,7 @@ function whoPlayed(box, others, out, starters) {
   const rest = played.slice(8).map((p) => `${p.name} ${p.min}`);
   const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${p.pts} pts)`);
   return [`      box: ${boxLine(box)} · ${boxLine(box.opponent)}`,
+    scoring,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
     `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
@@ -249,6 +262,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
   const starters = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => (await ballDontLieService.getNbaLineups([g.id]).catch(() => []))
     .filter((r) => r.starter && r.team?.id === ts.id).map((r) => `${r.player?.first_name} ${r.player?.last_name}`)));
+  const advanced = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaAdvancedBox(g.id)));
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
@@ -259,7 +273,8 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : ''})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
-    return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i])}` : line;
+    const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team]) : null;
+    return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring)}` : line;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

@@ -129,6 +129,31 @@ export const nbaPlayerStatsMethods = {
   },
 
   /**
+   * One game's advanced box (BDL v2, the whole game: period 0), one row per player with his paint, second-chance,
+   * fast-break and off-turnover points among 117 fields. Null when the feed fails, so the read can say not on file.
+   */
+  async getNbaAdvancedBox(gameId, ttlMinutes = 24 * 60) {
+    if (!gameId) return null;
+    try {
+      return await getCachedOrFetch(`nba_advanced_box_${gameId}`, async () => {
+        const rows = [];
+        let cursor = null;
+        do {
+          const url = `${BALLDONTLIE_API_BASE_URL}/nba/v2/stats/advanced?game_ids[]=${gameId}&period=0&per_page=100${cursor ? `&cursor=${cursor}` : ''}`;
+          const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
+          rows.push(...(Array.isArray(resp?.data?.data) ? resp.data.data : []));
+          cursor = resp?.data?.meta?.next_cursor ?? null;
+        } while (cursor);
+        return rows;
+      }, ttlMinutes);
+    } catch (e) {
+      recordPickDataFailure('BDL:getNbaAdvancedBox', e);
+      console.error('[Ball Don\'t Lie] getNbaAdvancedBox error:', e.message);
+      return null;
+    }
+  },
+
+  /**
    * Get NBA player season stats formatted for props analysis
    * ENHANCED: Now fetches base stats + usage/advanced stats in parallel
    * Returns: pts, reb, ast, stl, blk, fg3m (threes), min + usage_pct, ts_pct, efg_pct, etc.
