@@ -48,7 +48,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // bare "50", are counted; temperature and wind fall back to the weather text when their columns are empty.
 // 7 (Oct 23 2026 data audit): each game's score by quarter, kneel-downs by who took them, and drives that ran out the
 // half, ended in a safety or began in the opponent's territory (and their points).
-const LEDGER_SCHEMA = 7;
+// 8 (Oct 27 2026 data loop): a kickoff the receiving team fumbled away is its drive, ending in a turnover; a blocked
+// punt returned for a touchdown ends the drive as a punt, and a fourth-down kneel-down as the half running out.
+const LEDGER_SCHEMA = 8;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -316,7 +318,7 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   const scoreEnd = num(g('posteam_score_post'));
   const fresh = () => ({ gameId, team: posteam, result: g('fixed_drive_result') || '', firstDowns: num(g('drive_first_downs')),
     inside20: flag(g('drive_inside20')), start: drivePlace(g('drive_start_yard_line'), posteam),
-    scoreStart, scoreEnd, fromKickoff: playType === 'kickoff' });
+    scoreStart, scoreEnd, fromKickoff: playType === 'kickoff', lostOnKick: playType === 'kickoff' && flag(g('fumble_lost')) });
   let d = drives.get(key);
   if (!d) {
     drives.set(key, fresh());
@@ -325,12 +327,17 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   // A drive that opens with a kickoff belongs to whoever runs the next play: on an onside or muffed kick the
   // kicking team keeps the ball, and the kickoff row named the receiving team (audit, Oct 13 2026: five scoring
   // drives were credited to the wrong team and dropped).
+  // A kickoff the receiving team fumbled away is still its possession, ended by a turnover (Oct 27 2026 data loop: 9
+  // team games read a turnover fewer in the drives than in the box, as ESPN's drive log has them).
   if (d.fromKickoff && posteam !== d.team && playType !== 'kickoff') {
+    // The kickoff row has no drive start; the receiving team lost the ball where the other side's drive begins.
+    if (d.lostOnKick) drives.set(`${key}|kick`, { ...d, result: 'Turnover', scoreEnd: d.scoreStart, fromKickoff: false, start: d.start ?? drivePlace(g('drive_start_yard_line'), d.team) });
     drives.set(key, fresh());
     return;
   }
   if (playType !== 'kickoff') d.fromKickoff = false;
   if (posteam !== d.team) return;
+  if (playType && playType !== 'no_play' && playType !== 'kickoff') d.lastType = playType;
   if (d.scoreStart == null) d.scoreStart = scoreStart;
   if (scoreEnd != null && (d.scoreEnd == null || scoreEnd > d.scoreEnd)) d.scoreEnd = scoreEnd;
   if (d.start == null) d.start = drivePlace(g('drive_start_yard_line'), posteam);
@@ -344,7 +351,13 @@ function driveTotals(list) {
   const t = { drives: 0, drive_points: 0, drive_tds: 0, drive_fgs: 0, drive_punts: 0, drive_turnovers: 0, drive_downs: 0,
     drive_missed_fgs: 0, drive_safeties: 0, drive_end_of_half: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0,
     opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0 };
-  for (const d of list) {
+  // The feed's drive result, except where the drive's own last play says otherwise (Oct 27 2026 data loop, against
+  // ESPN's drive log): a punt blocked and run back for a touchdown read "Opp touchdown" and counted as the offense's
+  // turnover, and a kneel-down on fourth down as a turnover on downs.
+  const resultOf = (d) => (d.lastType === 'punt' && /^(Opp touchdown|Turnover|Turnover on downs)$/.test(d.result) ? 'Punt'
+    : d.lastType === 'qb_kneel' && /^(Turnover|Turnover on downs)$/.test(d.result) ? 'End of half' : d.result);
+  for (const raw of list) {
+    const d = { ...raw, result: resultOf(raw) };
     if (d.start == null) continue;
     const pts = d.scoreStart != null && d.scoreEnd != null ? Math.max(0, d.scoreEnd - d.scoreStart) : 0;
     if (d.start > 50) { t.opp_territory_drives += 1; t.opp_territory_points += pts; }
