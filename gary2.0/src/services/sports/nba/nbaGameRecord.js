@@ -18,9 +18,9 @@ import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY } from '../../providers/bdl/
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
-import { espnVenue, espnTeamBox } from './espnNbaGame.js';
+import { espnVenue, espnTeamBox, espnPlayerLines, espnNameKey } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 7;
+export const NBA_RECORD_VERSION = 11;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -94,17 +94,15 @@ export function flowOf(plays, final) {
     fiveLeft: scoreAt((p) => p.period < 4 || (p.period === 4 && clockSeconds(p.clock) >= 300)) };
 }
 
-// WHO CLOSED THE GAME AND WHEN EACH PLAYER LAST LEFT THE FLOOR (Oct 27 2026, founder: "there has to be a way to know
-// who closed out a game"). The play-by-play names both players of every substitution (in, then out) but not the changes
-// made between quarters, and a missed one early throws off every lineup after it (13 of 52 games failed a whole-game
-// check), so only the last quarter is followed: its first five are the players with minutes in it who were never
-// subbed in or out of it (on the floor all of it), or who were subbed out of it before being subbed in; the
-// substitutions then give the five at the end. Each player's minutes in that quarter, worked out this way, must match
-// the box's for the quarter, or there is no closing five (null). The minutes by quarter come from the box itself.
-export function closingOf(plays, players, periods) {
-  const q = periods[periods.length - 1];
+// WHO WAS ON THE FLOOR, QUARTER BY QUARTER (Oct 27 2026, founder: "there has to be a way to know who closed out a
+// game"). The play-by-play names both players of every substitution (in, then out) but not the changes made between
+// quarters, and a missed one early throws off every lineup after it (13 of 52 games failed a whole-game check), so each
+// quarter is followed on its own: its first five are the players with minutes in it who were never subbed in or out of
+// it (on the floor all of it), or who were subbed out of it before being subbed in; the substitutions then give each
+// player's seconds on the floor and the five at its end. The box's minutes by quarter are whole minutes, cut down
+// ("11" for 11:50), so a quarter followed this way must agree with them to the minute, or it is null.
+export function followQuarter(plays, players, q) {
   const sideOf = new Map(players.map((p) => [p.id, p.side]));
-  const nameOf = new Map(players.map((p) => [p.id, p.name]));
   const minIn = new Map(players.map((p) => [p.id, p.quarters?.find((x) => x.q === q)?.min || 0]));
   const inQ = [...(plays || [])].filter((p) => p.period === q).sort((a, b) => a.order - b.order);
   const length = q <= 4 ? 720 : 300;
@@ -129,7 +127,14 @@ export function closingOf(plays, players, periods) {
   }
   credit(0);
   if ([...minIn].some(([id, m]) => Math.abs((secs.get(id) || 0) / 60 - m) > 1)) return null;
-  return { home: [...court.home].map((id) => nameOf.get(id)), away: [...court.away].map((id) => nameOf.get(id)) };
+  return { court: { home: [...court.home], away: [...court.away] }, secs };
+}
+
+/** The five on the floor for each side at the final horn, by name, or null when the last quarter can't be followed. */
+export function closingOf(plays, players, periods) {
+  const t = followQuarter(plays, players, periods[periods.length - 1]);
+  const nameOf = new Map(players.map((p) => [p.id, p.name]));
+  return t ? { home: t.court.home.map((id) => nameOf.get(id)), away: t.court.away.map((id) => nameOf.get(id)) } : null;
 }
 
 /** When each player who played last left the floor: { name: { period, clock } }, the clock of his last substitution out
@@ -193,12 +198,49 @@ export async function buildNbaGameRecord(gameId) {
     for (const p of t.players || []) {
       const row = { side, id: p.player.id, name: `${p.player.first_name} ${p.player.last_name}`, starter: starters.has(p.player.id), min: minutesOf(p.min), pm: p.plus_minus ?? null,
         ...Object.fromEntries(STATS.map((k) => [k, Number(p[k]) || 0])) };
-      const quarters = periods.map((q, i) => { const r = byPeriod[i].get(p.player.id); return { q, min: r ? minutesOf(r.min) : 0, pts: r ? Number(r.pts) || 0 : 0 }; });
-      if (row.min > 0) {
-        if (sum(quarters, 'pts') === row.pts) row.quarters = quarters;
-        else { row.quarters = null; quarterMismatch.push(`${row.name} (${row.pts} in the box, ${sum(quarters, 'pts')} by quarter)`); }
-      }
+      if (row.min > 0) row.quarters = periods.map((q, i) => { const r = byPeriod[i].get(p.player.id); return { q, min: r ? minutesOf(r.min) : 0, pts: r ? Number(r.pts) || 0 : 0 }; });
       players.push(row);
+    }
+  }
+  // Minutes by quarter to the second from each quarter's substitutions; a quarter that can't be followed keeps the box's
+  // whole minutes. The closing five is the last quarter's five at the horn.
+  const followed = plays ? periods.map((q) => followQuarter(plays, players, q)) : periods.map(() => null);
+  const closing = followed[followed.length - 1] ? closingOf(plays, players, periods) : null;
+  for (const [i, t] of followed.entries()) if (t) for (const p of players) if (p.quarters) p.quarters[i].min = Math.round((t.secs.get(p.id) || 0) / 6) / 10;
+  const cutQuarters = followed.filter((t) => !t).length;
+  // Some boxes give whole minutes only (the Oct 20 games: "30" for 30:52).
+  const boxWhole = [...(box.home_team.players || []), ...(box.visitor_team.players || [])].every((p) => !String(p.min ?? '').includes(':'));
+  // Points by quarter are dropped for a player whose quarters don't add up to his points; minutes and points both go when
+  // his minutes don't add up (to half a minute, one more when the box has whole minutes only, and one more for each
+  // quarter not followed).
+  for (const row of players.filter((p) => p.quarters)) {
+    if (Math.abs(sum(row.quarters, 'min') - row.min) > (boxWhole ? 1 : 0.5) + cutQuarters) { quarterMismatch.push(`${row.name} (${Math.round(row.min)} min in the box, ${Math.round(sum(row.quarters, 'min'))} by quarter)`); row.quarters = null; }
+    else if (sum(row.quarters, 'pts') !== row.pts) { row.quarterPts = false; quarterMismatch.push(`${row.name} (${row.pts} in the box, ${sum(row.quarters, 'pts')} by quarter)`); }
+  }
+  // Each player's line against the official box (ESPN): where a count differs, the official one stands (Oct 27 2026
+  // loop: 13 differences in 1,180 lines, among them Boozer's 16 points, officially 14, and Marshall's missing shot). A
+  // player is matched by name (see below for the other ways the two spell one player).
+  const official = await espnPlayerLines(g).catch(() => null);
+  const corrected = [], unmatched = [], matched = new Set();
+  if (official) {
+    for (const p of players.filter((x) => x.min > 0)) {
+      const k = espnNameKey(p.name), last = espnNameKey(p.name.split(' ').filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop());
+      const sameSide = official.filter((o) => o.side === p.side);
+      const words = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w && !/^(jr|sr|ii|iii|iv)$/.test(w));
+      const mine = words(p.name), within = (a, b) => a.length >= 2 && a.every((w) => b.includes(w));
+      const only = (xs) => (xs.length === 1 ? xs[0] : null);
+      // Same name, else the one teammate with that last name, else the one whose name holds every part of his or the
+      // other way round ("Hansen Yang" is "Yang Hansen", "David Jones" is "David Jones Garcia").
+      const o = sameSide.find((x) => x.key === k) || only(sameSide.filter((x) => x.last === last))
+        || only(sameSide.filter((x) => within(mine, words(x.name)) || within(words(x.name), mine)));
+      if (!o) { unmatched.push(p.name); continue; }
+      matched.add(o);
+      const fixed = [];
+      for (const f of STATS) if (o[f] != null && o[f] !== p[f]) { fixed.push(`${f} ${p[f]} to ${o[f]}`); p[f] = o[f]; }
+      if (fixed.length) {
+        corrected.push(`${p.name} (${fixed.join(', ')})`);
+        if (p.quarters && p.quarterPts !== false && p.quarters.reduce((a, x) => a + x.pts, 0) !== p.pts) { p.quarterPts = false; quarterMismatch.push(`${p.name} (corrected to the official box; points by quarter no longer add up)`); }
+      }
     }
   }
   const teams = {};
@@ -211,11 +253,11 @@ export async function buildNbaGameRecord(gameId) {
   }
   // The official team box (ESPN) where it is on file: its shooting, rebounds and turnovers include what the players' rows
   // miss (team turnovers and rebounds, now and then a shot); the players' sums are kept to show any difference.
-  const official = await espnTeamBox(g);
+  const officialBox = await espnTeamBox(g);
   const OFFICIAL = ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta', 'reb', 'oreb', 'dreb', 'ast', 'stl', 'blk', 'turnover', 'pf'];
   const shotGaps = [];
   for (const side of ['home', 'away']) {
-    const o = official?.[side];
+    const o = officialBox?.[side];
     if (!o) { teams[side].official = false; continue; }
     teams[side].playersSum = Object.fromEntries(OFFICIAL.map((k) => [k, teams[side][k]]));
     for (const k of OFFICIAL) if (o[k] != null) teams[side][k] = o[k];
@@ -228,16 +270,20 @@ export async function buildNbaGameRecord(gameId) {
   teams.home.possessions = teams.away.possessions = possessionsOf(teams.home, teams.away);
   const quarters = { home: periods.map((q) => (q <= 4 ? g[`home_q${q}`] : g[`home_ot${q - 4}`])), away: periods.map((q) => (q <= 4 ? g[`visitor_q${q}`] : g[`visitor_ot${q - 4}`])) };
   const flow = plays ? flowOf(plays, final) : null;
-  const closing = plays ? closingOf(plays, players, periods) : null;
   const lastOff = plays ? lastOffOf(plays, players, periods) : null;
 
   checks.push({ check: "the players' points add up to the final", ok: teams.home.pts === final.home && teams.away.pts === final.away, detail: `${teams.home.pts}-${teams.away.pts} against ${final.home}-${final.away}` });
   checks.push({ check: 'the quarters add up to the final', ok: quarters.home.every((v) => v != null) && sum(quarters.home.map((v) => ({ v })), 'v') === final.home && sum(quarters.away.map((v) => ({ v })), 'v') === final.away });
   checks.push({ check: 'the play-by-play ends at the final', ok: Boolean(flow) });
-  checks.push({ check: "each player's quarters add up to his points", ok: !quarterMismatch.length, detail: quarterMismatch.join('; ') || null });
+  checks.push({ check: "each player's quarters add up to his minutes and points", ok: !quarterMismatch.length, detail: quarterMismatch.join('; ') || null });
   checks.push({ check: "the closing five match the last quarter's minutes", ok: Boolean(closing) });
+  checks.push({ check: 'every quarter followed to the second', ok: !cutQuarters, detail: cutQuarters ? `${cutQuarters} of ${periods.length} quarters in the box's whole minutes` : null });
   checks.push({ check: 'five starters each', ok: ['home', 'away'].every((s) => players.filter((p) => p.side === s && p.starter).length === 5) });
-  checks.push({ check: 'the official team box is on file', ok: Boolean(official) });
+  checks.push({ check: 'the official team box is on file', ok: Boolean(officialBox) });
+  const missing = (official || []).filter((o) => o.min > 0 && !matched.has(o)).map((o) => o.name);
+  checks.push({ check: 'player lines match the official box', ok: !missing.length,
+    detail: official ? [corrected.length && `corrected: ${corrected.join('; ')}`, unmatched.length && `not matched to the official box: ${unmatched.join(', ')}`,
+      missing.length && `played in the official box, not in ours: ${missing.join(', ')}`].filter(Boolean).join(' | ') || null : 'official player lines not on file' });
   checks.push({ check: "the players' shooting adds up to the official box", ok: !shotGaps.length, detail: shotGaps.join('; ') || null });
   checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.paint != null && teams.away.paint != null) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });

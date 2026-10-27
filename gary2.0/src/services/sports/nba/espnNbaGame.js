@@ -51,3 +51,29 @@ export async function espnTeamBox(g) {
   }
   return out.home && out.away && out.home.fga != null && out.away.fga != null ? out : null;
 }
+
+const keyOf = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+/** Each player's official line for a finished game: [{ side, name, key, last, min, pts, reb, oreb, dreb, ast, stl, blk,
+ * turnover, pf, fgm, fga, fg3m, fg3a, ftm, fta, pm }], or null when ESPN has no final box. */
+export async function espnPlayerLines(g) {
+  const ev = await eventOf(g);
+  if (!ev || !/final/i.test(String(ev.status?.type?.name || ev.status?.type?.description || ''))) return null;
+  if (!summaries.has(ev.id)) summaries.set(ev.id, get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${ev.id}`));
+  const sum = await summaries.get(ev.id);
+  const out = [];
+  for (const t of sum?.boxscore?.players || []) {
+    const side = nick(t.team?.name || t.team?.displayName) === nick(g.home_team?.name || g.home_team?.full_name) ? 'home' : 'away';
+    const st = t.statistics?.[0]; const names = st?.names || st?.labels || [];
+    for (const a of st?.athletes || []) {
+      if (!a.stats?.length) continue;
+      const v = Object.fromEntries(names.map((n, i) => [n, a.stats[i]]));
+      const [fgm, fga] = pair(v.FG), [fg3m, fg3a] = pair(v['3PT']), [ftm, fta] = pair(v.FT);
+      const num = (x) => (x == null || x === '' ? null : Number(x));
+      out.push({ side, name: a.athlete?.displayName, key: keyOf(a.athlete?.displayName), last: keyOf(a.athlete?.lastName || String(a.athlete?.displayName || '').split(' ').pop()),
+        min: num(v.MIN), pts: num(v.PTS), reb: num(v.REB), oreb: num(v.OREB), dreb: num(v.DREB), ast: num(v.AST), stl: num(v.STL), blk: num(v.BLK), turnover: num(v.TO), pf: num(v.PF),
+        fgm, fga, fg3m, fg3a, ftm, fta, pm: num(String(v['+/-'] ?? '').replace('+', '')) });
+    }
+  }
+  return out.length ? out : null;
+}
+export { keyOf as espnNameKey };
