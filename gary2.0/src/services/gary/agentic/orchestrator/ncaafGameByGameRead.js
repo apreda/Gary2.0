@@ -41,14 +41,16 @@ async function finishedGames(teamId, season, before) {
     const c = e.competitions?.[0]; const comp = c?.competitors || [];
     const us = comp.find((x) => String(x.team?.id) === String(teamId)), them = comp.find((x) => String(x.team?.id) !== String(teamId));
     return { id: String(e.id), date: e.date, final: c?.status?.type?.name === 'STATUS_FINAL', venue: c?.venue ? `${c.venue.fullName}${c.venue.address?.city ? `, ${c.venue.address.city}` : ''}` : null,
-      neutral: Boolean(c?.neutralSite), home: us?.homeAway === 'home',
+      neutral: Boolean(c?.neutralSite), home: us?.homeAway === 'home', ot: Math.max(0, Number(c?.status?.period || 0) - 4),
       us: { id: String(us?.team?.id), name: us?.team?.displayName, short: us?.team?.nickname || us?.team?.shortDisplayName, score: Number(us?.score?.value ?? us?.score) },
       them: { id: String(them?.team?.id), name: them?.team?.displayName, short: them?.team?.nickname || them?.team?.shortDisplayName, score: Number(them?.score?.value ?? them?.score) } };
   }).filter((g) => g.final && Date.parse(g.date) < Date.parse(before)).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
 }
 const wl = (gs) => { const w = gs.filter((g) => g.us.score > g.them.score).length; return `${w}-${gs.length - w}`; };
 const vs = (g) => (g.neutral ? 'vs' : g.home ? 'vs' : '@');
-const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${g.them.score}`;
+// Overtime from the period count (Oct 27 2026 data loop: Miami's 43-35 win over Florida State in two overtimes read as
+// a regulation 8-point win, its quarters "7-7-0-14-7-8").
+const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${g.them.score}${g.ot ? ` in ${g.ot > 1 ? `${g.ot} overtimes` : 'overtime'}` : ''}`;
 
 function playerLines(box, teamId) {
   const ps = (box.players || []).filter((p) => p.teamId === String(teamId));
@@ -78,7 +80,7 @@ async function fullGame(g, season, tonight) {
   const head = `${etDay(g.date)} · ${vs(g)} ${g.them.name}${g.neutral ? ' at a neutral site' : ''}${g.venue ? ` (${g.venue})` : ''} · ${result(g)}`;
   if (!box || box.unavailable) return `${head}\n  the box score is not on file (${box?.reason || 'ESPN did not answer'})`;
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
-  const q = (t, name) => `${name} ${t?.quarters?.length ? t.quarters.join('-') : 'not on file'}`;
+  const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   const scores = (box.scoring || []).map((p) => `${p.period ? `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}` : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
   const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; const by = new Map(); for (const d of ds) by.set(d.result, (by.get(d.result) || 0) + 1); return `${short} ${ds.length} (${[...by].map(([r, k]) => `${k} ${String(r || 'other').toLowerCase()}`).join(', ')})`; };
   const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
@@ -110,7 +112,9 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   const tonightPart = ['TONIGHT',
     `THE QUARTERBACKS AND COACHES\n${quarterbacksAndCoaches(desk, { availability: false })}`,
     // Season totals leave the report's lines (the games are below, game by game).
-    `THE AVAILABILITY REPORT\n${String(availabilityReport(desk)).replace(/;\s*season:[^\n]*/g, '')}`,
+    // The desk points its regulars to the live read's own game-by-game section; here their games are below (Oct 27 2026
+    // data loop: "game by game under CARRIES AND CATCHES, GAME BY GAME" named a section this read doesn't have).
+    `THE AVAILABILITY REPORT\n${String(availabilityReport(desk)).replace(/;\s*season:[^\n]*/g, '').replace(/\(game by game under CARRIES AND CATCHES, GAME BY GAME\)/g, '(in the games below)')}`,
     `REGULARS WITH NO STAT ROW IN THE LAST GAME\n${String(afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))).replace(/;\s*season:[^\n]*/g, '')}`,
     `SCHEDULE, TRAVEL AND WEATHER\n${situation(desk)}`].join('\n\n');
   if (!homeId || !awayId) {
