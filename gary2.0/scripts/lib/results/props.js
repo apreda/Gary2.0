@@ -7,7 +7,7 @@ import { requiredPropSourceSports, propGameId, isFinalGameStatus, normalizeStore
 import { sportAllowed } from '../resultsRunMode.js';
 import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySettlement.js';
 import { NFL_BOXED_ZERO_MARKETS, nflBoxedPlayerZero } from '../nflParticipationSettlement.js';
-import { emptySettlementStats, getStatValue } from './grading.js';
+import { emptySettlementStats, getStatValue, findNbaBoxPlayer, nbaDidNotPlay, nbaStatValue } from './grading.js';
 
 const RUSH_NEEDS_TEAM_BOX = new Set(['rushing_yards', 'rushing_attempts', 'rushing_receiving_yards']);
 
@@ -143,7 +143,20 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
         let actual = null;
         let source = 'none';
         let forcedResult = null;
-        if (dataSport === 'NBA') actual = getStatValue('NBA', nbaBox, name, type);
+        if (dataSport === 'NBA') {
+          // The prop's own game when it carries one, and only once that game is final (Oct 27 2026 props audit; see
+          // findNbaBoxPlayer). A player who did not play is a void, settled as a push.
+          const pool = gameId != null ? nbaBox.filter((box) => String(box.id) === String(gameId)) : nbaBox;
+          if (gameId != null && (!pool.length || !pool.every((box) => /final/i.test(String(box.status || ''))))) {
+            skippedNotFinal++; stats.pendingNonFinal++; continue;
+          }
+          const player = findNbaBoxPlayer(pool, name);
+          if (player && nbaDidNotPlay(player)) {
+            forcedResult = 'push';
+            source = 'bdl_box_did_not_play';
+            console.log(`    [DNP] NBA: ${name} "${type}" did not play — void, settled as push`);
+          } else if (player) actual = nbaStatValue(player, name, type);
+        }
         else if (dataSport === 'NHL') actual = getStatValue('NHL', nhlBox, name, type);
         else if (dataSport === 'MLB') {
           // The exact stored identity and validated box prevent cross-game matches.

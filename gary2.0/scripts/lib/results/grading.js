@@ -47,6 +47,47 @@ export function gradeGame(pickText, homeTeam, awayTeam, hScore, vScore) {
   return gradeGameMarket(pickText, pickSide(pickText, homeTeam, awayTeam), hScore, vScore);
 }
 
+/** One NBA box row's measurement for a prop type, or null for a type it does not settle. */
+export function nbaStatValue(p, name, type) {
+  const t = type.toLowerCase();
+  if (t.includes('point') && !t.includes('rebound') && !t.includes('assist')) return p.pts ?? p.points ?? 0;
+  if (t.includes('rebound') && !t.includes('point') && !t.includes('assist')) return p.reb ?? p.rebounds ?? 0;
+  if (t.includes('assist') && !t.includes('point') && !t.includes('rebound')) return p.ast ?? p.assists ?? 0;
+  if (t.includes('three') || t.includes('3pt') || t.includes('threes')) return p.fg3m ?? 0;
+  if (t.includes('steal')) return p.stl ?? p.steals ?? 0;
+  if (t.includes('block')) return p.blk ?? p.blocks ?? 0;
+  if (t.includes('turnover')) return p.turnover ?? p.tov ?? 0;
+  // Combo props — must check AFTER individual props
+  if (t.includes('points_rebounds_assists') || t.includes('pra') || (t.includes('point') && t.includes('rebound') && t.includes('assist'))) return (p.pts || 0) + (p.reb || 0) + (p.ast || 0);
+  if (t.includes('points_rebounds') || (t.includes('point') && t.includes('rebound'))) return (p.pts || 0) + (p.reb || 0);
+  if (t.includes('points_assists') || (t.includes('point') && t.includes('assist'))) return (p.pts || 0) + (p.ast || 0);
+  if (t.includes('rebounds_assists') || (t.includes('rebound') && t.includes('assist'))) return (p.reb || 0) + (p.ast || 0);
+  console.warn(`    [Stat] NBA: Found ${name} but no match for prop type "${type}"`);
+  return null;
+}
+
+// THE NBA PLAYER OF A PROP (Oct 27 2026 props audit): the prop's own game, then the player by his full name. Surname
+// and first initial over both dates' boxes graded Jalen Williams on Jaylin Williams (21 points recorded as 3, a lost
+// under recorded as won) and Davion Mitchell on Donovan Mitchell. Surname and initial stand only for the one player in
+// that game they fit ("Herb Jones" for Herbert Jones).
+const plainName = (s) => normalizeName(String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''))
+  .replace(/\b(?:jr|sr|ii|iii|iv)\b/g, '').replace(/\s+/g, ' ').trim();
+export function findNbaBoxPlayer(boxes, name) {
+  const target = plainName(name);
+  const players = (boxes || []).flatMap((g) => [...(g.home_team?.players || []), ...(g.visitor_team?.players || [])])
+    .map((p) => ({ p, full: plainName(`${p.player?.first_name || ''} ${p.player?.last_name || ''}`) }));
+  const exact = players.filter((x) => x.full === target);
+  if (exact.length) return exact.length === 1 ? exact[0].p : null;
+  const last = target.split(' ').pop();
+  const near = players.filter((x) => x.full.split(' ').pop() === last && x.full.charAt(0) === target.charAt(0));
+  return near.length === 1 ? near[0].p : null;
+}
+// A box row with no minutes and no counting stat: he did not play, and a prop on him is void (the books' rule).
+export function nbaDidNotPlay(p) {
+  const [m, s] = String(p?.min ?? '').split(':');
+  return !(Number(m) > 0 || Number(s) > 0) && !['pts', 'reb', 'ast', 'fga', 'fta', 'pf', 'turnover', 'stl', 'blk'].some((k) => Number(p?.[k]) > 0);
+}
+
 export function getStatValue(sport, data, name, type, playerId = null, meta = {}) {
   const target = normalizeName(name), t = type.toLowerCase();
   if (!data || data.length === 0) return null;
@@ -90,21 +131,7 @@ export function getStatValue(sport, data, name, type, playerId = null, meta = {}
 
   if (sport === 'NBA') {
     const p = findPlayerInGames(data);
-    if (p) {
-      if (t.includes('point') && !t.includes('rebound') && !t.includes('assist')) return p.pts ?? p.points ?? 0;
-      if (t.includes('rebound') && !t.includes('point') && !t.includes('assist')) return p.reb ?? p.rebounds ?? 0;
-      if (t.includes('assist') && !t.includes('point') && !t.includes('rebound')) return p.ast ?? p.assists ?? 0;
-      if (t.includes('three') || t.includes('3pt') || t.includes('threes')) return p.fg3m ?? 0;
-      if (t.includes('steal')) return p.stl ?? p.steals ?? 0;
-      if (t.includes('block')) return p.blk ?? p.blocks ?? 0;
-      if (t.includes('turnover')) return p.turnover ?? p.tov ?? 0;
-      // Combo props — must check AFTER individual props
-      if (t.includes('points_rebounds_assists') || t.includes('pra') || (t.includes('point') && t.includes('rebound') && t.includes('assist'))) return (p.pts || 0) + (p.reb || 0) + (p.ast || 0);
-      if (t.includes('points_rebounds') || (t.includes('point') && t.includes('rebound'))) return (p.pts || 0) + (p.reb || 0);
-      if (t.includes('points_assists') || (t.includes('point') && t.includes('assist'))) return (p.pts || 0) + (p.ast || 0);
-      if (t.includes('rebounds_assists') || (t.includes('rebound') && t.includes('assist'))) return (p.reb || 0) + (p.ast || 0);
-      console.warn(`    [Stat] NBA: Found ${name} but no match for prop type "${type}"`);
-    }
+    if (p) return nbaStatValue(p, name, type);
   } else if (sport === 'NHL') {
     // Try nested game format first, then flat
     const p = findPlayerInGames(data) || findPlayerFlat(data);
