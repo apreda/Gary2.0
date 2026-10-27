@@ -7,7 +7,7 @@
  */
 import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY, getCachedOrFetch } from '../../providers/bdl/transport.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
-import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
+import { latestOfficialReport, gameListing, playerKey } from '../../providers/nbaOfficialInjuryReport.js';
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 
@@ -114,20 +114,72 @@ function whoPlayed(box, others, out, starters) {
 // not absences from the rotation and stay off.
 export const reportClock = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const ailment = (reason) => String(reason || '').replace(/^Injury\/Illness - /, '').replace(/;\s*/g, ' ').trim();
-async function opponentOut(g, team, opp) {
+const reportDate = (tip) => tip.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
+// A team's Out rows on one listing (G League assignments are not absences from the rotation).
+const outRows = (side) => [...side.values()].filter((r) => r.status === 'Out' && !/g league/i.test(r.reason));
+
+// Who played for a team in its last PLAYED_FROM_GAMES games before `before`, from their box scores: { n, keys }, or
+// null when a box is not on file (Oct 27 2026 data audit: Golden State's Out list read "Jimmy Butler III, Kristaps
+// Porzingis, Moses Moody", three players who had not played all season, and seven reads in three nights called a win
+// over the Warriors or the Clippers a win over a short-handed team).
+const PLAYED_FROM_GAMES = 10;
+async function playedFor(teamId, before) {
+  const games = ((await ballDontLieService.getGames('basketball_nba', { team_ids: [teamId], seasons: [nbaSeason()], per_page: 100, paginateAll: true })) || [])
+    .filter((g) => !g.postseason && finishedBefore(g, before))
+    .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date)).slice(0, PLAYED_FROM_GAMES);
+  const boxes = await Promise.all(games.map((g) => boxOf(g, teamId).then((b) => boxSides(b, teamId)).catch(() => null)));
+  if (boxes.some((b) => !b)) return null;
+  return { n: games.length, keys: new Set(boxes.flatMap((b) => b.filter((p) => p.min > 0).map((p) => playerKey(p.name)))) };
+}
+
+// The opponent's Out list, those who had played for it apart from those who had not played in any of its games before
+// this one: the second kind is the team it had been every night, not a short-handed one.
+async function opponentOut(g, team, opp, oppId) {
   if (!g.datetime) return '      their Out list: not on file (no tip time for the game)';
   const tip = new Date(g.datetime);
-  const gameDate = tip.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
   try {
     const report = await latestOfficialReport({ now: tip, lookbackHours: 6 });
-    const side = gameListing(report, gameDate, team, opp)[opp];
+    const side = gameListing(report, reportDate(tip), team, opp)[opp];
     const when = `the ${reportClock(report.postedAt)} ET report`;
     if (side === 'unfiled') return `      their Out list: not filed by ${when}`;
-    const out = [...side.values()].filter((r) => r.status === 'Out' && !/g league/i.test(r.reason)).map((r) => `${r.name} (${ailment(r.reason)})`);
-    return `      their Out on ${when}: ${out.length ? out.join(', ') : 'nobody'}`;
+    const out = outRows(side);
+    const said = (r) => `${r.name} (${ailment(r.reason)})`;
+    if (!out.length) return `      their Out on ${when}: nobody`;
+    const before = await playedFor(oppId, tip).catch(() => null);
+    if (!before) return `      their Out on ${when}: ${out.map(said).join(', ')} (who of them had played for them before: not on file)`;
+    if (!before.n) return `      their Out on ${when}, their first game of the season: ${out.map(said).join(', ')}`;
+    const played = out.filter((r) => before.keys.has(playerKey(r.name)));
+    const not = out.filter((r) => !before.keys.has(playerKey(r.name)));
+    const games = before.n === 1 ? 'their one game' : `any of their ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
+    if (!not.length) return `      their Out on ${when}: ${played.map(said).join(', ')}`;
+    return `      their Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;
   } catch (e) {
     return `      their Out list: not on file (${e.message})`;
   }
+}
+
+/** Who was Out for a team's last game and is not Out, Doubtful, Questionable or Probable tonight (Oct 27 2026 data
+ * audit: Orlando's Anthony Black, Out for its first two games, was on no list for its third and scored 18 in 26 minutes;
+ * nothing in the read said so, and the news's "Black didn't play in either game" left Gary unsure). `tonight` is the
+ * team's side of tonight's listing (gameListing). Each: { name, reason, games: the team's newest games in a row he was
+ * Out for, available: listed Available tonight }. */
+export async function outLastGame(ts, tonight) {
+  if (!ts?.games?.length || !tonight || tonight === 'unfiled') return [];
+  const lists = [];
+  for (const g of ts.games.slice(0, BOX_GAMES)) {
+    if (!g.datetime) break;
+    const tip = new Date(g.datetime);
+    const opp = g.home_team?.id === ts.id ? g.visitor_team?.full_name : g.home_team?.full_name;
+    const side = gameListing(await latestOfficialReport({ now: tip, lookbackHours: 6 }), reportDate(tip), ts.team, opp)[ts.team];
+    if (side === 'unfiled') break;
+    lists.push(new Map(outRows(side).map((r) => [playerKey(r.name), r])));
+  }
+  if (!lists.length) return [];
+  return [...lists[0]].filter(([k]) => !tonight.has(k) || tonight.get(k).status === 'Available').map(([k, r]) => {
+    let games = 0;
+    while (games < lists.length && lists[games].has(k)) games += 1;
+    return { name: r.name, reason: ailment(r.reason), games, allGames: games === ts.games.length, available: tonight.has(k) };
+  });
 }
 
 /** The league's teams: [{ id, city, name, full_name }]. */
@@ -188,7 +240,10 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   if (!ts) return `${head}: games not on file.`;
   const { games, boxes } = ts;
   if (!games.length) return `${head}: no games played yet this season.`;
-  const outs = await Promise.all(games.slice(0, BOX_GAMES).map((g) => opponentOut(g, team, g.home_team?.id === ts.id ? g.visitor_team?.full_name : g.home_team?.full_name)));
+  const outs = await Promise.all(games.slice(0, BOX_GAMES).map((g) => {
+    const opp = g.home_team?.id === ts.id ? g.visitor_team : g.home_team;
+    return opponentOut(g, team, opp?.full_name, opp?.id);
+  }));
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
   const starters = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => (await ballDontLieService.getNbaLineups([g.id]).catch(() => []))
     .filter((r) => r.starter && r.team?.id === ts.id).map((r) => `${r.player?.first_name} ${r.player?.last_name}`)));

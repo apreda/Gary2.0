@@ -16,7 +16,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock, outLastGame } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, listingHistory, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
@@ -71,7 +71,9 @@ export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = 
   const teams = new Map([['AWAY', null], ['HOME', null]]);
   let side = null;
   for (const raw of sectionOf(desk, 'INJURY REPORT').split('\n')) {
-    if (!raw.trim() || /^TODAY'S DATE|^Official NBA injury report: |^STARTING LINEUPS \(|^ACTIVE INJURIES$|^ESTABLISHED ABSENCES|^[─━]+$/.test(raw)) continue;
+    // The desk's "Team Share: 18.5% PTS | 14.3% REB | 15.0% FGA" under a player is a season rate, and the read took it
+    // for the head of the players listed after it (Oct 27 2026 data audit); his games are in the log.
+    if (!raw.trim() || /^TODAY'S DATE|^Official NBA injury report: |^STARTING LINEUPS \(|^ACTIVE INJURIES$|^ESTABLISHED ABSENCES|^[─━]+$|^\s*Team Share:/.test(raw)) continue;
     const h = raw.match(/^\[(HOME|AWAY)\] ([^:]+):\s*(.*)$/);
     if (h) {
       side = h[1];
@@ -165,6 +167,27 @@ async function injurySection(desk, { homeTeam, awayTeam, tip, asOf }) {
       ...rows.map((r) => `${r.line}${note(r)}`)].join('\n');
   });
   return `Official NBA injury report of ${reportClock(anchor.postedAt)} ET:\n${out.join('\n')}`;
+}
+
+// From the same report as the injury list, each team's players who were Out for its last game and are not listed
+// tonight, or listed Available (Oct 27 2026 data audit; see outLastGame). The injury section already says when the
+// report time is not on file.
+async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }) {
+  const gameDate = reportDay(tip || asOf);
+  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
+  if (!anchor) return '';
+  const span = (r) => (r.allGames ? (r.games === 1 ? 'its only game' : r.games === 2 ? 'both of its games' : `all ${r.games} of its games`) : r.games === 1 ? 'its last game' : `its last ${r.games} games`);
+  try {
+    const listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), gameDate, homeTeam, awayTeam);
+    const lines = [];
+    for (const [tag, team, ts] of [['AWAY', awayTeam, seasons[1]], ['HOME', homeTeam, seasons[0]]]) {
+      const back = await outLastGame(ts, listing[team]);
+      if (back.length) lines.push(`[${tag}] ${team}: ${back.map((r) => `${r.name} (Out for ${span(r)}: ${r.reason}${r.available ? '; listed Available tonight' : ''})`).join('; ')}`);
+    }
+    return lines.length ? `Out for the team's last game, and not listed Out, Doubtful, Questionable or Probable tonight:\n${lines.join('\n')}` : '';
+  } catch (e) {
+    return `Out for the team's last game, and not listed tonight: not on file (${e.message})`;
+  }
 }
 
 // THE ROTATION: each team's top players by minutes with their basic line this season (the desk's advanced and
@@ -597,9 +620,10 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
     injurySection(desk, { homeTeam, awayTeam, tip: tipAt, asOf }),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
+  const back = await outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip: tipAt, asOf });
   return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
     spreadInWords(nbaLineOf(desk)) || 'The spread is not on file.', '',
-    'Who is playing:', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n'), '',
+    'Who is playing:', [projectedStarters(desk), injuries, back].filter(Boolean).join('\n\n'), '',
     'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => [teamHead(desk, ratings, t, ts).text, boardGames(ts, ratings)].filter(Boolean).join('\n')).join('\n\n'), '',
     'Schedule and travel:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
 }
@@ -615,14 +639,15 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
-  const [homeLog, awayLog, injuries] = await Promise.all([
+  const [homeLog, awayLog, injuries, back] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam, tip, asOf }),
+    outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
   ]);
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['WHO IS PLAYING', [projectedStarters(desk), injuries].filter(Boolean).join('\n\n')],
+    ['WHO IS PLAYING', [projectedStarters(desk), injuries, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
     ['SCHEDULE AND TRAVEL', situation(seasons, homeTeam, awayTeam, tip, asOf)],
