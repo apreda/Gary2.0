@@ -52,11 +52,11 @@ function easternInstant(mon, day, h, min, ampm, asOf) {
   return null;
 }
 // The tip, from the desk's header ("Sport: NBA | Friday, Oct 23, 4:00 PM EDT").
-function tipOf(desk, asOf) {
+export function tipOf(desk, asOf) {
   const m = String(desk || '').match(/^Sport: [^|\n]+\| \w+, (\w{3}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM) E[DS]T$/m);
   return m ? easternInstant(m[1], m[2], m[3], m[4], m[5], asOf) : null;
 }
-const reportDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
+export const reportDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
 
 // The injury report as reported, in plain facts. The desk's labels steer ("PRICED IN", "ESTABLISHED ABSENCES (already
 // reflected in line + all stats above — do NOT cite these players by name as reasons for your pick)"); the read keeps
@@ -111,7 +111,7 @@ function deskRows(desk) {
   for (const l of sectionOf(desk, 'INJURY REPORT').split('\n')) { const m = l.match(ROW); if (m) out.set(playerKey(m[1]), statusKey(m[2])); }
   return out;
 }
-async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }) {
+export async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }) {
   const said = (sectionOf(desk, 'INJURY REPORT').match(/^Official NBA injury report: (\w{3}) (\d{1,2}), (\d{1,2}):(\d{2}) (AM|PM) ET$/m));
   if (said) {
     const at = easternInstant(said[1], said[2], said[3], said[4], said[5], asOf);
@@ -184,7 +184,7 @@ function rotation(desk, teams) {
 
 // The starting fives come from a web search's projection; the read says so above them (Oct 23 2026 audit: the
 // desk's heading never reached Gary).
-function projectedStarters(desk) {
+export function projectedStarters(desk) {
   const five = sectionOf(desk, 'STARTING LINEUPS');
   return five ? `Projected starters (a web search's projection, not confirmed):\n${five}` : '';
 }
