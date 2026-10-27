@@ -6,6 +6,7 @@
 // schedules), which Ball Don't Lie does not carry. Facts only, one per line.
 import { RELEASE_BASE, fetchCsv } from './nflStreaksService.js';
 import { normName } from '../../gary/darts/dartsCommon.js';
+import { withOfficialBox } from './espnNflBox.js';
 
 const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -14,8 +15,13 @@ const day = (d) => { const [, m, dd] = String(d || '').split('-').map(Number); r
 const memo = new Map();
 const once = (key, fn) => { if (!memo.has(key)) memo.set(key, fn().catch(() => null)); return memo.get(key); };
 
-/** One season's weekly player rows (nflverse stats_player_week), regular season. */
-export const weeklyRows = (season) => once(`week|${season}`, async () => (await fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`)).filter((r) => r.season_type === 'REG'));
+/** One season's weekly player rows (nflverse stats_player_week), regular season, in the official box's counts
+ * (espnNflBox.js; Oct 27 2026: Brock Bowers' 13 targets were officially 14). */
+export const weeklyRows = (season) => once(`week|${season}`, async () => {
+  const rows = (await fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`)).filter((r) => r.season_type === 'REG');
+  const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => []);
+  return (await withOfficialBox(rows, schedule, season).catch(() => null))?.rows ?? rows;
+});
 
 /** "season|week|TEAM" → game date, from the nflverse schedule; `.site` has where the team played it ("vs", "@" or
  * "vs ... (neutral site)"). Oct 26 2026: every prop log line read "vs" the opponent, road games included. */

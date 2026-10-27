@@ -13,6 +13,7 @@ import { loadNflverseFile, NFLVERSE_TEAM_CODES } from '../../providers/nflverseS
 import { getNflSchedule, sideFacts, restPhrase, tripPhrase } from './nflSchedule.js';
 import { getPlayLedger } from './nflPlayLedger.js';
 import { loadNflGameWeather, gameWeatherLine } from './nflGameWeather.js';
+import { withOfficialBox } from './espnNflBox.js';
 
 const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
 export const codeOf = (team) => NFLVERSE_TEAM_CODES[team];
@@ -38,8 +39,10 @@ export async function loadBettorData(season) {
   // Rain and snow over each played outdoor game (nflGameWeather.js); a failed lookup says so on those games' lines.
   const playedRows = scheduleRows.filter((r) => r.season === String(season) && r.home_score !== '' && r.away_score !== '');
   const weather = await loadNflGameWeather(playedRows, kickoffMs).catch((e) => { console.warn(`[NFL data] game weather not on file: ${e.message}`); return null; });
+  // Each player's line in the official box's counts (espnNflBox.js: tackles, targets, QB hits, passes defended).
+  const official = await withOfficialBox(rows(pw), scheduleRows, season).catch((e) => { console.warn(`[NFL data] official box not checked: ${e.message}`); return null; });
   return { season, schedule: scheduleRows, scheduleMissing: !schedule || Boolean(schedule.unavailable),
-    teamWeek: rows(tw), playerWeek: rows(pw), snaps: rows(sc), rosterWeekly: rows(rw),
+    teamWeek: rows(tw), playerWeek: official?.rows ?? rows(pw), officialCorrections: official?.corrected ?? null, snaps: rows(sc), rosterWeekly: rows(rw),
     ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather };
 }
 
