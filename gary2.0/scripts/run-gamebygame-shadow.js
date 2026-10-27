@@ -37,7 +37,7 @@ async function livePicks(day) {
   const { data, error } = await db.from('daily_picks').select('picks').eq('date', day).limit(1);
   if (error) throw new Error(`daily_picks: ${error.message}`);
   const raw = data?.[0]?.picks; const picks = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
-  return picks.filter((p) => String(p.league).toUpperCase() === 'NBA' && p.pick && p.homeTeam && p.awayTeam);
+  return picks.filter((p) => String(p.league).toUpperCase() === 'NBA' && p.pick && p.homeTeam && p.awayTeam && p.game_id != null);
 }
 async function shadowRows(day) {
   const { data, error } = await db.from('gamebygame_picks').select('*').eq('league', 'NBA').eq('game_date', day);

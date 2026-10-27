@@ -49,3 +49,11 @@ export async function seasonSummaries(league, season, beforeDate) {
     if (!data || data.length < 1000) return out;
   }
 }
+
+/** Given games' full records, by id, oldest first. */
+export async function recordsById(league, gameIds) {
+  if (!gameIds.length) return [];
+  const { data, error } = await db().from(TABLE).select('game_id, game_date, record, checks').eq('league', league).in('game_id', gameIds.map(String)).order('game_date');
+  if (error) throw new Error(`game records store: records failed: ${error.message}`);
+  return data || [];
+}

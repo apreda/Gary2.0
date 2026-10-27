@@ -16,7 +16,7 @@ import { latestOfficialReport, gameListing, playerKey } from '../../../providers
 import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { findTeam } from '../scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
-import { saveGameRecord, storedGameIds, teamRecords, seasonSummaries } from '../../../gamebygame/gameRecordStore.js';
+import { saveGameRecord, storedGameIds, teamRecords, seasonSummaries, recordsById } from '../../../gamebygame/gameRecordStore.js';
 import { buildNbaGameRecord, NBA_RECORD_VERSION, settingOf } from '../../../sports/nba/nbaGameRecord.js';
 import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine, wonLost } from '../../../sports/nba/nbaGameRecordText.js';
 
@@ -28,7 +28,8 @@ const ord = (n) => `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 
 
 /** Builds any of the season's finished games missing from the store (the morning job keeps it current; this catches up). */
 export async function ensureNbaRecords(season = nbaSeason()) {
-  const games = ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], per_page: 100, paginateAll: true })) || []).filter((g) => /final/i.test(String(g.status)));
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const games = ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], end_date: today, per_page: 100, paginateAll: true })) || []).filter((g) => /final/i.test(String(g.status)));
   const stored = await storedGameIds('NBA', season);
   // A game of the last two days is built again while a part that posts after the final is missing (the advanced box,
   // ESPN's official box and venue, the report at tip).
@@ -97,8 +98,8 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
     ballDontLieService.getGames('basketball_nba', { team_ids: [home.id], seasons: [season], per_page: 100, paginateAll: true }),
     ballDontLieService.getGames('basketball_nba', { team_ids: [away.id], seasons: [season], per_page: 100, paginateAll: true }),
     seasonSummaries('NBA', season, today),
-    teamRecords('NBA', season, home.id, today, NBA_WINDOW + SHORT_LINES),
-    teamRecords('NBA', season, away.id, today, NBA_WINDOW + SHORT_LINES),
+    teamRecords('NBA', season, home.id, today, NBA_WINDOW),
+    teamRecords('NBA', season, away.id, today, NBA_WINDOW),
   ]);
   const byTeam = summariesByTeam(summaries);
   const tonight = (homeGames || []).find((g) => g.visitor_team.id === away.id && etDate(g.datetime || `${g.date}T23:00:00Z`) === today);
@@ -123,8 +124,10 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
     'Rest and travel:',
     tonight ? (await Promise.all([tonightSetting(tonight, away, awayGames || []), tonightSetting(tonight, home, homeGames || [])])).join('\n') : 'not on file (tonight\'s game is not in the schedule feed)'].join('\n');
 
-  const meetings = awayRecs.filter((r) => [r.record.home.id, r.record.away.id].includes(home.id));
-  const meetingIds = new Set(meetings.map((r) => String(r.game_id)));
+  // Every meeting this season, from the season's summaries (however far back), each in full.
+  const meetingIds = (byTeam.get(String(away.id)) || []).filter((r) => [String(r.summary.home.id), String(r.summary.away.id)].includes(String(home.id))).map((r) => r.game_id);
+  const meetings = (await recordsById('NBA', meetingIds)).reverse();
+  const meetingSet = new Set(meetings.map((r) => String(r.game_id)));
   const meetingPart = meetings.length
     ? `THIS SEASON'S MEETINGS (${meetings.length}), shown from the ${away.name}' side\n${meetings.map((r) => fullGameText(r.record, away.id, byTeam)).join('\n\n')}`
     : "THIS SEASON'S MEETINGS: none before tonight";
@@ -135,7 +138,7 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
     const w = all.filter((r) => { const s = r.summary; const us = String(s.home.id) === String(team.id) ? 'home' : 'away'; return s[us].score > s[us === 'home' ? 'away' : 'home'].score; }).length;
     const full = recs.slice(0, NBA_WINDOW).map((r) => {
       const row = all.find((x) => String(x.game_id) === String(r.game_id));
-      return meetingIds.has(String(r.game_id)) && row ? `${resultLine(row, team.id)}: in this season's meetings above` : fullGameText(r.record, team.id, byTeam);
+      return meetingSet.has(String(r.game_id)) && row ? `${resultLine(row, team.id)}: in this season's meetings above` : fullGameText(r.record, team.id, byTeam);
     });
     const older = all.filter((r) => !recs.slice(0, NBA_WINDOW).some((x) => String(x.game_id) === String(r.game_id))).reverse().slice(0, SHORT_LINES);
     return [`${team.full_name.toUpperCase()}: ${w}-${all.length - w} in the games below${all.length > NBA_WINDOW ? `; the last ${NBA_WINDOW} in full, newest first, then one line for each older game` : ', newest first'}`,
