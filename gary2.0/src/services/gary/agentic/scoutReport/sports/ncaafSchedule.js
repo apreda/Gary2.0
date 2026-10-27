@@ -475,7 +475,8 @@ function notOnFile(results, onFile) {
 
 /**
  * The players CARRIES AND CATCHES, GAME BY GAME lists for one team, name to entry: the two with the most carries and the
- * three with the most catches in the games with player lines on file, quarterbacks left out (Oct 23 2026 data audit).
+ * three with the most catches in the games with player lines on file, and in each of the last three of them,
+ * quarterbacks left out (Oct 23 2026 data audit; Oct 27 the last three games).
  * The availability and regulars sections name these players and point to that section instead of repeating them.
  */
 function offenseCore(rows, results, onFile) {
@@ -483,7 +484,13 @@ function offenseCore(rows, results, onFile) {
   const total = (entry, key) => [...entry.games.values()].reduce((a, row) => a + (Number(row[key]) || 0), 0);
   const passer = (entry) => /^QB$/i.test(entry.position) || total(entry, 'passing_attempts') >= 10;
   const top = (key, n) => [...byPlayer].filter(([, e]) => !passer(e) && total(e, key) > 0).sort((a, b) => total(b[1], key) - total(a[1], key)).slice(0, n);
-  return new Map([...top('rushing_attempts', 2), ...top('receptions', 3)]);
+  // And each of the last three games' (Oct 27 2026 data check: the season's leaders alone left out the players taking the
+  // work now, TCU's Jordan Dwyer, LSU's Trey'Dez Green, Arizona's and Oklahoma's backs).
+  const recent = results.filter((r) => onFile.has(String(r.gameId))).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+  const floor = { rushing_attempts: 3, receptions: 2 };
+  const gameTop = (gameId, key, n) => [...byPlayer].filter(([, e]) => !passer(e) && Number(e.games.get(String(gameId))?.[key]) >= floor[key])
+    .sort((a, b) => Number(b[1].games.get(String(gameId))[key]) - Number(a[1].games.get(String(gameId))[key])).slice(0, n);
+  return new Map([...top('rushing_attempts', 2), ...top('receptions', 3), ...recent.flatMap((r) => [...gameTop(r.gameId, 'rushing_attempts', 2), ...gameTop(r.gameId, 'receptions', 3)])]);
 }
 const UNDER_OFFENSE = 'game by game under CARRIES AND CATCHES, GAME BY GAME';
 

@@ -358,18 +358,30 @@ export function skillPlayers(d, team, before, reportText = '') {
   for (const r of rows) { if (!by.has(r.player_id)) by.set(r.player_id, []); by.get(r.player_id).push(r); }
   const total = (rs, k) => rs.reduce((a, r) => a + n(r[k]), 0);
   const ranked = (k) => [...by.values()].filter((rs) => total(rs, k) > 0).sort((a, b) => total(b, k) - total(a, k));
-  const chosen = [...new Set([...ranked('carries').slice(0, 2), ...ranked('targets').slice(0, 4)])];
+  // The season's leaders, and each of the last three games' (Oct 27 2026 data check: the season's leaders alone left out
+  // the back and the tight end taking the work now: Pierce for the Eagles, Darnell Washington for the Steelers).
+  const floor = { carries: 3, targets: 2 };
+  const gameTop = (gid, k, top) => [...by.values()].map((rs) => [rs, rs.find((r) => r.game_id === gid)]).filter(([, r]) => r && n(r[k]) >= floor[k])
+    .sort((a, b) => n(b[1][k]) - n(a[1][k])).slice(0, top).map(([rs]) => rs);
+  const recent = gs.slice(-3).flatMap((x) => [...gameTop(x.g.game_id, 'carries', 2), ...gameTop(x.g.game_id, 'targets', 4)]);
+  const chosen = [...new Set([...ranked('carries').slice(0, 2), ...ranked('targets').slice(0, 4), ...recent])];
   const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
   // A game with no stats row is "did not play" only when the snap counts have no snap for him either: Rice left Week 4
   // after 10% of the snaps without a touch.
-  const snapShare = (name, gameId) => { const k = sameKey(name); const r = (d.snaps || []).find((x) => x.team === c && x.game_id === gameId && sameKey(x.player) === k); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
+  const snapRow = (name, gameId) => { const k = sameKey(name); return (d.snaps || []).find((x) => x.team === c && x.game_id === gameId && sameKey(x.player) === k) || null; };
+  const snapShare = (name, gameId) => { const r = snapRow(name, gameId); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
+  // Special-teams snaps are playing too (Oct 27 2026 data check: KaVontae Turpin, hurt on his first return in Week 6,
+  // read "did not play").
+  const stShare = (name, gameId) => n(snapRow(name, gameId)?.st_pct);
   const game = (r) => [n(r.carries) ? `${n(r.carries)} ${n(r.carries) === 1 ? 'carry' : 'carries'} ${n(r.rushing_yards)} yds${n(r.rushing_tds) ? ` ${n(r.rushing_tds)} TD` : ''}` : null,
     n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null].filter(Boolean).join(', ') || 'no touches';
   const lines = chosen.map((rs) => {
     const last = rs.slice().sort((a, b) => n(b.week) - n(a.week))[0];
     const played = new Map(rs.map((r) => [r.game_id, r]));
     // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
-    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? game(played.get(x.g.game_id)) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : 'did not play'}`);
+    // A stat row with no carry or target (a return) says how much he played.
+    const rowGame = (x) => { const t = game(played.get(x.g.game_id)); if (t !== 'no touches') return t; const off = snapShare(last.player_display_name, x.g.game_id), sts = stShare(last.player_display_name, x.g.game_id); return off > 0 ? `no touches (${Math.round(100 * off)}% of snaps)` : sts > 0 ? `no carries or targets; special teams only (${Math.round(100 * sts)}% of special-teams snaps)` : t; };
+    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : stShare(last.player_display_name, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last.player_display_name, x.g.game_id))}% of special-teams snaps)` : 'did not play'}`);
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
     const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];

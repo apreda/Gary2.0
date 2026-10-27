@@ -1057,7 +1057,10 @@ export async function buildNflScoutReport(game, options = {}) {
     (injuries.notOnFile ||= []).push(`Official injury report: not on file (the schedule did not give this game's week); the statuses below are the injury feed's.`);
   }
   if (scheduleWeek && injuries && injuries.sourceOk !== false) {
-    const key = (first, last) => `${String(last || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '')}|${String(first || '').toLowerCase().slice(0, 1)}`;
+    // A report row finds the feed's row for the same player by full name; by last name only when one player on each
+    // side has it (Oct 27 2026 data check: last name and first initial merged Atlanta's two Terrells, A.J. and Avieon,
+    // into one entry with both injuries; and the Jets' "Kiko" and "Francisco" Mauigoa, one player, read as two).
+    const norm = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
     for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
       const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch(() => null);
       if (!report?.players?.length) {
@@ -1065,11 +1068,21 @@ export async function buildNflScoutReport(game, options = {}) {
         continue;
       }
       const list = Array.isArray(injuries[side]) ? injuries[side] : (injuries[side] = []);
-      const byKey = new Map(list.map((i) => [key(i.player?.first_name, i.player?.last_name), i]));
-      for (const p of report.players) {
-        const [first, ...rest] = String(p.name || '').trim().split(/\s+/);
-        if (!p.game_status || !first) continue;
-        const listed = byKey.get(key(first, rest.join(' ')));
+      const byFull = new Map(list.map((i) => [`${norm(i.player?.first_name)}${norm(i.player?.last_name)}`, i]));
+      const byLast = new Map();
+      for (const i of list) { const k = norm(i.player?.last_name); byLast.set(k, [...(byLast.get(k) || []), i]); }
+      const reportLast = new Map();
+      for (const r of report.players) { const k = norm(String(r.name || '').trim().split(/\s+/).slice(1).join(' ')); reportLast.set(k, (reportLast.get(k) || 0) + 1); }
+      const findListed = (first, last) => byFull.get(`${norm(first)}${norm(last)}`)
+        || (byLast.get(norm(last))?.length === 1 && reportLast.get(norm(last)) === 1 ? byLast.get(norm(last))[0] : null);
+      for (const raw of report.players) {
+        const [first, ...rest] = String(raw.name || '').trim().split(/\s+/);
+        if (!first) continue;
+        // A player on the report with no game designation is on it too: practiced, expected to play (Oct 27 2026 data
+        // check: Jaylon Carlies and Kaden Elliss, back from missed games, practiced fully with no designation and read
+        // as "missed the last game, not on this week's injury report").
+        const p = raw.game_status ? raw : { ...raw, game_status: 'No game designation' };
+        const listed = findListed(first, rest.join(' '));
         if (listed) {
           listed.status = p.game_status; listed.officialStatus = true;
           listed.comment = `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}. ${listed.comment || ''}`.trim();
