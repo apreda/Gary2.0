@@ -12,7 +12,7 @@ import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskT
 import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
-import { getNcaafGameBox } from '../scoutReport/sports/ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions } from '../scoutReport/sports/ncaafGameBox.js';
 
 export const NCAAF_WINDOW = 6;
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
@@ -52,18 +52,21 @@ const vs = (g) => (g.neutral ? 'vs' : g.home ? 'vs' : '@');
 // a regulation 8-point win, its quarters "7-7-0-14-7-8").
 const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${g.them.score}${g.ot ? ` in ${g.ot > 1 ? `${g.ot} overtimes` : 'overtime'}` : ''}`;
 
-function playerLines(box, teamId) {
+// Each player's position from his team's current ESPN roster, as the NFL and NBA reads show theirs; a player no longer
+// on the roster is shown without one.
+function playerLines(box, teamId, positions = {}) {
   const ps = (box.players || []).filter((p) => p.teamId === String(teamId));
   const s = (p, c, k) => p.stats?.[c]?.[k];
+  const who = (p) => `${p.name}${positions[p.id] ? ` (${positions[p.id]})` : ''}`;
   const off = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions'))
     .sort((a, b) => (s(b, 'passing', 'passingAttempts') || 0) - (s(a, 'passing', 'passingAttempts') || 0) || ((s(b, 'rushing', 'rushingAttempts') || 0) + (s(b, 'receiving', 'receptions') || 0)) - ((s(a, 'rushing', 'rushingAttempts') || 0) + (s(a, 'receiving', 'receptions') || 0)))
-    .map((p) => `    ${p.name} ${[s(p, 'passing', 'passingAttempts') ? `${s(p, 'passing', 'completions')}-of-${s(p, 'passing', 'passingAttempts')}, ${s(p, 'passing', 'passingYards')} yds, ${s(p, 'passing', 'passingTouchdowns') || 0} TD, ${s(p, 'passing', 'interceptions') || 0} INT` : null,
+    .map((p) => `    ${who(p)} ${[s(p, 'passing', 'passingAttempts') ? `${s(p, 'passing', 'completions')}-of-${s(p, 'passing', 'passingAttempts')}, ${s(p, 'passing', 'passingYards')} yds, ${s(p, 'passing', 'passingTouchdowns') || 0} TD, ${s(p, 'passing', 'interceptions') || 0} INT` : null,
       s(p, 'rushing', 'rushingAttempts') ? `${plural(s(p, 'rushing', 'rushingAttempts'), 'carry', 'carries')} ${s(p, 'rushing', 'rushingYards')} yds${s(p, 'rushing', 'rushingTouchdowns') ? ` ${s(p, 'rushing', 'rushingTouchdowns')} TD` : ''}` : null,
       s(p, 'receiving', 'receptions') ? `${plural(s(p, 'receiving', 'receptions'), 'catch', 'catches')} ${s(p, 'receiving', 'receivingYards')} yds${s(p, 'receiving', 'receivingTouchdowns') ? ` ${s(p, 'receiving', 'receivingTouchdowns')} TD` : ''}` : null,
       s(p, 'fumbles', 'fumblesLost') ? `${plural(s(p, 'fumbles', 'fumblesLost'), 'fumble')} lost` : null].filter(Boolean).join(', ')}`);
   const def = ps.filter((p) => s(p, 'defensive', 'totalTackles') || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'))
     .sort((a, b) => (s(b, 'defensive', 'totalTackles') || 0) - (s(a, 'defensive', 'totalTackles') || 0))
-    .map((p) => `    ${p.name} ${[s(p, 'defensive', 'totalTackles') ? plural(s(p, 'defensive', 'totalTackles'), 'tackle') : null, s(p, 'defensive', 'tacklesForLoss') ? `${s(p, 'defensive', 'tacklesForLoss')} for loss` : null,
+    .map((p) => `    ${who(p)} ${[s(p, 'defensive', 'totalTackles') ? plural(s(p, 'defensive', 'totalTackles'), 'tackle') : null, s(p, 'defensive', 'tacklesForLoss') ? `${s(p, 'defensive', 'tacklesForLoss')} for loss` : null,
       s(p, 'defensive', 'sacks') ? plural(s(p, 'defensive', 'sacks'), 'sack') : null, s(p, 'defensive', 'hurries') ? plural(s(p, 'defensive', 'hurries'), 'hurry', 'hurries') : null,
       s(p, 'interceptions', 'interceptions') ? `${s(p, 'interceptions', 'interceptions')} INT` : null, s(p, 'defensive', 'passesDefended') ? plural(s(p, 'defensive', 'passesDefended'), 'pass defended', 'passes defended') : null,
       s(p, 'fumbles', 'fumblesRecovered') ? plural(s(p, 'fumbles', 'fumblesRecovered'), 'fumble recovery', 'fumble recoveries') : null].filter(Boolean).join(', ')}`);
@@ -90,7 +93,8 @@ async function fullGame(g, season, tonight) {
     `  drives: ${drives(g.us.id, g.us.short)} · ${drives(g.them.id, g.them.short)}`,
     `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
   for (const side of [g.us, g.them]) {
-    const p = playerLines(box, side.id);
+    const roster = await getNcaafRosterPositions(side.id).catch(() => null);
+    const p = playerLines(box, side.id, roster?.positions || {});
     lines.push(`  ${side.name}:${p.onFile ? '' : ' player lines not on file'}`);
     if (p.off.length) lines.push('   offense', ...p.off);
     if (p.def.length) lines.push('   defense', ...p.def);

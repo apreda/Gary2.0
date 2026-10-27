@@ -150,9 +150,11 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
  * or { unavailable }. */
 export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.fetch } = {}) {
   if (teamId == null) return { unavailable: true, reason: 'no team id' };
-  return cachedResearch(`espn_cfb_roster_v2:${teamId}`, async () => {
+  return cachedResearch(`espn_cfb_roster_v3:${teamId}`, async () => {
     try {
-      const roster = await getJson(`${SITE}/teams/${teamId}/roster`, fetchImpl);
+      // The roster page stops at 100 players unless asked for more (Oct 27 2026 data loop: Miami's 117 read as 100, and
+      // Malachi Toney, Daylyn Upshaw and Mohamed Toure, starters, had no position).
+      const roster = await getJson(`${SITE}/teams/${teamId}/roster?limit=300`, fetchImpl);
       const positions = {}, jerseys = {};
       for (const group of roster?.athletes || []) {
         for (const a of group?.items || []) {
