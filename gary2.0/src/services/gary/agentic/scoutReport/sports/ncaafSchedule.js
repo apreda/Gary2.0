@@ -35,6 +35,7 @@ import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
 import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays } from './ncaafGameBox.js';
+import { teamStarters, startedIn } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -505,8 +506,17 @@ const playedPerPlays = (plays, gameId, entry) => namedInPlays(plays?.named?.get(
  * player lines on file are left out of the counts and named once beside the
  * team.
  */
-function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null) {
+function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null, starts = new Map()) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
+  // Whether he started (Oct 27 2026 data loop: an offensive lineman read "OL (out)" with nothing to say whether he was
+  // the starting left tackle or a reserve): the official box's starting lineup of each game the schools post one for.
+  const lineups = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => starts.has(String(r.gameId)));
+  // A lineup is the 11 on offense and 11 on defense: kickers, punters and snappers are never in it.
+  const started = (name, position) => {
+    if (!lineups.length || /^(PK|K|P|LS)$/i.test(position || '')) return '';
+    const mine = lineups.filter((r) => startedIn(starts.get(String(r.gameId)), name));
+    return `started ${mine.length} of ${lineups.length < results.length ? `the ${lineups.length} games with a starting lineup on file` : `${lineups.length} games`}${mine.length ? `, the last ${day(mine.at(-1))}` : ''}`;
+  };
   const byPlayer = playersOf(rows, games);
   // One line per player: the games he has a stat row in, the last one, and his last three games (Oct 23 2026 data review:
   // every defender's tackles game by game, and three backups' logs at every position, buried the report under noise).
@@ -543,7 +553,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
       // Whether the absence is new or already in the numbers (Oct 24 2026): his game-day status on the season's earlier
       // reports, from the conference's report archive.
       const earlier = historyLine(history, name);
-      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}${earlier ? ` · ${earlier}` : ''}`);
+      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${started(name, position) ? `${started(name, position)} · ` : ''}${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}${earlier ? ` · ${earlier}` : ''}`);
       if (!positions.includes(position)) positions.push(position);
       continue;
     }
@@ -552,7 +562,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // (no pass, carry, catch or tackle recorded)" on ten lines; the searched notes beside them only restated the status,
     // "listed out Friday; reason unspecified").
     const earlier = historyLine(history, name, { short: true });
-    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)}${earlier ? `; ${earlier}` : ''})`;
+    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)}${started(name, position) ? `; ${started(name, position)}` : ''}${earlier ? `; ${earlier}` : ''})`;
     if (/^(OL|OT|OG|T|G|C|LT|RT|LG|RG|IOL)$/i.test(position)) linemen.push(entry); else none.push(entry);
   }
   if (none.length) lines.push(`  ${games.length ? 'no stat row this season' : 'player lines not on file for any game this season'}: ${none.join(', ')}`);
@@ -700,6 +710,10 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     return sides.map(() => ({ rows: [], onFile: new Set(), points: new Map() }));
   });
   const rows = played.map((p) => p.rows);
+  // Each game's starting lineup, from the official box on either school's site.
+  const school = (t) => ({ college: t?.college, abbr: t?.abbreviation });
+  const starts = await Promise.all(sides.map((s) => teamStarters(school(s.atHome ? home : away),
+    s.results.map((r) => ({ gameId: r.gameId, date: r.date, opponent: school(teamsById.get(Number(r.opponentId))) })), season).catch(() => new Map())));
 
   // Who each side was without on each game day (Oct 24 2026: the college game log never said who was missing, the
   // Bears' blended-season problem in college form): the conferences' report archives, for the team and each opponent.
@@ -773,11 +787,12 @@ ${RULE}`;
 
   const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
 ${RULE}
-Each player on this game's availability report beside his last three games,
-and the other players at his position with theirs. College publishes
-no snap counts; these stat rows are the record of who played.
+Each player on this game's availability report beside the games he started
+(the official box's starting lineups, where a school posts them) and his last
+three games, and the other players at his position with theirs. College
+publishes no snap counts; these stat rows are the record of who played.
 
-${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i], starts[i]).join('\n')).join('\n\n')}
 ${RULE}`;
 
   // One intro paragraph each, which the read leaves out: "no stat row" says what the box score shows and no more.
