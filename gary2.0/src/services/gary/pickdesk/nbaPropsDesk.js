@@ -19,6 +19,7 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
+import { recordsById } from '../../gamebygame/gameRecordStore.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
@@ -103,7 +104,15 @@ async function playerSheet(player, markets, asOf) {
   // The stats feed's games carry team ids, not names (Oct 26 2026: every opponent printed "?"); the league's teams
   // name them.
   const teamsById = new Map(((await ballDontLieService.getTeams('basketball_nba').catch(() => [])) || []).map((t) => [String(t.id), t.abbreviation]));
-  const games = (cur?.games || []).map((g) => ({ ...g, opponent: g.opponent || teamsById.get(String(g.opponentId)) || 'opponent not on file' }));
+  // Each game's counts as its stored record has them, the official box's where BDL's differed (Oct 27 2026 data loop:
+  // Boozer's 14 points at Sacramento read 16); a game without a record keeps the feed's.
+  const recs = await recordsById('NBA', (cur?.games || []).map((g) => g.gameId)).catch(() => []);
+  const officialOf = new Map(recs.map((r) => [String(r.game_id), (r.record?.players || []).find((p) => String(p.id) === String(player.player_id))]));
+  const games = (cur?.games || []).map((g) => {
+    const o = officialOf.get(String(g.gameId));
+    const fixed = o ? { pts: o.pts, reb: o.reb, ast: o.ast, fg3m: o.fg3m, pra: o.pts + o.reb + o.ast } : {};
+    return { ...g, ...fixed, opponent: g.opponent || teamsById.get(String(g.opponentId)) || 'opponent not on file' };
+  });
   const fields = [...new Set(['min', ...markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)])])];
   const name = (f) => ({ min: 'min', pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' }[f]);
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];

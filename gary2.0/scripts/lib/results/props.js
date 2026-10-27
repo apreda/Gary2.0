@@ -8,6 +8,7 @@ import { sportAllowed } from '../resultsRunMode.js';
 import { NFL_PLAY_SETTLEMENT_MARKETS, nflPlayActualForProp } from '../nflPlaySettlement.js';
 import { NFL_BOXED_ZERO_MARKETS, nflBoxedPlayerZero } from '../nflParticipationSettlement.js';
 import { emptySettlementStats, getStatValue, findNbaBoxPlayer, nbaDidNotPlay, nbaStatValue } from './grading.js';
+import { withOfficialPlayerLines } from '../../../src/services/sports/nba/espnNbaGame.js';
 
 const RUSH_NEEDS_TEAM_BOX = new Set(['rushing_yards', 'rushing_attempts', 'rushing_receiving_yards']);
 
@@ -53,7 +54,9 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
     // props. The explicit football settlement filter remains an intersection,
     // so it cannot call an unrelated source even when the same date row is mixed.
     const wants = (sport) => sourceSports.has(String(sport).trim().toUpperCase());
-    const nbaBox = wants('NBA') ? (await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat() : [];
+    // Each final NBA box in the official box's counts (Oct 27 2026 data loop: BDL had Boozer's 14 points as 16).
+    const nbaBox = wants('NBA') ? await Promise.all((await Promise.all(dates.map(d => fetchBoxScores('NBA', d)))).flat()
+      .map((b) => (/final/i.test(String(b?.status || '')) ? withOfficialPlayerLines(b, b).catch(() => b) : b))) : [];
     const nhlBox = wants('NHL') ? (await Promise.all(dates.map(d => fetchBoxScores('NHL', d)))).flat() : [];
     const nflGames = wants('NFL') ? (await Promise.all(dates.map(d => fetchGames('NFL', d)))).flat() : [];
     const ncaafGames = wants('NCAAF') ? (await Promise.all(dates.map(d => fetchNCAAFGames(d)))).flat() : [];
