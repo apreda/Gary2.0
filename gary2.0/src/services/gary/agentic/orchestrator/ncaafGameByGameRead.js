@@ -1,0 +1,139 @@
+/**
+ * THE COLLEGE GAME-BY-GAME READ (Oct 27 2026, founder GO; the second system, run beside the live read and never
+ * published). All of it from ESPN, one source: each team's schedule (every game's id, venue, neutral site, score) and
+ * each game's box (every player on both sides, each score with its quarter and clock, every drive, each team's totals,
+ * the score by quarter). Tonight first (the live read's quarterbacks and coaches, availability report, regulars missing
+ * from the last game, and schedule, travel and weather, without season totals), then the records of every team in the
+ * read, this season's meetings, and each team's last NCAAF_WINDOW games in full, then one line for each older game. An
+ * opponent is its record, its FBS or FCS standing and its results; no averages or ranks. The news is the live read's,
+ * without recaps of the games shown.
+ */
+import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
+import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation } from './ncaafRead.js';
+import { newsWithoutRecaps } from './newsWithoutRecaps.js';
+import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
+import { getNcaafGameBox } from '../scoutReport/sports/ncaafGameBox.js';
+
+export const NCAAF_WINDOW = 6;
+const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
+const fetched = new Map();
+const getJson = (url) => {
+  if (!fetched.has(url)) fetched.set(url, fetch(url, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+  return fetched.get(url);
+};
+const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
+const ord = (n) => `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'}`;
+const plural = (k, one, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+
+/** A team's ESPN profile: name, nickname, FBS or FCS. */
+async function teamInfo(id) {
+  const t = (await getJson(`${SITE}/teams/${id}`))?.team;
+  if (!t) return null;
+  // FBS is ESPN's group 80, as a conference's parent or the team's own group; every other group is FCS or below.
+  const division = !t.groups ? null : t.groups.parent?.id === '80' || t.groups.id === '80' ? 'FBS' : 'FCS';
+  return { id: String(t.id), name: t.displayName, short: t.nickname || t.shortDisplayName || t.displayName, division };
+}
+
+/** A team's finished games before `before` (an instant), oldest first: { id, date, venue, neutral, home, us, them }. */
+async function finishedGames(teamId, season, before) {
+  const events = (await getJson(`${SITE}/teams/${teamId}/schedule?season=${season}`))?.events || [];
+  return events.map((e) => {
+    const c = e.competitions?.[0]; const comp = c?.competitors || [];
+    const us = comp.find((x) => String(x.team?.id) === String(teamId)), them = comp.find((x) => String(x.team?.id) !== String(teamId));
+    return { id: String(e.id), date: e.date, final: c?.status?.type?.name === 'STATUS_FINAL', venue: c?.venue ? `${c.venue.fullName}${c.venue.address?.city ? `, ${c.venue.address.city}` : ''}` : null,
+      neutral: Boolean(c?.neutralSite), home: us?.homeAway === 'home',
+      us: { id: String(us?.team?.id), name: us?.team?.displayName, short: us?.team?.nickname || us?.team?.shortDisplayName, score: Number(us?.score?.value ?? us?.score) },
+      them: { id: String(them?.team?.id), name: them?.team?.displayName, short: them?.team?.nickname || them?.team?.shortDisplayName, score: Number(them?.score?.value ?? them?.score) } };
+  }).filter((g) => g.final && Date.parse(g.date) < Date.parse(before)).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+const wl = (gs) => { const w = gs.filter((g) => g.us.score > g.them.score).length; return `${w}-${gs.length - w}`; };
+const vs = (g) => (g.neutral ? 'vs' : g.home ? 'vs' : '@');
+const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${g.them.score}`;
+
+function playerLines(box, teamId) {
+  const ps = (box.players || []).filter((p) => p.teamId === String(teamId));
+  const s = (p, c, k) => p.stats?.[c]?.[k];
+  const off = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions'))
+    .sort((a, b) => (s(b, 'passing', 'passingAttempts') || 0) - (s(a, 'passing', 'passingAttempts') || 0) || ((s(b, 'rushing', 'rushingAttempts') || 0) + (s(b, 'receiving', 'receptions') || 0)) - ((s(a, 'rushing', 'rushingAttempts') || 0) + (s(a, 'receiving', 'receptions') || 0)))
+    .map((p) => `    ${p.name} ${[s(p, 'passing', 'passingAttempts') ? `${s(p, 'passing', 'completions')}-of-${s(p, 'passing', 'passingAttempts')}, ${s(p, 'passing', 'passingYards')} yds, ${s(p, 'passing', 'passingTouchdowns') || 0} TD, ${s(p, 'passing', 'interceptions') || 0} INT` : null,
+      s(p, 'rushing', 'rushingAttempts') ? `${plural(s(p, 'rushing', 'rushingAttempts'), 'carry', 'carries')} ${s(p, 'rushing', 'rushingYards')} yds${s(p, 'rushing', 'rushingTouchdowns') ? ` ${s(p, 'rushing', 'rushingTouchdowns')} TD` : ''}` : null,
+      s(p, 'receiving', 'receptions') ? `${plural(s(p, 'receiving', 'receptions'), 'catch', 'catches')} ${s(p, 'receiving', 'receivingYards')} yds${s(p, 'receiving', 'receivingTouchdowns') ? ` ${s(p, 'receiving', 'receivingTouchdowns')} TD` : ''}` : null,
+      s(p, 'fumbles', 'fumblesLost') ? `${plural(s(p, 'fumbles', 'fumblesLost'), 'fumble')} lost` : null].filter(Boolean).join(', ')}`);
+  const def = ps.filter((p) => s(p, 'defensive', 'totalTackles') || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'))
+    .sort((a, b) => (s(b, 'defensive', 'totalTackles') || 0) - (s(a, 'defensive', 'totalTackles') || 0))
+    .map((p) => `    ${p.name} ${[s(p, 'defensive', 'totalTackles') ? plural(s(p, 'defensive', 'totalTackles'), 'tackle') : null, s(p, 'defensive', 'tacklesForLoss') ? `${s(p, 'defensive', 'tacklesForLoss')} for loss` : null,
+      s(p, 'defensive', 'sacks') ? plural(s(p, 'defensive', 'sacks'), 'sack') : null, s(p, 'defensive', 'hurries') ? plural(s(p, 'defensive', 'hurries'), 'hurry', 'hurries') : null,
+      s(p, 'interceptions', 'interceptions') ? `${s(p, 'interceptions', 'interceptions')} INT` : null, s(p, 'defensive', 'passesDefended') ? plural(s(p, 'defensive', 'passesDefended'), 'pass defended', 'passes defended') : null,
+      s(p, 'fumbles', 'fumblesRecovered') ? plural(s(p, 'fumbles', 'fumblesRecovered'), 'fumble recovery', 'fumble recoveries') : null].filter(Boolean).join(', ')}`);
+  const kick = ps.filter((p) => s(p, 'kicking', 'fieldGoalAttempts') || s(p, 'kicking', 'extraPointAttempts') || s(p, 'punting', 'punts'))
+    .map((p) => `${p.name} ${[s(p, 'kicking', 'fieldGoalAttempts') ? `FG ${s(p, 'kicking', 'fieldGoalsMade')}-of-${s(p, 'kicking', 'fieldGoalAttempts')} (long ${s(p, 'kicking', 'longFieldGoalMade') || 0})` : null,
+      s(p, 'kicking', 'extraPointAttempts') ? `XP ${s(p, 'kicking', 'extraPointsMade')}-of-${s(p, 'kicking', 'extraPointAttempts')}` : null,
+      s(p, 'punting', 'punts') ? `${plural(s(p, 'punting', 'punts'), 'punt')} for ${s(p, 'punting', 'puntYards')} yds, ${s(p, 'punting', 'puntsInside20') || 0} inside the 20` : null].filter(Boolean).join(', ')}`);
+  return { off, def, kick, onFile: ps.length > 0 };
+}
+
+async function fullGame(g, season, tonight) {
+  const box = await getNcaafGameBox(g.id);
+  const opp = await teamInfo(g.them.id);
+  const head = `${etDay(g.date)} · ${vs(g)} ${g.them.name}${g.neutral ? ' at a neutral site' : ''}${g.venue ? ` (${g.venue})` : ''} · ${result(g)}`;
+  if (!box || box.unavailable) return `${head}\n  the box score is not on file (${box?.reason || 'ESPN did not answer'})`;
+  const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
+  const q = (t, name) => `${name} ${t?.quarters?.length ? t.quarters.join('-') : 'not on file'}`;
+  const scores = (box.scoring || []).map((p) => `${p.period ? `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}` : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
+  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; const by = new Map(); for (const d of ds) by.set(d.result, (by.get(d.result) || 0) + 1); return `${short} ${ds.length} (${[...by].map(([r, k]) => `${k} ${String(r || 'other').toLowerCase()}`).join(', ')})`; };
+  const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
+  const lines = [head,
+    `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
+    `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,
+    `  drives: ${drives(g.us.id, g.us.short)} · ${drives(g.them.id, g.them.short)}`,
+    `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
+  for (const side of [g.us, g.them]) {
+    const p = playerLines(box, side.id);
+    lines.push(`  ${side.name}:${p.onFile ? '' : ' player lines not on file'}`);
+    if (p.off.length) lines.push('   offense', ...p.off);
+    if (p.def.length) lines.push('   defense', ...p.def);
+    if (p.kick.length) lines.push(`   kicking and punting: ${p.kick.join('; ')}`);
+  }
+  // The opponent coming in: its division, its record before this game and its games, its record before tonight.
+  const oppGames = await finishedGames(g.them.id, season, tonight);
+  const prior = oppGames.filter((x) => Date.parse(x.date) < Date.parse(g.date));
+  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
+  return lines.join('\n');
+}
+
+/** The game as the second system shows it. `news` is the live read's news for the same game. */
+export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, gameDate, commenceTime, asOf = new Date(), season, news = '' } = {}) {
+  const tonight = commenceTime || new Date(asOf).toISOString();
+  const yr = season || new Date(tonight).getUTCFullYear();
+  const event = await findEspnCollegeEvent({ date: gameDate, homeTeam, awayTeam, commenceTime }).catch(() => null);
+  const homeId = event?.homeTeamId || '', awayId = event?.awayTeamId || '';
+  const tonightPart = ['TONIGHT',
+    `THE QUARTERBACKS AND COACHES\n${quarterbacksAndCoaches(desk, { availability: false })}`,
+    // Season totals leave the report's lines (the games are below, game by game).
+    `THE AVAILABILITY REPORT\n${String(availabilityReport(desk)).replace(/;\s*season:[^\n]*/g, '')}`,
+    `REGULARS WITH NO STAT ROW IN THE LAST GAME\n${String(afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))).replace(/;\s*season:[^\n]*/g, '')}`,
+    `SCHEDULE, TRAVEL AND WEATHER\n${situation(desk)}`].join('\n\n');
+  if (!homeId || !awayId) {
+    return { line: lineOf(desk), story: [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart, 'THE GAMES: not on file (ESPN has no event for this game)'].join('\n\n'), news };
+  }
+  const [awayGames, homeGames] = await Promise.all([finishedGames(awayId, yr, tonight), finishedGames(homeId, yr, tonight)]);
+  // Every team in the read: the two, their opponents, with division and record before tonight.
+  const ids = [...new Set([homeId, awayId, ...awayGames.map((g) => g.them.id), ...homeGames.map((g) => g.them.id)])];
+  const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${wl(gs)}` : null; }));
+  const meetings = awayGames.filter((g) => g.them.id === homeId);
+  const meetingIds = new Set(meetings.map((g) => g.id));
+  const teamPart = async (name, games) => {
+    if (!games.length) return `${name.toUpperCase()}: no games yet this season`;
+    const newest = games.slice().reverse();
+    const full = await Promise.all(newest.slice(0, NCAAF_WINDOW).map((g) => (meetingIds.has(g.id) ? `${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.short}: in this season's meetings above` : fullGame(g, yr, tonight))));
+    const older = newest.slice(NCAAF_WINDOW);
+    return [`${name.toUpperCase()}: ${wl(games)}${games.length > NCAAF_WINDOW ? `; the last ${NCAAF_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
+      full.join('\n\n'), older.length ? `Older games, one line each:\n${older.map((g) => `  ${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.name}`).join('\n')}` : null].filter(Boolean).join('\n\n');
+  };
+  const story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
+    `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
+    meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
+    await teamPart(awayTeam, awayGames), await teamPart(homeTeam, homeGames)].join('\n\n');
+  const finals = new Set([...awayGames, ...homeGames].map((g) => `${g.us.score}-${g.them.score}`));
+  return { line: lineOf(desk), story, news: newsWithoutRecaps(news, finals) };
+}

@@ -39,7 +39,7 @@ export function withoutBettingLines(text) {
 // it, and a box score without turnovers hid why games went the way they did (Oregon's 15 points came with 7 giveaways).
 
 // A section's rows without the desk's opening paragraph that explains them ("Every completed game ...", "Each player ...").
-function afterIntro(section) {
+export function afterIntro(section) {
   const paras = String(section || '').split(/\n\s*\n/);
   return (/^(?:Every|Each) /.test(paras[0] || '') ? paras.slice(1) : paras).join('\n\n').trim();
 }
@@ -97,7 +97,7 @@ function quarterbackSectionLines(desk) {
 
 // The quarterbacks and coaching staff, without the desk's sourcing lines. `availability: false` leaves out each team's
 // availability source, official report and notes about who plays, which the read gives with the availability report.
-function quarterbacksAndCoaches(desk, { availability = true } = {}) {
+export function quarterbacksAndCoaches(desk, { availability = true } = {}) {
   const lines = quarterbackSectionLines(desk);
   return lines.filter((l) => availability || !(l.kind === 'source' || l.kind === 'official' || (l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, l.team)))))
     .map((l) => l.text).join('\n').trim();
@@ -125,7 +125,7 @@ function availabilitySources(desk) {
 // read as two lists of the same names). One list: each team with its report's source, each reported player once with
 // his status, anything the report adds, and his season's stat rows; then who else plays at his position, and the
 // week's reporting on who plays. Without the desk's player lines it is the report as reported.
-function availabilityReport(desk) {
+export function availabilityReport(desk) {
   const teams = teamsOf(desk), source = availabilitySources(desk);
   const lines = quarterbackSectionLines(desk);
   // The researcher's own working ("after the requested 9:07 a.m. research cutoff") is not news (Oct 24 2026).
@@ -265,7 +265,7 @@ export function seasonLines(team, all, qb = null) {
   return out.join('\n');
 }
 
-function situation(desk) {
+export function situation(desk) {
   const road = sectionOf(desk, 'HOME AND ROAD').split('\n')
     .filter((l) => /^(?:Site|Local kickoff|Trip):|^Kickoff weather\b/.test(l) || /: \d+(?:st|nd|rd|th) (?:home|road) game of the season today\.$/.test(l));
   return [...road, sectionOf(desk, 'REST & SCHEDULE SITUATION')].filter(Boolean).join('\n');

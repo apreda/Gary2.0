@@ -36,7 +36,9 @@ export function gameBoxFromSummary(summary, eventId) {
   const competition = summary?.header?.competitions?.[0];
   const status = competition?.status?.type;
   if (!(status?.completed === true || /FINAL/i.test(String(status?.name || '')))) return { unavailable: true, reason: `ESPN game ${eventId} is not final` };
-  const teams = (competition?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), homeAway: c?.homeAway, score: num(c?.score) }));
+  // Each side's score by quarter too (Oct 27 2026, the game-by-game system).
+  const teams = (competition?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), homeAway: c?.homeAway, score: num(c?.score),
+    quarters: Array.isArray(c?.linescores) ? c.linescores.map((l) => num(l?.displayValue ?? l?.value)) : null }));
   const players = [];
   for (const side of summary?.boxscore?.players || []) {
     const teamId = String(side?.team?.id ?? '');
@@ -55,8 +57,14 @@ export function gameBoxFromSummary(summary, eventId) {
     players.push(...byId.values());
   }
   if (!teams.length || !players.length) return { unavailable: true, reason: `ESPN game ${eventId} has no box score` };
+  // Each team's game totals as ESPN states them (yards, first downs, third and fourth downs, penalties, possession).
+  for (const side of summary?.boxscore?.teams || []) {
+    const t = teams.find((x) => x.id === String(side?.team?.id ?? ''));
+    if (t) t.totals = Object.fromEntries((side?.statistics || []).map((x) => [x.name, x.displayValue]));
+  }
   const scoring = (summary?.scoringPlays || []).map((p) => ({ type: p?.type?.text ?? null, scoringType: p?.scoringType?.name ?? null,
-    text: String(p?.text || ''), home: num(p?.homeScore), away: num(p?.awayScore) }));
+    text: String(p?.text || ''), home: num(p?.homeScore), away: num(p?.awayScore), period: num(p?.period?.number), clock: p?.clock?.displayValue ?? null,
+    teamId: String(p?.team?.id ?? '') }));
   // Every field goal try with its distance and result, from the play-by-play (Oct 24 2026: "FG 0-of-2" needs the 32 and
   // the 55 behind it). Only the drives' plays are read.
   const fieldGoals = [];
@@ -123,7 +131,7 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v8:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v9:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

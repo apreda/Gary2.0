@@ -34,7 +34,7 @@ const NEWS_NOT_ON_FILE = "The news search did not return a report for this game;
 
 
 // Regulars who missed or left the last game and are not on this week's report, under it (nflBettorData notOnReport).
-function backOffReport(data, desk, awayTeam, homeTeam, before) {
+export function backOffReport(data, desk, awayTeam, homeTeam, before) {
   const report = sectionOf(desk, 'INJURY REPORT');
   const lines = [awayTeam, homeTeam].map((t) => notOnReport(data, t, before, report)).filter(Boolean);
   return lines.length ? `MISSED OR LEFT THE LAST GAME, NOT ON THIS WEEK'S INJURY REPORT\n${lines.join('\n')}` : null;

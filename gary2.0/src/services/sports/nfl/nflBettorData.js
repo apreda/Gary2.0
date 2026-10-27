@@ -687,3 +687,95 @@ export function lineStory(lines, homeTeam, awayTeam) {
     kept.length ? `Moves since (spread, and moneyline moves of 2.5 points or more of implied chance):\n${kept.join('\n')}` : stillSince(open, lines.now, homeTeam, awayTeam, side, ml),
     `Now: ${side(lines.now.spread_home, lines.now)}, total ${lines.now.total} (first on file ${open.total}) · ${mls(lines.now)}`].join('\n');
 }
+
+// ── THE GAME-BY-GAME SYSTEM (Oct 27 2026, founder GO; the second system, run beside the live read) ──────────────────
+// One game as a fan who watched it knows it, from one team's side: where and when, each side's rest and coach, how it
+// went (quarters, kicking, drives), both quarterbacks, both boxes, who each side was without, every player on both
+// sides with what he did (passing, rushing, receiving; tackles, sacks, hits, takeaways) and his share of the snaps, and
+// the opponent coming in. No season averages or ranks: the opponent is its results. nflverse publishes no play-level
+// participation this season, so who was on the field is each player's snap share.
+const plural = (k, one, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+const passLine = (r) => `${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT${n(r.sacks_suffered) ? `, sacked ${plural(n(r.sacks_suffered), 'time')} for ${Math.abs(n(r.sack_yards_lost))} yds` : ''}`;
+function sidePlayers(d, x, code) {
+  const rows = (d.playerWeek || []).filter((r) => r.game_id === x.g.game_id && r.team === code);
+  const snaps = (d.snaps || []).filter((s) => s.game_id === x.g.game_id && s.team === code);
+  const snapOf = new Map(snaps.map((s) => [sameKey(s.player), s]));
+  const pct = (v) => `${Math.round(100 * n(v))}%`;
+  const snapText = (name) => { const s = snapOf.get(sameKey(name)); return !s ? '' : ` · ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ') || 'no snaps'}`; };
+  const offense = rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets)).sort((a, b) => (n(b.attempts) - n(a.attempts)) || (n(b.carries) + n(b.targets) - n(a.carries) - n(a.targets)))
+    .map((r) => `    ${r.player_display_name} (${r.position}) ${[n(r.attempts) ? passLine(r) : null,
+      n(r.carries) ? `${n(r.carries)} ${n(r.carries) === 1 ? 'carry' : 'carries'} ${n(r.rushing_yards)} yds${n(r.rushing_tds) ? ` ${n(r.rushing_tds)} TD` : ''}` : null,
+      n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null,
+      n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost) ? `${n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost)} fumble lost` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`);
+  const tackles = (r) => n(r.def_tackles_solo) + n(r.def_tackles_with_assist) + n(r.def_tackle_assists);
+  const defense = rows.filter((r) => tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced))
+    .sort((a, b) => tackles(b) - tackles(a))
+    .map((r) => `    ${r.player_display_name} (${r.position}) ${[tackles(r) ? plural(tackles(r), 'tackle') : null, n(r.def_tackles_for_loss) ? `${n(r.def_tackles_for_loss)} for loss` : null,
+      n(r.def_sacks) ? `${n(r.def_sacks)} sack${n(r.def_sacks) === 1 ? '' : 's'}` : null, n(r.def_qb_hits) ? `${n(r.def_qb_hits)} QB hit${n(r.def_qb_hits) === 1 ? '' : 's'}` : null,
+      n(r.def_interceptions) ? `${n(r.def_interceptions)} INT` : null, n(r.def_pass_defended) ? plural(n(r.def_pass_defended), 'pass defended', 'passes defended') : null,
+      n(r.def_fumbles_forced) ? `${n(r.def_fumbles_forced)} forced fumble${n(r.def_fumbles_forced) === 1 ? '' : 's'}` : null, n(r.def_tds) ? `${n(r.def_tds)} TD` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`);
+  // Everyone else who played: his snap share.
+  const named = new Set(rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets) || tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced)).map((r) => sameKey(r.player_display_name)));
+  const others = snaps.filter((s) => !named.has(sameKey(s.player)) && (n(s.offense_snaps) || n(s.defense_snaps) || n(s.st_snaps)))
+    .sort((a, b) => Math.max(n(b.offense_pct), n(b.defense_pct)) - Math.max(n(a.offense_pct), n(a.defense_pct)))
+    .map((s) => `${s.player} (${s.position}) ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ')}`);
+  return { offense, defense, others, onFile: rows.length > 0, snapsOnFile: snaps.length > 0 };
+}
+
+/** A team's games before `before` in the game-by-game layout's record words: W-L(-T). */
+export const recordOf = (d, code, before) => record(teamGames(d, code, d.season, before));
+
+/** One game in full, from `code`'s side (the second system). */
+export function nflGameFull(d, x, code, before) {
+  const o = x.opp;
+  const head = `Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(o))}${x.g.stadium ? ` at ${x.g.stadium}` : ''}${x.g.roof ? ` (${[x.g.roof, x.g.surface].filter(Boolean).join(', ')})` : ''} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}`;
+  const rest = (k) => (x.g[`${k}_rest`] ? `${x.g[`${k}_rest`]} days` : 'not on file');
+  const ourKey = x.home ? 'home' : 'away', theirKey = x.home ? 'away' : 'home';
+  const setting = `  setting: ${nickname(code)} ${rest(ourKey)} since their last game, coach ${x.g[`${ourKey}_coach`] || 'not on file'} · ${nickname(o)} ${rest(theirKey)}, coach ${x.g[`${theirKey}_coach`] || 'not on file'}`;
+  const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
+  const scoring = !d.ledgerGames ? 'score by quarter and drives: not on file' : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, code);
+  const kicking = x.off && x.def ? `kicking: ${nickname(code)} ${kicks(x.off.kicking)}; ${nickname(o)} ${kicks(x.def.kicking)}` : null;
+  const theirs = teamGames(d, o, d.season, before).find((g) => g.g.game_id === x.g.game_id);
+  const qb = (sideCode, gx) => { const ps = passersOf(d, x.g, sideCode); return ps.length ? ps.map((r) => `${r.player_display_name} ${passLine(r)}`).join('; ') : 'not on file'; };
+  const ourGames = teamGames(d, code, d.season, before), oppGames = teamGames(d, o, d.season, before);
+  const absent = (c, gs) => { const a = lineupChanges(d, c, gs).absent?.get(x.g.game_id) || []; return a.length ? a.map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ') : 'none of its regulars'; };
+  const changesUs = lineupChanges(d, code, ourGames).get(x.g.game_id), changesThem = lineupChanges(d, o, oppGames).get(x.g.game_id);
+  const lines = [head, setting, weather ? `  ${weather}` : null,
+    `  how it went: ${[scoring, kicking].filter(Boolean).join(' · ')}`,
+    d.ledgerGames && x.ledger ? `  ${driveLine(x, code)}` : null,
+    `  quarterbacks: ${nickname(code)} ${qb(code)} · ${nickname(o)} ${qb(o)}`,
+    `  ${boxLine(x, code)}`,
+    `  without that day: ${nickname(code)} ${absent(code, ourGames)} · ${nickname(o)} ${absent(o, oppGames)}`,
+    changesUs ? `  ${nickname(code)} lineup: ${changesUs.replace(/^missing regulars: [^·]*· ?/, '')}` : null,
+    changesThem ? `  ${nickname(o)} lineup: ${changesThem.replace(/^missing regulars: [^·]*· ?/, '')}` : null];
+  for (const c of [code, o]) {
+    const p = sidePlayers(d, x, c);
+    lines.push(`  ${teamName(c)}:${p.onFile ? '' : ' player lines not on file'}`);
+    if (p.offense.length) lines.push('   offense', ...p.offense);
+    if (p.defense.length) lines.push('   defense', ...p.defense);
+    if (p.others.length) lines.push(`   also played (snaps): ${p.others.join('; ')}`);
+    else if (!p.snapsOnFile) lines.push('   snap counts not on file');
+  }
+  // The opponent coming in: its record before this game and its games before it, then its record before tonight.
+  const prior = oppGames.filter((g) => g.date < x.date);
+  const res = (g) => `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa} ${versus(g, nickname(g.opp), true)}${g.qb ? ` (QB ${g.qb})` : ''}`;
+  lines.push(`  ${teamName(o)} coming in: ${record(prior)}${prior.length ? `; ${prior.map(res).join('; ')}` : ' (their first game)'} · ${record(oppGames)} before tonight`);
+  return lines.filter(Boolean).join('\n');
+}
+
+/** An older game in one line, from `code`'s side: result, score, both quarterbacks, who it was without. */
+export function nflGameShort(d, x, code, before) {
+  const a = lineupChanges(d, code, teamGames(d, code, d.season, before)).absent?.get(x.g.game_id) || [];
+  return `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} ${versus(x, teamName(x.opp), true)} · QB ${x.qb || 'not on file'} · theirs ${x.oppQb || 'not on file'} · without: ${a.length ? a.map((p) => p.name).join(', ') : 'none of its regulars'}`;
+}
+
+/** Every team's record before `before`, best first, as one table. */
+export function nflLeagueRecords(d, before) {
+  const codes = [...new Set((d.schedule || []).filter((g) => g.season === String(d.season)).flatMap((g) => [g.home_team, g.away_team]))];
+  const rows = codes.map((c) => { const gs = teamGames(d, c, d.season, before); const w = gs.filter((x) => x.won).length, t = gs.filter((x) => x.tied).length; return { c, w, l: gs.length - w - t, t, gp: gs.length }; })
+    .sort((a, b) => (b.w + b.t / 2) / Math.max(1, b.gp) - (a.w + a.t / 2) / Math.max(1, a.gp) || b.w - a.w);
+  return rows.map((r) => `${r.c} ${nickname(r.c)} ${r.w}-${r.l}${r.t ? `-${r.t}` : ''}`).join(' · ');
+}
+
+/** A team's games before `before` (the second system's read takes its window from these). */
+export const nflTeamGames = (d, team, before) => teamGames(d, codeOf(team), d.season, before);
