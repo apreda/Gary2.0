@@ -124,8 +124,13 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   return cachedResearch(`espn_cfb_box_v8:${eventId}`, async () => {
+    // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
+    // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
-      return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl), eventId);
+      return gameBoxFromSummary(await getJson(`${SITE}/summary?event=${eventId}`, fetchImpl).catch(async () => {
+        await new Promise((r) => setTimeout(r, 2000));
+        return getJson(`${SITE}/summary?event=${eventId}`, fetchImpl);
+      }), eventId);
     } catch (error) {
       console.warn(`[NCAAF box] ESPN box for game ${eventId} not retrieved: ${error.message}`);
       return { unavailable: true, reason: error.message };
