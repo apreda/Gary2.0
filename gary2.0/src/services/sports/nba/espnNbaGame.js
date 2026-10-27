@@ -77,3 +77,28 @@ export async function espnPlayerLines(g) {
   return out.length ? out : null;
 }
 export { keyOf as espnNameKey };
+
+const words = (n) => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w && !/^(jr|sr|ii|iii|iv)$/.test(w));
+/** One player's official line among his side's (`lines` from espnPlayerLines, one side): the same name, else the one
+ * teammate with that last name ("Ace" and "Airious" Bailey), else the one whose name holds every part of his or the
+ * other way round ("Hansen Yang" is "Yang Hansen", "David Jones" is "David Jones Garcia"); null when none or several. */
+export function officialLineFor(name, lines) {
+  const only = (xs) => (xs.length === 1 ? xs[0] : null);
+  const mine = words(name), within = (a, b) => a.length >= 2 && a.every((w) => b.includes(w));
+  return lines.find((x) => x.key === keyOf(name)) || only(lines.filter((x) => x.last === mine[mine.length - 1]))
+    || only(lines.filter((x) => within(mine, words(x.name)) || within(words(x.name), mine)));
+}
+
+const COUNTED = ['pts', 'oreb', 'dreb', 'reb', 'ast', 'stl', 'blk', 'turnover', 'pf', 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'];
+/** A BDL box score with each player's counts in the official box's (Oct 27 2026 loop: 13 of 1,180 player lines
+ * differed, Boozer's 16 points officially 14 among them). A copy; the box as it was when ESPN has no final box. */
+export async function withOfficialPlayerLines(g, box) {
+  if (!box) return box;
+  const official = await espnPlayerLines(g).catch(() => null);
+  if (!official) return box;
+  const fix = (side, key) => side && ({ ...side, players: (side.players || []).map((p) => {
+    const o = officialLineFor(`${p.player?.first_name} ${p.player?.last_name}`, official.filter((x) => x.side === key));
+    return o ? { ...p, ...Object.fromEntries(COUNTED.filter((k) => o[k] != null).map((k) => [k, o[k]])) } : p;
+  }) });
+  return { ...box, home_team: fix(box.home_team, 'home'), visitor_team: fix(box.visitor_team, 'away') };
+}

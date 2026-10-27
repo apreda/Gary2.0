@@ -10,7 +10,7 @@ import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../providers/nbaOfficialInjuryReport.js';
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
-import { espnTeamBox } from './espnNbaGame.js';
+import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -149,7 +149,7 @@ async function playedFor(teamId, before) {
   const games = ((await ballDontLieService.getGames('basketball_nba', { team_ids: [teamId], seasons: [nbaSeason()], per_page: 100, paginateAll: true })) || [])
     .filter((g) => !g.postseason && finishedBefore(g, before))
     .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date)).slice(0, PLAYED_FROM_GAMES);
-  const boxes = await Promise.all(games.map((g) => boxOf(g, teamId).then((b) => boxSides(b, teamId)).catch(() => null)));
+  const boxes = await Promise.all(games.map((g) => boxOf(g, teamId).then((b) => withOfficialPlayerLines(g, b)).then((b) => boxSides(b, teamId)).catch(() => null)));
   if (boxes.some((b) => !b)) return null;
   return { n: games.length, keys: new Set(boxes.flatMap((b) => b.filter((p) => p.min > 0).map((p) => playerKey(p.name)))) };
 }
@@ -234,7 +234,7 @@ export async function teamSeason(team, before = new Date(), season = nbaSeason()
   const games = (await ballDontLieService.getGames('basketball_nba', { team_ids: [t.id], seasons: [season], per_page: 100, paginateAll: true }) || [])
     .filter((g) => finishedBefore(g, before))
     .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date));
-  const boxes = await Promise.all(games.slice(0, BOX_GAMES).map((g) => boxOf(g, t.id).then((b) => boxSides(b, t.id)).catch(() => null)));
+  const boxes = await Promise.all(games.slice(0, BOX_GAMES).map((g) => boxOf(g, t.id).then((b) => withOfficialPlayerLines(g, b)).then((b) => boxSides(b, t.id)).catch(() => null)));
   return { team, id: t.id, city: t.city === 'LA' ? 'Los Angeles' : t.city, nickname: t.name, games, boxes };
 }
 

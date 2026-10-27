@@ -18,7 +18,7 @@ import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY } from '../../providers/bdl/
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
-import { espnVenue, espnTeamBox, espnPlayerLines, espnNameKey } from './espnNbaGame.js';
+import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
 
 export const NBA_RECORD_VERSION = 13;
 
@@ -223,20 +223,12 @@ export async function buildNbaGameRecord(gameId) {
   }
   // Each player's line against the official box (ESPN): where a count differs, the official one stands (Oct 27 2026
   // loop: 13 differences in 1,180 lines, among them Boozer's 16 points, officially 14, and Marshall's missing shot). A
-  // player is matched by name (see below for the other ways the two spell one player).
+  // player is matched as officialLineFor (espnNbaGame.js) says.
   const official = await espnPlayerLines(g).catch(() => null);
   const corrected = [], unmatched = [], matched = new Set();
   if (official) {
     for (const p of players.filter((x) => x.min > 0)) {
-      const k = espnNameKey(p.name), last = espnNameKey(p.name.split(' ').filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop());
-      const sameSide = official.filter((o) => o.side === p.side);
-      const words = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter((w) => w && !/^(jr|sr|ii|iii|iv)$/.test(w));
-      const mine = words(p.name), within = (a, b) => a.length >= 2 && a.every((w) => b.includes(w));
-      const only = (xs) => (xs.length === 1 ? xs[0] : null);
-      // Same name, else the one teammate with that last name, else the one whose name holds every part of his or the
-      // other way round ("Hansen Yang" is "Yang Hansen", "David Jones" is "David Jones Garcia").
-      const o = sameSide.find((x) => x.key === k) || only(sameSide.filter((x) => x.last === last))
-        || only(sameSide.filter((x) => within(mine, words(x.name)) || within(words(x.name), mine)));
+      const o = officialLineFor(p.name, official.filter((x) => x.side === p.side));
       if (!o) { unmatched.push(p.name); continue; }
       matched.add(o);
       const fixed = [];
