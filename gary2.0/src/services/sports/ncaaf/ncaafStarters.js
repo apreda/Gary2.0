@@ -56,7 +56,12 @@ const text = (html) => decode(String(html).replace(/<!--.*?-->/gs, '').replace(/
 export const nameKey = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 const schoolKey = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
 // "Hawkins Jr., Michael" is Michael Hawkins Jr.
-const displayName = (s) => { const [last, first] = String(s).split(','); return first ? `${first.trim()} ${last.trim()}` : String(s).trim(); };
+// "Glover,Jr." (a site that kept only the suffix as the first name) is Glover Jr.
+const displayName = (s) => {
+  const [last, first] = String(s).split(',');
+  if (!first) return String(s).trim();
+  return /^(jr|sr|ii|iii|iv|v)\.?$/i.test(first.trim()) ? `${last.trim()} ${first.trim()}` : `${first.trim()} ${last.trim()}`;
+};
 
 /** One official box page's starters: { date: 'YYYY-MM-DD', teams: [{ label, starters: [{ name, jersey, position, unit }] }] }, or null. */
 export function startersFromBoxPage(html) {
@@ -170,4 +175,22 @@ export function startedIn(starters, name) {
   const key = nameKey(name), w = words(name);
   if (starters.some((s) => s.key === key)) return true;
   return starters.some((s) => { const v = words(s.name); return v.length && w.length && v[v.length - 1] === w[w.length - 1] && v[0][0] === w[0][0]; });
+}
+
+/**
+ * The starters among one side's box-score players ([{ name, unit }], unit 'offense' or 'defense' by what the box counts
+ * for him): a Set of the names that started, and the starters left unmatched. By startedIn, then, for a starter still
+ * unmatched, the one player left on the same side of the ball with his last name when no other starter has it ("Ezekiel
+ * Durham-Campbell" in the official box is ESPN's "Zeke Durham-Campbell"; a defensive end "Taylor Brown" is never the
+ * starting guard "Kevin Brown").
+ */
+export function startersAmong(starters, players) {
+  const hit = new Set(), used = new Set();
+  for (const p of players) { const x = (starters || []).find((st) => !used.has(st) && startedIn([st], p.name)); if (x) { hit.add(p.name); used.add(x); } }
+  const last = (n) => words(n).at(-1);
+  for (const st of (starters || []).filter((x) => !used.has(x))) {
+    const same = players.filter((p) => !hit.has(p.name) && last(p.name) === last(st.name) && p.unit === st.unit);
+    if (same.length === 1 && starters.filter((x) => last(x.name) === last(st.name)).length === 1) { hit.add(same[0].name); used.add(st); }
+  }
+  return { started: hit, unmatched: (starters || []).filter((x) => !used.has(x)) };
 }

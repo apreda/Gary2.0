@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { startersFromBoxPage, teamStarters, startedIn } from '../../src/services/sports/ncaaf/ncaafStarters.js';
+import { startersFromBoxPage, teamStarters, startedIn, startersAmong } from '../../src/services/sports/ncaaf/ncaafStarters.js';
 
 const POS = ['OL', 'OL', 'OL', 'OL', 'OL', 'QB', 'RB', 'TE', 'WR', 'WR', 'WR'];
 const DEF = ['CB', 'CB', 'DE', 'DE', 'DL', 'DL', 'LB', 'LB', 'LB', 'S', 'S'];
@@ -47,5 +47,13 @@ describe('official box starters', () => {
     expect(startedIn(starters, 'Michael Hawkins')).toBe(true);
     expect(startedIn(starters, 'Matthew Sieg')).toBe(true);
     expect(startedIn(starters, 'Nate Gabriel')).toBe(false);
+  });
+
+  it('pairs a nickname by last name on the same side of the ball, when no other starter shares it', () => {
+    const starters = [{ name: 'Ezekiel Durham-Campbell', key: 'ezekieldurhamcampbell', unit: 'defense' }, { name: 'Nick Krahe', key: 'nickkrahe', unit: 'offense' },
+      { name: 'Kevin Brown', key: 'kevinbrown', unit: 'offense' }];
+    const got = startersAmong(starters, [{ name: 'Zeke Durham-Campbell', unit: 'defense' }, { name: 'Taylor Brown', unit: 'defense' }, { name: 'Cam Cook', unit: 'offense' }]);
+    expect([...got.started]).toEqual(['Zeke Durham-Campbell']);
+    expect(got.unmatched.map((x) => x.name)).toEqual(['Nick Krahe', 'Kevin Brown']);
   });
 });

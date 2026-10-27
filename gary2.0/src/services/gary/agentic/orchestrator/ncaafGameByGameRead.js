@@ -13,6 +13,7 @@ import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation } fro
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { getNcaafGameBox, getNcaafRosterPositions } from '../scoutReport/sports/ncaafGameBox.js';
+import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
@@ -31,7 +32,7 @@ async function teamInfo(id) {
   if (!t) return null;
   // FBS is ESPN's group 80, as a conference's parent or the team's own group; every other group is FCS or below.
   const division = !t.groups ? null : t.groups.parent?.id === '80' || t.groups.id === '80' ? 'FBS' : 'FCS';
-  return { id: String(t.id), name: t.displayName, short: t.nickname || t.shortDisplayName || t.displayName, division };
+  return { id: String(t.id), name: t.displayName, short: t.nickname || t.shortDisplayName || t.displayName, division, college: t.location, abbr: t.abbreviation };
 }
 
 /** A team's finished games before `before` (an instant), oldest first: { id, date, venue, neutral, home, us, them }. */
@@ -53,11 +54,17 @@ const vs = (g) => (g.neutral ? 'vs' : g.home ? 'vs' : '@');
 const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${g.them.score}${g.ot ? ` in ${g.ot > 1 ? `${g.ot} overtimes` : 'overtime'}` : ''}`;
 
 // Each player's position from his team's current ESPN roster, as the NFL and NBA reads show theirs; a player no longer
-// on the roster is shown without one.
-function playerLines(box, teamId, positions = {}) {
+// on the roster is shown without one. "started" from the official box's lineup (Oct 27 2026 data loop), when a school
+// posts it: null `starters` is a game with no lineup on file.
+function playerLines(box, teamId, positions = {}, starters = null) {
   const ps = (box.players || []).filter((p) => p.teamId === String(teamId));
   const s = (p, c, k) => p.stats?.[c]?.[k];
-  const who = (p) => `${p.name}${positions[p.id] ? ` (${positions[p.id]})` : ''}`;
+  // The starters the box counts nothing for (the offensive line, mostly) are named after, so every game's lineup is whole.
+  const lined = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions') || s(p, 'defensive', 'totalTackles')
+    || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'));
+  const unit = (p) => (s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions') ? 'offense' : 'defense');
+  const lineup = starters ? startersAmong(starters, lined.map((p) => ({ name: p.name, unit: unit(p) }))) : null;
+  const who = (p) => { const tags = [positions[p.id], lineup?.started.has(p.name) ? 'started' : null].filter(Boolean); return `${p.name}${tags.length ? ` (${tags.join(', ')})` : ''}`; };
   const off = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions'))
     .sort((a, b) => (s(b, 'passing', 'passingAttempts') || 0) - (s(a, 'passing', 'passingAttempts') || 0) || ((s(b, 'rushing', 'rushingAttempts') || 0) + (s(b, 'receiving', 'receptions') || 0)) - ((s(a, 'rushing', 'rushingAttempts') || 0) + (s(a, 'receiving', 'receptions') || 0)))
     .map((p) => `    ${who(p)} ${[s(p, 'passing', 'passingAttempts') ? `${s(p, 'passing', 'completions')}-of-${s(p, 'passing', 'passingAttempts')}, ${s(p, 'passing', 'passingYards')} yds, ${s(p, 'passing', 'passingTouchdowns') || 0} TD, ${s(p, 'passing', 'interceptions') || 0} INT` : null,
@@ -86,7 +93,8 @@ function playerLines(box, teamId, positions = {}) {
     .map((p) => `${p.name} ${[s(p, 'kicking', 'fieldGoalAttempts') ? `FG ${s(p, 'kicking', 'fieldGoalsMade')}-of-${s(p, 'kicking', 'fieldGoalAttempts')} (${distances(p)})` : null,
       s(p, 'kicking', 'extraPointAttempts') ? `XP ${s(p, 'kicking', 'extraPointsMade')}-of-${s(p, 'kicking', 'extraPointAttempts')}` : null,
       s(p, 'punting', 'punts') ? `${plural(s(p, 'punting', 'punts'), 'punt')} for ${s(p, 'punting', 'puntYards')} yds, ${s(p, 'punting', 'puntsInside20') || 0} inside the 20` : null].filter(Boolean).join(', ')}`);
-  return { off, def, kick, onFile: ps.length > 0 };
+  const quiet = lineup ? lineup.unmatched.map((x) => `${x.name}${x.position ? ` (${x.position})` : ''}`) : null;
+  return { off, def, kick, quiet, onFile: ps.length > 0 };
 }
 
 async function fullGame(g, season, tonight) {
@@ -104,13 +112,17 @@ async function fullGame(g, season, tonight) {
     `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,
     `  drives: ${drives(g.us.id, g.us.short)} · ${drives(g.them.id, g.them.short)}`,
     `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
-  for (const side of [g.us, g.them]) {
+  const [usInfo, themInfo] = await Promise.all([teamInfo(g.us.id), opp]);
+  const lineups = await Promise.all([[usInfo, themInfo], [themInfo, usInfo]].map(([a, b]) => (a?.college
+    ? teamStarters({ college: a.college, abbr: a.abbr }, [{ gameId: g.id, date: g.date, opponent: { college: b?.college, abbr: b?.abbr } }], season).then((m) => m.get(String(g.id)) || null).catch(() => null) : null)));
+  for (const [i, side] of [g.us, g.them].entries()) {
     const roster = await getNcaafRosterPositions(side.id).catch(() => null);
-    const p = playerLines(box, side.id, roster?.positions || {});
+    const p = playerLines(box, side.id, roster?.positions || {}, lineups[i]);
     lines.push(`  ${side.name}:${p.onFile ? '' : ' player lines not on file'}`);
     if (p.off.length) lines.push('   offense', ...p.off);
     if (p.def.length) lines.push('   defense', ...p.def);
     if (p.kick.length) lines.push(`   kicking and punting: ${p.kick.join('; ')}`);
+    lines.push(`   ${p.quiet ? `starters with no stat line: ${p.quiet.join(', ') || 'none'}` : 'starting lineup: not on file'}`);
   }
   // The opponent coming in: its division, its record before this game and its games, its record before tonight.
   const oppGames = await finishedGames(g.them.id, season, tonight);

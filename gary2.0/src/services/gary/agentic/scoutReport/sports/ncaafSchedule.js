@@ -201,12 +201,13 @@ const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /,
 
 /**
  * Who played quarterback in one game (founder, Oct 3 2026: "QB starter for
- * prior games this season"). The box score does not say who started, so this
- * names whoever threw the most passes, plus anyone else with ten or more:
- * a season's passing numbers are sometimes two quarterbacks' work (Baylor
- * 2026: two games each).
+ * prior games this season"): whoever threw the most passes, plus anyone else
+ * with five or more, as a season's passing numbers are sometimes two
+ * quarterbacks' work (Baylor 2026: two games each). ESPN's box does not say who
+ * started; the official box's lineup does, where a school posts it (Oct 27
+ * 2026), and marks him.
  */
-function quarterbackOfGame(rows, result, onFile) {
+function quarterbackOfGame(rows, result, onFile, starters = null) {
   if (!onFile.has(String(result.gameId))) return 'quarterback: the box score\'s player lines are not on file for this game';
   const passers = (rows || [])
     .filter((row) => String(row?.game?.id) === String(result.gameId) && row?.player?.first_name && Number(row.passing_attempts) > 0)
@@ -214,12 +215,17 @@ function quarterbackOfGame(rows, result, onFile) {
   if (!passers.length) return 'quarterback: no passing rows for this game';
   // Everyone with five or more passes, as the NFL's line reads (Oct 24 2026: Michigan's Tommy Carr played the second half
   // against Penn State, 7 passes, and the 10-pass floor left the only look at today's starter out of the line).
-  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5);
+  const qbs = (starters || []).filter((x) => /^QB$/i.test(x.position || ''));
+  const nameOf = (row) => `${row.player.first_name} ${row.player.last_name}`;
+  const started = (row) => qbs.length > 0 && startedIn(qbs, nameOf(row));
+  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5 || started(row));
+  // A starter who threw no pass (hurt on the first series) is named too.
+  const unseen = qbs.filter((x) => !passers.some((row) => startedIn([x], nameOf(row)))).map((x) => `${x.name} started, no pass`);
   // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine
   // games); college box scores count sacks as runs, so the line says so.
   const runs = (row) => (Number(row.rushing_attempts) > 0 ? `; ${plural(row.rushing_attempts, 'run')} for ${row.rushing_yards ?? '?'} yds${Number(row.rushing_touchdowns) > 0 ? `, ${row.rushing_touchdowns} TD` : ''} (sacks included)` : '');
-  return `quarterback: ${shown.map((row) => `${row.player.first_name} ${row.player.last_name} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
-    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}`).join('; ')}`;
+  return `quarterback: ${[...unseen, ...shown.map((row) => `${nameOf(row)}${started(row) ? ' (started)' : ''} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
+    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}`)].join('; ')}`;
 }
 
 // The player rows against the team's own box (Oct 23 2026 source audit: BDL's college player rows missed overtime
@@ -757,7 +763,7 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
       const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
       const theirQb = played[i].oppQb?.get(String(r.gameId));
-      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
+      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
