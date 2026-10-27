@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, espnNameKey } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 11;
+export const NBA_RECORD_VERSION = 12;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -100,11 +100,12 @@ export function flowOf(plays, final) {
 // quarter is followed on its own: its first five are the players with minutes in it who were never subbed in or out of
 // it (on the floor all of it), or who were subbed out of it before being subbed in; the substitutions then give each
 // player's seconds on the floor and the five at its end. The box's minutes by quarter are whole minutes, cut down
-// ("11" for 11:50), so a quarter followed this way must agree with them to the minute, or it is null.
+// ("11" for 11:50), so a quarter followed this way must fall within each player's minute, or it is null.
 export function followQuarter(plays, players, q) {
   const sideOf = new Map(players.map((p) => [p.id, p.side]));
   const minIn = new Map(players.map((p) => [p.id, p.quarters?.find((x) => x.q === q)?.min || 0]));
-  const inQ = [...(plays || [])].filter((p) => p.period === q).sort((a, b) => a.order - b.order);
+  // In clock order: the feed's own order sometimes isn't (a 3:52 substitution logged before one at 5:46).
+  const inQ = [...(plays || [])].filter((p) => p.period === q).sort((a, b) => clockSeconds(b.clock) - clockSeconds(a.clock) || a.order - b.order);
   const length = q <= 4 ? 720 : 300;
   const all = inQ.filter((p) => p.type === 'Substitution').map((p) => ({ p, ids: (p.participants || []).filter((id) => sideOf.has(id)) })).filter((x) => x.ids.length === 2);
   // A substitution logged at the quarter's first second is a change made between quarters: the player coming in starts it.
@@ -115,7 +116,8 @@ export function followQuarter(plays, players, q) {
   for (const [id, m] of minIn) if (m > 0 && !subbed.has(id)) court[sideOf.get(id)].add(id);
   for (const { ids: [inId] } of atStart) if (minIn.get(inId) > 0 && !subbed.has(inId)) court[sideOf.get(inId)].add(inId);
   const entered = new Set();
-  for (const { ids: [inId, outId] } of subs) { if (!entered.has(outId) && minIn.get(outId) > 0) court[sideOf.get(outId)].add(outId); entered.add(inId); }
+  // Subbed out before being subbed in: on the floor at the start, even for under a minute (the box shows "0" for 0:48).
+  for (const { ids: [inId, outId] } of subs) { if (!entered.has(outId)) court[sideOf.get(outId)].add(outId); entered.add(inId); }
   if (court.home.size !== 5 || court.away.size !== 5) return null;
   const secs = new Map(); let clock = length;
   const credit = (to) => { for (const side of ['home', 'away']) for (const id of court[side]) secs.set(id, (secs.get(id) || 0) + (clock - to)); clock = to; };
@@ -126,7 +128,8 @@ export function followQuarter(plays, players, q) {
     court[side].delete(outId); court[side].add(inId);
   }
   credit(0);
-  if ([...minIn].some(([id, m]) => Math.abs((secs.get(id) || 0) / 60 - m) > 1)) return null;
+  // The box's whole minutes are cut down, so a player's time worked out here must fall within the minute it names.
+  if ([...minIn].some(([id, m]) => { const t = (secs.get(id) || 0) / 60; return t < m - 0.02 || t > m + 1.02; })) return null;
   return { court: { home: [...court.home], away: [...court.away] }, secs };
 }
 
@@ -208,6 +211,7 @@ export async function buildNbaGameRecord(gameId) {
   const closing = followed[followed.length - 1] ? closingOf(plays, players, periods) : null;
   for (const [i, t] of followed.entries()) if (t) for (const p of players) if (p.quarters) p.quarters[i].min = Math.round((t.secs.get(p.id) || 0) / 6) / 10;
   const cutQuarters = followed.filter((t) => !t).length;
+  const wholeMinuteQuarters = periods.filter((q, i) => !followed[i]);
   // Some boxes give whole minutes only (the Oct 20 games: "30" for 30:52).
   const boxWhole = [...(box.home_team.players || []), ...(box.visitor_team.players || [])].every((p) => !String(p.min ?? '').includes(':'));
   // Points by quarter are dropped for a player whose quarters don't add up to his points; minutes and points both go when
@@ -296,6 +300,7 @@ export async function buildNbaGameRecord(gameId) {
     incidents: plays ? incidentsOf(plays) : null,
     closing,
     lastOff,
+    wholeMinuteQuarters,
     report, players, teams, flow };
   checks.push({ check: 'the venue is on file', ok: Boolean(record.setting.home.venue) });
   const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason)).map((r) => r.name);

@@ -109,7 +109,8 @@ export function fullGameText(rec, teamId, byTeam) {
   const q4 = (side) => rec.players.filter((p) => p.side === side && p.quarters).map((p) => ({ name: p.name, min: p.quarters.filter((x) => x.q >= 4).reduce((a, x) => a + x.min, 0) }))
     .filter((x) => x.min >= 1).sort((a, b) => b.min - a.min).map((x) => `${x.name} ${Math.round(x.min)}`).join(', ');
   lines.push(`  on the floor at the end: ${rec.closing ? `${rec[us].short} ${rec.closing[us].join(', ')} · ${rec[them].short} ${rec.closing[them].join(', ')}` : 'not on file (the play-by-play does not account for the last quarter\'s minutes)'}`);
-  lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
+  const cut = (rec.wholeMinuteQuarters || []).filter((q) => q >= 4).length ? ' (whole minutes, cut down)' : '';
+  lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}${cut}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
   if (rec.incidents?.length) lines.push(`  technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}`);
   lines.push(`  injury report at tip: ${reportText(rec, us, before(rec[us].id))} · ${reportText(rec, them, before(rec[them].id))}`);
   for (const side of [us, them]) {
