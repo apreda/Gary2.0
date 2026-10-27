@@ -1,7 +1,7 @@
 /**
  * THE NBA PROPS DESK (Oct 19 2026, for the Oct 20 opener; founder: "picks page is just for people wanting picks for
  * each game with 2 props"). The NFL props desk's shape: the game as the game pick reads it (nbaRead.js, from Oct 22)
- * with the day's news, Gary's published side as data, the props people bet for each team's main players, each
+ * with the day's news, the props people bet for each team's main players, each
  * player's own recent games, and the question. No formula, no projection, no hit rates.
  *
  * The menu: points, rebounds, assists, threes and points + rebounds + assists, the main over/under line of each.
@@ -88,22 +88,6 @@ async function publishedDesk(game) {
   } catch { return null; }
 }
 
-/** Gary's published side on this game (daily_picks, the one row for the date), as data. */
-async function publishedCall(game) {
-  if (!CALL_URL || !CALL_KEY || !game?.commence_time) return null;
-  try {
-    const url = `${CALL_URL}/rest/v1/daily_picks?date=eq.${etDate(game.commence_time)}&select=picks&limit=1`;
-    const resp = await fetch(url, { headers: { apikey: CALL_KEY, Authorization: `Bearer ${CALL_KEY}` }, signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) return null;
-    const raw = (await resp.json())?.[0]?.picks;
-    const picks = Array.isArray(raw) ? raw : JSON.parse(raw || '[]');
-    const id = String(game.bdl_game_id ?? game.id ?? '');
-    const p = picks.find((x) => (String(x?.league || x?.sport || '').toUpperCase().includes('NBA') || /basketball_nba/.test(String(x?.sport || '')))
-      && (String(x?.bdl_game_id ?? x?.game_id ?? '') === id || (norm(x?.homeTeam) === norm(game.home_team) && norm(x?.awayTeam) === norm(game.away_team))));
-    return p?.pick ? { pick: p.pick, rationale: p.rationale || '' } : null;
-  } catch { return null; }
-}
-
 // THE GAME-BY-GAME SHEET (Oct 26 2026 side-by-side test, test runs only): GARY_PROP_SHEETS=games lists each of the last
 // ten games with its date and opponent and no season average (founder: "all they do is play games"; a guess, to be
 // tested before props change: "71, 44, 92, 58, 66" against a line may tell more than one average).
@@ -180,16 +164,15 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   const sheets = (await Promise.all([...byPlayer.values()].map((p) => playerSheet(p, p.markets, asOf).catch(() => null)))).filter(Boolean);
   const sheetsBlock = sheets.length ? `\n\n═══ THE PLAYERS — each one's own games, for the stats his markets settle on ═══\n${sheets.join('\n\n')}` : '';
 
-  const call = await publishedCall(game);
-  const gameCall = call ? `\n\n═══ GARY'S GAME CALL — this game, already published ═══\n${call.pick}\n\n${call.rationale}` : '';
+  // Gary's published game pick no longer rides the desk (Oct 27 2026, founder GO; see footballPropsDesk.js).
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${deskText}${gameCall}\n\n${board.text}${sheetsBlock}\n\n${NBA_PROPS_ASK}`;
-  const winnersEvidence = { deskText: `${deskText}${gameCall}\n${board.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const userMessage = `## THE DESK — ${matchup}\n\n${deskText}\n\n${board.text}${sheetsBlock}\n\n${NBA_PROPS_ASK}`;
+  const winnersEvidence = { deskText: `${deskText}\n${board.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${deskText}${gameCall}\n${board.text}${sheetsBlock}` }],
+    corpus: [{ content: `${deskText}\n${board.text}${sheetsBlock}` }],
     recentScores: null,
   });
 

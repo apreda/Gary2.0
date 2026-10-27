@@ -142,11 +142,7 @@ export const NCAAF_FOOTBALL_PROPS_PROMPT_SHA = createHash('sha256')
   .update(FOOTBALL_PROPS_PROMPT_SHA + NCAAF_PROPS_EVIDENCE_SHA)
   .digest('hex').slice(0, 12);
 
-// ── GARY'S GAME CALL (published pick as DATA, same as the MLB desk) ─────────
-// NFL game picks live in weekly_nfl_picks keyed (week_start, season) and carry
-// the provider id as bdl_game_id; NCAAF game picks live in daily_picks keyed
-// by the NCAAF slate date and carry it as game_id. Fail-soft by contract: no
-// call, no section.
+// NFL game picks live in weekly_nfl_picks keyed (week_start, season); the week helpers below name that week.
 const CALL_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const CALL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -170,34 +166,6 @@ export function nflSeasonForInstant(instant) {
   return values.month >= 8 ? values.year : values.year - 1;
 }
 
-async function fetchFootballGameCall(league, game) {
-  const gameId = game.bdl_game_id ?? game.id;
-  if (!CALL_URL || !CALL_KEY || gameId == null) return null;
-  try {
-    const headers = { apikey: CALL_KEY, Authorization: `Bearer ${CALL_KEY}` };
-    let url;
-    if (league === 'NFL') {
-      const weekStart = nflWeekStartForInstant(game.commence_time);
-      const season = nflSeasonForInstant(game.commence_time);
-      url = `${CALL_URL}/rest/v1/weekly_nfl_picks?week_start=eq.${weekStart}&season=eq.${season}&select=picks&limit=1`;
-    } else {
-      const slateDate = ncaafSlateDateForInstant(game.commence_time);
-      url = `${CALL_URL}/rest/v1/daily_picks?date=eq.${slateDate}&select=picks&limit=1`;
-    }
-    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) throw Object.assign(new Error('Stored football game-call read failed'), { status: resp.status });
-    const rawPicks = (await resp.json())?.[0]?.picks;
-    const picks = Array.isArray(rawPicks)
-      ? rawPicks
-      : JSON.parse(rawPicks || '[]');
-    const p = picks.find((x) => String(x?.bdl_game_id ?? x?.game_id) === String(gameId));
-    if (!p?.pick) return null;
-    return { pick: p.pick, rationale: p.rationale || '' };
-  } catch (error) {
-    console.warn(`   [Football Props] game call unavailable (${error.message}) — the desk runs without it`);
-    return null;
-  }
-}
 
 // ── THE DESK THE GAME PICK READ (Sep 24 2026) ──────────────────────────────
 // The game pick stores the exact desk Gary read (pick_desks) moments before
@@ -406,12 +374,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     league,
   });
 
-  // 5. GARY'S GAME CALL — the published pick rides the desk as data.
-  let gameCall = '';
-  const call = await fetchFootballGameCall(league, game);
-  if (call?.pick) {
-    gameCall = `\n\n═══ GARY'S GAME CALL — this game, already published ═══\n${call.pick}\n\n${call.rationale}`;
-  }
+  // 5. Gary's published game pick no longer rides the desk (Oct 27 2026, founder GO): it anchored the props to the side
+  // the game read took, wrong or right; a team can lose while its back runs for 120, and the props read the game for
+  // themselves.
 
   const playersShelf = context.playerStats
     ? `\n\n═══ THE PLAYERS — provider-verified stats for today's board ═══\n${context.playerStats}`
@@ -447,9 +412,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     evidence: [{ kind: 'desk', text: scoutText }, { kind: 'player_stats', text: context.playerStats },
       { kind: 'prop_sheets', text: sheetsBlock }] });
 
-  const userMessage = `## THE DESK — ${matchup}\n\n${deskText}${playersShelf}${gameCall}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${league === 'NFL' ? NFL_PROPS_ASK : footballPropsAsk({ coreCount: screenedCount })}`;
+  const userMessage = `## THE DESK — ${matchup}\n\n${deskText}${playersShelf}\n\n${readBoard.text}${sheetsBlock}${jev.text}\n\n${league === 'NFL' ? NFL_PROPS_ASK : footballPropsAsk({ coreCount: screenedCount })}`;
 
-  const winnersEvidence = { deskText: `${deskText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
+  const winnersEvidence = { deskText: `${deskText}${playersShelf}\n${readBoard.text}${sheetsBlock}${jev.text}`, jev: jev.metadata, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
     // Every college pick runs Opus (founder, Sep 22 2026), the same cascade
@@ -457,7 +422,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     college: league === 'NCAAF',
     systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
-    corpus: [{ content: `${deskText}${playersShelf}${gameCall}\n${readBoard.text}${sheetsBlock}` }],
+    corpus: [{ content: `${deskText}${playersShelf}\n${readBoard.text}${sheetsBlock}` }],
     recentScores: null,
   });
 

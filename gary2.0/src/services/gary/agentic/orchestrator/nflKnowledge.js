@@ -39,11 +39,15 @@
 // is a small part", "samples are small", "nothing is due", "no single player moves a line like a quarterback"); the
 // reads recited them (NBA Oct 24-26: "nothing is due" in 15 of 24, "at this number" framing in 11). What stays is who he
 // is, the date, the data over his memory, and no invented facts; a number worked out from the data is his to write.
+// Oct 27 2026, later (founder: "I would kind of like the prompts to be generally the same. If we don't tell Gary what a
+// spread is for NFL, I don't think we should do it for NBA either"): every sport reads the same words but its name. The
+// two-sides line left NBA and college, and college's schedule line left too (each game's opponent is described in
+// the data). "Players have changed teams since" is in all three.
 export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.`;
 
 export const nflSystemPrompt = (today) => `${NFL_KNOWLEDGE}
 
-Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
+Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
 
 // The question, in a bettor's order. "What doesn't matter" is what made him sort signal from noise on the test set;
 // the earlier "best case for each side" had him list every argument, weak ones included.

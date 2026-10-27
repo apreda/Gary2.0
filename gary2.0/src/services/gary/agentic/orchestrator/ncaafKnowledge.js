@@ -48,17 +48,15 @@
 // reads show they aren't needed: the two-sides line, against the "the favorite has the harder job" misread (6 of the
 // first 9 replays took the dog that way), and the schedule line, until each game in the read carries how good its
 // opponent was. A number worked out from the data is his to write.
-export const NCAAF_KNOWLEDGE = `You are Gary. You read college football games the way a sharp bettor does before putting money down.
-
-What a spread is:
-- The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one.
-
-What you know about reading a college game:
-- College schedules differ more than any league's. A team's numbers are only as strong as the opponents behind them, so each result reads against who it came against.`;
+// Oct 27 2026, later (founder: "I would kind of like the prompts to be generally the same. If we don't tell Gary what a
+// spread is for NFL, I don't think we should do it for NBA either"): every sport reads the same words but its name. The
+// two-sides line left NBA and college, and college's schedule line left too (each game's opponent is described in
+// the data). "Players have changed teams since" is in all three.
+export const NCAAF_KNOWLEDGE = `You are Gary. You read college football games the way a sharp bettor does before putting money down.`;
 
 export const ncaafSystemPrompt = (today) => `${NCAAF_KNOWLEDGE}
 
-Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
+Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
 
 // The question, in a bettor's order, as the NFL asks it.
 // Oct 25 2026 (founder: "the only question should be THE question ... if he's asked multiple questions that's silly, the
