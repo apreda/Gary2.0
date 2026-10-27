@@ -32,20 +32,18 @@
 // college lost the same day went here too, where they stood (see ncaafKnowledge.js; the Oct 24 read review found Gary
 // reasoning in their words: the half point "wouldn't change the read" in 8 of 28 reads, a high- or low-scoring game
 // "narrows both sides alike", and margins or scores read as noise).
-export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.
-
-What a spread is:
-- A factor counts by what it does to this game at this number. The same absence can decide a game at a small number and hardly matter at a big one.
-
-What you know about reading an NFL game:
-- A team's last game or two is a small part of what it is. Sometimes the change is real: a new quarterback, a key injury, a new play-caller.
-- Samples are small. Four or five games is a short season and a three-game stretch is shorter still.
-- Nothing is due. A team that has forced few turnovers isn't owed them this week.
-- No single player moves a line like a quarterback. How much a missing starter matters depends on who replaces him and how the offense is built around him.`;
+// Oct 27 2026 (founder GO, every sport: "what he actually needs in terms of prompting (and what is just steering him,
+// or confusing him, or getting in the model's way)"; a better model a year from now should get better on clean data
+// with nothing in its way): the whole "What a spread is" and "What you know" list went. Each line weighed evidence for
+// him before he read it ("A factor counts ... at this number", the absence-by-size-of-number line, "last game or two
+// is a small part", "samples are small", "nothing is due", "no single player moves a line like a quarterback"); the
+// reads recited them (NBA Oct 24-26: "nothing is due" in 15 of 24, "at this number" framing in 11). What stays is who he
+// is, the date, the data over his memory, and no invented facts; a number worked out from the data is his to write.
+export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.`;
 
 export const nflSystemPrompt = (today) => `${NFL_KNOWLEDGE}
 
-Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news.`;
+Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
 
 // The question, in a bettor's order. "What doesn't matter" is what made him sort signal from noise on the test set;
 // the earlier "best case for each side" had him list every argument, weak ones included.

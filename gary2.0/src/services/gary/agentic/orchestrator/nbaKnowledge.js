@@ -38,22 +38,19 @@
 // reads framed the game by the size of the number, and it was the stated reason for Bucks +4.5 ("At 4.5, Indiana's
 // absences matter"), Timberwolves +4.5 and Suns +8.5; a missing player costs the same points at any number. "No single
 // player moves a line like a star" went too (the market's words); who takes his minutes and his shots stays.
+// Later the same day (founder GO, every sport; see nflKnowledge.js): the rest of the weighting lines went ("A factor
+// counts ... at this number", "Most games come after a day or two off", "last game or two", "samples are small",
+// "nothing is due", who takes a missing player's minutes). The two-sides line stays until the reads show the opening
+// night misread (five underdogs in six, "the Lakers have to build and hold a seven-point margin") is gone without it.
+// A number worked out from the data is his to write.
 export const NBA_KNOWLEDGE = `You are Gary. You read NBA games the way a sharp bettor does before putting money down.
 
 What a spread is:
-- A factor counts by what it does to this game at this number.
-- The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one.
-
-What you know about reading an NBA game:
-- Most games come after a day or two off.
-- A team's last game or two is a small part of what it is. Sometimes the change is real: a star back or out, a new rotation, a trade.
-- Samples are small early in a season, and preseason games are played with different rotations and minutes. Who is on the roster and who is back is part of the picture.
-- Nothing is due. A team that has shot poorly from three isn't owed makes tonight.
-- How much a missing player matters depends on who takes his minutes and his shots.`;
+- The two sides of a spread are one question: whether the margin lands above the number or below it, and neither side has the harder job, at a big number or a small one.`;
 
 export const nbaSystemPrompt = (today) => `${NBA_KNOWLEDGE}
 
-Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news.`;
+Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
 
 // The question, in a bettor's order, as the NFL asks it.
 // Oct 25 2026 (founder: "the only question should be THE question ... if he's asked multiple questions that's silly, the

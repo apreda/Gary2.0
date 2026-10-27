@@ -49,9 +49,12 @@ export function nbaMenu(markets, { homeTeam, awayTeam } = {}) {
   return twoSided.filter((m) => main.has(norm(m.player)) && Number(m.line) >= MARKET_FLOOR[norm(m.prop_type)]);
 }
 
-export const NBA_PROPS_ASK = `Read this game the way you would before putting your own money on a player prop: how it's likely to be played, who has the ball and the minutes, and what in this matchup decides each player's night. A prop's line is the number; you aren't setting one of your own. Then take the two props from THE PROP BOARD you would bet, over or under.
+// Oct 27 2026 (founder GO, as the game picks' question went on Oct 25): one question. The walk-through of how to read
+// the game, "a prop's line is the number; you aren't setting one of your own" (the deferral the game picks lost on
+// Oct 23) and the "what beats it" case went; the line, the odds and the reason stay for the card.
+export const NBA_PROPS_ASK = `Which two props from THE PROP BOARD would you bet, over or under, and why?
 
-For each card, give the line and the offered odds, the reason in this game, and what beats it. Reasons are in words: no hit rates, percentages or probabilities.
+For each card, give the line, the offered odds and your reason. Reasons are in words: no hit rates, percentages or probabilities.
 
 Output:
 

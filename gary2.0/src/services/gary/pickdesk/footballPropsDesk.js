@@ -97,9 +97,11 @@ export function footballPropsAsk({ coreCount = null } = {}) {
 
 // THE NFL PROPS ASK (Oct 19 2026, the new NFL system): the game as the side pick reads it, the props people bet for
 // each team's main players, and the question. No formula, no projection, no scores from a second model.
-export const NFL_PROPS_ASK = `Read this game the way you would before putting your own money on a player prop: how it's likely to be played, who gets the ball, and what in this matchup decides each player's day. A prop's line is the number; you aren't setting one of your own. Then take the two props from THE PROP BOARD you would bet, over or under.
+// Oct 27 2026 (founder GO; see nbaPropsDesk.js): one question, without the walk-through, the deferral to the line or
+// the "what beats it" case.
+export const NFL_PROPS_ASK = `Which two props from THE PROP BOARD would you bet, over or under, and why?
 
-For each card, give the line and the offered odds, the reason in this game, and what beats it. Reasons are in words: no hit rates, percentages or probabilities.
+For each card, give the line, the offered odds and your reason. Reasons are in words: no hit rates, percentages or probabilities.
 
 Output:
 
