@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 4;
+export const NBA_RECORD_VERSION = 7;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -92,6 +92,59 @@ export function flowOf(plays, final) {
   const scoreAt = (keep) => { const xs = ordered.filter(keep); const x = xs[xs.length - 1]; return x ? { home: x.home_score, away: x.away_score } : null; };
   return { largestLead: lead, leadChanges: changes, ties, biggestRun: best,
     fiveLeft: scoreAt((p) => p.period < 4 || (p.period === 4 && clockSeconds(p.clock) >= 300)) };
+}
+
+// WHO CLOSED THE GAME AND WHEN EACH PLAYER LAST LEFT THE FLOOR (Oct 27 2026, founder: "there has to be a way to know
+// who closed out a game"). The play-by-play names both players of every substitution (in, then out) but not the changes
+// made between quarters, and a missed one early throws off every lineup after it (13 of 52 games failed a whole-game
+// check), so only the last quarter is followed: its first five are the players with minutes in it who were never
+// subbed in or out of it (on the floor all of it), or who were subbed out of it before being subbed in; the
+// substitutions then give the five at the end. Each player's minutes in that quarter, worked out this way, must match
+// the box's for the quarter, or there is no closing five (null). The minutes by quarter come from the box itself.
+export function closingOf(plays, players, periods) {
+  const q = periods[periods.length - 1];
+  const sideOf = new Map(players.map((p) => [p.id, p.side]));
+  const nameOf = new Map(players.map((p) => [p.id, p.name]));
+  const minIn = new Map(players.map((p) => [p.id, p.quarters?.find((x) => x.q === q)?.min || 0]));
+  const inQ = [...(plays || [])].filter((p) => p.period === q).sort((a, b) => a.order - b.order);
+  const length = q <= 4 ? 720 : 300;
+  const all = inQ.filter((p) => p.type === 'Substitution').map((p) => ({ p, ids: (p.participants || []).filter((id) => sideOf.has(id)) })).filter((x) => x.ids.length === 2);
+  // A substitution logged at the quarter's first second is a change made between quarters: the player coming in starts it.
+  const atStart = all.filter((x) => clockSeconds(x.p.clock) >= length);
+  const subs = all.filter((x) => clockSeconds(x.p.clock) < length);
+  const subbed = new Set(subs.flatMap((x) => x.ids));
+  const court = { home: new Set(), away: new Set() };
+  for (const [id, m] of minIn) if (m > 0 && !subbed.has(id)) court[sideOf.get(id)].add(id);
+  for (const { ids: [inId] } of atStart) if (minIn.get(inId) > 0 && !subbed.has(inId)) court[sideOf.get(inId)].add(inId);
+  const entered = new Set();
+  for (const { ids: [inId, outId] } of subs) { if (!entered.has(outId) && minIn.get(outId) > 0) court[sideOf.get(outId)].add(outId); entered.add(inId); }
+  if (court.home.size !== 5 || court.away.size !== 5) return null;
+  const secs = new Map(); let clock = length;
+  const credit = (to) => { for (const side of ['home', 'away']) for (const id of court[side]) secs.set(id, (secs.get(id) || 0) + (clock - to)); clock = to; };
+  for (const { p, ids: [inId, outId] } of subs) {
+    const side = sideOf.get(outId);
+    if (!court[side].has(outId) || sideOf.get(inId) !== side) return null;
+    credit(Math.min(clock, clockSeconds(p.clock)));
+    court[side].delete(outId); court[side].add(inId);
+  }
+  credit(0);
+  if ([...minIn].some(([id, m]) => Math.abs((secs.get(id) || 0) / 60 - m) > 1)) return null;
+  return { home: [...court.home].map((id) => nameOf.get(id)), away: [...court.away].map((id) => nameOf.get(id)) };
+}
+
+/** When each player who played last left the floor: { name: { period, clock } }, the clock of his last substitution out
+ * when he was not subbed back in, or the end of the last quarter he played in. */
+export function lastOffOf(plays, players, periods) {
+  const out = {};
+  const ordered = [...(plays || [])].filter((p) => p.type === 'Substitution').sort((a, b) => a.order - b.order);
+  for (const pl of players.filter((x) => x.min > 0 && x.quarters)) {
+    const lastQ = [...pl.quarters].reverse().find((x) => x.min > 0)?.q;
+    if (!lastQ) continue;
+    const mine = ordered.filter((p) => p.period === lastQ && (p.participants || []).includes(pl.id));
+    const last = mine[mine.length - 1];
+    out[pl.name] = last && last.participants?.[1] === pl.id ? { period: lastQ, clock: last.clock } : { period: lastQ, clock: 'end' };
+  }
+  return out;
 }
 
 // Possessions as Basketball-Reference counts them, both teams' estimates averaged.
@@ -175,11 +228,14 @@ export async function buildNbaGameRecord(gameId) {
   teams.home.possessions = teams.away.possessions = possessionsOf(teams.home, teams.away);
   const quarters = { home: periods.map((q) => (q <= 4 ? g[`home_q${q}`] : g[`home_ot${q - 4}`])), away: periods.map((q) => (q <= 4 ? g[`visitor_q${q}`] : g[`visitor_ot${q - 4}`])) };
   const flow = plays ? flowOf(plays, final) : null;
+  const closing = plays ? closingOf(plays, players, periods) : null;
+  const lastOff = plays ? lastOffOf(plays, players, periods) : null;
 
   checks.push({ check: "the players' points add up to the final", ok: teams.home.pts === final.home && teams.away.pts === final.away, detail: `${teams.home.pts}-${teams.away.pts} against ${final.home}-${final.away}` });
   checks.push({ check: 'the quarters add up to the final', ok: quarters.home.every((v) => v != null) && sum(quarters.home.map((v) => ({ v })), 'v') === final.home && sum(quarters.away.map((v) => ({ v })), 'v') === final.away });
   checks.push({ check: 'the play-by-play ends at the final', ok: Boolean(flow) });
   checks.push({ check: "each player's quarters add up to his points", ok: !quarterMismatch.length, detail: quarterMismatch.join('; ') || null });
+  checks.push({ check: "the closing five match the last quarter's minutes", ok: Boolean(closing) });
   checks.push({ check: 'five starters each', ok: ['home', 'away'].every((s) => players.filter((p) => p.side === s && p.starter).length === 5) });
   checks.push({ check: 'the official team box is on file', ok: Boolean(official) });
   checks.push({ check: "the players' shooting adds up to the official box", ok: !shotGaps.length, detail: shotGaps.join('; ') || null });
@@ -192,6 +248,8 @@ export async function buildNbaGameRecord(gameId) {
     afterThree: quarters.home.slice(0, 3).every((v) => v != null) ? { home: quarters.home[0] + quarters.home[1] + quarters.home[2], away: quarters.away[0] + quarters.away[1] + quarters.away[2] } : null,
     setting: { home: await settingOf(g, g.home_team, homeGames || []), away: await settingOf(g, g.visitor_team, awayGames || []) },
     incidents: plays ? incidentsOf(plays) : null,
+    closing,
+    lastOff,
     report, players, teams, flow };
   checks.push({ check: 'the venue is on file', ok: Boolean(record.setting.home.venue) });
   const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason)).map((r) => r.name);

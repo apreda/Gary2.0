@@ -102,6 +102,12 @@ export function fullGameText(rec, teamId, byTeam) {
   const lines = [`${etDay(rec.date)} · ${us === 'home' ? 'vs' : '@'} ${rec[them].name} ${where} · ${won ? 'W' : 'L'} ${rec.final[us]}-${rec.final[them]}${rec.periods.length > 4 ? ` (${rec.periods.length - 4 === 1 ? 'OT' : `${rec.periods.length - 4} OT`})` : ''}${rec.cup ? ` · NBA Cup (${rec.cup})` : ''}${rec.postseason ? ' · postseason' : ''}`];
   lines.push(`  setting: ${settingText(rec.setting[us], rec[us].short)} · ${settingText(rec.setting[them], rec[them].short)}`);
   lines.push(`  how it went: ${flowText(rec, us)}`);
+  // Who finished it and who carried the fourth quarter (Oct 27 2026, founder: "who takes up the share of the fourth-quarter
+  // minutes"; the closing five from the last quarter's substitutions, checked against its minutes).
+  const q4 = (side) => rec.players.filter((p) => p.side === side && p.quarters).map((p) => ({ name: p.name, min: p.quarters.filter((x) => x.q >= 4).reduce((a, x) => a + x.min, 0) }))
+    .filter((x) => x.min >= 1).sort((a, b) => b.min - a.min).map((x) => `${x.name} ${Math.round(x.min)}`).join(', ');
+  lines.push(`  on the floor at the end: ${rec.closing ? `${rec[us].short} ${rec.closing[us].join(', ')} · ${rec[them].short} ${rec.closing[them].join(', ')}` : 'not on file (the play-by-play does not account for the last quarter\'s minutes)'}`);
+  lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
   if (rec.incidents?.length) lines.push(`  technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}`);
   lines.push(`  injury report at tip: ${reportText(rec, us, before(rec[us].id))} · ${reportText(rec, them, before(rec[them].id))}`);
   for (const side of [us, them]) {
@@ -116,7 +122,8 @@ export function fullGameText(rec, teamId, byTeam) {
     if (n) {
       const listedHere = new Set((rec.report[side].rows || []).map((x) => x.name));
       const after = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []).filter((x) => x.status !== 'Available' && !listedHere.has(x.name) && played.some((p) => p.name === x.name) && !/g league/i.test(x.reason));
-      if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(played.find((p) => p.name === x.name).min)} min here)`).join(', ')}`);
+      const left = (name) => { const o = rec.lastOff?.[name]; return !o ? '' : o.clock === 'end' ? `, on the floor to the end of the ${periodName(o.period)}` : `, last left the floor in the ${periodName(o.period)} with ${o.clock} left`; };
+      if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(played.find((p) => p.name === x.name).min)} min here${left(x.name)})`).join(', ')}`);
     }
   }
   lines.push(teamBox(rec, us), teamBox(rec, them));
