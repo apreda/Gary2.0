@@ -42,8 +42,8 @@ function settingText(set, short) {
   if (set.daysOff == null) return `${short}: first game of the season`;
   const rest = set.daysOff === 0 ? 'second night of a back-to-back' : `${set.daysOff} day${set.daysOff === 1 ? '' : 's'} off`;
   const four = set.gamesInFourNights >= 3 ? `, ${ord(set.gamesInFourNights)} game in four nights` : '';
-  const trip = !set.miles ? 'same arena' : `about ${set.miles.toLocaleString('en-US')} miles${set.tzShift ? `, ${Math.abs(set.tzShift)} time zone${Math.abs(set.tzShift) === 1 ? '' : 's'} ${set.tzShift > 0 ? 'east' : 'west'}` : ''}`;
-  return `${short}: ${rest}${four}; last game ${set.prev.home ? 'vs' : '@'} ${set.prev.opponent} (${etDay(set.prev.date)}, ${set.prev.city}), ${trip}`;
+  const trip = set.miles === 0 ? 'same arena' : set.miles == null ? 'miles not on file' : `about ${set.miles.toLocaleString('en-US')} miles${set.tzShift ? `, ${Math.abs(set.tzShift)} time zone${Math.abs(set.tzShift) === 1 ? '' : 's'} ${set.tzShift > 0 ? 'east' : 'west'}` : ''}`;
+  return `${short}: ${rest}${four}; last game ${set.prev.home ? 'vs' : '@'} ${set.prev.opponent} (${etDay(set.prev.date)}, ${set.prev.city || 'city not on file'}), ${set.miles == null && set.prev ? 'miles not on file' : trip}`;
 }
 
 function flowText(rec, us) {
@@ -71,7 +71,7 @@ function reportText(rec, side, before) {
   const groups = new Map();
   for (const x of rows) {
     const fresh = before.length && !played.has(x.name);
-    const key = `${x.status}${fresh ? ` (not in any of their ${before.length} game${before.length === 1 ? '' : 's'} before this one)` : ''}`;
+    const key = `${x.status}${fresh ? ` (not in ${before.length === 1 ? 'their one game' : `any of their ${before.length} games`} before this one)` : ''}`;
     if (!groups.has(key)) groups.set(key, []); groups.get(key).push(`${x.name} (${reason(x)})`);
   }
   return `${short}: ${[...groups].map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ')}`;
@@ -85,7 +85,10 @@ function playerRow(p) {
 function teamBox(rec, side) {
   const t = rec.teams[side];
   const kinds = t.paint != null ? `points: ${t.paint} in the paint, ${t.secondChance} second chance, ${t.fastBreak} fast break, ${t.offTurnovers} off turnovers, ${t.bench} bench` : `points: ${t.bench} bench; paint, second chance, fast break and off turnovers not on file`;
-  return `  ${rec[side].short} team: ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} reb (${t.oreb} off), ${t.ast} ast, ${t.stl} stl, ${t.blk} blk, ${t.turnover} TO, ${t.pf} PF · ${kinds}`;
+  const gap = t.official && t.playersSum && ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'].some((k) => t.playersSum[k] !== t[k])
+    ? ` · its players' lines above add up to ${t.playersSum.fgm}-${t.playersSum.fga} FG, ${t.playersSum.fg3m}-${t.playersSum.fg3a} 3PT, ${t.playersSum.ftm}-${t.playersSum.fta} FT (the stats feed is missing what the official box has)` : '';
+  const source = t.official ? 'official box' : "players' rows summed (the official box not on file; team turnovers and rebounds not included)";
+  return `  ${rec[side].short} team (${source}): ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} reb (${t.oreb} off), ${t.ast} ast, ${t.stl} stl, ${t.blk} blk, ${t.turnover} TO${t.teamTurnovers ? ` (${t.teamTurnovers} of them team turnovers)` : ''}, ${t.pf} PF · ${kinds}${gap}`;
 }
 
 /** One game in full, from `teamId`'s side. `byTeam` is summariesByTeam over the season so far. */
@@ -94,15 +97,17 @@ export function fullGameText(rec, teamId, byTeam) {
   const before = (id) => (byTeam.get(String(id)) || []).filter((r) => r.game_date < rec.date);
   const next = (id) => (byTeam.get(String(id)) || []).find((r) => r.game_date > rec.date);
   const won = rec.final[us] > rec.final[them];
-  const alt = rec.setting.home.altitudeFt ? ` (${rec.setting.home.altitudeFt.toLocaleString('en-US')} ft)` : '';
-  const lines = [`${etDay(rec.date)} · ${us === 'home' ? 'vs' : '@'} ${rec[them].name} in ${rec.setting.home.arenaCity || rec.home.name}${alt} · ${won ? 'W' : 'L'} ${rec.final[us]}-${rec.final[them]}${rec.periods.length > 4 ? ` (${rec.periods.length - 4 === 1 ? 'OT' : `${rec.periods.length - 4} OT`})` : ''}${rec.cup ? ` · NBA Cup (${rec.cup})` : ''}${rec.postseason ? ' · postseason' : ''}`];
+  const v = rec.setting.home.venue;
+  const where = v ? `at ${v.name}, ${v.city}${rec.setting.home.altitudeFt ? ` (${rec.setting.home.altitudeFt.toLocaleString('en-US')} ft)` : ''}${v.neutral ? ', a neutral site' : ''}` : 'venue not on file';
+  const lines = [`${etDay(rec.date)} · ${us === 'home' ? 'vs' : '@'} ${rec[them].name} ${where} · ${won ? 'W' : 'L'} ${rec.final[us]}-${rec.final[them]}${rec.periods.length > 4 ? ` (${rec.periods.length - 4 === 1 ? 'OT' : `${rec.periods.length - 4} OT`})` : ''}${rec.cup ? ` · NBA Cup (${rec.cup})` : ''}${rec.postseason ? ' · postseason' : ''}`];
   lines.push(`  setting: ${settingText(rec.setting[us], rec[us].short)} · ${settingText(rec.setting[them], rec[them].short)}`);
   lines.push(`  how it went: ${flowText(rec, us)}`);
+  if (rec.incidents?.length) lines.push(`  technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}`);
   lines.push(`  injury report at tip: ${reportText(rec, us, before(rec[us].id))} · ${reportText(rec, them, before(rec[them].id))}`);
   for (const side of [us, them]) {
     const mine = rec.players.filter((p) => p.side === side);
     const played = mine.filter((p) => p.min > 0).sort((a, b) => (b.starter - a.starter) || (b.min - a.min));
-    const listed = new Set((rec.report[side].rows || []).map((x) => x.name));
+    const listed = new Set((rec.report[side].rows || []).filter((x) => x.status !== 'Available').map((x) => x.name));
     const sat = mine.filter((p) => p.min <= 0 && !listed.has(p.name)).map((p) => p.name);
     lines.push(`  ${rec[side].short} (* started):`, ...played.map(playerRow));
     if (sat.length) lines.push(`    did not play, not on the injury report: ${sat.join(', ')}`);
@@ -110,7 +115,7 @@ export function fullGameText(rec, teamId, byTeam) {
     const n = next(rec[side].id);
     if (n) {
       const listedHere = new Set((rec.report[side].rows || []).map((x) => x.name));
-      const after = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []).filter((x) => !listedHere.has(x.name) && played.some((p) => p.name === x.name) && !/g league/i.test(x.reason));
+      const after = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []).filter((x) => x.status !== 'Available' && !listedHere.has(x.name) && played.some((p) => p.name === x.name) && !/g league/i.test(x.reason));
       if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(played.find((p) => p.name === x.name).min)} min here)`).join(', ')}`);
     }
   }

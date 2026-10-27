@@ -144,6 +144,26 @@ function injurySection(desk, { homeTeam, awayTeam }) {
   return text ? `Official NBA injury report:\n${text}` : 'Official NBA injury report: not on file.';
 }
 
+/** The players the league lists Available for tonight, with what they are listed for (Oct 27 2026 data check: Miami read
+ * "nobody listed" with Pelle Larsson, 36 minutes in its last game, listed Available with a left finger sprain), from the
+ * report the injury list came from. '' when nobody is. */
+export async function availableListed(desk, { homeTeam, awayTeam, tip, asOf }) {
+  const gameDate = reportDay(tip || asOf);
+  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
+  if (!anchor) return '';
+  try {
+    const listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), gameDate, homeTeam, awayTeam);
+    const lines = [];
+    for (const [tag, team] of [['AWAY', awayTeam], ['HOME', homeTeam]]) {
+      const side = listing[team];
+      if (!side || side === 'unfiled') continue;
+      const rows = [...side.values()].filter((r) => r.status === 'Available' && !/g league/i.test(r.reason));
+      if (rows.length) lines.push(`[${tag}] ${team}: ${rows.map((r) => `${r.name} (${String(r.reason || '').replace(/^Injury\/Illness - /, '')})`).join('; ')}`);
+    }
+    return lines.length ? `Listed Available on the same report:\n${lines.join('\n')}` : '';
+  } catch { return ''; }
+}
+
 // From the same report as the injury list, each team's players who were Out for its last game and are not listed
 // tonight, or listed Available (Oct 27 2026 data audit; see outLastGame).
 async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }) {
@@ -613,15 +633,16 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
-  const [homeLog, awayLog, injuries, back] = await Promise.all([
+  const [homeLog, awayLog, injuries, back, available] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
+    availableListed(desk, { homeTeam, awayTeam, tip, asOf }),
   ]);
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['WHO IS PLAYING', [projectedStarters(desk), injuries, back].filter(Boolean).join('\n\n')],
+    ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
     ['SCHEDULE AND TRAVEL', situation(seasons, homeTeam, awayTeam, tip, asOf)],

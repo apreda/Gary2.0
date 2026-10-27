@@ -10,7 +10,7 @@
  * without its recaps of past games, which the records hold. Facts only.
  */
 import { matchupHeader, spreadInWords } from './footballDeskText.js';
-import { nbaLineOf, injuriesAsReported, projectedStarters, reportOfDesk, reportDay, tipOf } from './nbaRead.js';
+import { nbaLineOf, injuriesAsReported, projectedStarters, reportOfDesk, reportDay, tipOf, availableListed } from './nbaRead.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { findTeam } from '../scoutReport/shared/utilities.js';
@@ -38,16 +38,17 @@ export async function ensureNbaRecords(season = nbaSeason()) {
 }
 
 // Tonight's rest and trip for one team, and its next game.
-function tonightSetting(tonight, team, games) {
-  const s = settingOf(tonight, team, games);
+async function tonightSetting(tonight, team, games) {
+  const s = await settingOf(tonight, team, games);
   const short = team.name;
   const rest = s.daysOff == null ? 'first game of the season' : s.daysOff === 0 ? 'second night of a back-to-back' : `${s.daysOff} day${s.daysOff === 1 ? '' : 's'} off`;
   const four = s.gamesInFourNights >= 3 ? `, ${ord(s.gamesInFourNights)} game in four nights` : '';
-  const trip = !s.prev ? '' : `; last game ${s.prev.home ? 'vs' : '@'} ${s.prev.opponent} (${etDay(s.prev.date)}, ${s.prev.city}), ${s.miles ? `about ${s.miles.toLocaleString('en-US')} miles${s.tzShift ? `, ${Math.abs(s.tzShift)} time zone${Math.abs(s.tzShift) === 1 ? '' : 's'} ${s.tzShift > 0 ? 'east' : 'west'}` : ''}` : 'same arena'}`;
+  const trip = !s.prev ? '' : `; last game ${s.prev.home ? 'vs' : '@'} ${s.prev.opponent} (${etDay(s.prev.date)}, ${s.prev.city || 'city not on file'}), ${s.miles == null ? 'miles not on file' : s.miles === 0 ? 'same arena' : `about ${s.miles.toLocaleString('en-US')} miles${s.tzShift ? `, ${Math.abs(s.tzShift)} time zone${Math.abs(s.tzShift) === 1 ? '' : 's'} ${s.tzShift > 0 ? 'east' : 'west'}` : ''}`}`;
+  const where = s.venue ? ` at ${s.venue.name}, ${s.venue.city}${s.altitudeFt ? ` (${s.altitudeFt.toLocaleString('en-US')} ft)` : ''}${s.venue.neutral ? ', a neutral site' : ''}` : '';
   const tip = Date.parse(tonight.datetime);
   const next = games.filter((x) => Date.parse(x.datetime || x.date) > tip).sort((a, b) => Date.parse(a.datetime || a.date) - Date.parse(b.datetime || b.date))[0];
   const nextText = next ? `; next game ${next.home_team.id === team.id ? 'vs' : '@'} ${(next.home_team.id === team.id ? next.visitor_team : next.home_team).full_name} (${etDay(next.date)})` : '';
-  return `• ${tonight.home_team.id === team.id ? `${short}, at home` : `${short}, on the road`}: ${rest}${four}${trip}${nextText}`;
+  return `• ${tonight.home_team.id === team.id ? `${short}, at home` : `${short}, on the road`}${where}: ${rest}${four}${trip}${nextText}`;
 }
 
 // What is different tonight from the games shown: each regular (started one of them, or played 15+ minutes in two)
@@ -136,15 +137,16 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
 
   const header = [matchupHeader(desk), spreadInWords(nbaLineOf(desk))].filter(Boolean).join('\n');
   const injuries = injuriesAsReported(desk, { homeTeam, awayTeam });
+  const available = await availableListed(desk, { homeTeam, awayTeam, tip, asOf });
   const tonightPart = ['TONIGHT',
-    [projectedStarters(desk), injuries ? `Official NBA injury report:\n${injuries}` : 'Official NBA injury report: not on file.'].filter(Boolean).join('\n\n'),
+    [projectedStarters(desk), injuries ? `Official NBA injury report:\n${injuries}` : 'Official NBA injury report: not on file.', available].filter(Boolean).join('\n\n'),
     '',
     `What is different tonight from the games shown below${listing ? '' : " (tonight's report not on file)"}:`,
     whatsDifferent(away, awayRecs, listing?.[awayTeam]),
     whatsDifferent(home, homeRecs, listing?.[homeTeam]),
     '',
     'Rest and travel:',
-    tonight ? [tonightSetting(tonight, away, awayGames || []), tonightSetting(tonight, home, homeGames || [])].join('\n') : 'not on file (tonight\'s game is not in the schedule feed)'].join('\n');
+    tonight ? (await Promise.all([tonightSetting(tonight, away, awayGames || []), tonightSetting(tonight, home, homeGames || [])])).join('\n') : 'not on file (tonight\'s game is not in the schedule feed)'].join('\n');
 
   const meetings = awayRecs.filter((r) => [r.record.home.id, r.record.away.id].includes(home.id));
   const meetingIds = new Set(meetings.map((r) => String(r.game_id)));

@@ -10,6 +10,7 @@ import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../providers/nbaOfficialInjuryReport.js';
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
+import { espnTeamBox } from './espnNbaGame.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -88,8 +89,14 @@ export function boxSides(box, teamId) {
   const ours = rows(us), theirs = rows(them);
   return Object.assign(ours, { team: us?.name, fullName: us?.full_name, totals: totalsOf(ours), opponent: Object.assign(theirs, { team: them?.name, fullName: them?.full_name, totals: totalsOf(theirs) }) });
 }
-// Each team's box, from its players' rows (team turnovers and team rebounds are not in the feed's box).
-const boxLine = (side) => { const t = side.totals; return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.oreb} offensive rebounds, ${t.turnover} turnovers, ${t.pf} fouls`; };
+// Each team's box: the official one (ESPN) where it is on file, with the team turnovers the players' rows leave out;
+// otherwise the players' rows summed, said so (Oct 27 2026 data check: Houston's "14 turnovers" were 16, Dallas's
+// "41-79 FG" was 41-80).
+const boxLine = (side, official) => {
+  const t = official || side.totals;
+  const src = official ? '' : " (players' rows summed; the official box not on file)";
+  return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.oreb} offensive rebounds, ${t.turnover} turnovers${official?.teamTurnovers ? ` (${official.teamTurnovers} team)` : ''}, ${t.pf} fouls${src}`;
+};
 const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null].filter(Boolean).join(', ');
 // Where each team's points came from, its players' rows in BDL's advanced box summed (Oct 27 2026, founder GO: the reads
 // quoted "60 points in the paint", "26 second-chance points" and "38 points off 26 turnovers" from the news, unchecked;
@@ -103,7 +110,7 @@ function scoringLine(rows, teams) {
   const both = teams.map(side);
   return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
 }
-function whoPlayed(box, others, out, starters, scoring) {
+function whoPlayed(box, others, out, starters, scoring, official) {
   if (!box) return ['      who played: box score not on file', scoring, out].filter(Boolean).join('\n');
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
@@ -114,7 +121,7 @@ function whoPlayed(box, others, out, starters, scoring) {
   // rebounds).
   const rest = played.slice(8).map((p) => `${p.name} ${p.min}`);
   const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${p.pts} pts)`);
-  return [`      box: ${boxLine(box)} · ${boxLine(box.opponent)}`,
+  return [`      box: ${boxLine(box, official?.us)} · ${boxLine(box.opponent, official?.them)}`,
     scoring,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
@@ -263,6 +270,10 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   const starters = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => (await ballDontLieService.getNbaLineups([g.id]).catch(() => []))
     .filter((r) => r.starter && r.team?.id === ts.id).map((r) => `${r.player?.first_name} ${r.player?.last_name}`)));
   const advanced = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaAdvancedBox(g.id)));
+  const officials = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => {
+    const o = await espnTeamBox(g).catch(() => null);
+    return o ? (g.home_team?.id === ts.id ? { us: o.home, them: o.away } : { us: o.away, them: o.home }) : null;
+  }));
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
@@ -274,7 +285,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team]) : null;
-    return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring)}` : line;
+    return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i])}` : line;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

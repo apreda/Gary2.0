@@ -17,9 +17,10 @@
 import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY } from '../../providers/bdl/transport.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
-import { NBA_ARENAS, milesBetween, utcOffsetHours } from './nbaArenas.js';
+import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
+import { espnVenue, espnTeamBox } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 1;
+export const NBA_RECORD_VERSION = 4;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -31,23 +32,37 @@ const teamOf = (t) => ({ id: t.id, abbr: t.abbreviation, name: t.full_name, shor
 const STATS = ['pts', 'oreb', 'dreb', 'reb', 'ast', 'stl', 'blk', 'turnover', 'pf', 'fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'];
 const sum = (rows, k) => rows.reduce((a, r) => a + (Number(r[k]) || 0), 0);
 
-/** Each team's days off, games in four nights, and the trip from its last game's arena (null before its first game). */
-export function settingOf(g, team, teamGames) {
+// Where a game was played comes from ESPN (espnNbaGame.js): the schedule feed has no venue.
+export const venueOf = espnVenue;
+
+/** Each team's days off, games in four nights, and the trip from where its last game was played (null before its first
+ * game). The miles and time zones are "not on file" when either venue is. */
+export async function settingOf(g, team, teamGames) {
   const tip = Date.parse(g.datetime || `${g.date}T23:00:00Z`);
   const prior = teamGames.filter((x) => x.id !== g.id && !x.postseason === !g.postseason && Date.parse(x.datetime || `${x.date}T23:00:00Z`) < tip)
     .sort((a, b) => Date.parse(b.datetime || b.date) - Date.parse(a.datetime || a.date));
-  const here = NBA_ARENAS[g.home_team.abbreviation];
+  const venue = await venueOf(g);
+  const here = venue ? placeOf(venue.city) : null;
   const prev = prior[0];
-  const out = { home: g.home_team.id === team.id, arenaCity: here?.city || null, altitudeFt: here?.altitudeFt || null,
+  const out = { home: g.home_team.id === team.id, venue, arenaCity: venue?.city || null, altitudeFt: here?.altitudeFt || null,
     gamesInFourNights: 1 + prior.filter((x) => dayNum(g.date) - dayNum(x.date) <= 3).length, prev: null, daysOff: null };
   if (!prev) return out;
-  const there = NBA_ARENAS[prev.home_team.abbreviation];
+  const prevVenue = await venueOf(prev);
+  const there = prevVenue ? placeOf(prevVenue.city) : null;
   const opp = prev.home_team.id === team.id ? prev.visitor_team : prev.home_team;
-  out.prev = { date: prev.date, opponent: opp.full_name, home: prev.home_team.id === team.id, city: there?.city || null };
+  out.prev = { date: prev.date, opponent: opp.full_name, home: prev.home_team.id === team.id, city: prevVenue?.city || null };
   out.daysOff = dayNum(g.date) - dayNum(prev.date) - 1;
   out.miles = here && there ? milesBetween(there, here) : null;
   out.tzShift = here && there ? utcOffsetHours(here.tz, tip) - utcOffsetHours(there.tz, Date.parse(prev.datetime || prev.date)) : null;
   return out;
+}
+
+// Technicals, flagrants and ejections, in order, from the play-by-play (Oct 27 2026 loop); defensive three-seconds and
+// delay technicals are routine and left out.
+const INCIDENT = /^(?:Technical Foul|Double Technical Foul|Flagrant Foul Type [12]|Flopping Technical|Ejection|Taunting Technical)$/i;
+export function incidentsOf(plays) {
+  return [...(plays || [])].sort((a, b) => a.order - b.order).filter((p) => INCIDENT.test(String(p.type || '')))
+    .map((p) => ({ period: p.period, text: String(p.text || p.type).trim() }));
 }
 
 /** How the game went, from the play-by-play (home/away as the game has them). Null when the plays don't end at the final
@@ -91,7 +106,7 @@ async function reportAtTip(g) {
     const report = await latestOfficialReport({ now: new Date(g.datetime), lookbackHours: 6 });
     const listing = gameListing(report, reportDate(g.datetime), g.home_team.full_name, g.visitor_team.full_name);
     const side = (s) => (s === 'unfiled' ? { notOnFile: `not filed by the ${report.postedAt} report` }
-      : { postedAt: report.postedAt, rows: [...s.values()].filter((r) => r.status !== 'Available').map((r) => ({ name: r.name, status: r.status, reason: r.reason })) });
+      : { postedAt: report.postedAt, rows: [...s.values()].map((r) => ({ name: r.name, status: r.status, reason: r.reason })) });
     return { home: side(listing[g.home_team.full_name]), away: side(listing[g.visitor_team.full_name]) };
   } catch (e) {
     return { home: { notOnFile: e.message }, away: { notOnFile: e.message } };
@@ -141,6 +156,22 @@ export async function buildNbaGameRecord(gameId) {
     teams[side] = { ...Object.fromEntries(STATS.map((k) => [k, sum(mine, k)])), bench: sum(mine.filter((p) => !p.starter), 'pts'),
       ...(adv.length ? { paint: sum(adv, 'points_paint'), secondChance: sum(adv, 'points_second_chance'), fastBreak: sum(adv, 'points_fast_break'), offTurnovers: sum(adv, 'points_off_turnovers') } : {}) };
   }
+  // The official team box (ESPN) where it is on file: its shooting, rebounds and turnovers include what the players' rows
+  // miss (team turnovers and rebounds, now and then a shot); the players' sums are kept to show any difference.
+  const official = await espnTeamBox(g);
+  const OFFICIAL = ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta', 'reb', 'oreb', 'dreb', 'ast', 'stl', 'blk', 'turnover', 'pf'];
+  const shotGaps = [];
+  for (const side of ['home', 'away']) {
+    const o = official?.[side];
+    if (!o) { teams[side].official = false; continue; }
+    teams[side].playersSum = Object.fromEntries(OFFICIAL.map((k) => [k, teams[side][k]]));
+    for (const k of OFFICIAL) if (o[k] != null) teams[side][k] = o[k];
+    for (const k of ['paint', 'fastBreak', 'offTurnovers']) if (o[k] != null) teams[side][k] = o[k];
+    teams[side].teamTurnovers = o.teamTurnovers;
+    teams[side].official = true;
+    const gap = ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'].filter((k) => o[k] != null && o[k] !== teams[side].playersSum[k]);
+    if (gap.length) shotGaps.push(`${side === 'home' ? g.home_team.name : g.visitor_team.name}: players ${teams[side].playersSum.fgm}-${teams[side].playersSum.fga} FG, ${teams[side].playersSum.fg3m}-${teams[side].playersSum.fg3a} 3PT, ${teams[side].playersSum.ftm}-${teams[side].playersSum.fta} FT; official ${o.fgm}-${o.fga}, ${o.fg3m}-${o.fg3a}, ${o.ftm}-${o.fta}`);
+  }
   teams.home.possessions = teams.away.possessions = possessionsOf(teams.home, teams.away);
   const quarters = { home: periods.map((q) => (q <= 4 ? g[`home_q${q}`] : g[`home_ot${q - 4}`])), away: periods.map((q) => (q <= 4 ? g[`visitor_q${q}`] : g[`visitor_ot${q - 4}`])) };
   const flow = plays ? flowOf(plays, final) : null;
@@ -150,6 +181,8 @@ export async function buildNbaGameRecord(gameId) {
   checks.push({ check: 'the play-by-play ends at the final', ok: Boolean(flow) });
   checks.push({ check: "each player's quarters add up to his points", ok: !quarterMismatch.length, detail: quarterMismatch.join('; ') || null });
   checks.push({ check: 'five starters each', ok: ['home', 'away'].every((s) => players.filter((p) => p.side === s && p.starter).length === 5) });
+  checks.push({ check: 'the official team box is on file', ok: Boolean(official) });
+  checks.push({ check: "the players' shooting adds up to the official box", ok: !shotGaps.length, detail: shotGaps.join('; ') || null });
   checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.paint != null && teams.away.paint != null) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });
 
@@ -157,8 +190,10 @@ export async function buildNbaGameRecord(gameId) {
   const record = { v: NBA_RECORD_VERSION, league: 'NBA', gameId: g.id, season: g.season, date: g.date, tip: g.datetime, postseason: Boolean(g.postseason), cup: g.ist_stage || null,
     home, away, final, periods, quarters,
     afterThree: quarters.home.slice(0, 3).every((v) => v != null) ? { home: quarters.home[0] + quarters.home[1] + quarters.home[2], away: quarters.away[0] + quarters.away[1] + quarters.away[2] } : null,
-    setting: { home: settingOf(g, g.home_team, homeGames || []), away: settingOf(g, g.visitor_team, awayGames || []) },
+    setting: { home: await settingOf(g, g.home_team, homeGames || []), away: await settingOf(g, g.visitor_team, awayGames || []) },
+    incidents: plays ? incidentsOf(plays) : null,
     report, players, teams, flow };
+  checks.push({ check: 'the venue is on file', ok: Boolean(record.setting.home.venue) });
   const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason)).map((r) => r.name);
   const summary = { date: g.date, home: { ...home, score: final.home }, away: { ...away, score: final.away }, ot: ots.length,
     out: { home: outOf('home'), away: outOf('away') },

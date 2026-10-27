@@ -37,6 +37,23 @@ export const NBA_ARENAS = Object.freeze({
   WAS: { city: 'Washington', lat: 38.898, lon: -77.021, tz: 'America/New_York' },
 });
 
+// Cities that host NBA games away from a team's arena (a second home city, international and Cup sites), for the trip
+// to and from them. A venue in none of these or the arenas has no miles on file.
+export const NBA_OTHER_SITES = Object.freeze({
+  Austin: { lat: 30.282, lon: -97.732, tz: 'America/Chicago' },
+  'Mexico City': { lat: 19.490, lon: -99.180, tz: 'America/Mexico_City', altitudeFt: 7350 },
+  'Las Vegas': { lat: 36.103, lon: -115.178, tz: 'America/Los_Angeles' },
+  Paris: { lat: 48.838, lon: 2.378, tz: 'Europe/Paris' },
+  London: { lat: 51.503, lon: 0.003, tz: 'Europe/London' },
+  Berlin: { lat: 52.505, lon: 13.443, tz: 'Europe/Berlin' },
+  'Abu Dhabi': { lat: 24.470, lon: 54.600, tz: 'Asia/Dubai' },
+  'Kansas City': { lat: 39.097, lon: -94.580, tz: 'America/Chicago' },
+  Seattle: { lat: 47.622, lon: -122.354, tz: 'America/Los_Angeles' },
+});
+const CITY_OF = Object.fromEntries([...Object.values(NBA_ARENAS).map((a) => [a.city, a]), ['New York', NBA_ARENAS.NYK], ['Los Angeles', NBA_ARENAS.LAL], ['Inglewood', NBA_ARENAS.LAC], ['Brooklyn', NBA_ARENAS.BKN]]);
+/** Where a city is, for a venue's city: an arena city or another host city, or null. */
+export const placeOf = (city) => CITY_OF[city] || NBA_OTHER_SITES[city] || null;
+
 /** Miles between two arenas (great-circle). */
 export function milesBetween(a, b) {
   if (!a || !b) return null;
