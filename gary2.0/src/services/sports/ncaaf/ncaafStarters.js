@@ -107,8 +107,19 @@ function olderLayout(html, date) {
 }
 
 // Every official box on one school's site this season: [{ date, teams }]. A box is kept a month once the game is three
-// days old (a stat correction lands within a day or two), the schedule six hours.
-async function siteBoxes(college, season, fetchImpl) {
+// days old (a stat correction lands within a day or two), the schedule six hours. One read per school per run: a
+// game-by-game read asks for the same school's games side by side, and each box page is about 2 MB.
+const inFlight = new Map();
+function siteBoxes(college, season, fetchImpl) {
+  const k = `${college}:${season}`;
+  if (fetchImpl !== fetch) return readSite(college, season, fetchImpl);
+  if (!inFlight.has(k)) {
+    inFlight.set(k, readSite(college, season, fetchImpl));
+    setTimeout(() => inFlight.delete(k), HOUR).unref?.();
+  }
+  return inFlight.get(k);
+}
+async function readSite(college, season, fetchImpl) {
   const domain = SITES[college];
   if (!domain) return [];
   const links = await cachedResearch(`cfb_official_box_links_v2:${domain}:${season}`, async () => {
@@ -148,8 +159,7 @@ const likeness = (label, school) => {
 export async function teamStarters(team, games, season, { fetchImpl = fetch } = {}) {
   const out = new Map();
   if (!games?.length) return out;
-  const sites = new Map();
-  const boxesOf = (school) => { if (!sites.has(school)) sites.set(school, siteBoxes(school, season, fetchImpl)); return sites.get(school); };
+  const boxesOf = (school) => siteBoxes(school, season, fetchImpl);
   for (const g of games) {
     for (const school of [team.college, g.opponent?.college]) {
       if (!SITES[school]) continue;
