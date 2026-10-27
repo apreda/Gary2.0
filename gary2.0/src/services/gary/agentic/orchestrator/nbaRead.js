@@ -16,8 +16,8 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines } from './ncaafRead.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, reportClock, outLastGame } from '../../../sports/nba/nbaBettorData.js';
-import { latestOfficialReport, gameListing, listingHistory, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame } from '../../../sports/nba/nbaBettorData.js';
+import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
@@ -101,9 +101,9 @@ export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = 
   return out.join('\n');
 }
 
-// Which official report the desk read (Oct 23 2026 data audit: the injury section never said which report it was, so
-// a line move could not be matched to the news). A desk records it ("Official NBA injury report: Oct 22, 5:30 PM ET");
-// an older desk is matched to the report at or just before the pick whose rows for this game are the desk's own rows.
+// Which official report the desk read, for who was Out last game and is not listed tonight (the read no longer shows
+// its time, Oct 27 2026). A desk records it ("Official NBA injury report: Oct 22, 5:30 PM ET"); an older desk is matched
+// to the report at or just before the pick whose rows for this game are the desk's own rows.
 const ROW = /^\s*• (.+?) \(([^)]+)\) - /;
 const statusKey = (s) => String(s || '').slice(0, 4).toLowerCase();
 function deskRows(desk) {
@@ -134,48 +134,22 @@ async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }) {
   return null;
 }
 
-// Each player's listing for this game since it began: when he first appeared and how his status went (Oct 23 2026
-// data audit: Jarrett Allen first appeared on the 5:00 PM report and the line moved at 5:11). Players a team first
-// listed together, unchanged since, share one line at the team's name instead of repeating it on each row.
-function listingNote(h, anchorAt) {
-  if (!h) return { first: 'first listing not on file', how: null };
-  const first = h.openEnded ? `listed on every report for this game back to the ${reportClock(h.firstAt)} ET report`
-    : h.firstAt === anchorAt ? 'first listed on this report'
-      : `first listed on the ${reportClock(h.firstAt)} ET report${h.teamFirst ? ", the team's first report for this game" : ''}`;
-  const how = h.firstAt === anchorAt ? null : h.statuses.length === 1 ? 'unchanged'
-    : h.statuses.map((x, i) => (i ? `${x.status} from the ${reportClock(x.from)} ET report` : `${x.status} at first`)).join(', ');
-  return { first, how };
-}
-async function injurySection(desk, { homeTeam, awayTeam, tip, asOf }) {
+// The injury list as reported, without the report's clock time or when each player was first listed and how his
+// status went (Oct 27 2026, founder: "he knows the spread is X and X player is now out or X player is now playing").
+// Both came in on Oct 23 to match a line move to the news; with the line's path gone they read as news the number might
+// not hold yet ("If the 1.5 was set while Thompson was still questionable", "I can't see where this line opened"; 22 of
+// 24 reads Oct 24-26 reasoned about what the spread already priced). How long a player has been out stays on his row.
+function injurySection(desk, { homeTeam, awayTeam }) {
   const text = injuriesAsReported(desk, { homeTeam, awayTeam });
-  if (!text) return 'Official NBA injury report: not on file.';
-  const gameDate = reportDay(tip || asOf);
-  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
-  if (!anchor) return `Official NBA injury report: report time not on file.\n${text}`;
-  const history = await listingHistory({ anchorAt: anchor.postedAt, gameDate, home: homeTeam, away: awayTeam }).catch((e) => ({ error: e.message }));
-  if (history.error) return `Official NBA injury report of ${reportClock(anchor.postedAt)} ET (when each player was first listed: not on file, ${history.error}):\n${text}`;
-  const blocks = [];
-  for (const l of text.split('\n')) {
-    const m = l.match(ROW);
-    if (!m || !blocks.length) blocks.push({ head: l, rows: [] });
-    else blocks[blocks.length - 1].rows.push({ line: l, ...listingNote(history.get(playerKey(m[1])), anchor.postedAt) });
-  }
-  const out = blocks.map(({ head, rows }) => {
-    const shared = rows.length > 1 && rows.filter((r) => r.how === 'unchanged').map((r) => r.first).find((x, i, all) => all.filter((y) => y === x).length > 1);
-    const note = (r) => { const parts = [r.first === shared ? null : r.first, r.how === 'unchanged' ? (r.first === shared ? null : 'same status on every report since') : r.how].filter(Boolean); return parts.length ? ` — ${parts.join('; ')}` : ''; };
-    return [shared ? `${head.replace(/:$/, '')} (${shared.replace(/^first listed/, 'each first listed')}, same status on every report since unless noted):` : head,
-      ...rows.map((r) => `${r.line}${note(r)}`)].join('\n');
-  });
-  return `Official NBA injury report of ${reportClock(anchor.postedAt)} ET:\n${out.join('\n')}`;
+  return text ? `Official NBA injury report:\n${text}` : 'Official NBA injury report: not on file.';
 }
 
 // From the same report as the injury list, each team's players who were Out for its last game and are not listed
-// tonight, or listed Available (Oct 27 2026 data audit; see outLastGame). The injury section already says when the
-// report time is not on file.
+// tonight, or listed Available (Oct 27 2026 data audit; see outLastGame).
 async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }) {
   const gameDate = reportDay(tip || asOf);
   const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
-  if (!anchor) return '';
+  if (!anchor) return "Out for the team's last game, and not listed tonight: not on file (the report the injury list came from is not on file).";
   const span = (r) => (r.allGames ? (r.games === 1 ? 'its only game' : r.games === 2 ? 'both of its games' : `all ${r.games} of its games`) : r.games === 1 ? 'its last game' : `its last ${r.games} games`);
   try {
     const listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), gameDate, homeTeam, awayTeam);
@@ -617,7 +591,7 @@ function boardGames(ts, league = {}) {
 export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
   const tipAt = tipOf(desk, asOf);
   const [injuries, seasons] = await Promise.all([
-    injurySection(desk, { homeTeam, awayTeam, tip: tipAt, asOf }),
+    injurySection(desk, { homeTeam, awayTeam }),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
   const back = await outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip: tipAt, asOf });
@@ -642,7 +616,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const [homeLog, awayLog, injuries, back] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
-    injurySection(desk, { homeTeam, awayTeam, tip, asOf }),
+    injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
   ]);
   const parts = [
