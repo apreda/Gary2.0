@@ -35,7 +35,7 @@ import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
 import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays } from './ncaafGameBox.js';
-import { teamStarters, startedIn } from '../../../../sports/ncaaf/ncaafStarters.js';
+import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
 const RULE = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -644,7 +644,7 @@ function offenseLines(team, reported, rows, results, onFile, core) {
  * whether he is on this week's report; a player on it has his last games beside his status in the availability section,
  * so here he gets his status only.
  */
-function regularsLines(team, reported, rows, results, onFile, core, plays = null) {
+function regularsLines(team, reported, rows, results, onFile, core, plays = null, starts = new Map()) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
   const last = games.at(-1);
   if (!last) return [`${team}: no completed games this season.`];
@@ -668,13 +668,35 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
     .map(([name, entry]) => ({ name, entry, played: earlier.filter((r) => entry.games.has(String(r.gameId))) }))
     .filter((p) => p.played.length >= 2 && p.played.length * 2 > earlier.length)
     .sort((a, b) => b.played.length - a.played.length || a.name.localeCompare(b.name));
-  return [`${head}${notOnFile(games.slice(0, -1), onFile)}:`, ...(kept.length ? kept.map((p) => {
+  // Starters of the earlier games who did not start the last one (Oct 27 2026 data loop): the official box's lineups
+  // name the linemen, and the defenders a stat row misses, that a stat row cannot.
+  const lineup = [];
+  const lastLineup = starts.get(String(last.gameId));
+  const earlierLineups = games.slice(0, -1).filter((r) => starts.has(String(r.gameId)));
+  if (starts.size && !lastLineup) lineup.push("  the last game's starting lineup: not on file");
+  else if (lastLineup && earlierLineups.length >= 2) {
+    const byStarter = new Map();
+    for (const r of earlierLineups) for (const x of starts.get(String(r.gameId))) {
+      const e = byStarter.get(x.key) || { name: x.name, position: x.position, games: [] };
+      e.games.push(r); byStarter.set(x.key, e);
+    }
+    const listed = kept.map((p) => ({ name: p.name, key: starterKey(p.name) }));
+    for (const e of [...byStarter.values()].filter((x) => x.games.length >= 2 && x.games.length * 2 > earlierLineups.length && !startedIn(lastLineup, x.name) && !startedIn(listed, x.name))
+      .sort((a, b) => b.games.length - a.games.length || a.name.localeCompare(b.name))) {
+      const report = onReport(e.name, reported);
+      lineup.push(`  ${e.name}${e.position ? ` (${e.position})` : ''}: started ${e.games.length} of the ${earlierLineups.length} earlier games with a starting lineup on file, the last ${day(e.games.at(-1))} ${versus(e.games.at(-1))}; `
+        + `not in the last game's starting lineup · ${report ? `${report.status} on this week's availability report` : "not on this week's availability report"}`);
+    }
+  }
+  const missing = kept.map((p) => {
     const report = onReport(p.name, reported);
     const who = `  ${p.name}${p.entry.position || report?.position ? ` (${p.entry.position || report.position})` : ''}`;
     if (report) return `${who}: ${report.status} on this week's availability report`;
     return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}; `
       + `${core.has(p.name) ? UNDER_OFFENSE : recentGames(p.entry, earlier)} · not on this week's availability report`;
-  }) : ['  none'])];
+  });
+  return [`${head}${notOnFile(games.slice(0, -1), onFile)}:`, ...(missing.length ? missing : [lineup.length ? '  no regular without a stat row' : '  none']),
+    ...(lineup.some((l) => !/not on file/.test(l)) ? ["  starters of the earlier games who did not start the last one:", ...lineup] : lineup)];
 }
 
 /**
@@ -818,12 +840,13 @@ ${RULE}
 Each team's regulars in the games before its last one (the most passes, the
 two most carries, the four most catches, the eleven most tackles, the most
 kicks and the most punts, each with a stat row in most of those games) who
-have no stat row in the last game, and whether each is on this week's
-availability report. A stat row is the player's line in the game's box score;
-college publishes no snap counts, so "no stat row" is not proof that a player
-did not play.
+have no stat row in the last game, then the starters of the earlier games who
+did not start the last one (the official box's lineups, where a school posts
+them), and whether each is on this week's availability report. A stat row is
+the player's line in the game's box score; college publishes no snap counts,
+so "no stat row" is not proof that a player did not play.
 
-${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], played[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], played[i], starts[i]).join('\n')).join('\n\n')}
 ${RULE}`;
 
   const behind = (s) => (s.results.length
