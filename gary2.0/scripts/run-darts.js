@@ -10,9 +10,7 @@
  *     first run of the day throws the board; later runs only fill categories
  *     that were short because their markets had not posted yet, at most once
  *     an hour per league. A dart already thrown is never replaced.
- *  2. Fill each new dart's form (his last 10 games for MLB; this season
- *     beside last season for the NFL; the clubs' first-inning scoring).
- *  3. Scratch any dart whose player is not playing (MLB lineup posted
+ *  2. Scratch any dart whose player is not playing (MLB lineup posted
  *     without him, NFL or NBA injury report has him out). The darts are the
  *     darts (founder, Oct 28 2026): a scratched dart's spot is never thrown
  *     again, and a short category fills only from markets that had not posted.
@@ -40,7 +38,6 @@ const { ballDontLieService: bdl } = await import('../src/services/providers/ball
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
-const { fillDartForms } = await import('../src/services/gary/darts/dartsForm.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -263,10 +260,6 @@ if (!scratchOnly && (force || etMinutes() >= START_MIN || date !== etDate())) {
     try { await throwLeague(league); } catch (e) { failed = true; console.error(`${league} darts failed: ${e.message}`); }
   }
 }
-try {
-  const f = await fillDartForms({ supabase, date, log });
-  if (f) log(`form filled on ${f}`);
-} catch (e) { failed = true; console.error(`form pass failed: ${e.message}`); }
 try {
   const n = await scratchDarts({ supabase, date, log });
   if (n) log(`scratched ${n}`);
