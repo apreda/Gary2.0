@@ -48,7 +48,9 @@ const memo = new Map();
  * with both clubs, both starters (name, hand) and each club's first-inning runs.
  * Memoized per process. Throws when the schedule does not answer.
  */
-export async function loadMlbGameFrames(endDate, { days = 50 } = {}) {
+// 90 days (Oct 27 2026 darts bug audit: at 50, a playoff starter's eighth-last start, in early September, printed with
+// no opponent or arm).
+export async function loadMlbGameFrames(endDate, { days = 90 } = {}) {
   const key = `${endDate}|${days}`;
   if (!memo.has(key)) memo.set(key, (async () => {
     const start = new Date(Date.parse(`${endDate}T12:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
