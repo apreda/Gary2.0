@@ -105,9 +105,14 @@ async function reportAtSlot(t, fetchImpl = fetch) {
   } finally {
     clearTimeout(timer);
   }
-  // A 403 is the CDN refusing this client (Oct 19 2026: Akamai blocked the host after a few hundred probes), not a
-  // slot with no report: stop at once instead of asking for every quarter hour of the day and a half.
-  if (response?.status === 403) throw new Error('Official NBA injury report blocked (403) by the CDN');
+  // A 403 on an older slot is the CDN refusing this client (Oct 19 2026: Akamai blocked the host after a few hundred
+  // probes): stop at once instead of asking for every quarter hour of the day and a half. On the current quarter hour
+  // it is the report not posted yet (Oct 28 2026: the 6:00 PM report answered 403 at 6:00:20 and was there at 6:00:26,
+  // and every NBA read that started on the half hour failed), so the search steps back to the one before.
+  if (response?.status === 403) {
+    if (Date.now() - t < SLOT_MS) return { url, missing: true };
+    throw new Error('Official NBA injury report blocked (403) by the CDN');
+  }
   const value = response?.ok
     ? { url, postedAt: new Date(t).toISOString(), ...parseOfficialReport(await pdfToText(Buffer.from(await response.arrayBuffer()))) }
     : { url, missing: true };

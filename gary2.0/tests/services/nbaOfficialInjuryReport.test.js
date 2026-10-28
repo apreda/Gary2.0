@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOfficialReport, reportUrlFor, samePlayerIn } from '../../src/services/providers/nbaOfficialInjuryReport.js';
+import { latestOfficialReport, parseOfficialReport, reportUrlFor, samePlayerIn } from '../../src/services/providers/nbaOfficialInjuryReport.js';
 
 // The shape `pdftotext -layout` gives the league's report: wrapped reasons print above and below their row, later
 // pages drop the header and shift left, and a reason can run past a page break.
@@ -53,5 +53,14 @@ describe('the NBA official injury report reader', () => {
     expect(samePlayerIn('J. Williams', feed)).toBeNull();
     expect(samePlayerIn('Wendell Carter Jr.', ['Jevon Carter'])).toBeNull();
     expect(samePlayerIn('Ace Bailey', ['Airious Bailey'], ['Ace Bailey', 'Amari Bailey'])).toBeNull();
+  });
+
+  it("steps back past the quarter hour's report not posted yet, and stops on an older 403", async () => {
+    const asked = [];
+    const notYet = (url) => { asked.push(url); return { status: asked.length === 1 ? 403 : 404, ok: false }; };
+    await expect(latestOfficialReport({ lookbackHours: 1, fetchImpl: notYet })).rejects.toThrow('No official NBA injury report');
+    expect(asked).toHaveLength(4);
+    const blocked = () => ({ status: 403, ok: false });
+    await expect(latestOfficialReport({ lookbackHours: 1, fetchImpl: blocked })).rejects.toThrow('blocked (403)');
   });
 });
