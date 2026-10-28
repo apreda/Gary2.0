@@ -21,12 +21,18 @@ export function collegeComponentRows(context, { game, date }) {
     // completed and retrieved current reporting for this team, but that
     // reporting names no starter or carries no availability report, the
     // component did its job: the answer is "not public yet". A named
-    // quarterback missing from the roster, rejected or partial injury
-    // reports, and a research run that never completed stay failures.
+    // quarterback missing from the roster and a research run that never
+    // completed stay failures.
+    // UNVERIFIABLE IS NOT MISSING (Oct 28 2026). The new Pac-12 (Colorado
+    // State, Utah State, San Diego State, Texas State) publishes no official
+    // availability report, so the research finds only older articles; a
+    // reported absence without a current source is dropped and the pick runs
+    // on the validated report. That mailed a failure most Saturdays with
+    // nothing anyone could do. Researched teams are listed, not mailed.
     const researched = Number(evidence?.diagnostics?.current_sources) > 0;
     const unresolved = {
       quarterback: researched && !evidence?.diagnostics?.reported_qb,
-      availability: researched && evidence?.availability === 'unavailable' && !evidence?.diagnostics?.invalid_injuries,
+      availability: researched && ['partial', 'unavailable'].includes(evidence?.availability),
       coaching: false,
     };
     return Object.entries(checks).map(([component, ok]) => ({
