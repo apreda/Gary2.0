@@ -60,6 +60,7 @@ describe.skipIf(!supported)('operational alert delivery on isolated PostgreSQL',
     sql(migration);
     sql(readFileSync(new URL('../../supabase/migrations/20260916184953_activate_operational_email_control.sql', import.meta.url), 'utf8'));
     sql(readFileSync(new URL('../../supabase/migrations/20260919213333_align_social_request_lifetime_with_pg_net.sql', import.meta.url), 'utf8'));
+    sql(readFileSync(new URL('../../supabase/migrations/20261028150000_ops_social_two_strikes.sql', import.meta.url), 'utf8'));
   },30000);
   afterAll(cleanup);
   beforeEach(() => {
@@ -106,13 +107,19 @@ describe.skipIf(!supported)('operational alert delivery on isolated PostgreSQL',
     sql('select gary_ops.enqueue_social()');
     sql("insert into net._http_response select id,502,'bad gateway',false from net.requests");
     sql('select gary_ops.tick()');
+    // One missed five-minute run is held (Oct 28 2026); the next failure in a row opens it.
+    expect(sql("select count(*) from gary_ops.incidents where source='cloud:social'")).toBe('0');
+    expect(sql("select count(*) from net.requests where url='https://api.resend.com/emails'")).toBe('0');
+    sql('select gary_ops.enqueue_social()');
+    sql("insert into net._http_response select id,502,'bad gateway',false from net.requests r where not exists(select 1 from net._http_response n where n.id=r.id)");
+    sql('select gary_ops.tick()');
     expect(sql("select count(*) from gary_ops.incidents where source='cloud:social' and resolved_at is null")).toBe('1');
     expect(sql("select count(*) from net.requests where url='https://api.resend.com/emails'")).toBe('1');
     sql('select gary_ops.tick()');
     expect(sql("select count(*) from net.requests where url='https://api.resend.com/emails'")).toBe('1');
   });
   it('catches timeouts, missing host heartbeats, and stale unresolved X receipts', () => {
-    sql("insert into gary_ops.social_requests(id,created_at) values(333,now()-interval '4 minutes'); update gary_ops.host set received_at=now()-interval '6 minutes'; insert into public.social_publication_intents values('game:1','sending_root',now()-interval '10 minutes'); select gary_ops.tick()");
+    sql("insert into gary_ops.social_requests(id,created_at,checked_at,failed) values(332,now()-interval '9 minutes',now()-interval '5 minutes',true); insert into gary_ops.social_requests(id,created_at) values(333,now()-interval '4 minutes'); update gary_ops.host set received_at=now()-interval '6 minutes'; insert into public.social_publication_intents values('game:1','sending_root',now()-interval '10 minutes'); select gary_ops.tick()");
     expect(sql('select count(*) from gary_ops.incidents where resolved_at is null')).toBe('3');
     expect(sql('select count(*) from gary_ops.mail')).toBe('1');
   });
