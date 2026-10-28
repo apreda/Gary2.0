@@ -9,7 +9,21 @@ import { emptySettlementStats, normalizeToETDate, gradeGame as gradeStoredGame }
 export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETDate, fetchNCAAFGames,
   getScoreGrounding, supportsExactGameResultIdentity, supportsExactNFLResultIdentity,
   fetchExistingGameResult, recapGradedPick, readCheckGradedPick = async () => {}, readBackPersistedResults,
-  gradeGame = gradeStoredGame, console = globalThis.console }) {
+  gradeGame = gradeStoredGame, console = globalThis.console, today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) }) {
+  // A postponed or canceled game is never played under its id (Oct 28 2026: the Oct 16
+  // Rays game, 15467425, was replayed the next day as a new game, and its two Winners
+  // plays sat "at risk" for twelve days). Once its day has passed, its Winners plays
+  // settle as no action, the way a book voids them. The free pick keeps no result.
+  const CALLED_OFF = /postpon|cancel/i;
+  async function voidCalledOffWinners(league, gameId, status, slateDate) {
+    if (!CALLED_OFF.test(status) || gameId == null || !(slateDate < today())) return;
+    const { data, error } = await supabase.from('winners_board')
+      .update({ scratched_at: new Date().toISOString(), scratch_reason: `no action: game ${status.replace(/^STATUS_/i, '').toLowerCase()}` })
+      .eq('league', league).eq('game_id', String(gameId)).is('scratched_at', null).select('candidate_id');
+    if (error) console.warn(`  ⚠️ could not void Winners plays on called-off ${league} game ${gameId}: ${error.message}`);
+    else if (data?.length) console.log(`  ↩︎ ${data.length} Winners play(s) on ${league} game ${gameId} (${status}) settled as no action`);
+  }
+
   async function processGenericGames(table, date, leagueFilter = null, { settlementOnly = false } = {}) {
     console.log(`\n📂 Processing ${table.toUpperCase()} for ${date}...`);
     const query = supabase.from(table).select('*');
@@ -155,6 +169,7 @@ export function createGameSettlement({ supabase, fetchGames, fetchMlbGamesForETD
             if ((['NFL', 'NCAAF'].includes(league) && !finalStatus) || (statusStr && !finalStatus)) {
               console.log(`  ⏳ NOT FINAL — skipping grade for ${pick.awayTeam} @ ${pick.homeTeam} (status: ${statusStr || 'missing'})`);
               gameFoundNotFinal = true; // provider has it but it isn't over — do NOT fall through to grounding
+              if (pickGameId != null && String(result.game.id) === String(pickGameId)) await voidCalledOffWinners(league, pickGameId, statusStr, date);
             } else {
               if (!statusStr) {
                 console.warn(`  ⚠️ No status on matched game for ${pick.awayTeam} @ ${pick.homeTeam} — grading anyway`);

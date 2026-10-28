@@ -34,6 +34,18 @@ describe('MLB head-to-head regular-season scope', () => {
       away_runs: 5, home_runs: 4, dom_won: true }]);
   });
 
+  it('reads a playoff game against its playoff series, not the regular season', async () => {
+    const tonight = { ...slate, id: 950, date: '2026-10-29T00:00:00Z', postseason: true };
+    const [row] = await collect([
+      indexed({ date: '2026-03-30T18:10:00.000Z' }),
+      indexed({ date: '2026-10-25T00:00:00.000Z', seasonType: 'postseason', postseason: true, homeRuns: 3, awayRuns: 2 }),
+      indexed({ date: '2026-10-26T00:00:00.000Z', seasonType: 'postseason', postseason: true, homeRuns: 5, awayRuns: 4 }),
+      indexed({ date: '2026-10-28T00:00:00.000Z', seasonType: 'postseason', postseason: true, homeId: 1, awayId: 12, homeRuns: 4, awayRuns: 3 }),
+    ], tonight);
+    expect(row.headline).toBe('Royals lead Diamondbacks 2-1 in the series');
+    expect(row.meta).toMatchObject({ wins: 2, losses: 1, games: 3, season_type: 'postseason' });
+  });
+
   it('keeps legitimate March regular-season meetings instead of guessing the season from the month', async () => {
     const [row] = await collect([indexed({ date: '2026-03-27T18:10:00.000Z' }), indexed()]);
     expect(row.meta.games).toBe(2);

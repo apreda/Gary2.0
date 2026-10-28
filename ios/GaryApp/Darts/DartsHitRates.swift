@@ -17,9 +17,38 @@ struct DartsHitRates: View {
     private static let mlbStats: [LogStat] = LogStat.batting + LogStat.pitching.filter { ["k", "outs"].contains($0.key) }
     /// The league's stats: MLB's hitting and the starters' two, or the NFL's.
     private var stats: [LogStat] { league == "NFL" ? LogStat.nfl : league == "NBA" ? LogStat.nba : Self.mlbStats }
-    /// The NFL's log runs across two seasons and the NBA's carries last season until a player has three games,
-    /// so neither has a season window.
-    private var windows: [LogWindow] { league == "NFL" || league == "NBA" ? [.last5, .last10, .last20] : LogWindow.allCases }
+    /// The NFL's log runs across two seasons and the NBA's carries last season until a player has three
+    /// games: the table reads their games this season only (Oct 28 2026: a player with no game yet this
+    /// season led tonight's NBA table on last spring's games, the only one with ten), its season window
+    /// the games so far.
+    private var thisSeasonOnly: Bool { league == "NFL" || league == "NBA" }
+    private var windows: [LogWindow] { LogWindow.allCases }
+    /// The day a league's current season began: the NBA's in October, the NFL's in August (January and
+    /// February belong to the season before).
+    private var seasonStart: String {
+        let today = SupabaseAPI.todayEST()
+        let year = Int(today.prefix(4)) ?? 2026, month = Int(today.dropFirst(5).prefix(2)) ?? 1
+        if league == "NBA" { return "\(month <= 7 ? year - 1 : year)-10-01" }
+        return "\(month <= 2 ? year - 1 : year)-08-01"
+    }
+    /// A player's values for the stat the table may read: this season's for the NBA and NFL, oldest first.
+    private func values(_ log: PlayerGameLog) -> [Double] {
+        let all = log.series(stat)
+        guard thisSeasonOnly else { return all }
+        guard let dates = log.d, dates.count == all.count else { return [] }
+        let start = seasonStart
+        return zip(dates, all).filter { $0.0 >= start }.map(\.1)
+    }
+    private func tally(_ log: PlayerGameLog, _ w: LogWindow) -> (hit: Int, of: Int)? {
+        guard thisSeasonOnly else { return log.tally(stat, mark, w) }
+        let v = values(log)
+        if let n = w.games {
+            guard v.count >= n else { return nil }
+            return (v.suffix(n).filter(mark.clears).count, n)
+        }
+        guard v.count >= 3 else { return nil }
+        return (v.filter(mark.clears).count, v.count)
+    }
 
     var body: some View {
         let ranked = rows
@@ -96,6 +125,12 @@ struct DartsHitRates: View {
             // A league change opens on the league's first stat.
             if !stats.contains(stat), let first = stats.first { stat = first; mark = LogMark(value: first.start) }
             if !windows.contains(window) { window = .last10 }
+            // Early in a season few have ten games: open on the longest window most of tonight's players fill.
+            if thisSeasonOnly {
+                let counts = pool.compactMap { $0.payload?.log }.map { values($0).count }
+                let half = max(1, counts.count / 2)
+                window = [LogWindow.last10, .last5].first { w in counts.filter { $0 >= (w.games ?? 0) }.count >= half } ?? .season
+            }
         }
     }
 
@@ -126,10 +161,11 @@ struct DartsHitRates: View {
     /// mark, then the count, then his season at the same mark.
     private var rows: [RateRow] {
         let built: [RateRow] = pool.compactMap { card in
-            guard let log = card.payload?.log, let t = log.tally(stat, mark, window) else { return nil }
-            if window == .season, t.of < 20 { return nil }
-            let values = window.games.map { Array(log.series(stat).suffix($0)) } ?? []
-            let season = log.tally(stat, mark, .season).map { $0.of > 0 ? Double($0.hit) / Double($0.of) : 0 } ?? 0
+            guard let log = card.payload?.log, let t = tally(log, window) else { return nil }
+            if window == .season, !thisSeasonOnly, t.of < 20 { return nil }
+            let series = values(log)
+            let values = window.games.map { Array(series.suffix($0)) } ?? (thisSeasonOnly ? series : [])
+            let season = tally(log, .season).map { $0.of > 0 ? Double($0.hit) / Double($0.of) : 0 } ?? 0
             return RateRow(card: card, name: card.player_name ?? card.payload?.name ?? "", sub: subline(card),
                            values: values, hit: t.hit, of: t.of, season: season)
         }

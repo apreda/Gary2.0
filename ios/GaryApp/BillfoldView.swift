@@ -327,6 +327,8 @@ struct BillfoldView: View {
             if verb == "billfold", let m = ChartMode(rawValue: arg.uppercased()) {
                 withAnimation { chartMode = m }
             }
+            // `garybook history` / `garybook bankroll`: Gary's record view, for the screenshot tooling.
+            if verb == "garybook", ["history", "bankroll"].contains(arg) { garyBookMode = arg }
         }
         // (Local settings sheet removed Aug 4 — the header's ⋯ posts
         // ShowSettingsMenu, which ContentView presents globally.)
@@ -1867,12 +1869,20 @@ private struct GaryBankrollPanel: View {
                         metric("MAX DRAWDOWN", dollars(b.max_drawdown_units))
                     }
                     if !b.curve.isEmpty {
-                        let points = [GaryBankrollSnapshot.Point(date: "Start", net_units: 0)] + b.curve
-                        Chart(points) { point in
-                            // "Sep 16", not the stored "2026-09-16" the axis cut to "2026-0…".
-                            let day = point.date == "Start" ? "Start" : LabFormat.monthDay(point.date)
-                            LineMark(x: .value("Date", day), y: .value("Net", point.net_units * garyUnitDollars))
+                        // A date axis, labeled once a week (Oct 28 2026: each day was its own
+                        // category, and forty labels squeezed into "SSSS…CCCC" under the line).
+                        let curve = b.curve.compactMap { p in Self.chartDay(p.date).map { (date: $0, net: p.net_units * garyUnitDollars) } }
+                        let start = curve.first.flatMap { Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: $0.date) }
+                        let points = (start.map { [(date: $0, net: 0.0)] } ?? []) + curve
+                        Chart(points.indices, id: \.self) { i in
+                            LineMark(x: .value("Date", points[i].date, unit: .day), y: .value("Net", points[i].net))
                                 .foregroundStyle(gold)
+                        }
+                        .chartXAxis {
+                            AxisMarks(preset: .aligned, values: .stride(by: .day, count: 7)) { _ in
+                                AxisGridLine()
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).day(), centered: false)
+                            }
                         }
                         .chartYAxis {
                             AxisMarks(position: .trailing) { value in
@@ -1908,6 +1918,16 @@ private struct GaryBankrollPanel: View {
             }
         }
     }
+
+    /// "2026-09-16" as that calendar day (noon UTC, so no zone moves it a day).
+    private static let chartDayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+    private static func chartDay(_ raw: String) -> Date? { chartDayFormat.date(from: "\(raw.prefix(10)) 12:00") }
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {

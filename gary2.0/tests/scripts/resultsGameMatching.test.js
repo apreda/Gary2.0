@@ -11,6 +11,8 @@ function harness({ pick, games = [], table = 'daily_picks' }) {
         eq() { return query; },
         gte() { return query; },
         in(column, values) { queries.push({ table: name, column, values }); return query; },
+        update(values) { queries.push({ table: name, update: values }); return query; },
+        is() { return query; },
         then(resolve) { return Promise.resolve({ data: name === table ? [{ picks: [pick] }] : [] }).then(resolve); },
       };
       return query;
@@ -48,6 +50,14 @@ describe('results runner game identity and score-grounding boundary', () => {
   ])('leaves %s pending without model grounding or grading', async (_label, stored, games) => {
     const h = harness({ pick: stored, games });
     expect(await h.run()).toMatchObject({ unmatched: 1, finalEligible: 0 });
+    expect(h.gradeGame).not.toHaveBeenCalled();
+    expect(h.getScoreGrounding).not.toHaveBeenCalled();
+  });
+
+  it('settles the Winners plays on a postponed game as no action once its day has passed, and grades nothing', async () => {
+    const h = harness({ pick: { ...pick, game_id: 102 }, games: [{ ...second, status: 'STATUS_POSTPONED' }] });
+    await h.run();
+    expect(h.queries).toContainEqual({ table: 'winners_board', update: expect.objectContaining({ scratch_reason: 'no action: game postponed' }) });
     expect(h.gradeGame).not.toHaveBeenCalled();
     expect(h.getScoreGrounding).not.toHaveBeenCalled();
   });

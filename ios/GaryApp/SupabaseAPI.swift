@@ -743,6 +743,28 @@ enum SupabaseAPI {
         throw invalid("Player-card page limit exceeded")
     }
 
+    /// One player's or one club's cards since a date, newest day first (Oct 28 2026: a
+    /// tapped name read up to six whole days of every league's cards, near a megabyte a
+    /// day decoded on the main thread, and the day cache keeps two). Empty on any failure.
+    @MainActor static func fetchRecentPlayerCards(league: String, since: String, nameLike: String? = nil,
+                                                  teamAbbrs: [String] = [], limit: Int = 40) async -> [(date: String, row: PlayerInsightCardRow)] {
+        var query = [
+            URLQueryItem(name: "select", value: "id,date,league,player_id,player_name,team_abbr,game_id,payload"),
+            URLQueryItem(name: "league", value: "eq.\(league.uppercased())"),
+            URLQueryItem(name: "date", value: "gte.\(since)"),
+            URLQueryItem(name: "order", value: "date.desc,id.asc"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
+        if let nameLike, !nameLike.isEmpty { query.append(URLQueryItem(name: "player_name", value: "ilike.*\(nameLike)*")) }
+        if !teamAbbrs.isEmpty { query.append(URLQueryItem(name: "team_abbr", value: "in.(\(teamAbbrs.joined(separator: ",")))")) }
+        var request = makeRequest(url: buildURL(table: "player_insight_cards", query: query))
+        request.timeoutInterval = 15
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([PlayerIntelPageRow].self, from: data) else { return [] }
+        return rows.filter { $0.row.payload != nil }.map { ($0.date, $0.row) }
+    }
+
     /// The full day's slate — every game + opening lines (daily_slate,
     /// written at the 5am plan step). The board exists before picks do.
     struct DailySlateFetch {

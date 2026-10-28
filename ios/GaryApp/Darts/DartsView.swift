@@ -783,18 +783,17 @@ struct TeamCardByName: View {
         let mine: (PlayerInsightCardRow) -> Bool = { row in
             HubCardIdentity.cardBelongsToTeam(cardLeague: row.league, cardAbbr: row.team_abbr, league: league, team: clubName, abbr: nil)
         }
-        guard !intel.contains(where: mine) else { return }
-        var day = today
-        for _ in 0..<PlayerCardByName.lookbackDays {
-            day = LabFormat.yesterday(of: day)
-            let rows = await SupabaseAPI.fetchPlayerIntelRows(date: day).filter { $0.payload != nil && mine($0) }
-            if Task.isCancelled { return }
-            if !rows.isEmpty {
-                var seen = Set<String>()
-                intel += rows.filter { seen.insert($0.player_id ?? $0.player_name ?? "").inserted }
-                return
-            }
-        }
+        guard !intel.contains(where: mine),
+              let code = HubCardIdentity.abbreviation(nil, name: clubName, league: league) else { return }
+        var since = today
+        for _ in 0..<PlayerCardByName.lookbackDays { since = LabFormat.yesterday(of: since) }
+        // The club's own cards only, newest day first; its latest game day's players.
+        let codes = [code] + (["ARI": ["AZ"], "CHW": ["CWS"], "OAK": ["ATH"]][code] ?? [])
+        let found = await SupabaseAPI.fetchRecentPlayerCards(league: league, since: since, teamAbbrs: codes, limit: 80)
+            .filter { $0.date < today && mine($0.row) }
+        guard !Task.isCancelled, let latest = found.first?.date else { return }
+        var seen = Set<String>()
+        intel += found.filter { $0.date == latest }.map(\.row).filter { seen.insert($0.player_id ?? $0.player_name ?? "").inserted }
     }
 
     /// The day's streak rows when the page didn't bring its own.
@@ -957,28 +956,39 @@ struct PlayerCardByName: View {
             }
         }
         .task {
+            let today = SupabaseAPI.todayEST()
+            var since = today
+            for _ in 0..<Self.lookbackDays { since = LabFormat.yesterday(of: since) }
+            if let date, date < since { since = date }
+            // His cards only, by surname, newest first; the dart's own day leads, then today, then the latest.
+            let found = await SupabaseAPI.fetchRecentPlayerCards(league: league, since: since, nameLike: Self.surname(name))
+            if Task.isCancelled { return }
+            var byDay: [String: [PlayerInsightCardRow]] = [:]
             var days: [String] = []
-            for day in [date, SupabaseAPI.todayEST()].compactMap({ $0 }) where !days.contains(day) { days.append(day) }
-            var back = SupabaseAPI.todayEST()
-            for _ in 0..<Self.lookbackDays {
-                back = LabFormat.yesterday(of: back)
-                if !days.contains(back) { days.append(back) }
+            for (day, card) in found {
+                if byDay[day] == nil { days.append(day) }
+                byDay[day, default: []].append(card)
             }
-            for day in days {
-                let rows = await SupabaseAPI.fetchPlayerIntelRows(date: day)
-                // A doubleheader gives a player one card per game: collapse to one
-                // row per player before asking whether the name is unique.
+            let order = [date, today].compactMap { $0 }.filter { byDay[$0] != nil } + days
+            for day in order {
+                // A doubleheader gives a player one card per game: one row per player before the name test.
                 var seen = Set<String>()
-                let candidates = rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
-                    .filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
+                let candidates = (byDay[day] ?? []).filter { seen.insert($0.player_id ?? $0.player_name ?? UUID().uuidString).inserted }
                 if let index = HubCardIdentity.uniquePlayerIndex(name, names: candidates.map { $0.player_name ?? $0.payload?.name ?? "" }) {
                     row = candidates[index]
                     break
                 }
-                if Task.isCancelled { return }
             }
             loading = false
         }
+    }
+
+    /// The name's last word that is not a suffix, letters only and unaccented ("Jaren Jackson Jr." → "jackson").
+    static func surname(_ name: String) -> String {
+        let suffixes: Set<String> = ["jr", "sr", "ii", "iii", "iv", "v"]
+        let words = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .split(separator: " ").map { $0.filter { $0.isLetter || $0 == "'" || $0 == "-" } }.filter { !$0.isEmpty }
+        return words.last { !suffixes.contains($0) } ?? words.last ?? name
     }
 }
 

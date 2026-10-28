@@ -81,7 +81,9 @@ export async function writeNbaStreaks({ supabase, date, bdlApiKey = process.env.
   if (!bdlApiKey) throw new Error('BALLDONTLIE_API_KEY missing');
   const days = Array.from({ length: WINDOW_DAYS }, (_, i) => shiftDate(date, -i));
   const stats = await bdlAll(`stats?${days.map((d) => `dates[]=${d}`).join('&')}`, bdlApiKey, fetchImpl);
-  const ahead = Array.from({ length: 4 }, (_, i) => shiftDate(date, i + 1));
+  // The date's own games count: a pass for today, before tip, names tonight's game (Oct 28 2026: the
+  // board said Maxey's next game was Friday while he played Indiana that night). Finals drop out below.
+  const ahead = Array.from({ length: 4 }, (_, i) => shiftDate(date, i));
   const upcoming = (await bdlAll(`games?${ahead.map((d) => `dates[]=${d}`).join('&')}`, bdlApiKey, fetchImpl)).filter((g) => !/final/i.test(String(g.status || '')));
   const { streaks, form } = nbaStreakRows(stats, upcoming, date);
   if (dryRun) return { streaks, form };

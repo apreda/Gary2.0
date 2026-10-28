@@ -36,6 +36,7 @@ const RELEVANCE_SCALE = 13;
 
 const isFinal = (g) => String(g?.status || '').toUpperCase().includes('FINAL');
 const regularSeason = (g) => g?.seasonType === 'regular' && g?.postseason === false;
+const postseason = (g) => g?.seasonType === 'postseason' && g?.postseason === true;
 const validRuns = value => ['number', 'string'].includes(typeof value) && String(value).trim() !== ''
   && Number.isInteger(Number(value)) && Number(value) >= 0;
 const decided = (g) =>
@@ -53,8 +54,13 @@ export function buildHeadToHeadRows(ctx, index) {
   // The shared provider index deliberately contains spring training and
   // postseason too. A calendar date or postseason:false cannot establish
   // regular-season scope: the provider's explicit seasonType must agree.
-  const seasonGames = [...index.entries()].map(([id, game]) => ({ ...game, sourceGameID: String(id) }))
-    .filter(g => regularSeason(g) && decided(g));
+  const indexed = [...index.entries()].map(([id, game]) => ({ ...game, sourceGameID: String(id) }));
+  const seasonGames = indexed.filter(g => regularSeason(g) && decided(g));
+  // A playoff game's history is its series (Oct 28 2026: World Series Game 5's page
+  // said "Brewers are 2-1 vs Rays this season" from three games in March while the
+  // Brewers led the Series 3-1). Only the provider's own postseason games count.
+  const playoffGames = indexed.filter(g => postseason(g) && decided(g));
+  const playoffIds = new Set(indexed.filter(postseason).map(g => g.sourceGameID));
 
   const candidates = [];
 
@@ -68,10 +74,11 @@ export function buildHeadToHeadRows(ctx, index) {
     const cutoff = [game.datetime, game.date, game.commence_time, game.start_time_utc]
       .map(instant).find(value => value != null);
     const cutoffDay = /^\d{4}-\d{2}-\d{2}$/.test(date || '') ? date : null;
+    const series = game?.postseason === true || playoffIds.has(String(gameId));
 
     // Strict chronological scope keeps separate doubleheader games separate.
     // If today's start is unknown, only prior Eastern dates establish history.
-    const h2h = seasonGames.filter(g => {
+    const h2h = (series ? playoffGames : seasonGames).filter(g => {
       const at = instant(g.date);
       return g.sourceGameID !== String(gameId) && at != null
         && (cutoff != null ? at < cutoff : cutoffDay != null && easternDay(at) < cutoffDay)
@@ -110,15 +117,17 @@ export function buildHeadToHeadRows(ctx, index) {
     const domName = dom.name || dom.abbr || 'The team';
     const subName = sub.name || sub.abbr || 'the opponent';
     const tied = diff === 0;
-    const headline = tied
-      ? `${domName} and ${subName} are square at ${record} this season`
-      : `${domName} are ${record} vs ${subName} this season`;
+    const headline = series
+      ? (tied ? `${domName} and ${subName} are even at ${record} in the series` : `${domName} lead ${subName} ${record} in the series`)
+      : tied
+        ? `${domName} and ${subName} are square at ${record} this season`
+        : `${domName} are ${record} vs ${subName} this season`;
     const lastClause = domWonLast
       ? `${dom.abbr} won the last meeting ${lastScore}`
       : `${sub.abbr} took the last meeting ${lastScore}, a revenge spot`;
     const detail = tied
-      ? `The season series sits ${record}. ${lastClause}.`
-      : `${domName} lead the season series ${record} over ${subName}. ${lastClause}.`;
+      ? `The ${series ? '' : 'season '}series sits ${record}. ${lastClause}.`
+      : `${domName} lead the ${series ? '' : 'season '}series ${record} over ${subName}. ${lastClause}.`;
 
     candidates.push(makeRow({
       category: 'headToHead',
@@ -163,8 +172,8 @@ export function buildHeadToHeadRows(ctx, index) {
           };
         }),
         season,
-        season_type: 'regular',
-        source: 'BALLDONTLIE completed regular-season games',
+        season_type: series ? 'postseason' : 'regular',
+        source: series ? 'BALLDONTLIE completed postseason games' : 'BALLDONTLIE completed regular-season games',
         ...(cutoff != null ? { history_before: new Date(cutoff).toISOString() }
           : { history_before_date: cutoffDay }),
       },
@@ -195,7 +204,8 @@ export async function computeHeadToHead(ctx) {
     const lastLine = last?.score
       ? ` Last meeting: ${last.winner} won it ${last.score}.`
       : '';
-    return `${m.dominant_name} are ${m.wins}-${m.losses} against ${m.opponent_name} across ${m.games} meeting(s) this season.${lastLine} Tonight: ${r.game}.`;
+    const scope = m.season_type === 'postseason' ? 'in this playoff series' : 'this season';
+    return `${m.dominant_name} are ${m.wins}-${m.losses} against ${m.opponent_name} across ${m.games} meeting(s) ${scope}.${lastLine} Tonight: ${r.game}.`;
   }, {
     ask: "what this season series actually means for tonight — whether anything in the matchup explains it (arms they've faced, where the games were played, how they were won) or it is just history that has no hold on tonight",
   });
