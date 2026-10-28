@@ -3,10 +3,10 @@
  * Gary Auto-Scheduler — Per-Game Scheduling
  *
  * Runs 24/7 on the local Mac. Every night at midnight ET, checks BDL for
- * tomorrow's games, and schedules EACH GAME individually 90 minutes before
- * its start time. Game picks run first, then props for the same game.
- *
- * This ensures lineups/injuries are as fresh as possible for each game.
+ * tomorrow's games, and schedules EACH GAME individually on its sport's
+ * ladder (MLB from 90 minutes out, or when both lineups post; NBA from five
+ * hours; football from four, or the weekend morning). Game picks run first,
+ * then props for the same game.
  *
  * Usage:
  *   node scripts/scheduler.js          # Run the 24/7 scheduler
@@ -64,7 +64,14 @@ const DATA_RETRY_INTERVAL_MS = 30 * 60_000; // an MLB pick waiting only on its r
 // net. MLB's ladder is untouched — its T-90 start is the LINEUP gate, not a
 // preference.
 const FOOTBALL_RETRY_LEAD_TIMES_MINUTES = [240, 180, 90, 30];
+// NBA picks from five hours out (founder, Oct 28 2026: "make the pick as the information becomes available ... how is
+// anyone supposed to actually place these bets?"; T-90 put picks up about 80 minutes before tip). By T-300 of a 7 PM
+// local tip every team has filed its game-day injury report (due 1 PM local), shootaround news is out and the starting
+// fives are projected; a questionable player is read the way a bettor reads him that afternoon, from the report and
+// the news. The later tiers are retries.
+const NBA_RETRY_LEAD_TIMES_MINUTES = [300, 240, 180, 90, 30];
 function retryLeadTimesFor(sportKey) {
+  if (sportKey === 'basketball_nba') return NBA_RETRY_LEAD_TIMES_MINUTES;
   return (sportKey === 'americanfootball_nfl' || sportKey === 'americanfootball_ncaaf')
     ? FOOTBALL_RETRY_LEAD_TIMES_MINUTES
     : RETRY_LEAD_TIMES_MINUTES;

@@ -18,7 +18,7 @@ const recapKey = row => `${leagueOf(row)}|${row.game_date}|${row.matchup}|${row.
 
 // Mirrors the final scheduler retry tier without importing the live daemon.
 // The focused contract test checks both values against scheduler.js.
-export const finalPickRetryMinutes = league => ['NFL', 'NCAAF'].includes(league) ? 30 : 15;
+export const finalPickRetryMinutes = league => ['NFL', 'NCAAF', 'NBA'].includes(league) ? 30 : 15;
 
 function storedGamePicks(value) {
   // Null/blank is the legacy absent-column representation; a stored JSON

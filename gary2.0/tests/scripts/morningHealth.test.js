@@ -169,7 +169,7 @@ describe('morning output health', () => {
       expect(check(report, 'results')).toBeUndefined();
     }
   });
-  it.each([['MLB', 15], ['NBA', 15], ['NFL', 30]])('warns for a missing %s pick only when its final retry window begins', (league, minutes) => {
+  it.each([['MLB', 15], ['NBA', 30], ['NFL', 30]])('warns for a missing %s pick only when its final retry window begins', (league, minutes) => {
     const kickoff = '2026-09-05T12:00:00Z';
     const data = snapshot([game(1, league, kickoff)]);
     const start = Date.parse(kickoff);
@@ -182,7 +182,7 @@ describe('morning output health', () => {
   });
   it('keeps the health warning aligned with the scheduler final retry constants', () => {
     const scheduler = readFileSync(new URL('../../scripts/scheduler.js', import.meta.url), 'utf8');
-    for (const [name, league] of [['RETRY_LEAD_TIMES_MINUTES', 'MLB'], ['FOOTBALL_RETRY_LEAD_TIMES_MINUTES', 'NFL']]) {
+    for (const [name, league] of [['RETRY_LEAD_TIMES_MINUTES', 'MLB'], ['FOOTBALL_RETRY_LEAD_TIMES_MINUTES', 'NFL'], ['NBA_RETRY_LEAD_TIMES_MINUTES', 'NBA']]) {
       const values = scheduler.match(new RegExp(`const ${name} = (\\[[^\\]]+\\]);`));
       expect(values, `${name} must remain visible to the health deadline contract`).not.toBeNull();
       expect(finalPickRetryMinutes(league)).toBe(JSON.parse(values[1]).at(-1));
