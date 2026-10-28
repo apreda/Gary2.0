@@ -138,4 +138,12 @@ describe('exact provider-id pick preflight', () => {
     });
     expect(mocks.from).not.toHaveBeenCalled();
   });
+  it('a strict coverage check never reads an unreadable table as no pick (Oct 28 2026)', async () => {
+    mocks.response = { data: null, error: { message: 'TypeError: fetch failed' } };
+    await expect(gameAlreadyHasPick('NBA', 'Knicks', 'Nets', '2026-10-28', '7')).resolves.toMatchObject({ exists: false });
+    await expect(gameAlreadyHasPick('NBA', 'Knicks', 'Nets', '2026-10-28', '7', { strict: true })).rejects.toThrow('fetch failed');
+    await expect(nflGameAlreadyHasPick('Jacksonville Jaguars', 'Houston Texans', '2026-10-18T13:30:00Z', '1392296', { strict: true })).rejects.toThrow('fetch failed');
+    mocks.response = { data: [], error: null };
+    await expect(nflGameAlreadyHasPick('Jacksonville Jaguars', 'Houston Texans', '2026-10-18T13:30:00Z', '1392296', { strict: true })).resolves.toMatchObject({ exists: false });
+  });
 });

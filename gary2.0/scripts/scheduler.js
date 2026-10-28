@@ -1390,9 +1390,10 @@ async function executeDecisionLaneSchedule(schedule, {
           ? entry.slateDate
           : entry.startTime.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
         try {
+          // Strict: an unreadable table is "Coverage check failed" below, never a MISSED pick.
           const res = entry.sport.label === 'NFL' && typeof nflGameAlreadyHasPick === 'function'
-            ? await nflGameAlreadyHasPick(entry.homeTeam, entry.awayTeam, entry.startTime, entry.gameId)
-            : await gameAlreadyHasPick(entry.sport.label, entry.homeTeam, entry.awayTeam, etDate, entry.gameId);
+            ? await nflGameAlreadyHasPick(entry.homeTeam, entry.awayTeam, entry.startTime, entry.gameId, { strict: true })
+            : await gameAlreadyHasPick(entry.sport.label, entry.homeTeam, entry.awayTeam, etDate, entry.gameId, { strict: true });
           if (!res?.exists) {
             missedGames.push(entry);
             log(`⚠️ MISSED PICK: ${entry.sport.label} ${entry.matchup} — 0 stored after all retry tiers (id ${entry.gameId})`);

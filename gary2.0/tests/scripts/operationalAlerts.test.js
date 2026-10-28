@@ -58,7 +58,7 @@ describe('non-AI operational observations', () => {
   it('correlates exact game IDs, retains failures, and clears only accepted outcomes', () => {
     const input = [
       line('🎯 Props: Yankees @ Twins [retry T-15] (id 5060045)'),
-      line('❌ Props failed: Yankees @ Twins [retry T-15]: Exit code 1'),
+      line('❌ Props failed: Yankees @ Twins [retry T-15]: refresh token revoked'),
       line('🎯 Props: Tigers @ Blue Jays [retry T-60] (id 5060046)'),
       line('🧾 Props outcome: stored for Tigers @ Blue Jays (0 pick(s))'),
       line('✅ Done'),
@@ -69,7 +69,7 @@ describe('non-AI operational observations', () => {
   });
   it('keeps a doubleheader failure distinct from a later game with identical teams', () => {
     const text = [line('📊 Game picks: A @ B [primary T-90] (id 1)'),
-      line('❌ Game picks failed: A @ B [primary T-90]: timeout'),
+      line('❌ Game picks failed: A @ B [primary T-90]: not logged in'),
       line('📊 Game picks: A @ B [primary T-90] (id 2)'),
       line('🧾 Game-pick outcome: stored for A @ B')].join('\n');
     expect([...schedulerObservations(text,date).active.keys()]).toEqual([`${date}:game:1`]);
@@ -100,6 +100,7 @@ describe('non-AI operational observations', () => {
     const parsed = schedulerObservations([
       line('📊 Game picks: Fresno State @ San Jose State [primary T-240] (id 457975)'),
       line('❌ Game picks failed: Fresno State @ San Jose State [primary T-240]: Exit code 1'),
+      line('⚠️ MISSED PICK: NCAAF Fresno State @ San Jose State — 0 stored after all retry tiers (id 457975)'),
     ].join('\n'), date);
     mergeDataFailures(parsed, [{ ...footballMarketUnavailable({}, 'NCAAF'), league: 'NCAAF',
       game_id: '457975', last_failed_at: '2026-09-16T17:25:38Z' }], date);
@@ -112,6 +113,7 @@ describe('non-AI operational observations', () => {
     const parsed = schedulerObservations([
       line('🎯 Props: Nationals @ Tigers [primary T-90] (id 5060113)'),
       line('❌ Props failed: Nationals @ Tigers [primary T-90]: Exit code 1'),
+      line('⚠️ MISSED PROPS: MLB Nationals @ Tigers — no accepted stored/pass outcome after all retry tiers (id 5060113): Exit code 1'),
     ].join('\n'), date);
     mergeDataFailures(parsed, [{ league: 'MLB', kind: 'props', game_id: '5060113', code: 'pick_failed', publication_blocked: true,
       error: 'MLB prop history is empty for confirmed participant river ryan (3856)', last_failed_at: '2026-09-16T19:27:40Z' }], date);
@@ -123,7 +125,8 @@ describe('non-AI operational observations', () => {
   });
   it('names a prop withheld because its line moved, instead of pointing at the private run log', () => {
     const parsed = schedulerObservations([line('🎯 Props: New York Giants @ Los Angeles Rams [retry T-150] (id 1392247)'),
-      line('❌ Props failed: New York Giants @ Los Angeles Rams [retry T-150]: Exit code 1')].join('\n'), date);
+      line('❌ Props failed: New York Giants @ Los Angeles Rams [retry T-150]: Exit code 1'),
+      line('⚠️ MISSED PROPS: NFL New York Giants @ Los Angeles Rams — no accepted stored/pass outcome after all retry tiers (id 1392247): Exit code 1')].join('\n'), date);
     mergeDataFailures(parsed, [{ league: 'NFL', kind: 'props', game_id: '1392247', code: 'pick_failed', publication_blocked: true,
       error: 'Selected standard prop line moved or is no longer corroborated; fresh analysis required', last_failed_at: '2026-09-16T21:43:23Z' }], date);
     const detail = parsed.active.get(`${date}:props:1392247`).detail;
@@ -132,11 +135,30 @@ describe('non-AI operational observations', () => {
     expect(detail).not.toContain('private run log');
   });
   it('clears a college prop incident after the exact prop was published', () => {
-    const parsed = schedulerObservations('', date);
+    const parsed = schedulerObservations(line('⚠️ MISSED PROPS: NCAAF A @ B — no accepted stored/pass outcome after all retry tiers (id 1): Exit code 1'), date);
     const failure = { league: 'NCAAF', kind: 'props', game_id: '1', code: 'NCAAF_PROP_UNAVAILABLE', error: 'No live board', last_failed_at: '2026-09-16T17:24:00Z' };
     mergeDataFailures(parsed, [failure], date);
-    expect(parsed.active.get(`${date}:props:1`).detail).toBe('No live board');
+    expect(parsed.active.get(`${date}:props:1`).detail).toContain('No live board');
     mergeDataFailures(parsed, [{ ...failure, publication_blocked: false, resolved_at: '2026-09-16T17:25:00Z' }], date);
     expect(parsed.active.size).toBe(0);
+  });
+  it('a retry by design is not an incident; a sign-in failure or a final miss is, naming what to fix (Oct 28 2026)', () => {
+    const tries = [
+      line('🎯 Props: Nets @ Knicks [primary T-90] (id 7)'),
+      line('❌ Props failed: Nets @ Knicks [primary T-90]: Exit code 1'),
+      line('📊 Game picks: Nets @ Knicks [primary T-90] (id 7)'),
+      line('❌ Game picks failed: Nets @ Knicks [primary T-90]: Job timed out'),
+    ];
+    const waiting = schedulerObservations(tries.join('\n'), date);
+    mergeDataFailures(waiting, [{ league: 'MLB', kind: 'props', game_id: '7', code: 'pick_failed', publication_blocked: true,
+      error: 'HARD FAIL — MLB requires lineups + starting pitchers', last_failed_at: '2026-09-16T17:25:38Z' }], date);
+    expect(waiting.active.size).toBe(0);
+    const signIn = schedulerObservations([...tries, line('❌ Props failed: Nets @ Knicks [retry T-60]: refresh token revoked')].join('\n'), date);
+    expect(signIn.active.get(`${date}:props:7`).detail).toBe('Provider sign-in failed');
+    const missed = schedulerObservations([...tries,
+      line('⚠️ MISSED PICK: NBA Nets @ Knicks — 0 stored after all retry tiers (id 7)')].join('\n'), date);
+    expect([...missed.active.keys()]).toEqual([`${date}:game:7`]);
+    expect(missed.active.get(`${date}:game:7`).detail).toContain('Final retry');
+    expect(missed.active.get(`${date}:game:7`).detail).toContain('Job timed out');
   });
 });

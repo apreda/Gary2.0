@@ -31,7 +31,11 @@ async function ensureValidSupabaseSession() {
  * @param {string} awayTeam - Away team name
  * @returns {Promise<{exists: boolean, existingPick: string|null}>}
  */
-async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, gameId = null) {
+// A STRICT CHECK NEVER READS AN ERROR AS "NO PICK" (Oct 28 2026). The
+// scheduler's final coverage check ran with the Mac offline (Oct 18, 9:53 AM),
+// the read failed, and a stored pick (Texans ML +128) was reported MISSED.
+// Strict callers get the read error; the storage guards keep their behavior.
+async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, gameId = null, { strict = false } = {}) {
   // Use game date if provided, otherwise today's EST date
   let currentDateString;
   if (gameDate) {
@@ -52,6 +56,7 @@ async function gameAlreadyHasPick(league, homeTeam, awayTeam, gameDate = null, g
     .or(`date.eq.${currentDateString},date.like.%${currentDateString}%`)
     .limit(5);
 
+  if (error && strict) throw new Error(`Daily picks unreadable: ${error.message || error}`);
   if (error || !data || data.length === 0) {
     return { exists: false, existingPick: null };
   }
@@ -580,7 +585,7 @@ async function storeWeeklyNFLPicks(picks, options = {}) {
 /**
  * Fetch NFL picks for the current week
  */
-async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
+async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null, { strict = false } = {}) {
   await ensureValidSupabaseSession();
   
   const targetWeek = weekStart || getNFLWeekStart();
@@ -596,6 +601,7 @@ async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
       .limit(1);
     
     if (error) {
+      if (strict) throw new Error(`Weekly NFL picks unreadable: ${error.message || error}`);
       console.error('Error fetching NFL picks:', error);
       return [];
     }
@@ -603,6 +609,7 @@ async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
     return data?.[0]?.picks || [];
     
   } catch (error) {
+    if (strict) throw error;
     console.error('Error in getWeeklyNFLPicks:', error);
     return [];
   }
@@ -611,9 +618,9 @@ async function getWeeklyNFLPicks(weekStart = null, seasonOverride = null) {
 /**
  * Check if an NFL game already has a pick this week
  */
-async function nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate = null, gameId = null) {
+async function nflGameAlreadyHasPick(homeTeam, awayTeam, gameDate = null, gameId = null, { strict = false } = {}) {
   const anchor = new Date(gameDate || Date.now());
-  const picks = await getWeeklyNFLPicks(getNFLWeekStart(anchor), getNFLSeason(anchor));
+  const picks = await getWeeklyNFLPicks(getNFLWeekStart(anchor), getNFLSeason(anchor), { strict });
   const gameKey = `${homeTeam}|${awayTeam}`.toLowerCase();
   const targetId = gameId != null ? String(gameId) : null;
   

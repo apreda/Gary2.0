@@ -42,10 +42,21 @@ export function collectorReadObservation(error, source, date, schedulerAt, now =
     detail: `${input}: ${reason}. Previous incidents remain open.` };
 }
 
+// A RETRY IS THE DESIGN, NOT A FAILURE (founder, Oct 28 2026: "if it gets to
+// 90 minutes and the lineups aren't out yet, he does it again in 60 minutes.
+// That's not a failure."). Each game is tried at every retry tier. A failed
+// try opens an incident only when retrying cannot fix it (a sign-in or a
+// usage limit, which need a person); anything else waits for the final
+// tier, and only a final miss is mailed, naming the last error to fix.
+const NEEDS_A_PERSON = new Set(['Provider sign-in failed', 'Provider quota or rate limit']);
+const needsAPerson = detail => NEEDS_A_PERSON.has(String(detail).split(':')[0]);
+const missedDetail = (kind, last) => `Final retry ended without a verified stored outcome${kind === 'props' ? ' or accepted props pass' : ''}.${last ? ` Last error: ${last}` : ''}`;
+
 // Reconstruct from the scheduler's own accepted stored/pass outcomes. A zero
 // exit, another game's success, or midnight never clears a failed game.
 export function schedulerObservations(text, date) {
   const active = new Map();
+  const attempts = new Map();
   const contexts = new Map();
   const outcomes = new Map();
   const leagues = new Map();
@@ -67,16 +78,19 @@ export function schedulerObservations(text, date) {
       const matchup = missed ? missed[3] : failed[2];
       const gameId = missed ? missed[4] : contexts.get(`${kind}:${matchup}`);
       const key = `${date}:${kind}:${gameId || matchup}`;
-      const previous = active.get(key);
-      active.set(key, { key, title: `${kind === 'props' ? 'Props' : 'Game pick'}: ${matchup}`,
-        detail: missed ? 'Final retry ended without a verified stored outcome or accepted props pass.' : failureCategory(failed[3]),
-        at: previous?.at || at, last_at: at, game_id: gameId, kind, league: missed?.[2] || leagues.get(gameId) });
+      const previous = attempts.get(key);
+      const row = { key, title: `${kind === 'props' ? 'Props' : 'Game pick'}: ${matchup}`,
+        detail: missed ? missedDetail(kind, previous?.detail) : failureCategory(failed[3]),
+        at: previous?.at || at, last_at: at, game_id: gameId, kind, league: missed?.[2] || leagues.get(gameId), missed: Boolean(missed) };
+      if (!missed) attempts.set(key, row);
+      if (missed || needsAPerson(row.detail)) active.set(key, row);
     }
     if (success) {
       const kind = success[1] === 'Props' ? 'props' : 'game';
       const gameId = contexts.get(`${kind}:${success[3]}`);
       const key = `${date}:${kind}:${gameId || success[3]}`;
       active.delete(key);
+      attempts.delete(key);
       outcomes.set(key, at);
     }
   }
@@ -101,11 +115,15 @@ export function mergeDataFailures(parsed, failures, date) {
       continue;
     }
     if (Date.parse(parsed.outcomes.get(key)) >= Date.parse(row.last_failed_at)) continue;
+    // A data gate waiting on lineups or a market is a retry by design: its
+    // reason names a final miss, and opens an incident only if a person must act.
     const existing = parsed.active.get(key);
+    const detail = incidentDetail(row);
+    if (!existing && !needsAPerson(detail)) continue;
     parsed.active.set(key, { key,
       game_id: row.game_id, kind: row.kind || 'game', league: row.league,
       title: existing?.title || `${row.league} ${row.kind || 'game'}: ${row.away_team || '?'} @ ${row.home_team || '?'}`,
-      detail: incidentDetail(row),
+      detail: existing?.missed ? missedDetail(row.kind || 'game', detail) : detail, missed: existing?.missed,
       at: existing?.at || row.first_failed_at, last_at: row.last_failed_at });
   }
   return parsed;
