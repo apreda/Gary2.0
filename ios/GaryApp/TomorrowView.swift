@@ -35,13 +35,10 @@ struct TomorrowView {
         }
     }
 
-    /// Sport-dot legend color: MLB green, WC teal, everything else gold.
+    /// Sport-dot color: each league's color on Home's board (Oct 28 2026: every league but
+    /// MLB wore the same gold, so an NFL and an NBA game looked alike under an "MLB" legend).
     static func sportDotColor(_ league: String?) -> Color {
-        switch (league ?? "").uppercased() {
-        case "MLB": return Color(hex: "#4FB14F")
-        case "WC":  return Color(hex: "#3FB6A8")
-        default:    return GaryColors.gold
-        }
+        HomeSheetRowView.leagueColor(league ?? "")
     }
 
     /// Built once: every board row asked for a new formatter on each redraw.
@@ -369,9 +366,9 @@ struct TomorrowView {
                         .font(GaryFonts.display(17))
                         .foregroundStyle(GaryColors.sectionHead)   // match "The Day Ahead" header
                     Spacer(minLength: 6)
-                    legendDot(Color(hex: "#4FB14F"), "MLB")
-                    // (WC dot removed Aug 18 2026 — the World Cup pipeline was
-                    // deleted Jul 21; the legend outlived it.)
+                    // The leagues on the board, in board order.
+                    let leagues = b.board.compactMap { $0.league?.uppercased() }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                    ForEach(leagues, id: \.self) { legendDot(TomorrowView.sportDotColor($0), $0) }
                 }
                 .pageGutter()
 

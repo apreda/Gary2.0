@@ -38,8 +38,12 @@ async function settledPicks() {
   if (rest.length) {
     const { data, error } = await db.from('game_results').select('league, matchup, pick_text, result, final_score, game_id, is_winners_pick').eq('game_date', date).in('league', rest);
     if (error) throw error;
+    // Every pick, Winners plays too (Oct 28 2026: the Winners ones, the money, were skipped; Oct 27 checked
+    // one of four NBA picks). One row a pick: a repeated row is checked once.
+    const seen = new Set();
     for (const r of data || []) {
-      if (r.is_winners_pick) continue;
+      if (seen.has(`${r.league}|${r.game_id}|${r.pick_text}`)) continue;
+      seen.add(`${r.league}|${r.game_id}|${r.pick_text}`);
       const [awayTeam, homeTeam] = String(r.matchup).split(' @ ');
       out.push({ league: r.league, matchup: r.matchup, homeTeam, awayTeam, pick: r.pick_text, result: r.result, finalScore: r.final_score, gameId: r.game_id });
     }
