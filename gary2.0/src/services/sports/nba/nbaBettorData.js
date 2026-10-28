@@ -259,6 +259,30 @@ const GAMES_SHOWN = 15;
  * opponent's record now and the score by quarter; the newest BOX_GAMES with both teams' box, who played and who the
  * opponent was missing. `head` opens the log (the read's record and standings line); `data` is the team's teamSeason
  * when already loaded. */
+/**
+ * A team's next game after tonight's tip, and whether tonight opens a back-to-back (Oct 28 2026 data check: Dallas's
+ * game at Indiana read without Dallas hosting San Antonio the next night, the night Irving was rested). Null when the
+ * schedule is not on file.
+ */
+export async function nextGameLine(team, tip, season = nbaSeason()) {
+  const teams = await ballDontLieService.getTeams('basketball_nba');
+  const t = findTeam(teams, team);
+  if (!t || !tip) return null;
+  const games = await ballDontLieService.getGames('basketball_nba', { team_ids: [t.id], seasons: [season], per_page: 100, paginateAll: true }).catch(() => null);
+  if (!games) return null;
+  const etYmd = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const tonight = etYmd(tip);
+  const next = games.filter((g) => !g.postseason && etYmd(g.datetime || `${g.date}T16:00:00Z`) > tonight)
+    .sort((a, b) => Date.parse(a.datetime || a.date) - Date.parse(b.datetime || b.date))[0];
+  if (!next) return `${t.name}: no game after tonight on the schedule`;
+  const day = (ymd) => Math.round(Date.parse(`${ymd}T12:00:00Z`) / 86_400_000);
+  const off = day(etYmd(next.datetime || `${next.date}T16:00:00Z`)) - day(tonight) - 1;
+  const home = next.home_team?.id === t.id;
+  const opp = home ? next.visitor_team?.full_name : next.home_team?.full_name;
+  const when = etDay(next.datetime || `${next.date}T16:00:00Z`);
+  return `${t.name}: next game ${when}, ${home ? 'at home vs' : 'at'} ${opp}${off <= 0 ? ' (tonight is the first night of a back-to-back)' : `, after ${off} day${off === 1 ? '' : 's'} off`}`;
+}
+
 export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data } = {}) {
   const ts = data === undefined ? await teamSeason(team, before, season) : data;
   if (!ts) return `${head}: games not on file.`;

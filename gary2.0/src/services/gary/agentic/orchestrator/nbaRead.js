@@ -17,7 +17,7 @@ import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText
 import { withoutBettingLines } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
@@ -634,19 +634,20 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
-  const [homeLog, awayLog, injuries, back, available] = await Promise.all([
+  const [homeLog, awayLog, injuries, back, available, nextGames] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
     availableListed(desk, { homeTeam, awayTeam, tip, asOf }),
+    Promise.all([awayTeam, homeTeam].map((t) => nextGameLine(t, tip).catch(() => null))),
   ]);
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
-    ['SCHEDULE AND TRAVEL', situation(seasons, homeTeam, awayTeam, tip, asOf)],
+    ['SCHEDULE AND TRAVEL', [situation(seasons, homeTeam, awayTeam, tip, asOf), ...nextGames.filter(Boolean)].filter(Boolean).join('\n')],
   ];
   const [starts, teams] = await Promise.all([
     Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null))).then((d) => d.filter(Boolean).sort()),
