@@ -433,6 +433,14 @@ struct CompactPickRow: View {
         return bet.isEmpty ? headlineTeam : "\(headlineTeam)\n\(bet.uppercased())"
     }
 
+    /// The picked side's full name when the hero's first line is that team.
+    private var heroTeam: String? {
+        let kind = (pick.type ?? "").lowercased()
+        guard kind != "special", kind != "total", homeIsPicked || awayIsPicked else { return nil }
+        let full = homeIsPicked ? pick.homeTeam : pick.awayTeam
+        return (full ?? "").isEmpty ? nil : full
+    }
+
     private var heroFontSize: CGFloat { 52}
     /// Tight stacked leading (the mock's line-height .9) — all-caps display type
     /// has no descenders, so the lines pull together safely.
@@ -574,11 +582,13 @@ struct CompactPickRow: View {
                 // the lines kiss; −24 keeps the stack tight without contact.
                 VStack(alignment: .leading, spacing: heroLineSpacing) {
                     ForEach(Array((heroOneLine ? [heroLines.replacingOccurrences(of: "\n", with: " ")]
-                                                : heroLines.components(separatedBy: "\n")).enumerated()), id: \.offset) { _, line in
+                                                : heroLines.components(separatedBy: "\n")).enumerated()), id: \.offset) { i, line in
                         Text(line)
                             .font(GaryFonts.display(heroFontSize))
                             .accessibilityLabel(line)
                             .fitsOneLine()
+                            // The team on its own line opens its team card; the rest of the card flips it.
+                            .opensTeamCard(i == 0 && !heroOneLine ? heroTeam : nil, league: pick.league)
                     }
                 }
                     .foregroundStyle(heroTint)

@@ -1290,9 +1290,8 @@ struct PicksCarouselView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text([sport, status].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(GaryFonts.ui(10.5, .bold)).tracking(1.6).foregroundStyle(GaryColors.warmWhite.opacity(0.55))
-                    Text((g?.matchup ?? pinned?.matchup ?? "").uppercased())
-                        .font(GaryFonts.display(24)).tracking(0.4).foregroundStyle(GaryColors.warmWhite)
-                        .fitsOneLine()
+                    // Each side opens its team card.
+                    TeamPairTitle(matchup: g?.matchup ?? pinned?.matchup ?? "", league: g.map { gameLeague($0) } ?? sport, size: 24)
                 }
                 Spacer(minLength: 8)
                 if let onClose { CardCloseButton(label: "Close game", action: onClose) }

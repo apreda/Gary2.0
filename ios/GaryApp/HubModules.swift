@@ -244,7 +244,8 @@ struct PlayerInsightSheet: View {
             loading: loading,
             edge: hubEdge,
             logFocus: logFocus,
-            ruledOut: signal?.isRuledOut ?? false
+            ruledOut: signal?.isRuledOut ?? false,
+            league: prefetched?.league ?? signal?.league.label ?? directLeague
         )
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())

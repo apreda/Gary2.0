@@ -413,10 +413,8 @@ struct MLBGameIntelView: View {
                 ZStack {
                     Canvas { ctx, size in drawField(ctx, fieldT(size)) }
                     ForEach(displayLineup) { f in
-                        Group {
-                            if f.sp { token(f) }
-                            else { Button { selected = f } label: { token(f) }.buttonStyle(.plain) }
-                        }
+                        // Every name on the field opens his card, the starter on the mound too.
+                        Button { selected = f } label: { token(f) }.buttonStyle(.plain)
                         .position(t.map(f.dx, f.dy))
                     }
                     if displayLineup.isEmpty {
@@ -773,7 +771,7 @@ private struct CarouselCard: View {
     var body: some View {
         PlayerCardV4(name: player.name, heat: player.heat, game: player.game,
                      pack: scope != nil && loadedScope == scope ? pack : nil,
-                     loading: scope != nil && (loadedScope != scope || loading), edge: player.edge)
+                     loading: scope != nil && (loadedScope != scope || loading), edge: player.edge, league: "MLB")
             .task(id: scope) { await loadPack() }
     }
 
@@ -807,6 +805,8 @@ struct PlayerCardV4: View {
     /// Ruled out of tonight's game (OUT / IR): no breakdown is coming, so the
     /// card is the story alone, never "check back closer to kickoff".
     var ruledOut: Bool = false
+    /// The card's league: the team in the line under his name opens its team card.
+    var league: String? = nil
     @State private var recentExpanded = false   // "Recent" expand toggle (advanced + game stats)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -870,6 +870,7 @@ struct PlayerCardV4: View {
             if let id = identityLine {
                 Text(id).font(.subheadline).foregroundStyle(PCV4.mut)
                     .fixedSize(horizontal: false, vertical: true)
+                    .opensTeamCard(pack?.team, league: league)
             }
             if heat == "hot" || heat == "cold" {
                 Text("RECENT FORM  ·  \(heat.uppercased())")

@@ -715,15 +715,29 @@ struct TeamCardByName: View {
     @State private var loaded = false
 
     private var hubLeague: HubLeagueSel { HubLeagueSel.from(league) ?? .mlb }
+    /// A tapped code ("PHI" under a player's name) reads as the club ("76ers"),
+    /// the way its season's games are stored; a name stays as tapped.
+    private var clubName: String {
+        let code = name.trimmingCharacters(in: .whitespaces).uppercased()
+        let map: [String: [String]]
+        switch league.uppercased() {
+        case "NBA": map = nbaTeamKeywords
+        case "NFL": map = nflTeamKeywords
+        case "MLB": map = mlbTeamKeywords
+        default: map = [:]
+        }
+        guard code.count <= 4, let nick = map[code]?.first else { return name }
+        return nick.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+    }
     private var signal: Signal {
-        Signal(league: hubLeague, kind: .teamRecord, headline: name, detail: "", game: "", value: "", tone: .neutral)
+        Signal(league: hubLeague, kind: .teamRecord, headline: clubName, detail: "", game: "", value: "", tone: .neutral)
     }
     /// Tonight's row: the one game this club plays in the league today.
     private var tonight: TomorrowBoardRow? {
         let rows = (board?.board ?? []).filter { r in
             guard HubCardIdentity.sameLeague(r.league, league) else { return false }
-            let away = HubCardIdentity.matchesTeam(name, name: r.away_team, abbr: r.away_abbr, league: league)
-            let home = HubCardIdentity.matchesTeam(name, name: r.home_team, abbr: r.home_abbr, league: league)
+            let away = HubCardIdentity.matchesTeam(clubName, name: r.away_team, abbr: r.away_abbr, league: league)
+            let home = HubCardIdentity.matchesTeam(clubName, name: r.home_team, abbr: r.home_abbr, league: league)
             return away != home
         }
         return rows.first
@@ -759,6 +773,27 @@ struct TeamCardByName: View {
             intel = await rows.filter { HubCardIdentity.sameLeague($0.league, league) && $0.payload != nil }
             dayStreaks = await s
             loaded = true
+            await clubCardsBefore(today)
+        }
+    }
+
+    /// A club with no game today still shows its players: its cards from the
+    /// last days it played (the player cards' own lookback), newest kept.
+    private func clubCardsBefore(_ today: String) async {
+        let mine: (PlayerInsightCardRow) -> Bool = { row in
+            HubCardIdentity.cardBelongsToTeam(cardLeague: row.league, cardAbbr: row.team_abbr, league: league, team: clubName, abbr: nil)
+        }
+        guard !intel.contains(where: mine) else { return }
+        var day = today
+        for _ in 0..<PlayerCardByName.lookbackDays {
+            day = LabFormat.yesterday(of: day)
+            let rows = await SupabaseAPI.fetchPlayerIntelRows(date: day).filter { $0.payload != nil && mine($0) }
+            if Task.isCancelled { return }
+            if !rows.isEmpty {
+                var seen = Set<String>()
+                intel += rows.filter { seen.insert($0.player_id ?? $0.player_name ?? "").inserted }
+                return
+            }
         }
     }
 
@@ -769,14 +804,14 @@ struct TeamCardByName: View {
     }
 }
 
-/// A team name that opens its team card. MLB, NFL and NBA have the card; a
-/// name from any other league stays plain text.
+/// A team name that opens its team card. MLB, NFL, NBA and college have the
+/// card (college's season since Oct 28 2026); any other league stays plain text.
 struct TeamCardLink: ViewModifier {
     let name: String?
     let league: String?
     @State private var open = false
 
-    static let leagues: Set<String> = ["MLB", "NFL", "NBA"]
+    static let leagues: Set<String> = ["MLB", "NFL", "NBA", "NCAAF"]
 
     private var target: (name: String, league: String)? {
         guard let n = name?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty,
@@ -797,9 +832,99 @@ struct TeamCardLink: ViewModifier {
     }
 }
 
+/// "AWAY @ HOME" in one line, each side its own tap to the team card; the
+/// words step down a size rather than wrap or cut.
+struct TeamPairTitle: View {
+    let away: String
+    let home: String
+    let league: String
+    var size: CGFloat = 24
+    var color: Color = GaryColors.warmWhite
+    /// What each side reads as (a nickname); the full name opens the card.
+    var awayLabel: String? = nil
+    var homeLabel: String? = nil
+
+    init(matchup: String, league: String, size: CGFloat = 24, color: Color = GaryColors.warmWhite) {
+        let sides = matchup.components(separatedBy: " @ ")
+        self.away = sides.count == 2 ? sides[0] : matchup
+        self.home = sides.count == 2 ? sides[1] : ""
+        self.league = league; self.size = size; self.color = color
+    }
+
+    init(away: String, home: String, league: String, size: CGFloat = 24, color: Color = GaryColors.warmWhite,
+         awayLabel: String? = nil, homeLabel: String? = nil) {
+        self.away = away; self.home = home; self.league = league; self.size = size; self.color = color
+        self.awayLabel = awayLabel; self.homeLabel = homeLabel
+    }
+
+    var body: some View {
+        if !home.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                line(size)
+                line(size * 0.85)
+                line(size * 0.72)
+                line(size * 0.6)
+            }
+        } else {
+            Text(away.uppercased()).font(GaryFonts.display(size)).tracking(0.4).foregroundStyle(color).fitsOneLine()
+        }
+    }
+
+    private func line(_ points: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Text((awayLabel ?? away).uppercased()).opensTeamCard(away, league: league)
+            Text(" @ ")
+            Text((homeLabel ?? home).uppercased()).opensTeamCard(home, league: league)
+        }
+        .font(GaryFonts.display(points)).tracking(0.4).foregroundStyle(color)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+/// A player name that opens his player card (founder, Oct 28 2026: every
+/// player name in the app opens his card, every team name its team card): by
+/// his id when the page has it, else by name from the day's cards.
+struct PlayerCardLink: ViewModifier {
+    let name: String?
+    let league: String?
+    var playerId: Int? = nil
+    var gameId: String? = nil
+    var date: String? = nil
+    @State private var open = false
+
+    static let leagues: Set<String> = ["MLB", "NFL", "NBA", "NCAAF"]
+
+    private var target: (name: String, league: String)? {
+        guard let n = name?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty,
+              let lg = league?.uppercased(), Self.leagues.contains(lg) else { return nil }
+        return (n, lg)
+    }
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let t = target {
+            Button { open = true } label: { content.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the player card")
+                .background(Color.clear.sheet(isPresented: $open) {
+                    if let playerId {
+                        PlayerInsightSheet(signal: nil, directPlayerId: playerId, directName: t.name, directLeague: t.league, directGameId: gameId)
+                    } else {
+                        PlayerCardByName(name: t.name, league: t.league, date: date)
+                    }
+                })
+                .onGaryTour { verb, arg in if verb == "playertap", arg.caseInsensitiveCompare(t.name) == .orderedSame { open = true } }
+        } else {
+            content
+        }
+    }
+}
+
 extension View {
     func opensTeamCard(_ name: String?, league: String?) -> some View {
         modifier(TeamCardLink(name: name, league: league))
+    }
+    func opensPlayerCard(_ name: String?, league: String?, id: Int? = nil, gameId: String? = nil, date: String? = nil) -> some View {
+        modifier(PlayerCardLink(name: name, league: league, playerId: id, gameId: gameId, date: date))
     }
 }
 
@@ -813,7 +938,7 @@ struct PlayerCardByName: View {
     let league: String
     /// The day the dart was thrown, when the card opens from a dart.
     var date: String? = nil
-    private static let lookbackDays = 4
+    static let lookbackDays = 4
     @State private var row: PlayerInsightCardRow?
     @State private var loading = true
 

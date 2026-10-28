@@ -20,6 +20,7 @@ struct HubTeamCardSheet: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject private var live = LiveScoreCache.shared
     @State private var shapeExpanded = false   // MORE STATS expander (player-card parity)
+    @State private var recentExpanded = false
     /// The club's own season from team_games (Oct 19 2026: one team card wherever it opens, never bare on a day
     /// the club doesn't play).
     @State private var seasonGames: [TeamGame] = []
@@ -140,8 +141,17 @@ struct HubTeamCardSheet: View {
         }
         .sorted { a, b in
             let ta = top(a), tb = top(b)
-            return ta != tb ? ta > tb : (a.player_name ?? "") < (b.player_name ?? "")
+            if ta != tb { return ta > tb }
+            // No lines (college has no props): the players with a season's numbers, by
+            // the football order of who touches the ball, then the rest.
+            let sa = a.payload?.season?.line1?.isEmpty == false, sb = b.payload?.season?.line1?.isEmpty == false
+            if sa != sb { return sa }
+            let pa = Self.positionOrder(a.payload?.position), pb = Self.positionOrder(b.payload?.position)
+            return pa != pb ? pa < pb : (a.player_name ?? "") < (b.player_name ?? "")
         }
+    }
+    private static func positionOrder(_ position: String?) -> Int {
+        ["QB", "RB", "WR", "TE", "K"].firstIndex(of: (position ?? "").uppercased()) ?? 9
     }
     private var ls: LiveScore? {
         guard let t = tonight else { return nil }
@@ -164,11 +174,19 @@ struct HubTeamCardSheet: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
+                // The team card (founder, Oct 28 2026: "a true team card" wherever a team name is tapped; a
+                // page may add to it, never replace it): the player card's order, every league. The page's
+                // own story (the edge) and tonight's game lead; then the club's games on the yardstick, its
+                // splits and results, the baseball extras where the board has them, its runs and its players.
                 header
-                if !seasonGames.isEmpty { seasonSection }
                 if let e = edgeContent { edgeHero(e) }
                 if let ledger = bullpenResearch { bullpenSection(ledger) }
                 if let t = tonight { tonightSection(t) }
+                if !seasonGames.isEmpty {
+                    section("Hit rates") { TeamHitRates(games: seasonGames, league: signal.league.label) }
+                    sheetSection
+                    recentSection
+                }
                 if formStat != nil || runProfile != nil { shapeSection }
                 if let s = tonight?.series { seriesSection(s) }
                 if let arm = starter { armSection(arm) }
@@ -182,22 +200,31 @@ struct HubTeamCardSheet: View {
         .background(PCV4.surface)
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold)).foregroundStyle(PCV4.mut)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+        // The close sits above the card, the player card's way, so the card's
+        // words never scroll under it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .medium)).foregroundStyle(PCV4.mut)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close team details")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close team details")
-            .padding(.top, 14).padding(.trailing, 16)
+            .padding(.horizontal, 16).padding(.top, 6)
+            .background(GaryColors.darkBg)
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .task(id: resolved.name) {
-            guard ["MLB", "NFL", "NBA"].contains(signal.league.label) else { return }
-            let games = await SupabaseAPI.fetchTeamGames(league: signal.league.label, team: resolved.name)
+            guard ["MLB", "NFL", "NBA", "NCAAF"].contains(signal.league.label) else { return }
+            // A school's name is not a key ("Michigan" begins "Michigan State"): college asks by the
+            // provider's code, the pros by the club's name.
+            let key = signal.league == .ncaaf ? (resolved.abbr ?? resolved.name) : resolved.name
+            let games = await SupabaseAPI.fetchTeamGames(league: signal.league.label, team: key)
             seasonGames = games.filter { $0.cur ?? true }
         }
     }
@@ -208,13 +235,53 @@ struct HubTeamCardSheet: View {
         let w = games.filter { $0.f > $0.a }.count, l = games.filter { $0.f < $0.a }.count, t = games.count - w - l
         return t > 0 ? "\(w)-\(l)-\(t)" : "\(w)-\(l)"
     }
-    private var seasonSection: some View {
-        section("This season") {
+    private var football: Bool { signal.league != .mlb }
+    private func perGame(_ games: [TeamGame], _ v: (TeamGame) -> Int) -> String {
+        guard !games.isEmpty else { return "" }
+        return String(format: "%.1f", Double(games.map(v).reduce(0, +)) / Double(games.count))
+    }
+    /// "112.5 scored · 104.0 allowed a game" (runs for baseball).
+    private func scoring(_ games: [TeamGame]) -> String {
+        "\(perGame(games, \.f)) scored · \(perGame(games, \.a)) allowed a game"
+    }
+
+    // ── THE SHEET: home and road, the last five and ten, as the player card's splits ──
+
+    private var sheetSection: some View {
+        let home = seasonGames.filter { $0.home == true }, road = seasonGames.filter { $0.home == false }
+        var rows: [(String, String, String)] = []
+        // MLB's log carries the postseason too, so baseball shows the last ten instead of a season record.
+        if football { rows.append(("SEASON", record(seasonGames), scoring(seasonGames))) }
+        if !home.isEmpty { rows.append(("HOME", record(home), scoring(home))) }
+        if !road.isEmpty { rows.append(("ROAD", record(road), scoring(road))) }
+        for n in [5, 10] where seasonGames.count > n {
+            let last = Array(seasonGames.prefix(n))
+            rows.append(("LAST \(n)", record(last), scoring(last)))
+        }
+        return section("The sheet") {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(rows.indices, id: \.self) { i in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(rows[i].0).font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink)
+                        Spacer(minLength: 8)
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(rows[i].1).font(.headline.monospacedDigit()).foregroundStyle(PCV4.ink)
+                            Text(rows[i].2).font(.caption.monospacedDigit()).foregroundStyle(PCV4.mut2)
+                                .multilineTextAlignment(.trailing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── RECENT: this season's games, newest first, five then all ──
+
+    private var recentSection: some View {
+        section("Recent") {
             VStack(alignment: .leading, spacing: 10) {
-                // MLB's log carries the postseason too, so baseball shows the last ten instead of a season record.
-                if signal.league != .mlb { splitLikeRow("RECORD", record(seasonGames)) }
-                if seasonGames.count >= 5 { splitLikeRow("LAST \(min(10, seasonGames.count))", record(Array(seasonGames.prefix(10)))) }
-                ForEach(Array(seasonGames.prefix(5).enumerated()), id: \.offset) { _, g in
+                ForEach(Array(seasonGames.prefix(recentExpanded ? seasonGames.count : 5).enumerated()), id: \.offset) { _, g in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(g.f > g.a ? "W" : g.f < g.a ? "L" : "T").hubTitleFont(16)
                             .foregroundStyle(g.f > g.a ? PCV4.gold : PCV4.mut2)
@@ -222,9 +289,22 @@ struct HubTeamCardSheet: View {
                         Text("\(g.f)-\(g.a)").hubBodyFont(13, .semibold).foregroundStyle(PCV4.ink).monospacedDigit()
                             .frame(width: 64, alignment: .leading)
                         Text(g.axis).hubDataFont(11, .bold).foregroundStyle(PCV4.mut)
+                            .opensTeamCard(g.opp, league: signal.league.label)
                         Spacer(minLength: 8)
                         if let d = g.shortDate { Text(d).hubDataFont(11, .bold).foregroundStyle(PCV4.mut2).monospacedDigit() }
                     }
+                }
+                if seasonGames.count > 5 {
+                    Button { withAnimation(.easeInOut(duration: 0.2)) { recentExpanded.toggle() } } label: {
+                        HStack(spacing: 5) {
+                            Text(recentExpanded ? "LESS" : "ALL \(seasonGames.count) GAMES").font(PCV4.label).tracking(1)
+                            Image(systemName: recentExpanded ? "chevron.up" : "chevron.down").font(.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(PCV4.gold)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -264,6 +344,7 @@ struct HubTeamCardSheet: View {
     private var identityLine: String? {
         var bits: [String] = [signal.league.label]
         if let a = resolved.abbr, !a.isEmpty, a.lowercased() != resolved.name.lowercased() { bits.append(a) }
+        if football, !seasonGames.isEmpty { bits.append(record(seasonGames)) }
         if let away = isAway { bits.append(away ? "Road tonight" : "Home tonight") }
         return bits.isEmpty ? nil : bits.joined(separator: "  ·  ")
     }
@@ -302,8 +383,8 @@ struct HubTeamCardSheet: View {
 
     private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(cap.uppercased()).font(.caption.monospaced().weight(.medium)).tracking(1)
-                .foregroundStyle(PCV4.mut2)
+            Text(cap.uppercased()).font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
+                .foregroundStyle(GaryColors.gold)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -638,13 +719,14 @@ struct HubTeamCardSheet: View {
     // ── ON THE LINE: this club's live runs ──
 
     private var streaksSection: some View {
-        section("On the line") {
+        section("Streaks") {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(Array(teamStreaks.prefix(4).enumerated()), id: \.offset) { _, r in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(streakBadge(r)).hubTitleFont(16).foregroundStyle(PCV4.gold)
                             .frame(width: 52, alignment: .leading)
-                        Text(r.detail ?? r.kind?.capitalized ?? "")
+                        // The detail can open with the badge itself ("W3 — outscored foes"): said once.
+                        Text(streakDetail(r))
                             .hubBodyFont(12, .medium).foregroundStyle(PCV4.mut)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -652,6 +734,12 @@ struct HubTeamCardSheet: View {
                 }
             }
         }
+    }
+    private func streakDetail(_ r: StreakRow) -> String {
+        let detail = r.detail ?? r.kind?.capitalized ?? ""
+        let badge = streakBadge(r)
+        guard detail.hasPrefix(badge) else { return detail }
+        return String(detail.dropFirst(badge.count)).trimmingCharacters(in: CharacterSet(charactersIn: " —-·"))
     }
     private func streakBadge(_ r: StreakRow) -> String {
         let n = r.length ?? 0
@@ -667,9 +755,9 @@ struct HubTeamCardSheet: View {
     // ── THE CLUBHOUSE: the day's carded bats + arms, each tap → player card ──
 
     private var clubhouseSection: some View {
-        section("The clubhouse") {
+        section("Players") {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(teamIntel.prefix(6).enumerated()), id: \.element.id) { i, row in
+                ForEach(Array(teamIntel.prefix(8).enumerated()), id: \.element.id) { i, row in
                     Button { onPlayer(row) } label: {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 2) {
@@ -695,7 +783,7 @@ struct HubTeamCardSheet: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    if i < min(teamIntel.count, 6) - 1 {
+                    if i < min(teamIntel.count, 8) - 1 {
                         Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
                     }
                 }
@@ -763,6 +851,49 @@ struct HubTeamCardSheet: View {
         }
         .padding(.vertical, 16)
         .overlay(Rectangle().fill(PCV4.line).frame(height: 1), alignment: .top)
+    }
+}
+
+/// The team card's hit rates: the club's games this season against a mark the
+/// fan slides, for the margin, the game's total, and what it scored and allowed.
+/// The game pick's yardstick (GameLogPanel) with the player card's stat tabs.
+struct TeamHitRates: View {
+    /// This season's games, newest first.
+    let games: [TeamGame]
+    let league: String
+    @State private var tab = "MARGIN"
+    private static let tabs = ["MARGIN", "TOTAL", "SCORED", "ALLOWED"]
+
+    private var measure: GameLogPanel.Measure {
+        switch tab {
+        case "TOTAL": return .total
+        case "SCORED": return .scored
+        case "ALLOWED": return .allowed
+        default: return .margin
+        }
+    }
+    private func average(_ v: (TeamGame) -> Double) -> Int {
+        guard !games.isEmpty else { return 1 }
+        return Int((games.map(v).reduce(0, +) / Double(games.count)).rounded())
+    }
+    /// A win; the season's average total and score; what it allows at most.
+    private var opening: LogMark {
+        switch measure {
+        case .margin: return LogMark(value: 1)
+        case .total: return LogMark(value: max(1, average(\.total)))
+        case .scored: return LogMark(value: max(1, average { Double($0.f) }))
+        case .allowed: return LogMark(value: average { Double($0.a) }, under: true)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LabTextTabs(items: Self.tabs, selected: $tab, size: 15)
+            }
+            GameLogPanel(games: games, measure: measure, league: league, opening: opening, price: nil)
+                .id(tab)
+        }
     }
 }
 

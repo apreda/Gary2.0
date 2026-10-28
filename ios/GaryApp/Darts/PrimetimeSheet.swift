@@ -31,8 +31,9 @@ struct PrimetimeSheet: View {
 
     @ViewBuilder private func page(_ game: PrimetimeGame) -> some View {
         FeatureEyebrow(text: game.slot ?? "Primetime")
-        Text(game.matchupWords.uppercased()).font(GaryFonts.display(35)).foregroundStyle(GaryColors.warmWhite)
-            .fixedSize(horizontal: false, vertical: true)
+        // Each club opens its team card.
+        TeamPairTitle(away: game.away_team, home: game.home_team, league: game.league, size: 35,
+                      awayLabel: LabFormat.nickname(game.away_team), homeLabel: LabFormat.nickname(game.home_team))
         meta(game)
 
         if let lede = game.lede, !lede.isEmpty {

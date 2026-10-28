@@ -185,6 +185,7 @@ private struct NBAAvailabilityCard: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(ScoutMock.warm)
                             .fixedSize(horizontal: false, vertical: true)
+                            .opensPlayerCard(Self.name(s), league: "NBA", id: s.playerId.flatMap { Int($0) })
                         Text(s.value.uppercased())
                             .font(GaryFonts.data(10, .semibold)).tracking(0.8)
                             .foregroundStyle(s.value.uppercased() == "OUT" ? GaryColors.loss : GaryColors.sweating)

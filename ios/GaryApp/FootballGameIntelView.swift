@@ -438,7 +438,7 @@ struct FootballGameIntelView: View {
             if isCollege {
                 PlayerIntelSection(matchup: matchup, league: normalizedLeague, gameId: exactGameID, gameDate: gameDate)
             }
-            FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home,
+            FootballAvailabilityCard(awayLabel: sides.away, homeLabel: sides.home, league: normalizedLeague,
                                      confirmed: availability,
                                      wireAway: wireRows(home: false), wireHome: wireRows(home: true),
                                      practice: practiceRows, requiresVerifiedCoverage: isCollege, coverageVerified: availabilityVerified, coverageFailure: availabilityFailure)
@@ -652,6 +652,8 @@ private struct FootballAvailabilityCard: View {
     @Environment(\.solidPanels) private var solidPanels
     let awayLabel: String
     let homeLabel: String
+    /// NFL or NCAAF: a listed player's name opens his card.
+    var league: String = "NFL"
     let confirmed: [FootballEvidence.Availability]
     let wireAway: [Signal]
     let wireHome: [Signal]
@@ -901,6 +903,7 @@ private struct FootballAvailabilityCard: View {
                         Text(line.name)
                             .font(GaryFonts.text(14.5, .semibold)).foregroundStyle(.white)
                             .fixedSize(horizontal: false, vertical: true)
+                            .opensPlayerCard(line.name, league: league)
                         let pos = (line.position ?? "").uppercased()
                         let injury = line.injury ?? ""
                         if !pos.isEmpty || !injury.isEmpty {

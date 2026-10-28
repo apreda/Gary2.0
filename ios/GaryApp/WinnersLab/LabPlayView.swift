@@ -259,6 +259,8 @@ struct LabPlayView: View {
                     Text(full).font(GaryFonts.display(38)).fixedSize(horizontal: false, vertical: true)
                 }
                 .foregroundStyle(GaryColors.warmWhite)
+                // A prop's title names the player: it opens his card.
+                .opensPlayerCard(play.prop?.player, league: play.candidate.league)
             },
             leading: {
                 Button { dismiss() } label: {
@@ -713,6 +715,7 @@ struct LabPropRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(LabFormat.propTicket(prop).uppercased()).font(GaryFonts.display(18)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
+                    .opensPlayerCard(prop.player, league: league)
                 Spacer(minLength: 6)
                 Text(LabFormat.price(prop.odds.flatMap { Int($0.replacingOccurrences(of: "+", with: "")) })).font(GaryFonts.display(18)).foregroundStyle(GaryColors.gold)
             }

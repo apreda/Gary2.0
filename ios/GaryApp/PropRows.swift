@@ -341,11 +341,13 @@ struct CompactPropRow: View {
                 // effective line advance, which is the one the founder called
                 // correct.
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                    ForEach(Array(heroLines.components(separatedBy: "\n").enumerated()), id: \.offset) { i, line in
                         Text(line)
                             .font(GaryFonts.display(propHeroSize))
                             .fitsOneLine()
                             .frame(height: propHeroSize * 0.86, alignment: .leading)
+                            // The player's name opens his player card; the rest of the card flips it.
+                            .opensPlayerCard(i == 0 ? prop.player : nil, league: leagueToken, gameId: prop.game_id.map(String.init), date: ExactGameIdentity.easternDate(of: prop.commence_time.flatMap(parseISO8601)))
                     }
                 }
                     .foregroundStyle(heroTint)

@@ -241,6 +241,7 @@ struct HeadlineFlipCard: View {
                 .font(GaryFonts.mono(11.5, bold: true)).tracking(0.6)
                 .foregroundStyle(winner ? GaryColors.warmGold : .white.opacity(0.55))
                 .fitsOneLine()
+                .opensTeamCard(name, league: story.league)
             Spacer(minLength: 4)
             Text("\(runs)")
                 .font(GaryFonts.mono(13.5, bold: true))

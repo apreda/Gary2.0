@@ -795,7 +795,9 @@ extension SupabaseAPI {
 /// points in its games against the number. The ruler opens on the ticket and
 /// slides; the windows count the games that got there; the bars show them.
 struct GameLogPanel: View {
-    enum Measure: Equatable { case margin, total }
+    /// What the bars read: the margin, the game's total, or one side's score
+    /// (the team card's SCORED and ALLOWED).
+    enum Measure: Equatable { case margin, total, scored, allowed }
     /// Newest first, as the server sends them.
     let games: [TeamGame]
     let measure: Measure
@@ -835,7 +837,14 @@ struct GameLogPanel: View {
 
     private var chrono: [TeamGame] { Array(games.reversed()) }
     private var season: [TeamGame] { chrono.filter { $0.cur ?? true } }
-    private func value(_ g: TeamGame) -> Double { measure == .margin ? g.margin : g.total }
+    private func value(_ g: TeamGame) -> Double {
+        switch measure {
+        case .margin: return g.margin
+        case .total: return g.total
+        case .scored: return Double(g.f)
+        case .allowed: return Double(g.a)
+        }
+    }
     private func clears(_ v: Double) -> Bool { measure == .margin ? v >= Double(mark.value) : mark.clears(v) }
     private var football: Bool { league.uppercased() != "MLB" }
 
@@ -865,6 +874,12 @@ struct GameLogPanel: View {
         case .total:
             let noun = football ? "POINTS" : "RUNS"
             return mark.under ? (v == 0 ? "NO \(noun)" : "\(v) OR FEWER \(noun)") : "\(v)+ \(noun)"
+        case .scored:
+            let noun = football ? "POINTS" : "RUNS"
+            return mark.under ? "\(v) OR FEWER \(noun) SCORED" : "\(v)+ \(noun) SCORED"
+        case .allowed:
+            let noun = football ? "POINTS" : "RUNS"
+            return mark.under ? "ALLOWED \(v) OR FEWER \(noun)" : "ALLOWED \(v)+ \(noun)"
         }
     }
 
@@ -872,16 +887,17 @@ struct GameLogPanel: View {
         switch measure {
         case .margin:
             let top = football ? max(21, opening.value + 7) : max(8, opening.value + 4)
-            return min(opening.value, 1)...top
-        case .total:
-            let most = Int(chrono.map(\.total).max() ?? 0)
+            // Down to a loss by two scores (four runs), so a dog's cover reads too.
+            return min(opening.value, football ? -14 : -4)...top
+        case .total, .scored, .allowed:
+            let most = Int(chrono.map(value).max() ?? 0)
             return mark.under ? 0...max(most, opening.value + 4) : 1...max(most, opening.value + 4)
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GaryRuler(value: $mark.value, range: range, name: measure == .margin ? "Margin" : "Total",
+            GaryRuler(value: $mark.value, range: range, name: Self.rulerName(measure),
                       spoken: { v in
                           var m = mark; m.value = v
                           return GameLogPanel.spokenWords(m, measure: measure, football: football)
@@ -894,13 +910,23 @@ struct GameLogPanel: View {
                 if mark == opening, let price { Text(price).font(GaryFonts.display(20)).foregroundStyle(GaryColors.gold).monospacedDigit() }
             }
             LogWindowTabs(items: windows.map { ($0, tally($0)) }, selected: Binding(get: { shownWindow }, set: { window = $0 }))
-            if shownWindow == .season {
+            // A short season reads game by game; a long one as a spread.
+            if shownWindow == .season, season.count > 20 {
                 LogBarsChart(bars: seasonBars)
             } else if measure == .margin {
                 MarginBarsChart(bars: bars, rule: Double(mark.value) - 0.5)
             } else {
                 LogBarsChart(bars: bars, rule: mark.line)
             }
+        }
+    }
+
+    private static func rulerName(_ measure: Measure) -> String {
+        switch measure {
+        case .margin: return "Margin"
+        case .total: return "Total"
+        case .scored: return "Scored"
+        case .allowed: return "Allowed"
         }
     }
 
@@ -913,14 +939,19 @@ struct GameLogPanel: View {
             return "win or lose by \(-v) or less"
         }
         let noun = football ? "points" : "runs"
-        return mark.under ? "\(v) or fewer \(noun)" : "\(v) or more \(noun)"
+        let words = mark.under ? "\(v) or fewer \(noun)" : "\(v) or more \(noun)"
+        switch measure {
+        case .scored: return "scored \(words)"
+        case .allowed: return "allowed \(words)"
+        default: return words
+        }
     }
 
     private var bars: [LogBar] {
         let s = slice(shownWindow)
         let n = s.count
         return s.enumerated().map { i, g in
-            LogBar(id: i, value: value(g), top: measure == .margin ? "\(g.f)-\(g.a)" : "\(Int(g.total))",
+            LogBar(id: i, value: value(g), top: measure == .margin ? "\(g.f)-\(g.a)" : "\(Int(value(g)))",
                    axis: n <= 10 ? g.axis : nil, sub: n <= 5 ? g.shortDate : nil, clears: clears(value(g)))
         }
     }

@@ -53,6 +53,7 @@ import {
 } from './lib/liveGradeQueue.js';
 import { loadIncompleteFinalFootballGames } from './lib/footballFinalReconciliation.js';
 import { syncNbaTeamGames } from '../src/services/sports/nba/nbaTeamGames.js';
+import { syncNcaafTeamGames } from '../src/services/sports/ncaaf/ncaafTeamGames.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
@@ -223,6 +224,11 @@ function nbaRows() {
 async function footballRows(league) {
   const request = footballBdlRequest(league, targetDate);
   const games = (await bdl.getGames(request.sportKey, request.params, 1)) || [];
+  // College finals go to team_games (ncaafTeamGames.js): the team card's season.
+  if (league === 'NCAAF' && !dryRun) {
+    const synced = await syncNcaafTeamGames(games).catch((e) => ({ error: e.message }));
+    if (synced?.error) console.warn(`[live-scores] NCAAF team games: ${synced.error}`);
+  }
   const normalized = normalizeFootballGames(games, {
     league,
     targetDate,
