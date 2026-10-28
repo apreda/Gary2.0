@@ -97,8 +97,10 @@ export function defenseLine(cur, prev, defense, position, season) {
 /** "Wk 2 Sep 14 vs DAL: 7 targets, 5 catches, 72 yards, 1 TD; 2 carries, 9 yards; 54 of 66 snaps" — newest first. */
 // `defenses`: team code → the defense that week's opponent is this season ("allowing 26.3 points a game, 5th most"),
 // so "120 yards vs DAL" says whether Dallas was a soft defense (Oct 26 2026, as the game lines show it).
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null } = {}) {
-  return (rows || []).slice(0, limit).map((r) => {
+// A game his club played that he has no row in reads "did not play" (Oct 27 2026 darts bug audit: Josh Jacobs' sheet
+// showed one game, Week 7, with nothing to say he had missed Weeks 1 to 6 and was one game back).
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null } = {}) {
+  const line = (r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
     const bits = [];
@@ -111,7 +113,20 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const faced = defenses?.get(r.opponent_team);
     const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
     return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
-  });
+  };
+  const played = (rows || []).map((r) => ({ wk: n(r.week), text: line(r) }));
+  const team = rows?.[0]?.team;
+  const end = today || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const missed = [];
+  if (team && days) {
+    for (const [key, date] of days) {
+      const [s, w, t] = key.split('|');
+      if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
+        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: did not play` });
+      }
+    }
+  }
+  return [...played, ...missed].sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
 }
 
 /** Each team's targets in each week, from every player's weekly row: `${season}|${week}|${team}` → targets. */
