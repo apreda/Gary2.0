@@ -170,7 +170,12 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
       if (played.length >= 3) sheet.push(`    This season: ${one(avg(played.map((p) => ({ ...p, pra: p.pts + p.reb + p.ast })), m.stat))} ${m.word} a game in ${one(avg(played, 'min'))} minutes over ${played.length} games`);
       sheet.push(`    His team's games, newest first:\n      ${lines.slice(0, 10).join('\n      ')}`);
     }
-    menu.push({ id, gameId: c.gameId, line: head, sheet: sheet.join('\n') });
+    // The one-line board Gary picks his sheets from carries his last three games, as MLB's and the NFL's lines carry
+    // theirs (Oct 27 2026 darts bug audit: the NBA line was a name and a price, so a full slate's first pick was made
+    // from names alone).
+    const recent = played.slice(0, 3).map((p) => one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat]));
+    const line = `${head} · ${recent.length ? `last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
+    menu.push({ id, gameId: c.gameId, line, sheet: sheet.join('\n') });
   }
   // The books' order of who matters most: the higher line first.
   menu.sort((a, b) => (board.candidates.get(b.id)?.[kind]?.line ?? 0) - (board.candidates.get(a.id)?.[kind]?.line ?? 0));
