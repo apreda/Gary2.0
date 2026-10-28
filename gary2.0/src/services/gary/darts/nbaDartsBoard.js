@@ -2,13 +2,24 @@
 // each rotation player's main over/under line in the five NBA dart categories, and a sheet of his own games for
 // the stat each settles on (this season only: founder, Oct 23 2026, no last season ever). No formula: the
 // menu is the board in the books' order of who matters most (the higher line first). Sources: BDL games, odds,
-// player props, injuries and game logs.
+// player props, the league's injury report and the stored game records.
+//
+// Oct 27 2026 (founder: NBA darts losing while MLB's and the NFL's hold; points 11-21): the sheet was a season average
+// and ten bare numbers, so a 14 in 22 minutes of a blowout read like a slump, and nothing said who was out around him.
+// Each player's sheet is now his games dated, started or off the bench, his minutes and the stat, and the regulars his
+// team was without that night, from the game records (the official box's counts); tonight's official report for both
+// teams sits above. Injuries come from the league's report only, as everywhere else (the stats feed's list was read).
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
+import { latestOfficialReport, gameListing, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
+import { teamRecords } from '../../gamebygame/gameRecordStore.js';
 import { mainLineBoth, fmtOdds, etClock, etDate, normName } from './dartsCommon.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
 const OUT = /^out/i;
+const reportDate = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
+const shortDay = (ymd) => new Date(`${String(ymd).slice(0, 10)}T16:00:00Z`).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
+const LISTED = ['Out', 'Doubtful', 'Questionable'];
 const nextUtcDay = (d) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
 /** The NBA categories: the candidate key, the BDL prop type, the game-log field, and the line that makes a market. */
@@ -36,8 +47,20 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
 
   const teams = await bdl.getTeams('basketball_nba').catch(() => []);
   const abbrById = new Map((teams || []).map((t) => [String(t.id), t.abbreviation]));
-  const injuries = await bdl.getInjuriesGeneric('basketball_nba', { team_ids: games.flatMap((g) => [g.home_team?.id, g.visitor_team?.id]).filter((x) => x != null) }).catch(() => []);
-  const injuryById = new Map((injuries || []).filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
+  // Tonight's report, each team's side of it ('unfiled' until the team files), and each team's games so far.
+  const report = await latestOfficialReport({ now: new Date(now) }).catch(() => null);
+  const listings = new Map(games.map((g) => [String(g.id), report ? gameListing(report, reportDate(g.datetime), g.home_team.full_name, g.visitor_team.full_name) : null]));
+  const recordsOf = new Map();
+  for (const g of games) for (const t of [g.home_team, g.visitor_team]) {
+    if (!recordsOf.has(String(t.id))) recordsOf.set(String(t.id), await teamRecords('NBA', season, t.id, date, 100).catch(() => null));
+  }
+  const statusOf = (gameId, teamName, name) => {
+    const side = listings.get(String(gameId))?.[teamName];
+    if (!side || side === 'unfiled') return '';
+    const hit = samePlayerIn(name, [...side.values()].map((r) => r.name));
+    const row = hit ? [...side.values()].find((r) => r.name === hit) : null;
+    return row && row.status !== 'Available' ? row.status : '';
+  };
   const odds = await bdl.getOddsV2?.({ game_ids: games.map((g) => g.id) }, 'nba').catch(() => []) || [];
 
   const candidates = new Map();
@@ -62,11 +85,12 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const byPlayer = new Map();
     for (const r of rows) { const k = String(r.player_id); if (!byPlayer.has(k)) byPlayer.set(k, []); byPlayer.get(k).push(r); }
     const lines = [head.join(' · ')];
+    lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report)}`).join(' · ')}`);
     for (const team of [away, home]) {
       const roster = [...byPlayer.keys()].map((pid) => ({ pid, info: people[pid] || people[Number(pid)] })).filter((p) => p.info?.team === team.full_name);
       const priced = [];
       for (const { pid, info } of roster) {
-        const status = injuryById.get(pid) || '';
+        const status = statusOf(g.id, team.full_name, info.name);
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const markets = Object.fromEntries(Object.entries(NBA_MARKET).map(([k, m]) => {
@@ -83,7 +107,7 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
         const id = `P${++seq}`;
         const shown = Object.entries(markets).filter(([, m]) => m).map(([k, m]) => `${LABEL[k]} ${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`);
         lines.push(`  [${id}] ${info.name}${info.position ? ` ${info.position}` : ''}${status ? ` · ${status.toLowerCase()}` : ''} · ${shown.join(' · ')}`);
-        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.datetime, player: info.name, playerId: pid, team: team.full_name,
+        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.datetime, player: info.name, playerId: pid, team: team.full_name, teamId: String(team.id),
           position: info.position || null, status: status ? status.toLowerCase() : null, ...markets });
         for (const k of Object.keys(NBA_MARKET)) if (markets[k] && !usedSet[k].has(info.name)) eligible[k].push(id);
       }
@@ -91,7 +115,41 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     blocks.push(lines.join('\n'));
   }
 
-  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById };
+  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf };
+}
+
+// A team's side of tonight's report in a few words: who is out, doubtful or questionable.
+function listedLine(side, report) {
+  if (!report) return 'not on file (the report did not load)';
+  if (!side || side === 'unfiled') return 'not filed yet';
+  const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league/i.test(r.reason)).map((r) => r.name)]).filter(([, names]) => names.length);
+  return by.length ? by.map(([st, names]) => `${st.toLowerCase()} ${names.join(', ')}`).join('; ') : 'nobody listed';
+}
+
+/**
+ * One player's games this season from the records, newest first: date, opponent, started or off the bench, minutes,
+ * the stat, and the regulars his team was without (out on the report at tip, and played 15+ minutes in another of these
+ * games). A game he was on the report or did not play reads so. Null when his team has no records on file.
+ */
+function gameLines(c, records, stat, abbrById) {
+  if (!records) return null;
+  const rows = [];
+  for (const r of records) {
+    const rec = r.record; const side = String(rec.home?.id) === c.teamId ? 'home' : 'away';
+    const opp = side === 'home' ? rec.away : rec.home;
+    const me = (rec.players || []).find((p) => String(p.id) === String(c.playerId));
+    const value = me ? (stat === 'pra' ? me.pts + me.reb + me.ast : me[stat]) : null;
+    rows.push({ rec, side, opp: opp?.abbr || abbrById?.get(String(opp?.id)) || opp?.name || '?', me, value, date: r.game_date });
+  }
+  const big = new Set(rows.flatMap((x) => (x.rec.players || []).filter((p) => p.side === x.side && p.min >= 15).map((p) => p.name)));
+  return rows.map((x) => {
+    const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}`;
+    const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason || ''));
+    const mine = outRows.find((r) => samePlayerIn(c.player, [r.name]));
+    if (!x.me || !(x.me.min > 0)) return `${where}: did not play${mine ? ` (out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')})` : ''}`;
+    const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(r.name, [n]))).map((r) => r.name);
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min, ${one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
+  });
 }
 
 /** One category's menu: every eligible player, his line, and a sheet of his own games for the stat it settles on. */
@@ -102,16 +160,15 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     const c = board.candidates.get(id);
     const mk = c?.[kind];
     if (!mk) continue;
-    const cur = await bdl.getNbaPlayerGameLogs(c.playerId, 100, {}, { season: board.season, asOf }).catch(() => null);
-    const games = (cur?.games || []).map((g) => ({ ...g, opponent: g.opponent || board.abbrById?.get(String(g.opponentId)) || '?' }));
     const head = `${c.player} (${c.team})${c.status ? ` · ${c.status}` : ''} · ${LABEL[kind]} ${mk.line} · over ${fmtOdds(mk.over)} / under ${fmtOdds(mk.under)}`;
     const sheet = [head];
-    if (!cur) sheet.push("    This season's games are not on file (the game log did not load).");
-    else if (!games.length) sheet.push('    No games yet this season.');
-    else if (games.length < 3) sheet.push(`    This season so far: ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${one(g[m.stat])}`).join(', ')}`);
+    const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById);
+    const played = (board.recordsOf?.get(c.teamId) || []).map((r) => (r.record.players || []).find((p) => String(p.id) === String(c.playerId))).filter((p) => p?.min > 0);
+    if (!lines) sheet.push("    This season's games are not on file (the game records did not load).");
+    else if (!lines.length) sheet.push('    No games yet this season.');
     else {
-      sheet.push(`    This season: ${one(avg(games, m.stat))} ${m.word} a game in ${one(avg(games, 'min'))} minutes over ${games.length} games`);
-      sheet.push(`    Last ${Math.min(10, games.length)}, newest first: ${games.slice(0, 10).map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${one(g[m.stat])}`).join(', ')}`);
+      if (played.length >= 3) sheet.push(`    This season: ${one(avg(played.map((p) => ({ ...p, pra: p.pts + p.reb + p.ast })), m.stat))} ${m.word} a game in ${one(avg(played, 'min'))} minutes over ${played.length} games`);
+      sheet.push(`    His team's games, newest first:\n      ${lines.slice(0, 10).join('\n      ')}`);
     }
     menu.push({ id, gameId: c.gameId, line: head, sheet: sheet.join('\n') });
   }
