@@ -49,6 +49,7 @@ ${BRAND.boilerplateMedium}
 ## Key pages
 - ${BRAND.domain}/today — published sports desk and picks
 - ${BRAND.domain}/picks — today's published free game picks (all sports)
+- ${BRAND.domain}/picks/nba — today's NBA game picks and record
 - ${BRAND.domain}/picks/mlb — today's MLB game picks and record
 - ${BRAND.domain}/picks/nfl — NFL game picks and record
 - ${BRAND.domain}/picks/ncaaf — college football game picks and record

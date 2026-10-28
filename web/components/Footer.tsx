@@ -11,6 +11,7 @@ const COLUMNS: {
   {
     heading: "The Desk",
     links: [
+      { href: "/picks/nba", label: "NBA Picks" },
       { href: "/picks/mlb", label: "MLB Picks" },
       { href: "/picks/nfl", label: "NFL Picks" },
       { href: "/picks/ncaaf", label: "College Football Picks" },
