@@ -35,7 +35,12 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   // ESPN's official box and venue, the report at tip).
   const recent = new Date(Date.now() - 2 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const LATE = ['the advanced box is on file', 'the official team box is on file', 'the venue is on file', 'the injury report at tip is on file'];
-  const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
+  // The league corrects a box days after the final (Oct 28 2026: Clingan's 10 rebounds at Sacramento on Oct 23 became
+  // 11 and Camara's 3 became 2 after the record was built on Oct 27): a game is built again two days and seven days
+  // after its date, once each.
+  const at = (ymd, days) => Date.parse(`${String(ymd).slice(0, 10)}T12:00:00Z`) + days * 86_400_000;
+  const beforeCorrections = (s) => Boolean(s.builtAt) && [2, 7].some((d) => Date.parse(s.builtAt) < at(s.date, d) && Date.now() >= at(s.date, d));
+  const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || beforeCorrections(s) || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
   for (const g of missing) {
     try { await saveGameRecord((await buildNbaGameRecord(g.id)).row); } catch (e) { failed.push(`${g.id}: ${e.message}`); }

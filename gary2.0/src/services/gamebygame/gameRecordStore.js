@@ -21,9 +21,9 @@ export async function saveGameRecord(row) {
 export async function storedGameIds(league, season) {
   const out = new Map();
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db().from(TABLE).select('game_id, version, game_date, checks').eq('league', league).eq('season', season).range(from, from + 999);
+    const { data, error } = await db().from(TABLE).select('game_id, version, game_date, checks, built_at').eq('league', league).eq('season', season).range(from, from + 999);
     if (error) throw new Error(`game records store: list failed: ${error.message}`);
-    for (const r of data || []) out.set(String(r.game_id), { version: r.version, date: r.game_date, failed: (r.checks || []).filter((c) => !c.ok).map((c) => c.check) });
+    for (const r of data || []) out.set(String(r.game_id), { version: r.version, date: r.game_date, builtAt: r.built_at, failed: (r.checks || []).filter((c) => !c.ok).map((c) => c.check) });
     if (!data || data.length < 1000) return out;
   }
 }
