@@ -165,7 +165,10 @@ export async function loadMlbPlayerSplits(gamePks, season) {
       const res = await getJson(`/people?personIds=${chunk}&${q}`);
       for (const p of res?.people || []) {
         const splits = p.stats?.[0]?.splits || [];
-        const get = (code) => splits.find((s) => s.split?.code === code)?.stat || null;
+        // A player traded in-season has one split per club and one for his season (no team); the season's is his
+        // (Oct 27 2026 darts bug audit: Liam Hicks read his Rays at-bats against righties and his Marlins ones against
+        // lefties, 209 of 554 PA).
+        const get = (code) => { const all = splits.filter((s) => s.split?.code === code); return (all.find((s) => !s.team) || all[0])?.stat || null; };
         const slots = SLOTS.map((code, k) => ({ slot: k + 1, pa: Number(get(code)?.plateAppearances) || 0 })).filter((s) => s.pa > 0).sort((a, b) => b.pa - a.pa);
         hitting.set(p.id, { vl: get('vl'), vr: get('vr'), usualSlot: slots[0]?.slot ?? null, slots });
       }
@@ -173,7 +176,8 @@ export async function loadMlbPlayerSplits(gamePks, season) {
     try {
       const res = await getJson(`/people?personIds=${chunk}&hydrate=stats(group=[pitching],type=[statSplits],sitCodes=[i01],season=${season})`);
       for (const p of res?.people || []) {
-        const s = p.stats?.[0]?.splits?.find((x) => x.split?.code === 'i01')?.stat;
+        const all = (p.stats?.[0]?.splits || []).filter((x) => x.split?.code === 'i01');
+        const s = (all.find((x) => !x.team) || all[0])?.stat;
         if (s && Number(s.gamesPlayed) > 0) firstInning.set(p.id, s);
       }
     } catch { /* first-inning lines left out */ }
@@ -286,7 +290,9 @@ export function hitterWindows(rows, { asOf = null } = {}) {
   const parts = [];
   if (week.length) parts.push(`last 7 days: ${battingTotals(week)}`);
   parts.push(`last 15 games: ${battingTotals(played.slice(-15))}`);
-  parts.push(`season: ${battingTotals(played)}`);
+  // Said when the playoffs are in it (Oct 27 2026 darts bug audit: "season" here read 19 HR beside a regular-season
+  // line of 18 on the same sheet).
+  parts.push(`${played.some((r) => r._game?.postseason) ? 'season, playoffs included' : 'season'}: ${battingTotals(played)}`);
   return parts.join(' · ');
 }
 

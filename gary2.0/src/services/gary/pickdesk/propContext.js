@@ -153,7 +153,9 @@ export async function buildPropContext({ gamePk, lineups, meta, season }) {
 
       let platMult = {};
       const splits = people.get(id)?.stats?.[0]?.splits || [];
-      const vl = splits.find(s => s.split?.code === 'vl')?.stat, vr = splits.find(s => s.split?.code === 'vr')?.stat;
+      // The season's split (no team), not one club's, for a player traded in-season (Oct 27 2026 darts bug audit).
+      const seasonSplit = (code) => { const all = splits.filter(s => s.split?.code === code); return (all.find(s => !s.team) || all[0])?.stat; };
+      const vl = seasonSplit('vl'), vr = seasonSplit('vr');
       const split = oppHand === 'L' ? vl : oppHand === 'R' ? vr : null;
       if (split && vl && vr) {
         const overall = combine(vl, vr);

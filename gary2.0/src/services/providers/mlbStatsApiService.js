@@ -332,7 +332,9 @@ export async function getPitcherPlatoonSplits(playerId, season) {
   const stats = data.people?.[0]?.stats || [];
   const result = { vsLeft: null, vsRight: null };
   for (const block of stats) {
-    for (const split of (block.splits || [])) {
+    // A pitcher traded in-season has a split per club and one for his season (no team): the season's only.
+    const seasonOnly = (block.splits || []).filter((x) => !x.team || !(block.splits || []).some((y) => y.split?.code === x.split?.code && !y.team));
+    for (const split of seasonOnly) {
       const code = split.split?.code;
       const st = split.stat || {};
       const line = {
@@ -775,17 +777,14 @@ export async function getMlbTransactions(teamId, startDate, endDate) {
   return rows;
 }
 
-/** A pitcher's completed starts this season (gameLog), most recent last.
+/** A pitcher's completed starts this season (gameLog), playoff starts included, most recent last.
  *  Excludes any entry dated today ET — an in-progress start would leak a
- *  partial line onto the desk. */
+ *  partial line onto the desk. The playoff starts (Oct 27 2026 darts bug audit: the regular-season log alone
+ *  read Griffin Jax at "30 days' rest" a week after his Oct 15 start, and every playoff starter's last outing,
+ *  rest and last three starts stopped in September). */
 export async function getPitcherLastStarts(personId, season, limit = 3) {
-  const key = `mlb_sp_log_${personId}_${season}`;
-  let splits = getCached(key);
-  if (!splits) {
-    const data = await apiFetch(`/people/${personId}/stats?stats=gameLog&season=${season}&group=pitching`);
-    splits = data.stats?.[0]?.splits || [];
-    setCache(key, splits);
-  }
+  const splits = (await getPitcherGameLogRaw(personId, season, { withPostseason: true }))
+    .slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
   const todayEt = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   return splits
     .filter(g => g.date && g.date < todayEt && g.stat?.gamesStarted > 0)
@@ -844,7 +843,9 @@ export async function getPitcherSituationalSplits(personId, season) {
   if (cached) return cached;
   const data = await apiFetch(`/people/${personId}/stats?stats=statSplits&group=pitching&season=${year}&sitCodes=i01`);
   const rows = data.stats?.[0]?.splits || [];
-  const fi = rows.find((s) => s.split?.code === 'i01')?.stat || null;
+  // His season's split, not one club's, when he was traded (Oct 27 2026 darts bug audit).
+  const fiAll = rows.filter((s) => s.split?.code === 'i01');
+  const fi = (fiAll.find((s) => !s.team) || fiAll[0])?.stat || null;
   if (!fi) return null;
   const out = { firstInning: { era: fi.era ?? null, ip: fi.inningsPitched ?? null, avg: fi.avg ?? null } };
   setCache(key, out);

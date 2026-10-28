@@ -140,14 +140,24 @@ export function targetShareLine(rows, totals = null) {
   return `his targets against the team's: ${last3.mine} of ${last3.team} over his last ${Math.min(3, list.length)} games, ${all.mine} of ${all.team} this season (${list.length} games)`;
 }
 
-/** "out around him: WR Ja'Marr Chase (out), TE ... (doubtful)" — his club's current report, himself excluded. */
+/**
+ * "his club's report: WR Ja'Marr Chase (out), TE ... (questionable) · on reserve: ..." — his club's current report,
+ * himself excluded: this week's statuses first, then the reserve lists, every name (Oct 27 2026 darts bug audit: the
+ * first ten in the feed's order, reserve players among them, hid this week's names on 24 of 32 clubs; the 49ers' line
+ * left out Bosa, McCaffrey, Deebo Samuel and Mike Evans, all questionable).
+ */
 export function outAroundLine(injuries, teamFull, name) {
   const mine = normName(name);
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
     && /^(out|doubtful|questionable|ir|injured reserve|pup)/i.test(String(i?.status || '')));
   if (!list.length) return null;
-  return `his club's report: ${list.slice(0, 10).map((i) => `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()})`.trim()).join(', ')}`;
+  const rank = (s) => ['out', 'doubtful', 'questionable'].findIndex((w) => String(s).toLowerCase().startsWith(w));
+  const word = (i) => `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()})`.trim();
+  const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
+  const reserve = list.filter((i) => rank(i.status) < 0);
+  return [week.length ? `his club's report: ${week.map(word).join(', ')}` : "his club's report: nobody listed this week",
+    reserve.length ? `on reserve: ${reserve.map(word).join(', ')}` : null].filter(Boolean).join(' · ');
 }
 
 /** A club's regular season from the schedule: "11-6, 25.1 points a game, 19.2 allowed (17 games)"; null before a final. */

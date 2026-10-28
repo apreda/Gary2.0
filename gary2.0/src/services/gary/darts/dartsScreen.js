@@ -110,7 +110,7 @@ export function mlbPlayerSheet(kind, c, rows, ctx = {}) {
     : priceHistoryLine(ctx.history, c.player, m.prop, { line: m.line, label: `${m.label.toLowerCase()} price` });
   if (hist) lines.push(hist);
   const season = [c.seasonHr != null ? `${c.seasonHr} HR` : null, c.ops ? `${String(c.ops).replace(/^0/, '')} OPS` : null].filter(Boolean).join(', ');
-  if (season) lines.push(`season line: ${season}`);
+  if (season) lines.push(`regular season: ${season}`);
   const plat = platoonLine(split);
   if (plat) lines.push(plat);
   if (c.facing?.name && gamePk && ctx.vs && ctx.splits) {

@@ -5,7 +5,8 @@
 // seven NFL dart categories. Sources: BDL
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
-import { RELEASE_BASE, TEAM_NAMES, fetchCsv } from '../../sports/nfl/nflStreaksService.js';
+import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
+import { weeklyRows as officialWeeklyRows } from '../../sports/nfl/nflPlayerContext.js';
 import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
@@ -15,12 +16,9 @@ const POS = { Quarterback: 'QB', 'Running Back': 'RB', 'Wide Receiver': 'WR', 'T
 const nextUtcDay = (d) => new Date(Date.parse(`${d}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 const n = (v) => Number(v || 0);
 
-// One CSV read per season per process: the totals and the game arrays share it.
-const csvMemo = new Map();
-async function weeklyRows(season) {
-  if (!csvMemo.has(season)) csvMemo.set(season, fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`).catch(() => []));
-  return csvMemo.get(season);
-}
+// The season's weekly rows in the official box's counts, the same rows the sheet's game log reads (Oct 27 2026 darts bug
+// audit: the totals and the volume model read nflverse's own counts beside a game log in the official ones).
+const weeklyRows = async (season) => (await officialWeeklyRows(season)) || [];
 
 /** normalized name → the season's regular-season games, newest first (the shape the sheets and the volume model read). */
 export async function nflSeasonGames(season) {

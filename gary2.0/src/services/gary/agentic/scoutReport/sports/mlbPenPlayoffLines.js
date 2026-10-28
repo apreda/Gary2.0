@@ -70,7 +70,9 @@ const EVENT_WORDS = (event) => String(event || '?').replace(/_/g, ' ');
 
 function handLine(splits) {
   const side = (code) => {
-    const s = (splits || []).find((x) => x?.split?.code === code)?.stat;
+    // The season's split (no team), not one club's, for an arm traded in-season (Oct 27 2026 darts bug audit).
+    const all = (splits || []).filter((x) => x?.split?.code === code);
+    const s = (all.find((x) => !x.team) || all[0])?.stat;
     if (!s) return null;
     const pa = s.battersFaced ?? s.plateAppearances;
     return `${rate(s.avg)}/${rate(s.obp)}/${rate(s.slg)}${pa != null ? ` (${pa} batters)` : ''}`;
