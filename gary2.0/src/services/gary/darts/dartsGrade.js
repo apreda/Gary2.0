@@ -4,6 +4,7 @@
 // score (no model), so the Darts page can show yesterday's hits.
 import { findMlbSettlementPlayer, mlbPropActual } from '../../../../supabase/functions/_shared/mlbPropSettlement.js';
 import { findNflSettlementPlayer } from '../../../../scripts/lib/resultsGradingReliability.js';
+import { espnPlayerLines, officialLineFor } from '../../sports/nba/espnNbaGame.js';
 
 const BDL = 'https://api.balldontlie.io';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -102,6 +103,21 @@ const NBA_ACTUAL = {
 };
 const minutesPlayed = (r) => { const m = String(r?.min ?? '').split(':')[0]; return Number(m) || 0; };
 
+/**
+ * The feed's stat rows with each player's counts from the official box (Oct 27 2026 bug audit: six NBA darts were
+ * graded on a count one off the official one, Gobert's 20 rebounds read 19; none turned a result yet). A row the official
+ * box has no line for, or a game ESPN has no final box for, keeps the feed's counts.
+ */
+export async function withOfficialNbaCounts(game, rows, lines = null) {
+  const official = lines || await espnPlayerLines(game).catch(() => null);
+  if (!official) return rows;
+  return (rows || []).map((r) => {
+    const side = String(r?.team?.id) === String(game?.home_team?.id) ? 'home' : 'away';
+    const o = officialLineFor(`${r?.player?.first_name || ''} ${r?.player?.last_name || ''}`.trim(), official.filter((x) => x.side === side));
+    return o ? { ...r, ...Object.fromEntries(['pts', 'reb', 'ast', 'fg3m'].filter((k) => o[k] != null).map((k) => [k, o[k]])) } : r;
+  });
+}
+
 /** Grade one NBA lean against its game and box score. A player who never got on the floor voids. null = not yet. */
 export function gradeNbaDart(dart, game, statRows) {
   if (!game) return null;
@@ -138,9 +154,10 @@ export async function gradeDarts({ supabase, bdlApiKey, date, console = globalTh
       const game = (await bdl(`${path}/games/${encodeURIComponent(gameId)}`, bdlApiKey)).data;
       if (!isFinal(game?.status) && !isOff(game?.status)) continue;
       const needsBox = group.some((dart) => dart.kind !== 'first_inning');
-      const stats = needsBox && isFinal(game.status)
+      const feed = needsBox && isFinal(game.status)
         ? await bdlAll(`${path}/stats?game_ids[]=${encodeURIComponent(gameId)}&per_page=100`, bdlApiKey)
         : [];
+      const stats = league === 'NBA' && feed.length ? await withOfficialNbaCounts(game, feed) : feed;
       for (const dart of group) {
         const outcome = league === 'MLB' ? gradeMlbDart(dart, game, stats) : league === 'NBA' ? gradeNbaDart(dart, game, stats) : gradeNflDart(dart, game, stats);
         if (!outcome) continue;
