@@ -137,11 +137,6 @@ async function throwLeague(league) {
     // arms they face. NFL: two seasons of game logs from one CSV each and the
     // volume model's team context per game.
     const owedKinds = DART_CATEGORIES[league].map((c) => c.kind).filter((k) => needed[k] > 0);
-    // His own last three days of throws per category, as facts about his record.
-    const since = new Date(Date.parse(`${date}T12:00:00Z`) - 3 * 86400000).toISOString().slice(0, 10);
-    const { data: recent } = await supabase.from('darts').select('game_date, kind, player, matchup, prop, bet, odds, result, scratched_at, rank')
-      .eq('league', league).gte('game_date', since).lt('game_date', date).is('replaced_by', null);
-    const historyOf = (kind) => (recent || []).filter((d) => d.kind === kind);
     let screens;
     const blocks = new Map();
     const starts = new Map();
@@ -198,7 +193,7 @@ async function throwLeague(league) {
     for (const screen of screens) {
       const { kind, menu } = screen;
       if (!menu.length) { log(`${league} ${kind}: nothing priced on the board`); continue; }
-      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, history: historyOf(kind), note: screen.note, flex: FLEX_KINDS.has(kind), log: { warn: log } });
+      const thrown = await throwCategory({ league, kind, count: needed[kind], menu, board, dateLong, perClub: perClubKinds.includes(kind), blocks, starts, note: screen.note, flex: FLEX_KINDS.has(kind), log: { warn: log } });
       filled += thrown.filled;
       if (thrown.looked?.length) log(`${league} ${kind}: read ${thrown.looked.length} sheets of ${menu.length} (${thrown.looked.join(', ')})`);
       for (const d of thrown.darts) {

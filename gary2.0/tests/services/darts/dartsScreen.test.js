@@ -28,10 +28,10 @@ describe('the throw', () => {
   const board = { candidates: new Map([['B1', { team: 'A' }], ['B2', { team: 'B' }], ['B3', { team: 'A' }]]) };
   it('asks the bettor\'s question over the whole board, sheets under their games, with no rule for how to answer', () => {
     const entries = menu.map((m, i) => ({ ...m, gameId: i < 2 ? 'G1' : 'G2', line: `line ${m.id}` }));
-    const ask = buildCategoryAsk({ kind: 'hr', count: 2, sheets: sheetsByGame(entries, new Map([['G1', 'Rays @ Yankees'], ['G2', 'Cubs @ Reds']])), dateLong: 'Thursday', history: [{ game_date: '2026-09-23', kind: 'hr', player: 'Ben Rice', odds: 400, result: 'hit' }] });
+    const ask = buildCategoryAsk({ kind: 'hr', count: 2, sheets: sheetsByGame(entries, new Map([['G1', 'Rays @ Yankees'], ['G2', 'Cubs @ Reds']])), dateLong: 'Thursday' });
     expect(ask).toContain('Which 2 are the best bets in HOME RUN today?');
     expect(ask).toContain('GAME · Rays @ Yankees\n\n  [B1] Player One');
-    expect(ask).toContain('Sep 23: Ben Rice to homer +400, hit');
+    expect(ask).not.toContain('LAST THREE DAYS');
     expect(ask).toContain('set after each player\'s and each club\'s season and recent form were known');
     for (const banned of ['value', 'edge', 'favorite', 'underdog', 'always', 'never pick', '%']) expect(ask.toLowerCase()).not.toContain(banned);
     expect(buildBoardAsk({ kind: 'hr', menu: entries, dateLong: 'Thursday' })).toContain('[B3] line B3');

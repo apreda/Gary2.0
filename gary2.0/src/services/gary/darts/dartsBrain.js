@@ -8,8 +8,9 @@
 // of the list and nothing more. Opus 5.5 at medium effort on the
 // subscription. The ask is the product contract and founder facts only: how
 // many, from which ids, over or under where the line is two-sided, the
-// prices already know the season, his own last three days of throws in the
-// category, reasons in words. A short or invalid answer is re-asked for
+// prices already know the season, reasons in words. His own recent darts and
+// their results are not shown (founder, Oct 27 2026: Gary never sees his record;
+// with them he flipped sides on a player after a miss). A short or invalid answer is re-asked for
 // exactly what is missing; only after two re-asks does the list's own order
 // fill the last spot, and that dart says so in its model stamp.
 import { createHash } from 'crypto';
@@ -70,16 +71,6 @@ export function dartWords(d) {
   return `${words.replace(/\s+/g, ' ').trim()}${d.odds != null ? ` ${fmtOdds(d.odds)}` : ''}`;
 }
 
-/** His own last days of throws in this category, as facts about his record. */
-export function dartsHistoryBlock(label, history) {
-  if (!history?.length) return `YOUR LAST THREE DAYS OF ${label} DARTS: none thrown.`;
-  const byDay = new Map();
-  for (const d of history) { if (!byDay.has(d.game_date)) byDay.set(d.game_date, []); byDay.get(d.game_date).push(d); }
-  const days = [...byDay.keys()].sort().reverse();
-  const outcome = (d) => (d.scratched_at ? 'scratched' : d.result || 'not settled');
-  return `YOUR LAST THREE DAYS OF ${label} DARTS:\n${days.map((day) => `${shortDay(day)}: ${byDay.get(day).sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99)).map((d) => `${dartWords(d)}, ${outcome(d)}`).join(' · ')}`).join('\n')}`;
-}
-
 const intro = (label, dateLong) => `THE ${label} BOARD — ${dateLong}. Today's darts: your fun leans, never on your record. Fans see them in the morning and throw them if they like; each one settles hit or miss after its game.`;
 
 /** Entries grouped under their games (earliest first), each game's frame printed once. */
@@ -96,20 +87,18 @@ export function sheetsByGame(entries, blocks = new Map(), starts = new Map()) {
 }
 
 /** Stage one of a full board: every priced entry in one line; Gary names the sheets he wants. */
-export function buildBoardAsk({ kind, menu, dateLong, history = [], look = SHEETS_WANTED, note = null }) {
+export function buildBoardAsk({ kind, menu, dateLong, look = SHEETS_WANTED, note = null }) {
   const label = CATEGORY_LABEL[kind] || kind;
   const unit = unitOf(kind);
   return `${intro(label, dateLong)}
 
 ${PRICED_IN}
 
-${dartsHistoryBlock(label, history)}
-
 The ${label} board, one line each.${note ? ` ${note}` : ''}
 
 ${menu.map((m) => `[${m.id}] ${m.line}`).join('\n')}
 
-Before you throw: name the ${look} whose full sheets you want in front of you (his games by date, opponent and arm, his splits, his price before tonight, and the game around him).
+Before you throw: name the ${look} whose full sheets you want in front of you (his games by date and opponent, and the game around him).
 
 JSON only:
 
@@ -122,13 +111,13 @@ JSON only:
 /** What a flexible category's dart says will happen. */
 const FLEX_VERB = { hr: 'homer' };
 
-export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, history = [], afterLook = false, note = null, flex = false }) {
+export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = false, afterLook = false, note = null, flex = false }) {
   const label = CATEGORY_LABEL[kind] || kind;
   const unit = unitOf(kind);
   const side = sideWord(kind);
   const head = afterLook
     ? 'Their sheets, game by game:'
-    : `${intro(label, dateLong)}\n\n${PRICED_IN}\n\n${dartsHistoryBlock(label, history)}\n\nThe ${label} board, game by game, each game's frame and then each ${unit === 'games' ? 'game' : 'player'}'s sheet.${note ? ` ${note}` : ''}`;
+    : `${intro(label, dateLong)}\n\n${PRICED_IN}\n\nThe ${label} board, game by game, each game's frame and then each ${unit === 'games' ? 'game' : 'player'}'s sheet.${note ? ` ${note}` : ''}`;
   return `${head}
 
 ${sheets}
@@ -218,12 +207,11 @@ export function formulaFill({ kind, menu, count, taken, perClub = false, board }
 /**
  * Throw one category over the whole board. `menu` = every entry in the
  * model's order ({ id, gameId, sheet, line, standalone? }); `blocks` = game id
- * → the game's frame; `starts` = game id → start time; `history` = his last
- * three days of darts in this category. Returns Gary's darts in his order
+ * → the game's frame; `starts` = game id → start time. Returns Gary's darts in his order
  * (rank 1 first), the model that answered, how many the order filled, and
  * the ids he asked to read.
  */
-export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), history = [], note = null, flex = false, session: given = null, log = console }) {
+export async function throwCategory({ league, kind, count, menu, board, dateLong, perClub = false, blocks = new Map(), starts = new Map(), note = null, flex = false, session: given = null, log = console }) {
   if (!count || !menu.length) return { darts: [], model: DARTS_MODEL, filled: 0, looked: [] };
   // A flexible category owes only its minimum; Gary throws up to `count`.
   const min = flex ? Math.min(FLEX_MIN, count) : count;
@@ -236,11 +224,11 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
   let looked = [];
   let fillOrder = menu;
   if (menu.length <= WHOLE_BOARD_READ) {
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, history, note, flex });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, note, flex });
   } else {
     const want = Math.max(SHEETS_WANTED, count + 4);
     try {
-      const res = await sendToSessionWithRetry(session, buildBoardAsk({ kind, menu, dateLong, history, look: want, note }), {});
+      const res = await sendToSessionWithRetry(session, buildBoardAsk({ kind, menu, dateLong, look: want, note }), {});
       model = res.model || session.modelName || model;
       const ids = new Set(menu.map((m) => m.id));
       looked = [...new Set((parseJsonKey(res.content, 'look') || []).map(cleanId).filter((id) => ids.has(id)))].slice(0, want + 4);
@@ -252,7 +240,7 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     const lookedSet = new Set(looked);
     const chosen = menu.filter((m) => lookedSet.has(m.id));
     fillOrder = [...chosen, ...menu.filter((m) => !lookedSet.has(m.id))];
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, blocks, starts), dateLong, perClub, history, afterLook: true, flex });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, blocks, starts), dateLong, perClub, afterLook: true, flex });
   }
   const taken = [];
   for (let attempt = 0; attempt <= REASKS; attempt++) {
