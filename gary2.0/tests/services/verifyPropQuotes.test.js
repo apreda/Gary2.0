@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 const standard = vi.hoisted(() => ({ verify: vi.fn(async picks => picks) }));
 vi.mock('../../src/services/gary/standardPropMarkets.js', () => ({ verifyStandardPropSelections: standard.verify }));
 import { propQuoteReceipt } from '../../src/services/gary/propQuoteReceipt.js';
-import { verifyPropQuotes } from '../../src/services/gary/verifyPropQuotes.js';
+import { verifyPropQuotes, readAgainIfQuotesMoved, PROP_QUOTES_MOVED } from '../../src/services/gary/verifyPropQuotes.js';
 const source = { id: 1, game_id: 2, player_id: 3, vendor: 'fanduel', prop_type: 'pitcher_earned_runs', line_value: '0.5', market: { type: 'over_under', over_odds: -187, under_odds: 130 } };
 const pick = () => ({ player: 'Pitcher', odds: '-187', quote_receipt: propQuoteReceipt({ game_id: 2, player_id: 3, prop_type: source.prop_type, line: 0.5, over_odds: -187, over_vendor: source.vendor, over_source_market: source }, 'over') });
 const setup = rows => ({ league: 'MLB', gameId: 2, apiKey: 'fixture', now: () => new Date('2026-09-19T14:00:00Z'), fetchImpl: vi.fn(async () => ({ ok: true, json: async () => ({ data: rows }) })) });
@@ -36,5 +36,19 @@ describe('publication quote recheck', () => {
     expect(await verifyPropQuotes([pick()], options)).toHaveLength(1);
     expect(options.fetchImpl.mock.calls[1][0].searchParams.get('cursor')).toBe('100');
     expect(standard.verify).not.toHaveBeenCalled();
+  });
+  it('reads the game again at once when every selected quote moved, only once (Oct 28 2026)', async () => {
+    const moved = await verifyPropQuotes([pick()], setup([])).catch(error => error);
+    expect(moved.code).toBe(PROP_QUOTES_MOVED);
+    const wrapped = () => new Error('Props processing failed for A @ B', { cause: moved });
+    const run = vi.fn().mockRejectedValueOnce(wrapped()).mockResolvedValueOnce('stored');
+    expect(await readAgainIfQuotesMoved(run)).toBe('stored');
+    expect(run).toHaveBeenCalledTimes(2);
+    const twice = vi.fn().mockRejectedValue(wrapped());
+    await expect(readAgainIfQuotesMoved(twice)).rejects.toThrow('Props processing failed');
+    expect(twice).toHaveBeenCalledTimes(2);
+    const other = vi.fn().mockRejectedValue(new Error('BDL HTTP 500'));
+    await expect(readAgainIfQuotesMoved(other)).rejects.toThrow('BDL HTTP 500');
+    expect(other).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,7 +8,7 @@
 // line runs with no key (a plain-shell run 401'd on Sep 21 2026; the
 // scheduler only worked because it passes its own environment).
 import '../src/loadEnv.js';
-import { verifyPropQuotes } from '../src/services/gary/verifyPropQuotes.js';
+import { verifyPropQuotes, readAgainIfQuotesMoved } from '../src/services/gary/verifyPropQuotes.js';
 import { propQuoteReceipt, selectionMatchesQuote } from '../src/services/gary/propQuoteReceipt.js';
 import { recordMlbDataFailure } from './lib/mlbDataFailure.js';
 import { createClient } from '@supabase/supabase-js';
@@ -93,7 +93,11 @@ function estDateFromISO(iso) {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // en-CA → YYYY-MM-DD
 }
 
-export async function runAgenticPropsCli({
+export function runAgenticPropsCli(options) {
+  return readAgainIfQuotesMoved(() => runAgenticPropsOnce(options));
+}
+
+async function runAgenticPropsOnce({
   sportKey,
   leagueLabel,
   windowHours = 24 * 7,

@@ -3,6 +3,24 @@ import { getApiKey } from '../providers/ballDontLieService.js';
 import { decodeBdlRows } from '../providers/bdlResponse.js';
 import { propQuoteReceipt } from './propQuoteReceipt.js';
 
+export const PROP_QUOTES_MOVED = 'PROP_QUOTES_MOVED';
+
+// MOVED BEFORE PUBLICATION = READ IT AGAIN NOW (Oct 28 2026). When every
+// selected quote moved between Gary's read and publication, the run used to
+// crash and wait for the next retry tier (Oct 23 Bulls @ Bucks, Oct 26 Pacers
+// @ Bucks: about twenty minutes, and a failure email each time). The fresh
+// analysis that error asks for now happens at once, on the current board,
+// one time. A ticket is still never repriced.
+export async function readAgainIfQuotesMoved(run) {
+  try {
+    return await run();
+  } catch (error) {
+    if (error?.code !== PROP_QUOTES_MOVED && error?.cause?.code !== PROP_QUOTES_MOVED) throw error;
+    console.log(`↻ ${error.message}. Reading the game again on the current board.`);
+    return run();
+  }
+}
+
 /** Re-read the selected book after analysis. A moved ticket is never repriced silently. */
 export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetch, apiKey = getApiKey(), now = () => new Date() } = {}) {
   if (!picks.length) return [];
@@ -45,7 +63,7 @@ export async function verifyPropQuotes(picks, { league, gameId, fetchImpl = fetc
     else console.warn(`[Props] Withheld moved/unavailable quote: ${pick.player} ${original.side} ${original.line} ${original.odds} (${original.bookmaker})`);
   }
   verified.push(...oddsApiPicks);
-  if (!verified.length) throw new Error('Selected prop quotes moved or disappeared before publication; fresh analysis required');
+  if (!verified.length) throw Object.assign(new Error('Selected prop quotes moved or disappeared before publication; fresh analysis required'), { code: PROP_QUOTES_MOVED });
   // The re-read board rides along so the standard check sees every book's rows.
   return ['MLB', 'NFL', 'NCAAF'].includes(league)
     ? verifyStandardPropSelections(verified, { league, rawRows: rows }) : verified;
