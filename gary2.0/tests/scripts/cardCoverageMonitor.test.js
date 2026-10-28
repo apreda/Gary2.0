@@ -130,6 +130,17 @@ describe('coverage reporting', () => {
     expect(report.rows.find(row => row.league === 'NFL')).toMatchObject({ player_rows: 0, cards: 0, excluded: { fantasy_briefing: 2 } });
   });
 
+  it('does not count a player ruled out of tonight as a missing card; a playing player still is (Oct 28 2026)', () => {
+    const out = (id, value) => story({ id, league: 'NBA', category: 'beneficiary', player_id: `9${id}`, game_id: '2002', headline: `Player ${id} is OUT for DAL`, value });
+    const nba = card({ league: 'NBA', player_id: '1' });
+    const report = auditCardCoverage({ date, cards: [nba], signals: ['OUT', 'IR', 'IR-R', 'PUP-R', 'RESERVE-SUS'].map((v, i) => out(i, v)) });
+    expect(report.failures).toEqual([]);
+    expect(report.warnings).toEqual([]);
+    expect(report.rows[0]).toMatchObject({ player_rows: 0, excluded: { ruled_out: 5 } });
+    const playing = auditCardCoverage({ date, cards: [nba], signals: [out(1, 'OUT'), out(2, 'QUESTIONABLE')] });
+    expect(playing.failures[0]).toContain('none of 1 player row(s)');
+  });
+
   it('fails zero reachable coverage even when unrelated cards exist', () => {
     const report = auditCardCoverage({ date, signals: [story()], cards: [card({ player_id: 'unrelated' })] });
     expect(report.failures[0]).toContain('none of 1 player row(s)');

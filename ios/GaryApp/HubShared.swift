@@ -256,6 +256,12 @@ struct Signal: Identifiable {
     /// Live first-pitch park-weather payload (park_weather lane) — temp/wind/lean drive the MLB weather chip + sheet.
     var weather: SwapMeta? = nil
     var fantasy: SwapMeta? = nil   // fantasy-pickup payload (role / tier / ops / opp_sp)
+    /// The row's player is ruled out of tonight's game (OUT, IR, PUP, NFI,
+    /// suspended), so no game card is coming. Matches the server card watch.
+    var isRuledOut: Bool {
+        value.trimmingCharacters(in: .whitespaces).uppercased()
+            .range(of: #"^(OUT|IR|PUP|NFI|RESERVE|SUS)(\b|-)"#, options: .regularExpression) != nil
+    }
     /// Player's field position ("2B", "SS", "LF"…) when the lane is player-backed —
     /// shown on the Insights row beside the matchup. Sourced from meta.position.
     var position: String? = nil

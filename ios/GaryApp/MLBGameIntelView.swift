@@ -804,6 +804,9 @@ struct PlayerCardV4: View {
     var edge: PlayerCardV4Edge? = nil
     /// Where the hit rates open (the Darts table hands its stat, mark and window).
     var logFocus: LogFocus? = nil
+    /// Ruled out of tonight's game (OUT / IR): no breakdown is coming, so the
+    /// card is the story alone, never "check back closer to kickoff".
+    var ruledOut: Bool = false
     @State private var recentExpanded = false   // "Recent" expand toggle (advanced + game stats)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -816,7 +819,7 @@ struct PlayerCardV4: View {
                     ProgressView().tint(PCV4.gold).frame(maxWidth: .infinity).padding(.vertical, 46)
                 } else if let p = pack {
                     sections(p)
-                } else {
+                } else if !ruledOut {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("BUILDING THE BREAKDOWN")
                             .font(PCV4.label).tracking(1).foregroundStyle(PCV4.gold).opacity(0.92)

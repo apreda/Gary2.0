@@ -3,7 +3,7 @@
 export const HUB_LEAGUES = ['MLB', 'NFL', 'NCAAF', 'NBA'];
 // SignalKind.from drops unknown categories before the Hub can route them.
 export const HUB_CATEGORIES = ["streak", "h2h", "head-to-head", "head_to_head", "owned", "h2h_form", "hot", "heat", "heat check", "heat_check", "cold", "cooling", "cooling off", "cooling_off", "injury", "replacement", "beneficiary", "situational", "rest", "fatigue", "rest & fatigue", "rest_fatigue", "platoon", "platoon edge", "platoon_edge", "ballpark", "ballpark shift", "ballpark_shift", "regression", "regression watch", "regression_watch", "regression_tomorrow", "xg_regression", "xg regression", "advancement", "advancement_odds", "advancement odds", "xg_recap", "xg recap", "tournament", "stakes", "group", "tournament_stakes", "gary_hr_threats", "hr_threat", "hr threats", "streaking", "starter_form", "starter_team_record", "team_record", "bullpen_fatigue", "first_inning", "running_game", "park_weather", "fantasy_pickups", "streamers", "pickups", "two_start_week", "two_start", "closer_watch", "return_watch", "cut_list", "trenches", "the_trenches", "ol_dl", "line_play", "line_of_scrimmage", "quarterback", "quarterbacks", "qb", "qb_matchup", "mismatch", "the_mismatch", "pass_rush", "pressure", "pressure_rate", "coverage", "secondary", "coverage_matchup", "pace_script", "pace_and_script", "game_script", "tempo", "red_zone", "red_zone_edge", "red_zone_td", "turnover_edge", "turnovers", "turnover_margin", "explosive_play", "explosive_plays", "explosiveness", "special_teams", "special_teams_edge", "coaching", "coaching_edge", "after_gary", "after gary", "market_range", "market range", "next_slate", "next slate", "practice_report", "practice report", "fantasy_usage", "usage", "usage_role", "snap_share", "target_share", "rush_share", "fantasy_red_zone", "red_zone_role", "goal_line_role", "fantasy_matchup", "player_matchup", "fantasy_trend", "recent_usage", "recent_trend", "nba_stars", "nba_tape"];
-export const SIGNAL_COLUMNS = 'id,date,league,category,player_id,team_id,game_id,headline,meta,generated_by';
+export const SIGNAL_COLUMNS = 'id,date,league,category,player_id,team_id,game_id,headline,value,meta,generated_by';
 export const CARD_COLUMNS = 'id,date,league,player_id,player_name,team_abbr,game_id,payload';
 
 const clean = value => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -89,6 +89,12 @@ export function resolvePlayerCard({ league, slateDate, playerID, playerName, gam
   return { index: matches[0].index, reason: expectedPlayer ? 'player_id' : 'name' };
 }
 
+// A player ruled out of tonight's game has no game card by design: the row
+// opens its own story (Oct 28 2026: NBA injury rows like "Santi Aldama is OUT
+// for DAL" were the only NBA player rows on Oct 21-26, so the watch failed
+// every morning). Questionable, doubtful and practice tags may still play.
+export const ruledOut = value => /^(OUT|IR|PUP|NFI|RESERVE|SUS)(\b|-)/.test(String(value ?? '').trim().toUpperCase());
+
 function ignoredRoute(signal) {
   if (signal.generated_by === 'fantasy_briefing_v1' || signal.meta?.source === 'fantasy_briefing_v1') return 'fantasy_briefing';
   if (leagueKey(signal.league) === 'NCAAF' && signal.meta?.source === 'balldontlie_ncaaf_rankings') return 'ranked_game';
@@ -115,7 +121,7 @@ export function auditCardCoverage({ signals, cards, date, currentDate = date, st
     const leagueSignals = signals.filter(signal => signal.league === league);
     const leagueCards = cards.filter(card => leagueKey(card.league) === league);
     if (!leagueSignals.length && !leagueCards.length) continue;
-    const excluded = { fantasy_briefing: 0, ranked_game: 0, team: 0, empty_headline: 0, unknown_category: 0 };
+    const excluded = { fantasy_briefing: 0, ranked_game: 0, team: 0, empty_headline: 0, unknown_category: 0, ruled_out: 0 };
     const required = [];
     const nameOnly = [];
     for (const signal of leagueSignals) {
@@ -126,6 +132,7 @@ export function auditCardCoverage({ signals, cards, date, currentDate = date, st
       const resolved = resolvePlayerCard({ league, slateDate: signal.date, playerID: signal.player_id,
         playerName: headlinePlayerName(signal.headline), gameID: signal.game_id,
         loadedDate: date, currentDate, candidates });
+      if (resolved.index == null && ruledOut(signal.value)) { excluded.ruled_out += 1; continue; }
       const result = { id: signal.id, category: signal.category, player_id: signal.player_id,
         game_id: signal.game_id, headline: signal.headline, ...resolved };
       if (signal.player_id != null) required.push(result);

@@ -243,7 +243,8 @@ struct PlayerInsightSheet: View {
             pack: pack,
             loading: loading,
             edge: hubEdge,
-            logFocus: logFocus
+            logFocus: logFocus,
+            ruledOut: signal?.isRuledOut ?? false
         )
         .padding(16)
         .background(GaryColors.darkBg.ignoresSafeArea())
