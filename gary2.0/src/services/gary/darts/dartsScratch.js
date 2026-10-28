@@ -1,7 +1,8 @@
 // Scratches: a dart that cannot happen is marked scratched, never replaced or
 // removed. Any dart on a postponed or cancelled game; MLB: the player's club
-// posted its lineup without him; NFL: the injury report has him out.
+// posted its lineup without him; NFL: the injury report has him out; NBA: the league's report has him out.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
+import { latestOfficialReport, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
 import { getMlbSchedule, getConfirmedLineups } from '../../providers/mlbStatsApiService.js';
 import { normName, clubShort } from './dartsCommon.js';
 
@@ -74,16 +75,20 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
   }
   const nba = open.filter((d) => d.league === 'NBA');
   if (nba.length) {
-    // NBA (Oct 19 2026): a player the injury report has out.
-    const injuries = await bdl.getInjuriesGeneric('basketball_nba', {}, 5).catch(() => []);
-    const out = new Map((injuries || []).filter((i) => /^out/i.test(String(i.status || ''))).map((i) => [String(i.player?.id), i.status]));
-    for (const d of nba) {
-      if (!d.player_id) continue;
-      const status = out.get(String(d.player_id));
-      if (status) {
-        await mark(supabase, d.id, String(status).toLowerCase());
+    // NBA: a player the league's latest report has out for this game (Oct 27 2026 bug audit: the stats feed's list came
+    // back one page long, 25 of 127 rows, and in 185 darts none was ever scratched; LeBron James, out at tip on Oct 24,
+    // voided instead). A team that has not filed for the game yet scratches nobody.
+    const report = await latestOfficialReport({ now: new Date(now) }).catch((e) => { log(`  ⚠️ NBA darts scratch: report unavailable (${e.message})`); return null; });
+    const nick = (name) => String(name || '').trim().split(/\s+/).pop().toLowerCase();
+    const day = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
+    for (const d of report ? nba : []) {
+      const rows = report.rows.filter((r) => r.gameDate === day(d.commence_time) && nick(r.team) === nick(d.team));
+      const hit = samePlayerIn(d.player, rows.map((r) => r.name || r.player));
+      const row = hit && rows.find((r) => (r.name || r.player) === hit);
+      if (row?.status === 'Out') {
+        await mark(supabase, d.id, `out (${String(row.reason || '').replace(/^Injury\/Illness - /, '').toLowerCase()})`);
         scratched++;
-        log(`  ✂️  NBA ${d.player} (${d.kind}) scratched: ${status}`);
+        log(`  ✂️  NBA ${d.player} (${d.kind}) scratched: out on the league's report`);
       }
     }
   }

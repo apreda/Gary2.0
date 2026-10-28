@@ -526,7 +526,7 @@ const ballDontLieService = {
         return { ok: false, status: resp.status, body: String(body).slice(0, 400) };
       }
       const json = await resp.json().catch(() => ({}));
-      return { ok: true, data: Array.isArray(json?.data) ? json.data : [] };
+      return { ok: true, data: Array.isArray(json?.data) ? json.data : [], next: json?.meta?.next_cursor ?? null };
     } catch (e) {
       return { ok: false, status: 0, body: e?.message || String(e) };
     }
@@ -542,33 +542,21 @@ const ballDontLieService = {
   async _getInjuriesGenericRaw(sportKey, path, params, ttlMinutes) {
     const cacheKey = `${sportKey}_injuries_${JSON.stringify(params)}`;
     try {
+      // Every page (Oct 27 2026 bug audit: one call returned the feed's first 25 rows, 25 of 127 NBA injuries; the
+      // darts scratch never saw LeBron James out, and a slate-wide list lost most of its players).
       return await getCachedOrFetch(cacheKey, async () => {
-        const sport = this._getSportClient(sportKey);
-        const fn = sport?.getPlayerInjuries || sport?.getInjuries;
-        if (fn) {
-          try {
-            const resp = await fn.call(sport, params);
-            return resp?.data || [];
-          } catch (sdkError) {
-            // Recover the reason the SDK threw away. buildQuery also drops
-            // null/undefined array members, which the SDK crashes on.
-            const detail = await this._fetchInjuriesHttp(path, params);
-            if (detail.ok) return detail.data;
-            throw new Error(
-              `${path} HTTP ${detail.status || sdkError?.status || '?'} ` +
-              `${detail.body || sdkError?.message || '(no response body)'} ` +
-              `[params ${JSON.stringify(params)}]`
-            );
+        const all = [];
+        let cursor = null;
+        for (let page = 0; page < 20; page++) {
+          const got = await this._fetchInjuriesHttp(path, { ...params, per_page: 100, ...(cursor != null ? { cursor } : {}) });
+          if (!got.ok) {
+            throw new Error(`${path} HTTP ${got.status || '?'} ${got.body || '(no response body)'} [params ${JSON.stringify(params)}]`);
           }
+          all.push(...got.data);
+          if (got.next == null) return all;
+          cursor = got.next;
         }
-        const direct = await this._fetchInjuriesHttp(path, params);
-        if (!direct.ok) {
-          throw new Error(
-            `${path} HTTP ${direct.status} ${direct.body || '(no response body)'} ` +
-            `[params ${JSON.stringify(params)}]`
-          );
-        }
-        return direct.data;
+        throw new Error(`${path}: more than 20 pages [params ${JSON.stringify(params)}]`);
       }, ttlMinutes);
     } catch (e) {
       recordPickDataFailure('BDL:getInjuriesGeneric', e);
