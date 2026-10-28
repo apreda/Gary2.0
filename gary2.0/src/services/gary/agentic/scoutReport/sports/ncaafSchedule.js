@@ -746,6 +746,39 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const starts = await Promise.all(sides.map((s) => teamStarters(school(s.atHome ? home : away),
     s.results.map((r) => ({ gameId: r.gameId, date: r.date, opponent: school(teamsById.get(Number(r.opponentId))) })), season).catch(() => new Map())));
 
+  // Each game's usual starters who did not start, for the team and, in its last three games, for the opponent (Oct 28
+  // 2026 data check: Alabama's center and Kansas State's back out, Oregon's leading receiver suspended, all in games
+  // outside a conference report). A usual starter started 60% or more of the team's earlier games with a lineup on file;
+  // it takes two such games. From the official boxes the starting lineups already come from. Quarterbacks and offensive
+  // linemen only: who else "starts" follows the opening formation (a second tight end, a nickel back), not who played.
+  const STEADY = /^(QB|OL|C|G|T|OT|OG|LT|LG|RT|RG)$/i;
+  const usualMissing = (map, gameIds, gameId) => {
+    const that = map?.get(String(gameId));
+    const earlier = gameIds.filter((id) => String(id) !== String(gameId) && map.has(String(id)));
+    if (!that || earlier.length < 2) return null;
+    const count = new Map();
+    for (const id of earlier) for (const p of map.get(String(id))) count.set(p.key, { p, n: (count.get(p.key)?.n || 0) + 1 });
+    const missing = [...count.values()].filter(({ n }) => n >= Math.ceil(earlier.length * 0.6)).map(({ p }) => p)
+      .filter((p) => STEADY.test(String(p.position || '')) && !startedIn(that, p.name));
+    return missing.length ? `${missing.map((p) => `${p.name} (${p.position})`).join(', ')} (each started most of their ${earlier.length} earlier games with a lineup on file)` : null;
+  };
+  const ownMissing = sides.map((s, i) => new Map(s.results.map((r) => {
+    const earlierIds = s.results.filter((x) => new Date(x.date) < new Date(r.date)).map((x) => x.gameId);
+    return [String(r.gameId), usualMissing(starts[i], [...earlierIds, r.gameId], r.gameId)];
+  })));
+  const oppMissing = new Map();
+  await Promise.all(sides.map(async (s, i) => {
+    for (const r of [...s.results].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3)) {
+      const opp = teamsById.get(Number(r.opponentId));
+      if (!opp) continue;
+      const theirs = (await loadTeamResults(SPORT, opp.id, season).catch(() => null))?.filter((x) => new Date(x.date) <= new Date(r.date));
+      if (!theirs?.length) continue;
+      const map = await teamStarters(school(opp), theirs.map((x) => ({ gameId: x.gameId, date: x.date, opponent: school(teamsById.get(Number(x.opponentId))) })), season).catch(() => null);
+      const line = map ? usualMissing(map, theirs.map((x) => x.gameId), r.gameId) : null;
+      if (line) oppMissing.set(`${i}|${r.gameId}`, line);
+    }
+  }));
+
   // Who each side was without on each game day (Oct 24 2026: the college game log never said who was missing, the
   // Bears' blended-season problem in college form): the conferences' report archives, for the team and each opponent.
   const reportDate = game?.commence_time ? new Date(game.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
@@ -793,6 +826,8 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
         + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '')
+        + (ownMissing[i].get(String(r.gameId)) ? `\n      usual starting quarterback or linemen who did not start: ${ownMissing[i].get(String(r.gameId))}` : '')
+        + (oppMissing.get(`${i}|${r.gameId}`) ? `\n      opponent's usual starting quarterback or linemen who did not start: ${oppMissing.get(`${i}|${r.gameId}`)}` : '')
         + weatherLine_(gameWeatherFor(leagueWeather, s.team, r.opponent, r.date));
     }).join('\n')
     : '  no completed games this season'}`).join('\n\n')}

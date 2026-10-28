@@ -269,8 +269,41 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     return opponentOut(g, team, opp?.full_name, opp?.id);
   }));
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
-  const starters = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => (await ballDontLieService.getNbaLineups([g.id]).catch(() => []))
-    .filter((r) => r.starter && r.team?.id === ts.id).map((r) => `${r.player?.first_name} ${r.player?.last_name}`)));
+  const lineups = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaLineups([g.id]).catch(() => [])));
+  const startersOf = (rows, teamId) => rows.filter((r) => r.starter && r.team?.id === teamId).map((r) => `${r.player?.first_name} ${r.player?.last_name}`);
+  const starters = lineups.map((rows) => startersOf(rows, ts.id));
+  // A starter on either side who played under 15 minutes left early or was held back (Oct 28 2026 data check:
+  // Brooklyn's loss to Indiana read without Zubac starting and leaving after seven minutes with an ankle injury).
+  const early = games.slice(0, BOX_GAMES).map((g, i) => {
+    const box = boxes[i];
+    if (!box) return null;
+    const oppId = g.home_team?.id === ts.id ? g.visitor_team?.id : g.home_team?.id;
+    const short = (rows, names, team) => (rows || []).filter((p) => names.includes(p.name) && p.min > 0 && p.min < 15).map((p) => `${p.name} (${team}, ${p.min} min)`);
+    const list = [...short(box, starters[i], box.team), ...short(box.opponent, startersOf(lineups[i], oppId), box.opponent.team)];
+    return list.length ? `      started and played under 15 minutes: ${list.join(', ')}` : null;
+  });
+  // Each team's rest that night (Oct 28 2026 data check: Detroit's win at Philadelphia read without the 76ers on the
+  // second night of a back-to-back). Days off since each one's previous game this season.
+  const dayOf = (g) => Math.round(Date.parse(`${new Date(g.datetime || `${g.date}T16:00:00Z`).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T12:00:00Z`) / 86_400_000);
+  const scheduleOf = new Map();
+  const restLine = async (g, i) => {
+    const home = g.home_team?.id === ts.id;
+    const opp = home ? g.visitor_team : g.home_team;
+    if (!scheduleOf.has(opp.id)) {
+      scheduleOf.set(opp.id, ballDontLieService.getGames('basketball_nba', { team_ids: [opp.id], seasons: [season], per_page: 100, paginateAll: true }).catch(() => null));
+    }
+    const theirs = await scheduleOf.get(opp.id);
+    const words = (prev) => {
+      if (prev === undefined) return 'not on file';
+      if (prev === null) return 'first game of the season';
+      const off = dayOf(g) - dayOf(prev) - 1;
+      return off <= 0 ? 'second night of a back-to-back' : `${off} day${off === 1 ? '' : 's'} off`;
+    };
+    const ourPrev = games[i + 1] || null;
+    const theirPrev = theirs ? (theirs.filter((x) => x.id !== g.id && !x.postseason && dayOf(x) < dayOf(g)).sort((a, b) => dayOf(b) - dayOf(a))[0] || null) : undefined;
+    return `      rest: ${ts.nickname} ${words(ourPrev)}, ${opp.name} ${words(theirPrev)}`;
+  };
+  const rests = await Promise.all(games.slice(0, BOX_GAMES).map((g, i) => restLine(g, i)));
   const advanced = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaAdvancedBox(g.id)));
   const officials = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => {
     const o = await espnTeamBox(g).catch(() => null);
@@ -287,7 +320,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team]) : null;
-    return i < BOX_GAMES ? `${line}\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i])}` : line;
+    return i < BOX_GAMES ? `${line}\n${[rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : line;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

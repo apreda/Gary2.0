@@ -324,7 +324,7 @@ function lineupChanges(d, code, gs) {
     const top = (k, m) => [...tot.values()].filter((t) => t[k] > 0).sort((a, b) => b[k] - a[k]).slice(0, m);
     return new Set([...top('carries', 2), ...top('targets', 4)].map((t) => snapIdOf(t.r)).filter(Boolean));
   };
-  const out = new Map(); out.absent = new Map();
+  const out = new Map(); out.absent = new Map(); out.limited = new Map();
   gs.forEach((g, i) => {
     const prior = gs.slice(0, i);
     const snapRegular = (id) => prior.length > 0 && prior.filter((e) => of(e, id) >= 0.6).length >= Math.ceil(prior.length / 2);
@@ -346,6 +346,9 @@ function lineupChanges(d, code, gs) {
     // Every regular who did not play that day, as an opponent's line reads it: its quarterback first, then whoever had
     // played the most snaps before (an opponent's line names four).
     const snapsBefore = (id) => prior.reduce((a, e) => a + of(e, id), 0);
+    // The regulars who left early or were held to a few snaps, as an opponent's line reads them too (Oct 28 2026 data
+    // check: the 49ers' Week 6 win read without Washington losing McLaurin in the first quarter).
+    out.limited.set(g.g.game_id, limited.map((id) => label(g, id, true)));
     out.absent.set(g.g.game_id, absent.slice().sort((a, b) => (name.get(b).pos === 'QB') - (name.get(a).pos === 'QB') || snapsBefore(b) - snapsBefore(a))
       .map((id) => ({ name: name.get(id).name, pos: posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos, why: why(g, id) })));
     const parts = [
@@ -541,8 +544,11 @@ export function gameByGame(d, team, before) {
     // (Oct 23 2026 data audit: Herbert's 121 yards in Week 5 came against a Denver secondary without Pat Surtain II and
     // Riley Moss).
     const oppGames = teamGames(d, x.opp, d.season, before);
-    const absent = lineupChanges(d, x.opp, oppGames).absent?.get(x.g.game_id) || [];
-    const without = absent.length ? `${nickname(x.opp)} regulars out that day: ${absent.slice(0, 4).map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ')}${absent.length > 4 ? ` and ${absent.length - 4} more` : ''}` : null;
+    const theirs = lineupChanges(d, x.opp, oppGames);
+    const absent = theirs.absent?.get(x.g.game_id) || [];
+    const left = theirs.limited?.get(x.g.game_id) || [];
+    const without = [absent.length ? `${nickname(x.opp)} regulars out that day: ${absent.slice(0, 6).map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ')}${absent.length > 6 ? ` and ${absent.length - 6} more` : ''}` : null,
+      left.length ? `${nickname(x.opp)} regulars who left early or were limited: ${left.join(', ')}` : null].filter(Boolean).join('\n      ') || null;
     // Overtime from the schedule (Oct 23 2026 data audit: Kansas City's 3-point win over Indianapolis read as a
     // regulation win), with the score after four quarters when the quarters are on file.
     const q = quarters(x, c);
