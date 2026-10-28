@@ -378,7 +378,11 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // the game read took, wrong or right; a team can lose while its back runs for 120, and the props read the game for
   // themselves.
 
-  const playersShelf = context.playerStats
+  // The NFL's prop sheets below carry every game of each board player's own line, opponent and snaps; the shelf of
+  // summaries above them repeated them in other windows (five recent games beside the sheets' six) and added labels and
+  // sums of its own (Oct 28 2026 sweep: "Usage: ELITE (L5 21.0 touches/g)" for a back the sheets put at 17.4, "LOW"
+  // usage for a quarterback, a two-game "SPIKE", "Consistency: 81%"), so the NFL reads the sheets alone.
+  const playersShelf = context.playerStats && league !== 'NFL'
     ? `\n\n═══ THE PLAYERS — provider-verified stats for today's board ═══\n${context.playerStats}`
     : '';
 
@@ -404,6 +408,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     if (sheets.text) {
       sheetsBlock = `\n\n${sheets.text}`;
       console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${readBoard.players.size} on the board`);
+    } else {
+      sheetsBlock = "\n\n═══ THE PROP SHEETS ═══\nNot on file: the players' games did not load.";
     }
   }
 
