@@ -15,7 +15,7 @@ bottom-third teams by ESPN's power index stay off the boards. Gary's card seats 
 - **NFL** (`nflBoard.js`, Oct 19 2026): about 110 minutes before the first kickoff he hasn't boarded, he sees every
   picked game still to start, fresh, and names the ones he would bet, in order. `seat_nfl_board` (SQL) seats his top
   two whose pick is on the same side (since Oct 23 2026), 75 minutes before kickoff, after late news.
-- **NBA** (`nbaBoard.js`, from Oct 21 2026): the same look about 50 minutes before the first tip he hasn't boarded,
+- **NBA** (`nbaBoard.js`, from Oct 21 2026): the same look about 110 minutes before the first tip he hasn't boarded (50 until Oct 28 2026, when the picks moved to five hours out),
   each game read the way the NBA pick reads it (`buildNbaBoardEntry` in `nbaRead.js`, Oct 22 2026);
   `seat_nba_board` seats five a night, 28 minutes before tip, spread over the night (Oct 21 2026): the first third of
   tip times can take two, the first two thirds four, the late games the rest. (Oct 20, opening night, seated every NBA pick.)
