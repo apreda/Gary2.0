@@ -46,7 +46,9 @@ function reads() {
       if (!asked || !answered) continue;
       const matchup = (asked.match(/^## THE GAME\s*\n+(.+)$/m) || [])[1]?.trim() || file;
       const kickoff = (asked.match(/^## THE GAME\s*\n+.+\n(.+)$/m) || [])[1]?.trim() || '';
-      const pick = (answered.match(/"final_pick":\s*"([^"]+)"/) || [])[1] || (answered.match(/^#+ .*?(?:pick|side)[^:\n]*:\s*(.+)$/im) || [])[1] || '';
+      // The answer's own first heading when it names the bet alone ("# Hawks -2.5", Oct 28 2026: 5 of 9 read "pick not parsed").
+      const pick = (answered.match(/"final_pick":\s*"([^"]+)"/) || [])[1] || (answered.match(/^#+ .*?(?:pick|side)[^:\n]*:\s*(.+)$/im) || [])[1]
+        || (answered.match(/^#\s+(.+?[+-]\d.*)$/m) || [])[1] || '';
       out.push({ league, file, matchup, kickoff, pick, asked, answered });
     }
   }

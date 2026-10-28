@@ -119,13 +119,16 @@ function whoPlayed(box, others, out, starters, scoring, official) {
   // with 15+ minutes and their points (the top five left out a starter at 24 minutes; Oct 23 2026 audit). Rebounds,
   // assists and turnovers reached Gary only through the news until Oct 27 2026 ("16 Cunningham turnovers", Towns' 14
   // rebounds).
-  const rest = played.slice(8).map((p) => `${p.name} ${p.min}`);
-  const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${p.pts} pts)`);
+  // Foul trouble (Oct 28 2026 read check: Thompson fouled out at New York and Reed had five fouls early in the third,
+  // read as a managed workload and a weak frontcourt).
+  const fouls = (p) => (p.pf >= 6 ? 'fouled out' : p.pf === 5 ? '5 fouls' : null);
+  const rest = played.slice(8).map((p) => `${p.name} ${p.min}${fouls(p) ? ` (${fouls(p)})` : ''}`);
+  const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, fouls(p)].filter(Boolean).join(', ')})`);
   return [`      box: ${boxLine(box, official?.us)} · ${boxLine(box.opponent, official?.them)}`,
     scoring,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
-    `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
+    `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p), fouls(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
     missed.length ? `      did not play: ${missed.join(', ')}` : null,
     theirs.length ? `      theirs with 15+ minutes: ${theirs.join(', ')}` : null,
     out].filter(Boolean).join('\n');

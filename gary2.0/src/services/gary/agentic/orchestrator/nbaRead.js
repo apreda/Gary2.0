@@ -105,7 +105,8 @@ export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = 
 // Which official report the desk read, for who was Out last game and is not listed tonight (the read no longer shows
 // its time, Oct 27 2026). A desk records it ("Official NBA injury report: Oct 22, 5:30 PM ET"); an older desk is matched
 // to the report at or just before the pick whose rows for this game are the desk's own rows.
-const ROW = /^\s*• (.+?) \(([^)]+)\) - /;
+// A player's position, when on file, sits between his name and his status: "• Marcus Smart (G) (Out) - ".
+const ROW = /^\s*• (.+?)(?: \([A-Z]{1,2}(?:-[A-Z]{1,2})?\))? \(([^)]+)\) - /;
 const statusKey = (s) => String(s || '').slice(0, 4).toLowerCase();
 function deskRows(desk) {
   const out = new Map();

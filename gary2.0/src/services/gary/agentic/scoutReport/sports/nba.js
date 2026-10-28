@@ -594,6 +594,9 @@ export async function buildNbaScoutReport(game, options = {}) {
         }
 
         if (playerEntries.length > 0) {
+          // His position, from his own box-score rows (Oct 28 2026 read check: the league's report has none, and Marcus
+          // Smart, a guard, was read as one of Houston's backup bigs).
+          if (!inj.player.position && playerEntries[0].player?.position) inj.player.position = playerEntries[0].player.position;
           // Sort by game date descending to find most recent appearance
           playerEntries.sort((a, b) => {
             const dateA = new Date(a.game?.date || gameDateMap.get(a.game?.id) || 0);
