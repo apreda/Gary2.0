@@ -170,7 +170,10 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
     byPlayer.get(k).markets.push(m);
   }
   const asOf = new Date(game.commence_time);
-  const sheets = (await Promise.all([...byPlayer.values()].map((p) => playerSheet(p, p.markets, asOf).catch(() => null)))).filter(Boolean);
+  // A sheet that fails says so under the player's name (Oct 28 2026 sweep: it dropped him from the sheets while his
+  // markets stayed on the board).
+  const sheets = await Promise.all([...byPlayer.values()].map((p) => playerSheet(p, p.markets, asOf)
+    .catch((e) => `${p.player} (${p.team})\n  This season's games are not on file (${e.message}).`)));
   const sheetsBlock = sheets.length ? `\n\n═══ THE PLAYERS — each one's own games, for the stats his markets settle on ═══\n${sheets.join('\n\n')}` : '';
 
   // Gary's published game pick no longer rides the desk (Oct 27 2026, founder GO; see footballPropsDesk.js).

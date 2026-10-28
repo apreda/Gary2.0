@@ -1075,21 +1075,27 @@ export async function buildNflScoutReport(game, options = {}) {
       for (const r of report.players) { const k = norm(String(r.name || '').trim().split(/\s+/).slice(1).join(' ')); reportLast.set(k, (reportLast.get(k) || 0) + 1); }
       const findListed = (first, last) => byFull.get(`${norm(first)}${norm(last)}`)
         || (byLast.get(norm(last))?.length === 1 && reportLast.get(norm(last)) === 1 ? byLast.get(norm(last))[0] : null);
+      // The week's game statuses come with its final report (the day before a Thursday game, the Friday before a
+      // Sunday one); until then the report carries practice participation only, and a blank status is not "no
+      // designation" (Oct 28 2026 sweep: the night before Panthers-Packers every player read "No game designation",
+      // Golden under a note saying he was listed questionable and Franklin, Phillips and Lewis under "out").
+      const designated = report.players.some((r) => r.game_status);
       for (const raw of report.players) {
         const [first, ...rest] = String(raw.name || '').trim().split(/\s+/);
         if (!first) continue;
         // A player on the report with no game designation is on it too: practiced, expected to play (Oct 27 2026 data
         // check: Jaylon Carlies and Kaden Elliss, back from missed games, practiced fully with no designation and read
         // as "missed the last game, not on this week's injury report").
-        const p = raw.game_status ? raw : { ...raw, game_status: 'No game designation' };
+        const p = raw.game_status || !designated ? raw : { ...raw, game_status: 'No game designation' };
+        const said = `${p.game_status || 'game statuses not issued yet'}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}`;
         const listed = findListed(first, rest.join(' '));
         if (listed) {
-          listed.status = p.game_status; listed.officialStatus = true;
-          listed.comment = `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}. ${listed.comment || ''}`.trim();
+          if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }
+          listed.comment = `Official injury report, Wk ${report.week}: ${said}. ${listed.comment || ''}`.trim();
           continue;
         }
-        list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status,
-          comment: `Official injury report, Wk ${report.week}: ${p.game_status}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}.`,
+        list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status || 'No game status yet',
+          comment: `Official injury report, Wk ${report.week}: ${said}.`,
           freshness: 'FRESH', noteCurrent: true, source: 'NFL official report' });
       }
     }
