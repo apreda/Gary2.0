@@ -77,8 +77,18 @@ const TEST = process.argv[2] === "--test" ? { day: process.argv[3], candidate: N
 async function capture(candidateId) {
   rmSync(WORK, { recursive: true, force: true });
   mkdirSync(WORK, { recursive: true });
+  // A simulator still shutting down or cold (Oct 27 2026: the first try met it shutting down, the second recorded before
+  // the freshly booted app had settled, and the day's two tries were spent): wait out a shutdown, boot, and give a cold
+  // app one warm-up launch before the recorded one.
+  const state = () => (spawnSync("xcrun", ["simctl", "list", "devices"], { encoding: "utf8" }).stdout || "").split("\n").find((l) => l.includes(UDID)) || "";
+  for (let i = 0; i < 30 && /Shutting Down/.test(state()); i++) await sleep(2000);
+  const cold = !/\(Booted\)/.test(state());
   spawnSync("xcrun", ["simctl", "boot", UDID]);
   run("xcrun", ["simctl", "bootstatus", UDID, "-b"]);
+  if (cold) {
+    run("xcrun", ["simctl", "launch", UDID, APP, "-tour.noPrompts", "YES"]);
+    await sleep(20000);
+  }
   spawnSync("xcrun", ["simctl", "status_bar", UDID, "override", "--time", "9:41", "--batteryState", "charged",
     "--batteryLevel", "100", "--cellularBars", "4", "--wifiBars", "3"]);
   spawnSync("xcrun", ["simctl", "terminate", UDID, APP]);
