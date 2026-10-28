@@ -45,6 +45,10 @@ function storedGamePicks(value) {
 export function etDate(value = new Date()) {
   return new Date(value).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
+// Midnight Eastern is 04:00Z under daylight time and 05:00Z under standard time.
+export function easternMidnight(date) {
+  return etDate(`${date}T04:00:00Z`) === date ? `${date}T04:00:00Z` : `${date}T05:00:00Z`;
+}
 export function dateBefore(date, days = 1) {
   const value = new Date(`${date}T12:00:00Z`);
   value.setUTCDate(value.getUTCDate() - days);
@@ -201,6 +205,15 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
   const checks = [];
   const add = (id, status, evidence, details = {}) => checks.push({ id, status, evidence, ...details });
   const fresh = row => Number.isFinite(timestamp(row)) && nowMs - timestamp(row) <= maxAgeHours * HOUR && timestamp(row) <= nowMs + 60_000;
+  // TODAY'S CONTENT IS CURRENT ALL DAY (Oct 28 2026). Content runs twice a day
+  // since Sep 24 (now 5 AM and noon) and an unchanged write-up keeps its old
+  // timestamp, so the eight-hour horizon called a complete board and complete
+  // insights failed nearly every evening near 8 PM, then "recovered" at
+  // midnight: a FAILURE and a RECOVERY email almost every day. The board and
+  // insights pass when written on the Eastern date they cover. A failed run
+  // still reports through content-stages; yesterday's board still fails.
+  const dayStart = Date.parse(easternMidnight(date));
+  const current = row => Number.isFinite(timestamp(row)) && timestamp(row) >= dayStart && timestamp(row) <= nowMs + 60_000;
   for (const [name, error] of Object.entries(errors)) add(`read:${name}`, 'fail', error);
   const slate = rowsOf(data.slate).filter(row => row.date === date && !['cancelled', 'canceled', 'postponed'].includes(String(row.game_status || '').toLowerCase()));
   const board = rowsOf(data.board).find(row => row.date === date);
@@ -217,7 +230,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     // compare against there is no finding to report: say pending and let the
     // existing `slate` warn carry it. A genuine quiet day still reads ok above
     // (fresh board, game_count 0), and a populated slate still fails loudly.
-    const boardStatus = board && fresh(board) && !missing.length ? 'ok'
+    const boardStatus = board && current(board) && !missing.length ? 'ok'
       : !slate.length ? 'pending'
       : 'fail';
     const boardNote = boardStatus === 'pending'
@@ -292,7 +305,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
     // NHL is a picks-only league (Oct 3 2026): it has no insight, card or Wire lane to cover.
     const picksOnly = league === 'NHL';
     if (!errors.insights && !picksOnly) {
-      const recentlyPublished = insights.some(fresh);
+      const recentlyPublished = insights.some(current);
       const revalidated = !recentlyPublished && league === 'NCAAF'
         ? frozenNcaafRankingEvidence({ date, nowMs, insights, games, errors, stageHistory, fresh }) : null;
       const evidence = `${insights.length} rows across ${new Set(insights.map(row => row.game_id).filter(Boolean)).size}/${games.length} games; signal categories are conditional, so every game need not produce a row.`

@@ -44,6 +44,8 @@ if (!schedulerAt || Date.now() - Date.parse(schedulerAt) > 3 * 60000) {
 }
 let health;
 try { health = JSON.parse(read(resolve(logRoot, 'host-health-latest.json'))); } catch { /* unverified */ }
+// A failed or held read hides the checks it feeds; that is not their recovery.
+if ((health?.checks || []).some(c => String(c.id).startsWith('read:'))) complete = false;
 const unresolved = withoutPublishedGameFailures(observations, health, date);
 observations.splice(0, observations.length, ...unresolved);
 observations.push(...healthObservations(health));

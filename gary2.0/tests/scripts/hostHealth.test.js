@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence } from '../../scripts/lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence, holdFirstReadOutage, readOutage } from '../../scripts/lib/hostHealth.js';
 
 describe('host outcome health', () => {
   it('remembers publications across failed reads, accepts a corrected read and resets at Eastern midnight', () => {
@@ -11,6 +11,21 @@ describe('host outcome health', () => {
     expect(publishedGameEvidence(next,outage)).toEqual(outage.published_games);
     expect(publishedGameEvidence({...good,checks:[{id:'picks:NCAAF',published_game_ids:[]}]},outage).leagues.NCAAF.game_ids).toEqual([]);
     expect(publishedGameEvidence({...next,checked_at:'2026-09-20T04:00:00Z'},outage).leagues).toEqual({});
+  });
+  it('holds a first all-reads outage as a warning and reports it when the next check still fails (Oct 28 2026)', () => {
+    const outage = () => [{ id: 'host:internal-disk', status: 'ok' },
+      ...['slate', 'board', 'picks'].map(name => ({ id: `read:${name}`, status: 'fail', evidence: 'fetch failed' }))];
+    const first = outage();
+    expect(holdFirstReadOutage(first, { checks: [{ id: 'board', status: 'ok' }] })).toBe(true);
+    expect(first.filter(c => c.id.startsWith('read:')).map(c => c.status)).toEqual(['warn', 'warn', 'warn']);
+    expect(readOutage({ checks: first })).toBe(true);
+    const second = outage();
+    expect(holdFirstReadOutage(second, { checks: first })).toBe(false);
+    expect(second.filter(c => c.id.startsWith('read:')).map(c => c.status)).toEqual(['fail', 'fail', 'fail']);
+    const one = [{ id: 'read:cards', status: 'fail', evidence: 'HTTP 403' }];
+    expect(holdFirstReadOutage(one, undefined)).toBe(false);
+    expect(one[0].status).toBe('fail');
+    expect(readOutage({ checks: [{ id: 'board', status: 'ok' }] })).toBe(false);
   });
   it('distinguishes dangerously low disk from recovery margin and sufficient space', () => {
     expect([1, 5, 14.9, 15, 100].map(gib => diskHealth(gib * 1024 ** 3).status)).toEqual(['fail', 'warn', 'warn', 'ok', 'ok']);

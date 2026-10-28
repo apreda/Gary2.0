@@ -79,6 +79,19 @@ describe('morning output health', () => {
     data.cards.push({ ...data.cards[0], payload: { card_build: { version: 1, built_at: '2026-09-05T10:30:00Z', team_id: '1', game_complete: false } } });
     expect(check(evaluateMorningHealth({ date, now, data }), 'cards:NCAAF').status).toBe('fail');
   });
+  it('keeps today\'s board and insights current all evening; content runs at 5 AM and noon (Oct 28 2026)', () => {
+    const data = snapshot();
+    data.board[0].updated_at = '2026-09-05T16:00:30Z';
+    data.insights.forEach(row => { row.created_at = row.updated_at = '2026-09-05T09:08:00Z'; });
+    const evening = evaluateMorningHealth({ date, now: '2026-09-06T00:30:00Z', data });
+    expect(check(evening, 'board').status).toBe('ok');
+    expect(check(evening, 'insights:MLB').status).toBe('ok');
+    data.board[0].updated_at = data.insights[0].updated_at = '2026-09-04T16:00:30Z';
+    data.insights[0].created_at = '2026-09-04T16:00:30Z';
+    const yesterday = evaluateMorningHealth({ date, now: '2026-09-05T11:00:00Z', data });
+    expect(check(yesterday, 'board').status).toBe('fail');
+    expect(check(yesterday, 'insights:MLB').status).toBe('fail');
+  });
   it('checks exact board identity, rather than accepting a matching row count', () => {
     const data = snapshot();
     data.board[0].board = [game(99)];
@@ -252,7 +265,8 @@ describe('recovered stage history', () => {
 
 describe('frozen current-day college rankings', () => {
   const lateNow = '2026-09-05T21:00:00Z';
-  const oldPublication = '2026-09-05T10:07:00Z';
+  // Written the evening before (11:07 PM ET): a same-day write is current all day.
+  const oldPublication = '2026-09-05T03:07:00Z';
   function frozenSnapshot() {
     const data = snapshot([game(2, 'NCAAF', '2026-09-05T23:00:00Z')]);
     data.board[0].updated_at = lateNow;

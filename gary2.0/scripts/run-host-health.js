@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
+import { diskHealth, healthSignature, coverageReport, validHealthChecks, publishedGameEvidence, holdFirstReadOutage, readOutage, HOST_CHECK_INTERVAL_MS } from './lib/hostHealth.js';
 
 const cwd = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const destination = resolve(homedir(), 'Library/Logs/Gary2.0/host-health-latest.json');
@@ -20,7 +20,8 @@ try {
 }
 const now = new Date();
 const elapsed = now - Date.parse(previous?.checked_at);
-if (!process.argv.includes('--force') && elapsed >= 0 && elapsed < HOST_CHECK_INTERVAL_MS) process.exit(0);
+// A held read outage is re-checked on the next two-minute watchdog tick.
+if (!process.argv.includes('--force') && !readOutage(previous) && elapsed >= 0 && elapsed < HOST_CHECK_INTERVAL_MS) process.exit(0);
 const checks = [];
 try {
   const disk = statfsSync(cwd);
@@ -35,6 +36,7 @@ let coverage;
 try {
   coverage = coverageReport(read);
   checks.push(...coverage.checks);
+  holdFirstReadOutage(checks, previous);
 } catch {
   checks.push({ id: 'host:coverage-read', status: 'fail', evidence: 'Coverage check did not complete with a valid report (60-second limit)' });
 }

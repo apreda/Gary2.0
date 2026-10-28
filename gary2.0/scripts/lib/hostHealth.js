@@ -36,6 +36,27 @@ export function publishedGameEvidence(report, previous) {
   return { date, leagues };
 }
 
+// Several reads failing together is the Mac's connection, not the tables.
+export function readOutage(report) {
+  return (report?.checks || []).filter(check => String(check?.id).startsWith('read:') && check.status !== 'ok').length >= 2;
+}
+
+// A NETWORK BLIP IS NOT AN INCIDENT (Oct 28 2026). The Mac drops DNS for a
+// minute or two (ENOTFOUND on the Supabase host) and every read fails at once;
+// the report then sat for ten minutes and mailed a FAILURE, then a RECOVERY
+// (10:09 AM Oct 28, 10:12 the collector already reached Supabase again). The
+// first such check is a warning and is re-checked on the next watchdog tick;
+// it becomes a failure only when that next check still cannot read.
+export function holdFirstReadOutage(checks, previous) {
+  if (!readOutage({ checks }) || readOutage(previous)) return false;
+  for (const check of checks) {
+    if (!String(check.id).startsWith('read:') || check.status !== 'fail') continue;
+    check.status = 'warn';
+    check.evidence = `${check.evidence}; first failed check, re-checked on the next watchdog run`;
+  }
+  return true;
+}
+
 export function diskHealth(availableBytes) {
   return {
     id: 'host:internal-disk',
