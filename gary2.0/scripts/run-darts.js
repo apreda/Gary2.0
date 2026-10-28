@@ -13,9 +13,9 @@
  *  2. Fill each new dart's form (his last 10 games for MLB; this season
  *     beside last season for the NFL; the clubs' first-inning scoring).
  *  3. Scratch any dart whose player is not playing (MLB lineup posted
- *     without him, NFL injury report has him out). A scratched dart's spot
- *     is thrown again on a later run (Sep 24 2026): the quota counts the
- *     darts that stand, and a new dart's rank follows the category's last.
+ *     without him, NFL or NBA injury report has him out). The darts are the
+ *     darts (founder, Oct 28 2026): a scratched dart's spot is never thrown
+ *     again, and a short category fills only from markets that had not posted.
  *
  * Usage:
  *   node scripts/run-darts.js                 # the scheduled run
@@ -26,7 +26,7 @@
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, holdsSlot, repeatKey } = await import('../src/services/gary/darts/dartsCommon.js');
+const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, repeatKey } = await import('../src/services/gary/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/gary/darts/mlbDartsBoard.js');
 const { buildNflDartsBoard, nflDartRow } = await import('../src/services/gary/darts/nflDartsBoard.js');
 const { buildNbaDartsBoard, screenNbaCategory, nbaDartRow, NBA_MARKET } = await import('../src/services/gary/darts/nbaDartsBoard.js');
@@ -96,7 +96,7 @@ async function throwLeague(league) {
   const lastRank = {};
   for (const d of existing || []) {
     (used[d.kind] ||= []).push(d.kind === 'first_inning' ? d.game_id : d.player);
-    if (holdsSlot(d)) have[d.kind] = (have[d.kind] || 0) + 1;
+    have[d.kind] = (have[d.kind] || 0) + 1;
     lastRank[d.kind] = Math.max(lastRank[d.kind] || 0, d.rank || 0);
   }
   const most = dartCounts(league, 99, date);
@@ -210,7 +210,7 @@ async function throwLeague(league) {
     const still = Object.fromEntries(owedKinds.map((k) => [k, Math.max(0, owedMin(k) - rows.filter((r) => r.kind === k).length)]));
     const shortBy = Object.values(still).reduce((a, b) => a + b, 0);
     if (dry) { log(`${league}: dry run, ${rows.length} darts not stored${shortBy ? `, still owed ${JSON.stringify(still)}` : ''}${filled ? `, ${filled} by menu order` : ''}`); return; }
-    // A lineup review can add darts while this throw runs (Sep 27 2026: two
+    // Another run can add darts while this throw runs (Sep 27 2026: two
     // #1 interceptions, and a pick lost to a duplicate). Re-read the day just
     // before writing: never past a category's count, no subject twice, ranks
     // after the last one standing.
@@ -221,7 +221,7 @@ async function throwLeague(league) {
     const standingNow = {};
     const rankNow = {};
     for (const d of nowRows || []) {
-      if (holdsSlot(d)) standingNow[d.kind] = (standingNow[d.kind] || 0) + 1;
+      standingNow[d.kind] = (standingNow[d.kind] || 0) + 1;
       rankNow[d.kind] = Math.max(rankNow[d.kind] || 0, d.rank || 0);
     }
     // THE SAME BET ONCE (dartsCommon REPEAT_PAIRS): a dart already on the board stays; between two new

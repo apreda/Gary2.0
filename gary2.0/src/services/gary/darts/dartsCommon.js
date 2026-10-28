@@ -69,12 +69,10 @@ export function dartCounts(league, games, date) {
 // bases then let's just keep it at one of them ... I don't want to replace the one we remove"). An H+R+RBI
 // dart and a total-bases dart on the same player, side and line are one read. The one Gary ranked higher in
 // its own category stays (a tie keeps H+R+RBI, the first tab; a dart already on the board always stays). The
-// other is stored scratched as "repeat of <kind> #<rank>": hidden from the board, never graded or bet, and it
-// still holds its slot so nothing is thrown in its place.
+// other is stored scratched as "repeat of <kind> #<rank>": hidden from the board, never graded or bet, and
+// nothing is thrown in its place.
 export const REPEAT_PAIRS = Object.freeze({ hrr: 'tb', tb: 'hrr' });
 export const isRepeatDart = (d) => /^repeat of /.test(String(d?.scratch_reason || ''));
-/** A dart that occupies one of its category's slots: live, or set aside as a repeat. */
-export const holdsSlot = (d) => !d?.scratched_at || isRepeatDart(d);
 export const repeatKey = (d) => `${normName(d?.player || '')}|${String(d?.bet || '').toLowerCase()}|${String(d?.prop || '').trim().split(/\s+/).pop()}`;
 
 export const FLEX_KINDS = new Set(['hr']);
