@@ -30,11 +30,13 @@ const isCollege = (sport) => sport === 'NCAAF' || sport === 'americanfootball_nc
  * in ("the Bears' first home game since Mike Ditka passed away"). The articles that used to carry them were cut to
  * one side's game plan; the storylines come as dated facts for both teams, with no past seasons and no takes.
  */
+// And what coaches, beat reporters and insiders say about a player in doubt (founder, Oct 28 2026: "what the insiders are
+// saying on the two teams"); a listed status alone says nothing about which way it is leaning.
 const NEWS_DESK_ITEMS = {
-  NFL: 'game-day statuses and inactives, a starting-quarterback decision, late-week practice participation, a player activated, placed on injured reserve, signed, released or traded, a coordinator or play-caller change (with the first game under the new one), and a weather change',
+  NFL: 'game-day statuses and inactives, a starting-quarterback decision, late-week practice participation, a player activated, placed on injured reserve, signed, released or traded, a coordinator or play-caller change (with the first game under the new one), a weather change, and for every player whose playing is in doubt, what his coach said and what beat reporters and league insiders report about whether he plays, with who said it and when',
   // A starter who played hurt, was benched or left the last game (Oct 23 2026 data audit: Arkansas center Caden Kitler
   // played the first half against Tennessee with a foot injury and Kash Courtney played center after; no list has it).
-  NCAAF: 'the latest availability report and game-day statuses, a starting-quarterback decision, a starter who played hurt, was benched or left the team\'s last game, a player suspended, ruled out, returning or leaving the team, a head coach, coordinator or play-caller change (with the first game under the new one), and a weather change',
+  NCAAF: 'the latest availability report and game-day statuses, a starting-quarterback decision, a starter who played hurt, was benched or left the team\'s last game, a player suspended, ruled out, returning or leaving the team, a head coach, coordinator or play-caller change (with the first game under the new one), a weather change, and for every player whose playing is in doubt, what his coach said and what beat reporters and insiders report about whether he plays, with who said it and when',
 };
 const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor named Gary. Gary already has the game below: the line and how it moved, the quarterbacks, the ${isCollege(sport) ? 'availability' : 'injury'} report and both teams' season. Your job is two things.
 
@@ -42,7 +44,7 @@ const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor na
 
 2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason.
 
-Report what happened only: no statistics, no opinions, analysis or predictions from anyone, nothing about betting lines, odds, line moves or betting percentages, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
+Report what happened only: no statistics, no opinions, analysis or predictions from anyone (a coach's or reporter's word on whether a player plays is reporting: keep it, attributed and dated), nothing about betting lines, odds, line moves or betting percentages, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
 
 Return one JSON object:
 {"factor": "The latest news", "findings": "Each item on who plays for both teams, one per line, with its date", "storylines": "Each storyline for both teams, one per line, with its date, or none", "sources": "URL and publication date for each item", "uncertainties": "Conflicting or unconfirmed reports, or none"}

@@ -63,7 +63,10 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
     }
 
     if (isNBA) {
-      searchQueries.push(`${homeTeam} ${awayTeam} NBA game tonight ${today}. Player availability, rest decisions, load management, who is sitting out, who is playing, game-day status, lineup decisions.`);
+      // What the coach and the reporters say about a questionable player (founder, Oct 28 2026: "what the stories are
+      // saying, what the insiders are saying on the two teams, and what the injury report is saying"): the report has
+      // only his status, and the picks run hours before tip.
+      searchQueries.push(`${homeTeam} ${awayTeam} NBA game tonight ${today}. Player availability, rest decisions, load management, who is sitting out, who is playing, game-day status, lineup decisions. For every player listed questionable, doubtful or probable or called a game-time decision: the coach's latest update and what team beat reporters and league insiders are reporting about whether he plays, with who said it and when.`);
       queryLabels.push('AVAILABILITY');
     }
 
@@ -153,10 +156,11 @@ ${footballNarrativeInstructions}
 **TODAY'S MATCHUP NEWS (${today}):**
 - Game preview context: time, broadcast, venue
 - Announcements about who plays tonight (starters, returns, rest)
-- Any breaking news affecting tonight's game
+${isNBA ? `- **UNCERTAIN PLAYERS:** For every player whose playing tonight is in doubt (listed questionable, doubtful or probable, or called a game-time decision): what his coach said and what beat reporters or league insiders have reported about whether he plays, each with who said it and when. Nothing reported: say so for him.
+` : ''}- Any breaking news affecting tonight's game
 
 RULES:
-- Do NOT mention injuries or injury statuses (e.g., "OUT", "questionable", "OFS"). Injury data comes from a dedicated real-time source and is handled separately. EXCEPTIONS: (1) You MAY mention a player RETURNING tonight from absence as a storyline. (2) You MAY mention load management, rest decisions, or DNP-Rest — these game-day decisions do NOT appear on injury reports and are important context.
+${isNBA ? `- Listed injury statuses come from the league's official report, handled separately: don't list who is out or restate a player's listed status. DO report, under UNCERTAIN PLAYERS, what coaches, beat reporters and insiders have said about whether a doubtful player plays; a coach's or reporter's word on that is reporting, not a take. You MAY mention a player RETURNING tonight from absence as a storyline, and load management, rest decisions or DNP-Rest.` : `- Do NOT mention injuries or injury statuses (e.g., "OUT", "questionable", "OFS"). Injury data comes from a dedicated real-time source and is handled separately. EXCEPTIONS: (1) You MAY mention a player RETURNING tonight from absence as a storyline. (2) You MAY mention load management, rest decisions, or DNP-Rest — these game-day decisions do NOT appear on injury reports and are important context.`}
 - Do NOT include ATS records, betting trends, cover percentages, or any against-the-spread statistics.
 - Do NOT include HISTORICAL records or series history (e.g., "Team is 28-49 all-time at...", "first win since 2019", "lost 13 of last 19 trips"). These are descriptive, not predictive.
 - Do NOT include conditional records (e.g., "15-0 when scoring 80+", "2-6 in Quad 1 games"). Focus on HOW they are playing, not won-loss tallies.
