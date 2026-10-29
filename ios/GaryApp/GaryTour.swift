@@ -126,6 +126,12 @@ enum GaryTour {
         case "recelebrate":
             CelebratedWins.clearAll()
             post(verb, arg)
+        case "cashrail":
+            // "cashrail demo" / "cashrail off" — the Cash Rail card replays the
+            // approved mock's game in the marquee slot (CashRailDemo.swift).
+            #if DEBUG
+            Task { @MainActor in if arg == "off" { CashRailDemo.shared.stop() } else { CashRailDemo.shared.start() } }
+            #endif
         case "mock":
             // "mock nfl on" / "mock nfl off" — the sim-only cloned NFL day
             // (GaryMock.swift). Persists across relaunches; relaunch to drop

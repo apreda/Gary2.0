@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */; };
 		9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF06182E7B8C9740E22A012 /* CashRailModel.swift */; };
 		10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4E8CD23C526CD205E10607 /* CashRailCard.swift */; };
 		78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FE63AC8845ADF41948E75E /* CashRailRailView.swift */; };
@@ -169,6 +170,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailDemo.swift; sourceTree = "<group>"; };
 		4AF06182E7B8C9740E22A012 /* CashRailModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailModel.swift; sourceTree = "<group>"; };
 		EF4E8CD23C526CD205E10607 /* CashRailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCard.swift; sourceTree = "<group>"; };
 		52FE63AC8845ADF41948E75E /* CashRailRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailRailView.swift; sourceTree = "<group>"; };
@@ -347,6 +349,7 @@
 		C568940569BDA7093C695587 /* CashRail */ = {
 			isa = PBXGroup;
 			children = (
+				6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */,
 				4AF06182E7B8C9740E22A012 /* CashRailModel.swift */,
 				EF4E8CD23C526CD205E10607 /* CashRailCard.swift */,
 				52FE63AC8845ADF41948E75E /* CashRailRailView.swift */,
@@ -773,6 +776,7 @@
 				3970CDAC01ED5D05D6448664 /* HomeLiveVerdict.swift in Sources */,
 				EB862D1F777BDFF490F421A4 /* HomeMarqueeHero.swift in Sources */,
 				66A58BD776985470ED7F5842 /* HomeMarqueeTracker.swift in Sources */,
+				DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */,
 				9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */,
 				10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */,
 				78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */,

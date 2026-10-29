@@ -58,7 +58,6 @@ struct CashRailCard: View {
                 .stroke(landing ? GaryColors.lightGold : GaryColors.gold.opacity(0.5), lineWidth: 1)
         )
         .shadow(color: GaryColors.gold.opacity(landing ? 0.22 : 0), radius: 17)
-        .animation(reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85), value: board?.hits.map(\.key))
         .onChange(of: hero?.key) { _ in land() }
         .onAppear { heroElapsed = hero?.elapsed }
         .sheet(isPresented: $showSheet) {
@@ -127,6 +126,7 @@ struct CashRailCard: View {
                 .font(CR.bebas(31)).tracking(0.6)
                 .foregroundStyle(home ? GaryColors.gold : CR.ink)
                 .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: score)
                 .frame(minWidth: 30, alignment: .trailing)
             Rectangle().fill(GaryColors.gold)
                 .frame(width: 6, height: 6)
@@ -179,6 +179,41 @@ struct CashRailCard: View {
         }
         .padding(.horizontal, 14)
         .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
+        // Only the hits move: the clock and situation tick every second and
+        // must never cross-fade.
+        .animation(reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85), value: board.hits.map(\.key))
+    }
+}
+
+/// "THURSDAY NIGHT FOOTBALL ········ ● LIVE" above the card.
+struct CashRailLabelRow: View {
+    let title: String
+    let live: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(CR.mute)
+                .fitsOneLine()
+            Spacer(minLength: 8)
+            if live {
+                HStack(spacing: 7) {
+                    Circle().fill(GaryColors.gold).frame(width: 6, height: 6).opacity(dim ? 0.25 : 1)
+                    Text("LIVE")
+                }
+                .foregroundStyle(GaryColors.gold)
+                .onAppear {
+                    guard !reduceMotion else { return }
+                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
+                }
+            } else {
+                Text("FINAL").foregroundStyle(CR.mute)
+            }
+        }
+        .font(CR.sys(10.5, .bold)).tracking(1.68)
+        .padding(.horizontal, 2).padding(.bottom, 9)
     }
 }
 

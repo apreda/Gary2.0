@@ -114,7 +114,31 @@ struct HomeMarqueeTracker: View {
         return "\(cashed)–\(lost) in the big ones"
     }
 
+    #if DEBUG
+    /// Sim-only Cash Rail replay (tour verb `cashrail demo`).
+    @ObservedObject private var cashDemo = CashRailDemo.shared
+    #endif
+
     var body: some View {
+        #if DEBUG
+        if cashDemo.isOn {
+            VStack(spacing: 0) {
+                CashRailLabelRow(title: "THURSDAY NIGHT FOOTBALL", live: cashDemo.board?.status != "final")
+                CashRailCard(awayName: "Panthers", homeName: "Packers", awayAbbr: "CAR", homeAbbr: "GB",
+                             awayScore: cashDemo.away, homeScore: cashDemo.home,
+                             marketLine: cashDemo.marketLine, clockBig: cashDemo.clock,
+                             board: cashDemo.board, onOpenGame: {})
+            }
+            .pageGutter()
+        } else {
+            trackerBody
+        }
+        #else
+        trackerBody
+        #endif
+    }
+
+    @ViewBuilder private var trackerBody: some View {
         // M1 — hero owns the full width; the rest of the day's big ones run
         // as one slim ticker ribbon along the card's bottom (founder-picked
         // over the side rail: shorter card, nothing competing with the hero).
