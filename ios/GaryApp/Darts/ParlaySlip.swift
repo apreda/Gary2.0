@@ -292,11 +292,13 @@ struct CardCloseButton: View {
 /// "PARLAY OF THE DAY · WEDNESDAY".
 struct ParlayEyebrow: View {
     let date: String
+    /// The pop-up ticket's word size; the day grows less than the ticket and never breaks its line.
+    var scale: CGFloat = 1
     var body: some View {
         Text("PARLAY OF THE DAY · \(LabFormat.weekdayWord(date).uppercased())")
-            .font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
+            .font(GaryFonts.ui(10.5 * min(scale, 1.15), .bold)).tracking(1.7)
             .foregroundStyle(GaryColors.gold)
-            .fixedSize(horizontal: false, vertical: true)
+            .fitsOneLine()
     }
 }
 
@@ -326,20 +328,32 @@ struct ParlayTicket: View {
     /// The words' size (founder, Oct 19 2026: "why doesn't it take up the whole container"): the
     /// pop-up passes the largest that fits its card, the Winners recap's way; 1 everywhere else.
     var scale: CGFloat = 1
+    /// The pop-up's ticket IS the card (founder, Oct 28 2026: "it's like a rectangle container
+    /// inside a rectangle container ... can't we just make that the one pop up"): no box of its
+    /// own, its bands run to the card's edges, and `top` (the day, the share button) rides the
+    /// price band.
+    var isCard = false
+    var top: AnyView? = nil
+
+    /// The words' margin: the pop-up card's own 20 when the ticket is the card.
+    private var edge: CGFloat { isCard ? 20 : 14 * scale }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: isCard ? 0 : 14, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(LabFormat.price(slip.american_odds))
-                    .font(GaryFonts.display(37 * scale)).foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit().fixedSize()
-                Spacer(minLength: 8)
-                Text("$10 pays \(LabFormat.dollars(slip.payout_10))")
-                    .font(GaryFonts.ui(12 * scale)).foregroundStyle(TicketInk.muted)
-                    .monospacedDigit().fixedSize()
+            VStack(alignment: .leading, spacing: 10 * scale) {
+                if let top { top }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(LabFormat.price(slip.american_odds))
+                        .font(GaryFonts.display(37 * scale)).foregroundStyle(GaryColors.warmWhite)
+                        .monospacedDigit().fixedSize()
+                    Spacer(minLength: 8)
+                    Text("$10 pays \(LabFormat.dollars(slip.payout_10))")
+                        .font(GaryFonts.ui(12 * scale)).foregroundStyle(TicketInk.muted)
+                        .monospacedDigit().fixedSize()
+                }
             }
-            .padding(.horizontal, 14 * scale).padding(.top, 14 * scale).padding(.bottom, 10 * scale)
+            .padding(.horizontal, edge).padding(.top, 14 * (isCard ? 1 : scale)).padding(.bottom, 10 * scale)
             .background(LinearGradient(colors: [Color(hex: "#0E0C0A"), Color(hex: "#12100D")], startPoint: .top, endPoint: .bottom))
             .overlay(alignment: .bottom) { Rectangle().fill(GaryColors.gold.opacity(0.55)).frame(height: 1) }
 
@@ -362,7 +376,7 @@ struct ParlayTicket: View {
                     Text("— Gary A.I.").font(GaryFonts.hand(19 * scale)).foregroundStyle(GaryColors.lightGold)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14 * scale).padding(.vertical, 12 * scale)
+                .padding(.horizontal, edge).padding(.vertical, 12 * scale)
             }
 
             if fills { Spacer(minLength: 0) }
@@ -373,12 +387,12 @@ struct ParlayTicket: View {
                 Text(footCount).foregroundStyle(TicketInk.faint).monospacedDigit()
             }
             .font(GaryFonts.ui(11 * scale, .bold)).tracking(1.5 * scale)
-            .padding(.horizontal, 14 * scale).padding(.vertical, 10 * scale)
+            .padding(.horizontal, edge).padding(.vertical, 10 * scale)
             .background(TicketInk.band)
         }
         .background(GaryColors.cardBg)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(GaryColors.gold.opacity(0.3), lineWidth: 1))
+        .overlay(shape.strokeBorder(GaryColors.gold.opacity(isCard ? 0 : 0.3), lineWidth: 1))
     }
 
     private func legRow(_ leg: ParlayLeg) -> some View {
@@ -393,7 +407,7 @@ struct ParlayTicket: View {
             Text(LabFormat.price(leg.odds)).font(GaryFonts.ui(13 * scale)).foregroundStyle(TicketInk.muted)
                 .monospacedDigit().fixedSize()
         }
-        .padding(.horizontal, 14 * scale).padding(.vertical, 11 * scale)
+        .padding(.horizontal, edge).padding(.vertical, 11 * scale)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

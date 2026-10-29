@@ -317,33 +317,34 @@ struct ParlayPopupPage: View {
     @State private var share: PickShareItem?
 
     /// The ticket fills the card, words and all (founder, Oct 19 2026: "why doesn't it take up the
-    /// whole container there's a massive space at the bottom"): the largest word size whose ticket
-    /// fits the card without scrolling, measured the Winners recap's way; only what a step leaves
-    /// sits above the foot band. A ticket too long for the card keeps the base size and scrolls (a
-    /// scroll view never hands its content the card's height on iOS, so a fitting ticket has none).
-    private static let fillScales: [CGFloat] = [1.6, 1.52, 1.44, 1.36, 1.28, 1.2, 1.12, 1.06, 1]
+    /// whole container there's a massive space at the bottom"; Oct 28: "everything could just be
+    /// bigger and fill it"): the largest word size whose ticket fits the card without scrolling,
+    /// measured the Winners recap's way, in steps fine enough that little sits above the foot band.
+    /// A ticket too long for the card keeps the base size and scrolls (a scroll view never hands
+    /// its content the card's height on iOS, so a fitting ticket has none).
+    private static let fillScales: [CGFloat] = (0...30).map { 1.6 - CGFloat($0) * 0.02 }
 
     var body: some View {
         ViewThatFits(in: .vertical) {
-            ForEach(Self.fillScales, id: \.self) { k in
-                VStack(alignment: .leading, spacing: 14) { page(fills: true, scale: k) }
-                    .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 32)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            FeatureSheetPage { page(fills: false, scale: 1) }
+            ForEach(Self.fillScales, id: \.self) { k in ticket(fills: true, scale: k) }
+            ScrollView(showsIndicators: false) { ticket(fills: false, scale: 1) }
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .sheet(item: $share) { ActivityShareSheet(items: $0.images) }
     }
 
-    @ViewBuilder private func page(fills: Bool, scale: CGFloat) -> some View {
+    private func ticket(fills: Bool, scale: CGFloat) -> some View {
+        ParlayTicket(slip: slip, onLeg: onLeg, fills: fills, scale: scale, isCard: true, top: AnyView(top(scale)))
+    }
+
+    private func top(_ scale: CGFloat) -> some View {
         HStack(alignment: .center) {
-            ParlayEyebrow(date: slip.date)
+            ParlayEyebrow(date: slip.date, scale: scale)
             Spacer(minLength: 8)
             if shareable {
                 Button { share = renderParlayShareImage(slip).map { PickShareItem(images: [$0]) } } label: {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(GaryColors.gold)
+                        .font(.system(size: 15 * min(scale, 1.2), weight: .semibold)).foregroundStyle(GaryColors.gold)
                         .frame(width: 32, height: 28).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -351,7 +352,6 @@ struct ParlayPopupPage: View {
             }
         }
         .padding(.trailing, 36) // the card's X
-        ParlayTicket(slip: slip, onLeg: onLeg, fills: fills, scale: scale)
     }
 }
 
