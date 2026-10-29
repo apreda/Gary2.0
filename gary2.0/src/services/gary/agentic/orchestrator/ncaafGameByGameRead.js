@@ -12,7 +12,8 @@ import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskT
 import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
-import { getNcaafGameBox, getNcaafRosterPositions } from '../scoutReport/sports/ncaafGameBox.js';
+import { ncaafSeason } from '../../../../utils/dateUtils.js';
+import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
@@ -57,7 +58,8 @@ const result = (g) => `${g.us.score > g.them.score ? 'W' : 'L'} ${g.us.score}-${
 // on the roster is shown without one. "started" from the official box's lineup (Oct 27 2026 data loop), when a school
 // posts it: null `starters` is a game with no lineup on file.
 function playerLines(box, teamId, positions = {}, starters = null) {
-  const ps = (box.players || []).filter((p) => p.teamId === String(teamId));
+  // ESPN's "Team" row is the team's own plays (kneel-downs, spikes, a botched snap), not a player (Oct 29 2026 hunt).
+  const ps = (box.players || []).filter((p) => p.teamId === String(teamId) && !/^team$/i.test(String(p.name || '').trim()));
   const s = (p, c, k) => p.stats?.[c]?.[k];
   // The starters the box counts nothing for (the offensive line, mostly) are named after, so every game's lineup is whole.
   const lined = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions') || s(p, 'defensive', 'totalTackles')
@@ -71,12 +73,17 @@ function playerLines(box, teamId, positions = {}, starters = null) {
       s(p, 'rushing', 'rushingAttempts') ? `${plural(s(p, 'rushing', 'rushingAttempts'), 'carry', 'carries')} ${s(p, 'rushing', 'rushingYards')} yds${s(p, 'rushing', 'rushingTouchdowns') ? ` ${s(p, 'rushing', 'rushingTouchdowns')} TD` : ''}` : null,
       s(p, 'receiving', 'receptions') ? `${plural(s(p, 'receiving', 'receptions'), 'catch', 'catches')} ${s(p, 'receiving', 'receivingYards')} yds${s(p, 'receiving', 'receivingTouchdowns') ? ` ${s(p, 'receiving', 'receivingTouchdowns')} TD` : ''}` : null,
       s(p, 'fumbles', 'fumblesLost') ? `${plural(s(p, 'fumbles', 'fumblesLost'), 'fumble')} lost` : null].filter(Boolean).join(', ')}`);
-  const def = ps.filter((p) => s(p, 'defensive', 'totalTackles') || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'))
-    .sort((a, b) => (s(b, 'defensive', 'totalTackles') || 0) - (s(a, 'defensive', 'totalTackles') || 0))
+  // Under defense only defenders: an offensive player's or a specialist's tackle (after a turnover, on a return) is listed
+  // apart, as the NFL second system does (Oct 29 2026 hunt: Kansas's quarterback and a guard read as defenders).
+  const offensive = (p) => /^(QB|RB|FB|WR|TE|OL|OT|OG|OC|C|G|T|IOL|PK|K|P|LS)$/i.test(String(positions[p.id] || '')) || unit(p) === 'offense';
+  const defRows = ps.filter((p) => s(p, 'defensive', 'totalTackles') || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'));
+  const defLine = (list) => list.sort((a, b) => (s(b, 'defensive', 'totalTackles') || 0) - (s(a, 'defensive', 'totalTackles') || 0))
     .map((p) => `    ${who(p)} ${[s(p, 'defensive', 'totalTackles') ? plural(s(p, 'defensive', 'totalTackles'), 'tackle') : null, s(p, 'defensive', 'tacklesForLoss') ? `${s(p, 'defensive', 'tacklesForLoss')} for loss` : null,
       s(p, 'defensive', 'sacks') ? plural(s(p, 'defensive', 'sacks'), 'sack') : null, s(p, 'defensive', 'hurries') ? plural(s(p, 'defensive', 'hurries'), 'hurry', 'hurries') : null,
       s(p, 'interceptions', 'interceptions') ? `${s(p, 'interceptions', 'interceptions')} INT` : null, s(p, 'defensive', 'passesDefended') ? plural(s(p, 'defensive', 'passesDefended'), 'pass defended', 'passes defended') : null,
       s(p, 'fumbles', 'fumblesRecovered') ? plural(s(p, 'fumbles', 'fumblesRecovered'), 'fumble recovery', 'fumble recoveries') : null].filter(Boolean).join(', ')}`);
+  const def = defLine(defRows.filter((p) => !offensive(p)));
+  const otherTackles = defLine(defRows.filter(offensive)).map((x) => x.trim());
   // Every field goal try's distance, as the live read gives them (founder, Oct 24 2026: "FG 0-of-2" needs the 32 and
   // the 55 behind it); the tries come from the play-by-play, a team's own kicker's when it used one.
   const tries = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
@@ -94,7 +101,7 @@ function playerLines(box, teamId, positions = {}, starters = null) {
       s(p, 'kicking', 'extraPointAttempts') ? `XP ${s(p, 'kicking', 'extraPointsMade')}-of-${s(p, 'kicking', 'extraPointAttempts')}` : null,
       s(p, 'punting', 'punts') ? `${plural(s(p, 'punting', 'punts'), 'punt')} for ${s(p, 'punting', 'puntYards')} yds, ${s(p, 'punting', 'puntsInside20') || 0} inside the 20` : null].filter(Boolean).join(', ')}`);
   const quiet = lineup ? lineup.unmatched.map((x) => `${x.name}${x.position ? ` (${x.position})` : ''}`) : null;
-  return { off, def, kick, quiet, onFile: ps.length > 0 };
+  return { off, def, otherTackles, kick, quiet, onFile: ps.length > 0 };
 }
 
 async function fullGame(g, season, tonight) {
@@ -105,7 +112,7 @@ async function fullGame(g, season, tonight) {
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   const scores = (box.scoring || []).map((p) => `${p.period ? `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}` : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
-  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; const by = new Map(); for (const d of ds) by.set(d.result, (by.get(d.result) || 0) + 1); return `${short} ${ds.length} (${[...by].map(([r, k]) => `${k} ${String(r || 'other').toLowerCase()}`).join(', ')})`; };
+  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})`; };
   const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
@@ -121,6 +128,7 @@ async function fullGame(g, season, tonight) {
     lines.push(`  ${side.name}:${p.onFile ? '' : ' player lines not on file'}`);
     if (p.off.length) lines.push('   offense', ...p.off);
     if (p.def.length) lines.push('   defense', ...p.def);
+    if (p.otherTackles.length) lines.push(`   tackles by offensive players and specialists: ${p.otherTackles.join('; ')}`);
     if (p.kick.length) lines.push(`   kicking and punting: ${p.kick.join('; ')}`);
     lines.push(`   ${p.quiet ? `starters with no stat line: ${p.quiet.join(', ') || 'none'}` : 'starting lineup: not on file'}`);
   }
@@ -131,10 +139,14 @@ async function fullGame(g, season, tonight) {
   return lines.join('\n');
 }
 
+// The live read's pointer to its own section, bracketed or bare (Oct 29 2026 hunt: the bare form stayed).
+const UNDER_OFFENSE = /(\(?)game by game under CARRIES AND CATCHES, GAME BY GAME(\)?)/g;
+
 /** The game as the second system shows it. `news` is the live read's news for the same game. */
 export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, gameDate, commenceTime, asOf = new Date(), season, news = '' } = {}) {
   const tonight = commenceTime || new Date(asOf).toISOString();
-  const yr = season || new Date(tonight).getUTCFullYear();
+  // The season the game falls in, not its UTC year (Oct 29 2026 hunt: January bowls are last year's season).
+  const yr = season || ncaafSeason(new Date(tonight));
   const event = await findEspnCollegeEvent({ date: gameDate, homeTeam, awayTeam, commenceTime }).catch(() => null);
   const homeId = event?.homeTeamId || '', awayId = event?.awayTeamId || '';
   const tonightPart = ['TONIGHT',
@@ -142,8 +154,8 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
     // Season totals leave the report's lines (the games are below, game by game).
     // The desk points its regulars to the live read's own game-by-game section; here their games are below (Oct 27 2026
     // data loop: "game by game under CARRIES AND CATCHES, GAME BY GAME" named a section this read doesn't have).
-    `THE AVAILABILITY REPORT\n${String(availabilityReport(desk)).replace(/;\s*season:[^\n]*/g, '').replace(/\(game by game under CARRIES AND CATCHES, GAME BY GAME\)/g, '(in the games below)')}`,
-    `REGULARS WITH NO STAT ROW IN THE LAST GAME\n${String(afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))).replace(/;\s*season:[^\n]*/g, '')}`,
+    `THE AVAILABILITY REPORT\n${String(availabilityReport(desk)).replace(/;\s*season:[^\n]*/g, '').replace(UNDER_OFFENSE, '$1in the games below$2')}`,
+    `REGULARS WITH NO STAT ROW IN THE LAST GAME\n${String(afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))).replace(/;\s*season:[^\n]*/g, '').replace(UNDER_OFFENSE, '$1in the games below$2')}`,
     `SCHEDULE, TRAVEL AND WEATHER\n${situation(desk)}`].join('\n\n');
   if (!homeId || !awayId) {
     return { line: lineOf(desk), story: [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart, 'THE GAMES: not on file (ESPN has no event for this game)'].join('\n\n'), news };

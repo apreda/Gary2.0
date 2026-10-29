@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -390,7 +390,10 @@ async function playerGames(sides, boxes) {
         const sum = (k) => rs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
         const fga = sum('field_goal_attempts'), xpa = sum('extra_point_attempts');
         // Each try's distance when the play-by-play has them all (made 26, 29; missed 32, 55; blocked 41).
-        const tries = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
+        // A try told only as its return names no kicker: it is the one kicker's when the team used one that day.
+        const raw = (box.fieldGoals || []).filter((f) => f.teamId === String(teamId));
+        const named = [...new Set(raw.map((f) => f.kicker).filter(Boolean))];
+        const tries = raw.map((f) => (!f.kicker && named.length === 1 ? { ...f, kicker: named[0] } : f));
         const yards = (list) => list.map((f) => f.yards ?? '?').join(', ');
         const split = (list) => [['made', list.filter((f) => f.made)], ['missed', list.filter((f) => !f.made && !f.blocked)], ['blocked', list.filter((f) => f.blocked)]]
           .filter(([, l]) => l.length).map(([word, l]) => `${word} ${yards(l)}`).join('; ');
@@ -403,16 +406,11 @@ async function playerGames(sides, boxes) {
         return fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks';
       };
       // How the drives ended, and the ones that began in the other team's half with how they ended.
-      const WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 'BLOCKED FG': 'blocked FG', PUNT: 'punt', 'BLOCKED PUNT': 'blocked punt',
-        INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', 'INT TD': 'interception returned for a TD',
-        'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD',
-        'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD' };
       const driveLine = (teamId) => {
         const ds = (box.drives || []).filter((d) => d.teamId === String(teamId));
         if (!ds.length) return null;
         const counted = ds.filter((d) => !/^END OF/.test(d.result));
-        const tally = (list) => [...list.reduce((m, d) => m.set(WORD[d.result] || d.result.toLowerCase(), (m.get(WORD[d.result] || d.result.toLowerCase()) || 0) + 1), new Map())]
-          .map(([w, n]) => `${n} ${w}${n > 1 && !/on downs|TD$|FG$/.test(w) ? 's' : ''}`).join(', ');
+        const tally = (list) => ncaafDriveTally(list.map((d) => d.result));
         const short = counted.filter((d) => d.oppHalf);
         const ended = ds.length - counted.length;
         return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;

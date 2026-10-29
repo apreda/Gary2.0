@@ -83,7 +83,11 @@ function quarterbackSectionLines(desk) {
     // the report says it per team.
     if (/^Availability source:/.test(l)) { out.push({ team, kind: 'source', text: l.replace(/ Empty list means no absences reported by these sources, not confirmed healthy\.$/, '') }); continue; }
     if (/^(?:Quarterback|head coach|offensive coordinator|defensive coordinator|co-offensive coordinator|co-defensive coordinator|offensive play caller|defensive play caller|play caller):/i.test(l)) {
-      out.push({ team, kind: 'role', text: l }); continue;
+      // Without the researcher's notes on its own retrieval (Oct 29 2026 hunt: Ohio State's quarterback line said the
+      // availability report "could not be successfully retrieved; injuries [] means unavailable information" over the
+      // report the read prints in full).
+      const text = l.split(/(?<=[.!?])\s+/).filter((x) => !/could not be (?:successfully )?(?:retrieved|accessed|loaded)|\binjuries \[\]|\[\] means/i.test(x)).join(' ').trim();
+      out.push({ team, kind: 'role', text }); continue;
     }
     // A context note about another season, a former player, a scheme or game plan, or someone's assessment leaves (Oct 23
     // 2026 audit: "Elliott described Duke as structurally similar to last season", "credited Duke's protection" carried a

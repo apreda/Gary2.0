@@ -74,9 +74,14 @@ export function gameBoxFromSummary(summary, eventId) {
       const type = String(play?.type?.text || '');
       if (!/field goal/i.test(type)) continue;
       const text = String(play?.text || '');
-      const yards = num(text.match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
+      // A blocked or missed kick's return is told as the return ("Donovan Dunmore 55 Yd Return of Blocked Field Goal"):
+      // no kicker in it, and its yards are the return's; the try's distance is then from the line of scrimmage (Oct 29
+      // 2026 hunt: Eastern Michigan's blocked try read as a kicker "o.Blocked" from 55).
+      const returned = /\breturn\b/i.test(text);
+      const fromLine = Number.isFinite(Number(play?.start?.yardsToEndzone)) ? Number(play.start.yardsToEndzone) + 17 : null;
+      const yards = returned ? fromLine : num(text.match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
       // Who kicked it (founder, Oct 24 2026: a miss says nothing about today if someone else kicks today).
-      const named = (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:yd|yards?)\s+)?field goal/i)?.[1] || '').trim();
+      const named = returned ? '' : (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:[Yy][Dd][Ss]?|yards?)\s+)?[Ff]ield [Gg]oal/)?.[1] || '').trim();
       // One spelling per kicker: ESPN writes both "D.Kelly" and "Dieter Kelly" in one game.
       const parts = named.split(/\s+/);
       const kicker = !named ? null : parts.length > 1 && !named.includes('.') ? `${parts[0][0]}.${parts.slice(1).join(' ')}` : named;
@@ -131,7 +136,7 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v9:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v10:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -280,4 +285,18 @@ export function pointsByKind(box) {
 export function kindsInWords(kinds) {
   const words = ORDER.filter((k) => kinds.get(k)).map((k) => (kinds.get(k) === 1 ? `1 ${k}` : `${kinds.get(k)} ${PLURAL[k] || `${k}s`}`));
   return words.length ? words.join(', ') : 'no points';
+}
+
+// ESPN's drive results in words, for both reads (Oct 29 2026 hunt: "1 sf" and "1 punt td" reached Gary as codes).
+export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 'BLOCKED FG': 'blocked FG', PUNT: 'punt', 'BLOCKED PUNT': 'blocked punt',
+  INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', SF: 'safety', 'INT TD': 'interception returned for a TD',
+  'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD', 'PUNT TD': 'punt returned for a TD',
+  'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
+  'END OF HALF': 'end of half', 'END OF GAME': 'end of game' };
+export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
+/** Drive results counted in words: "6 punts, 1 safety, 3 on downs, 1 TD". */
+export function ncaafDriveTally(results) {
+  const counts = new Map();
+  for (const r of results) { const w = ncaafDriveWord(r); counts.set(w, (counts.get(w) || 0) + 1); }
+  return [...counts].map(([w, n]) => `${n} ${n === 1 || /on downs|TD$|FG$|^end of/.test(w) ? w : w === 'safety' ? 'safeties' : `${w}s`}`).join(', ');
 }
