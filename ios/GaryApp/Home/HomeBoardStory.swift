@@ -39,17 +39,22 @@ struct HomeBoardStory {
     }
 }
 
-/// The lifted story (mock F): the card raised off the board and the two choices under it. The board
-/// dims and blurs behind it (HomeSheetPanel); a tap on the board outside puts it back.
+/// The lifted story (mock F): the card raised off the board and the two choices under it. The board steps
+/// back behind it but stays live (HomeSheetPanel); a tap on the card puts it back.
 struct HomeBoardStoryPeek: View {
     let row: HomeSheetRow
     let story: HomeBoardStory
     let onPickCard: () -> Void
+    let onClose: () -> Void
     @State private var shareItem: PickShareItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HomeBoardStoryCard(row: row, story: story)
+                .contentShape(Rectangle())
+                .onTapGesture { onClose() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Closes the story")
                 .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(hex: "#12100D")))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .strokeBorder(GaryColors.gold.opacity(0.6), lineWidth: 1))

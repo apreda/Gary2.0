@@ -124,8 +124,10 @@ struct HomeSheetPanel<YouScorecard: View>: View {
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                 Button {
                     // A finished game with a story lifts it (founder, Oct 29 2026: the pick card is a choice under
-                    // it now, not the default). Every other row still opens its card.
-                    if r.story != nil { lift(r); return }
+                    // it now, not the default). With one up, another game swaps straight in ("they could literally
+                    // just check each game as they go down"). Every other row still opens its card.
+                    if r.story != nil { lifted?.id == r.id ? close() : lift(r); return }
+                    close()
                     guard !r.matchupFull.isEmpty else { return }
                     onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
                 } label: {
@@ -157,8 +159,9 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                     .padding(.horizontal, 14).padding(.vertical, 12)
             }
         }
-        // The board under a lifted story blurs and dims (mock F); the rest of Home stays as it is.
-        .blur(radius: lifted == nil ? 0 : 5)
+        // The board under a lifted story steps back but stays readable and live, so the next game is one tap
+        // away (founder, Oct 29 2026: "if it wasn't so blurred they could literally just check each game").
+        .opacity(lifted == nil ? 1 : 0.42)
         .padding(.vertical, 3)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.board = $0 }
         .background(
@@ -185,24 +188,14 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
                 .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
         )
-        .overlay {
-            if lifted != nil {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: "#080706").opacity(0.62))
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .onTapGesture { close() }
-                    .accessibilityLabel("Close the story")
-                    .accessibilityAddTraits(.isButton)
-                    .transition(.opacity)
-            }
-        }
         .overlay(alignment: .top) {
             if let lifted, let r = rows.first(where: { $0.id == lifted.id }), let story = r.story {
                 HomeBoardStoryPeek(row: r, story: story, onPickCard: {
                     close()
                     guard !r.matchupFull.isEmpty else { return }
                     onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
-                })
+                }, onClose: close)
+                .id(r.id)
                 .padding(.horizontal, 10)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { peekHeight = $0 }
                 .offset(y: peekTop(lifted))
