@@ -70,6 +70,25 @@ export const MLB = {
   "Nationals": ["#AB0003", "#14225A", "red and navy"],
 };
 
+// NBA club colors (Oct 29 2026, for the stat desk's rankings card).
+export const NBA = {
+  "Hawks": ["#E03A3E", "#26282A", "red and charcoal"], "Celtics": ["#007A33", "#BA9653", "green and gold"],
+  "Nets": ["#000000", "#FFFFFF", "black and white"], "Hornets": ["#1D1160", "#00788C", "purple and teal"],
+  "Bulls": ["#CE1141", "#000000", "red and black"], "Cavaliers": ["#860038", "#FDBB30", "wine and gold"],
+  "Mavericks": ["#00538C", "#002B5E", "royal blue and navy"], "Nuggets": ["#0E2240", "#FEC524", "navy and gold"],
+  "Pistons": ["#C8102E", "#1D42BA", "red and royal blue"], "Warriors": ["#1D428A", "#FFC72C", "royal blue and gold"],
+  "Rockets": ["#CE1141", "#000000", "red and black"], "Pacers": ["#002D62", "#FDBB30", "navy and gold"],
+  "Clippers": ["#C8102E", "#1D428A", "red and blue"], "Lakers": ["#552583", "#FDB927", "purple and gold"],
+  "Grizzlies": ["#5D76A9", "#12173F", "blue and navy"], "Heat": ["#98002E", "#F9A01B", "red and yellow"],
+  "Bucks": ["#00471B", "#EEE1C6", "green and cream"], "Timberwolves": ["#0C2340", "#236192", "navy and blue"],
+  "Pelicans": ["#0C2340", "#C8102E", "navy and red"], "Knicks": ["#006BB6", "#F58426", "blue and orange"],
+  "Thunder": ["#007AC1", "#EF3B24", "blue and orange"], "Magic": ["#0077C0", "#000000", "blue and black"],
+  "76ers": ["#006BB6", "#ED174C", "blue and red"], "Suns": ["#1D1160", "#E56020", "purple and orange"],
+  "Trail Blazers": ["#E03A3E", "#000000", "red and black"], "Kings": ["#5A2D81", "#63727A", "purple and gray"],
+  "Spurs": ["#000000", "#C4CED4", "black and silver"], "Raptors": ["#CE1141", "#000000", "red and black"],
+  "Jazz": ["#002B5C", "#F9A01B", "navy and yellow"], "Wizards": ["#002B5C", "#E31837", "navy and red"],
+};
+
 // Teams without a table entry (most of college football) print in Gary's brass and a deep navy.
 const FALLBACK = [["#9C7A1C", "#2B2620", "gold and charcoal"], ["#14243F", "#8A93A0", "navy and slate"]];
 
@@ -77,8 +96,8 @@ const SHORT = { "Buccaneers": "Bucs" };
 
 /** The nickname a name ends in ("Tampa Bay Buccaneers" → "Buccaneers"), or the name itself. */
 export function nickname(name, league) {
-  const table = league === "NFL" ? NFL : league === "MLB" ? MLB : {};
-  for (const key of ["Red Sox", "White Sox", "Blue Jays"]) if (table[key] && name.includes(key)) return key;
+  const table = league === "NFL" ? NFL : league === "MLB" ? MLB : league === "NBA" ? NBA : {};
+  for (const key of ["Red Sox", "White Sox", "Blue Jays", "Trail Blazers"]) if (table[key] && name.includes(key)) return key;
   return Object.keys(table).find((k) => name.includes(k)) || name;
 }
 
@@ -86,7 +105,7 @@ export function nickname(name, league) {
 export const shortName = (name, league) => SHORT[nickname(name, league)] || nickname(name, league);
 
 export function colors(name, league, side = 0) {
-  const table = league === "NFL" ? NFL : league === "MLB" ? MLB : {};
+  const table = league === "NFL" ? NFL : league === "MLB" ? MLB : league === "NBA" ? NBA : {};
   const hit = table[nickname(name, league)];
   const [primary, secondary, words] = hit || FALLBACK[side];
   return { primary, secondary, words, known: Boolean(hit) };

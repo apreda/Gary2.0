@@ -3,6 +3,8 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { socialRunHealth } from "./health.js";
 import { composeFreePickPost } from "./gamePickHook.ts";
+import { shortTeam, startWords } from "./teamWords.ts";
+import { runStatDesk } from "./statDesk.ts";
 
 // social-auto-post — the scheduled @BetwithGary poster: the day's free pick, plus the metrics refresh.
 //
@@ -18,8 +20,11 @@ import { composeFreePickPost } from "./gamePickHook.ts";
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
 // personality post were removed on Sep 29 2026; git history keeps them.
 //
+// Oct 29 2026: the stat desk (statDesk.ts) adds three or four posts a day that are not picks: last night's best
+// box-score line and facts about today's games from the app's insights.
+//
 // Cron: every 5 min (gary_ops.enqueue_social). Query params: ?dry_run=1 (compose, don't post or log),
-// ?metrics_only=1. The response keeps the service/health contract gary_ops' failure monitor reads.
+// ?stat_slot=<slot> (with dry_run: compose that stat slot now), ?metrics_only=1. The response keeps the service/health contract gary_ops' failure monitor reads.
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -149,17 +154,6 @@ export function ticketWords(sp: any): string {
   return String(sp?.pick_text ?? "").replace(/\s+[+-]\d{3,4}\s*$/, "").trim();
 }
 
-// Two-word nicknames; every other pro nickname is the team name's last word.
-const TWO_WORD_NAMES = new Set(["white sox", "red sox", "blue jays", "trail blazers", "maple leafs", "golden knights", "blue jackets", "red wings"]);
-
-/** A pro team's nickname ("Chicago White Sox" -> "White Sox"); a college team keeps its full name. */
-function shortTeam(team: string, league: string): string {
-  const words = String(team ?? "").trim().split(/\s+/);
-  if (/NCAA/i.test(league) || words.length < 2) return words.join(" ");
-  const two = words.slice(-2).join(" ");
-  return TWO_WORD_NAMES.has(two.toLowerCase()) ? two : words[words.length - 1];
-}
-
 /** "White Sox @ Guardians": the writer's words when each side names its team, else the nicknames. */
 function matchupWords(sp: any, written: string): string {
   const [away, home] = String(sp?.matchup ?? "").split(/\s+@\s+/);
@@ -167,12 +161,6 @@ function matchupWords(sp: any, written: string): string {
   const [wa, wh] = written.split(/\s+@\s+/);
   const names = (short: string | undefined, full: string) => !!short && full.toLowerCase().includes(short.toLowerCase());
   return names(wa, away) && names(wh, home) ? `${wa} @ ${wh}` : `${shortTeam(away, sp?.league)} @ ${shortTeam(home, sp?.league)}`;
-}
-
-/** "5pm EST", "7:05pm EST" (founder's words, Oct 6 2026). */
-function startWords(iso: string): string {
-  const s = new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-  return `${s.replace(":00", "").replace(/\s*([AP])M$/, (_m, h) => `${h.toLowerCase()}m`)} EST`;
 }
 
 /** The part of the ticket the writer's words must keep: "-2.5", "ML", or a prop's side and line. */
@@ -319,6 +307,7 @@ Deno.serve(async (req) => {
   if (!isSocialServiceRequest(req, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))) {
     return Response.json({ ok: false, error: "Service authorization required" }, { status: 403 });
   }
+  const startedAt = Date.now();
   let dryRun = false;
   let runKind = "scheduled";
   // pg_cron success means the HTTP request was enqueued, not that X accepted it. gary_ops reads this
@@ -352,7 +341,12 @@ Deno.serve(async (req) => {
     for (const r of sundayPicks) console.log(JSON.stringify({ mode: "sunday_free_pick", ...r }).slice(0, 500));
     const resultReplies = await runFreePickResult(Date.now(), dryRun);
     for (const r of resultReplies) if (r.replied || r.error) console.log(JSON.stringify({ mode: "free_pick_result", ...r }).slice(0, 300));
-    return respond({ mode: "free_pick", metrics, results: [freePick, ...sundayPicks, ...resultReplies] });
+    // The stat desk (statDesk.ts) runs last, inside what is left of a 110 s budget for the run.
+    const statPosts = await runStatDesk(sb, etDate(), Date.now(), dryRun, {
+      model: WRITER_MODEL, postTweet: (text) => postTweet(text), force: url.searchParams.get("stat_slot"), deadlineMs: startedAt + 110_000,
+    });
+    for (const r of statPosts) console.log(JSON.stringify({ mode: "stat_desk", ...r }).slice(0, 500));
+    return respond({ mode: "free_pick", metrics, results: [freePick, ...sundayPicks, ...resultReplies, ...statPosts] });
   } catch (e) {
     console.error(String(e));
     return respond({ error: String(e) }, { status: 500 });
