@@ -64,10 +64,11 @@ struct WinnersLabView: View {
                 ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        header
+                        // The ticker runs at the very top of the page (founder, Oct 28 2026), over the header.
                         if !showsRecap && todayHasResult {
-                            resultsTicker.padding(.top, 10).pageGutter()
+                            resultsTicker.pageGutter().padding(.bottom, 6)
                         }
+                        header
                         // Yesterday's line rides the header, between the date and
                         // the profile (founder, Sep 23 2026), so the page starts
                         // higher. The sport tabs ride TODAY's row (Sep 24); they
@@ -570,7 +571,7 @@ struct WinnersLabView: View {
     }
 
     /// THE TICKER (founder, Oct 4 2026, mock 31 "slim ticker"): a slim strip
-    /// under the header once today has a result; each result runs past,
+    /// at the top of the page (over the header since Oct 28 2026) once today has a result; each result runs past,
     /// latest game first. The day's record and money moved to TODAY's row
     /// (Oct 7 2026), so the strip no longer repeats them.
     private var resultsTicker: some View {
@@ -1437,7 +1438,7 @@ struct ComingWindow: Identifiable, Equatable {
     }
 }
 
-/// The slim results ticker under the Winners header (founder, Oct 4 2026):
+/// The slim results ticker at the top of Winners (founder, Oct 4 2026; over the header since Oct 28):
 /// the day's results running past. Results that fit simply sit still; with
 /// Reduce Motion the strip scrolls by hand instead of moving.
 struct LabResultsTicker: View {

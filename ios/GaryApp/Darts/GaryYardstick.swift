@@ -217,11 +217,23 @@ extension PlayerGameLog {
         var out = LogWindow.allCases.filter { w in w.games.map { count >= $0 } ?? false }
         let longest = out.compactMap { $0.games }.max() ?? 0
         if let n, n > longest, ge?[stat.key] != nil { out.append(.season) }
+        else if out.isEmpty, seasonByGame(stat) { out.append(.season) }
         return out
+    }
+
+    /// A season shorter than the first window, all of it in the log (an October NBA
+    /// card, Oct 28 2026): the season window counts and draws its games one by one.
+    func seasonByGame(_ stat: LogStat) -> Bool {
+        let count = series(stat).count
+        return count > 0 && count < 5 && (n ?? count) == count
     }
 
     /// Games that reached the mark, of the games in the window.
     func tally(_ stat: LogStat, _ mark: LogMark, _ window: LogWindow) -> (hit: Int, of: Int)? {
+        if window == .season, seasonByGame(stat) {
+            let v = series(stat)
+            return (v.filter(mark.clears).count, v.count)
+        }
         if let games = window.games {
             let v = series(stat)
             guard v.count >= games else { return nil }
@@ -526,7 +538,8 @@ struct LogBarsChart: View {
             let plotW = geo.size.width - ruleW
             let n = max(bars.count, 1)
             let gap: CGFloat = n <= 6 ? 12 : n <= 12 ? 7 : 4
-            let barW = max(3, min(34, (plotW - gap * CGFloat(n - 1)) / CGFloat(n)))
+            // A season of a few games (an October NBA card) draws them wider, so they hold the plot.
+            let barW = max(3, min(n < 5 ? 56 : 34, (plotW - gap * CGFloat(n - 1)) / CGFloat(n)))
             let totalW = barW * CGFloat(n) + gap * CGFloat(n - 1)
             let x0 = max(0, (plotW - totalW) / 2)
             let hasAxis = bars.contains { $0.axis != nil }
@@ -704,7 +717,7 @@ struct PlayerLogPanel: View {
                 if let price { Text(price).font(GaryFonts.display(20)).foregroundStyle(GaryColors.gold).monospacedDigit() }
             }
             LogWindowTabs(items: windows.map { ($0, log.tally(stat, mark, $0)) }, selected: windowBinding)
-            LogBarsChart(bars: bars, rule: shownWindow == .season ? nil : mark.line)
+            LogBarsChart(bars: bars, rule: shownWindow == .season && !log.seasonByGame(stat) ? nil : mark.line)
         }
     }
 
@@ -717,9 +730,9 @@ struct PlayerLogPanel: View {
 
     private var bars: [LogBar] {
         let w = shownWindow
-        if let games = w.games {
+        if let games = w.games ?? (log.seasonByGame(stat) ? log.series(stat).count : nil) {
             let values = Array(log.series(stat).suffix(games))
-            let dates = Array((log.d ?? []).suffix(games))
+            let dates = Array((log.d ?? []).suffix(games)).map(Self.shortDate)
             let opps = Array((log.o ?? []).suffix(games))
             return values.enumerated().map { i, v in
                 LogBar(id: i, value: v, top: LabFormat.trim(v),
@@ -733,6 +746,13 @@ struct PlayerLogPanel: View {
                    axis: b.orMore ? "\(b.value)+" : "\(b.value)",
                    clears: mark.under ? b.value <= mark.value && !b.orMore : b.value >= mark.value)
         }
+    }
+
+    /// The NBA log dates its games "2026-10-21"; the axis reads "Oct 21", as the other logs write it.
+    private static func shortDate(_ d: String) -> String {
+        let parts = d.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, (1...12).contains(parts[1]) else { return d }
+        return "\(Calendar.current.shortMonthSymbols[parts[1] - 1]) \(parts[2])"
     }
 
     private var statBinding: Binding<String> {

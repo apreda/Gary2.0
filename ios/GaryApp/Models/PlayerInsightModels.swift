@@ -47,6 +47,32 @@ struct PlayerInsightPack: Decodable {
     /// WC: role-aware stats-section title ("FINISHING" / "ON THE BALL" / "AT THE BACK" / "IN GOAL").
     /// MLB cards omit this → stats section falls back to "SPLITS".
     let statsSectionTitle: String?
+    /// NBA cards from Oct 28 2026: the numbers the card draws as tables.
+    let box: Box?
+
+    /// His averages over the window, home / road / last five, and the last five
+    /// games' box lines, newest first (nbaPlayerInsightCards.js `box`).
+    struct Box: Decodable {
+        struct Line: Decodable {
+            let label: String?
+            let n: Int?
+            let min: Double?, pts: Double?, reb: Double?, ast: Double?, fg3m: Double?
+            let stl: Double?, blk: Double?
+        }
+        struct Game: Decodable {
+            let d: String?
+            let o: String?
+            let home: Bool?
+            let min: Double?, pts: Double?, reb: Double?, ast: Double?, fg3m: Double?
+        }
+        struct Status: Decodable { let status: String?; let detail: String? }
+        /// "2026-27 season", or "2025-26 season, last season" before his third game.
+        let window: String?
+        let avg: Line?
+        let splits: [Line]?
+        let games: [Game]?
+        let status: Status?
+    }
 }
 
 

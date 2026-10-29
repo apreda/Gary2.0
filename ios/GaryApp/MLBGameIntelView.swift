@@ -894,19 +894,17 @@ struct PlayerCardV4: View {
 
     // MARK: sections
     @ViewBuilder private func sections(_ p: PlayerInsightPack) -> some View {
+        if let b = p.box { nbaSections(p, b) } else { standardSections(p) }
+    }
+
+    @ViewBuilder private func standardSections(_ p: PlayerInsightPack) -> some View {
         if let read = readBullets(p), !read.isEmpty {
             section("The read") { VStack(alignment: .leading, spacing: 11) { ForEach(read.indices, id: \.self) { readRow(read[$0]) } } }
         }
         // The yardstick: his games against any mark, the card's posted lines
         // first. It carries the prop lines and their prices, so the old
         // prop list below steps aside when it shows.
-        let logStats = hitRateStats(p)
-        if let log = p.log, !logStats.isEmpty {
-            section("Hit rates") {
-                PlayerLogPanel(log: log, stats: logStats, lines: postedLines(p), focus: logFocus,
-                               start: logStats.first { postedLines(p)[$0.key] != nil })
-            }
-        }
+        hitRates(p)
         if let sp = p.splits, !sp.isEmpty {
             // WC cards carry a role-aware title (FINISHING / ON THE BALL / AT THE BACK / IN GOAL);
             // MLB omits it → "Splits". section() uppercases, so it matches the gold eyebrow style.
@@ -958,6 +956,131 @@ struct PlayerCardV4: View {
         }
     }
 
+    @ViewBuilder private func hitRates(_ p: PlayerInsightPack) -> some View {
+        let logStats = hitRateStats(p)
+        if let log = p.log, !logStats.isEmpty {
+            section("Hit rates") {
+                PlayerLogPanel(log: log, stats: logStats, lines: postedLines(p), focus: logFocus,
+                               start: logStats.first { postedLines(p)[$0.key] != nil })
+            }
+        }
+    }
+
+    // MARK: the NBA card
+    // THE NBA CARD (founder, Oct 28 2026, on Clint Capela's three-game card: "a wildly unfinished
+    // player card ... very, very unfinished compared to the other player cards"): his averages up
+    // top, the hit rates, then his numbers as tables, every game of the window on the card.
+    @ViewBuilder private func nbaSections(_ p: PlayerInsightPack, _ b: PlayerInsightPack.Box) -> some View {
+        if let a = b.avg, let n = a.n, n > 0 {
+            section(b.window?.contains("last season") == true ? "Last season" : "This season",
+                    trailing: n == 1 ? "1 game" : "\(n) games") { averages(a) }
+        }
+        hitRates(p)
+        let sides = b.splits ?? []
+        if !sides.isEmpty || b.status?.status != nil {
+            section("The sheet") { sheetTable(sides, status: b.status) }
+        }
+        if let games = b.games, !games.isEmpty {
+            section("Game log") { gameLog(games, lines: postedLines(p)) }
+        }
+        if let pr = p.props, !pr.isEmpty, p.log == nil || hitRateStats(p).isEmpty {
+            section("The angle") { VStack(spacing: 0) { ForEach(pr.indices, id: \.self) { propRow(pr[$0]) } } }
+        }
+    }
+
+    private func averages(_ a: PlayerInsightPack.Box.Line) -> some View {
+        let cells: [(String, Double?)] = [("PTS", a.pts), ("REB", a.reb), ("AST", a.ast), ("3PM", a.fg3m), ("MIN", a.min)]
+        return HStack(alignment: .top, spacing: 0) {
+            ForEach(cells.indices, id: \.self) { i in
+                VStack(spacing: 4) {
+                    Text(cells[i].1.map { LabFormat.trim($0) } ?? "—")
+                        .font(GaryFonts.display(30)).monospacedDigit()
+                        .foregroundStyle(i == 4 ? PCV4.mut : PCV4.ink)
+                        .fitsOneLine()
+                    Text(cells[i].0).font(PCV4.label).tracking(1).foregroundStyle(PCV4.mut2)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(cells.map { "\($0.1.map { LabFormat.trim($0) } ?? "no") \($0.0)" }.joined(separator: ", "))
+    }
+
+    /// Home, road and his last five as rows; games, points, rebounds, assists and minutes as columns.
+    private func sheetTable(_ rows: [PlayerInsightPack.Box.Line], status: PlayerInsightPack.Box.Status?) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !rows.isEmpty {
+                Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 11) {
+                    GridRow {
+                        Color.clear.frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                        ForEach(["GP", "PTS", "REB", "AST", "MIN"], id: \.self) { tableHead($0) }
+                    }
+                    ForEach(rows.indices, id: \.self) { i in
+                        let r = rows[i]
+                        tableRule
+                        GridRow {
+                            Text((r.label ?? "").uppercased()).font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink)
+                                .fitsOneLine()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .gridColumnAlignment(.leading)
+                            tableCell(r.n.map(Double.init), dim: true)
+                            tableCell(r.pts)
+                            tableCell(r.reb)
+                            tableCell(r.ast)
+                            tableCell(r.min, dim: true)
+                        }
+                    }
+                }
+            }
+            if let s = status, let word = s.status {
+                splitRow(.init(label: "STATUS", value: word, detail: s.detail))
+            }
+        }
+    }
+
+    /// His last five games, newest first: minutes and his counts, a count over tonight's line in green.
+    private func gameLog(_ games: [PlayerInsightPack.Box.Game], lines: [String: (line: Double, odds: String?)]) -> some View {
+        Grid(alignment: .trailing, horizontalSpacing: 14, verticalSpacing: 11) {
+            GridRow {
+                Color.clear.frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                ForEach(["MIN", "PTS", "REB", "AST", "3PM"], id: \.self) { tableHead($0) }
+            }
+            ForEach(games.indices, id: \.self) { i in
+                let g = games[i]
+                tableRule
+                GridRow {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text([g.home.map { $0 ? "vs" : "at" }, g.o].compactMap { $0 }.joined(separator: " "))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(PCV4.ink).fitsOneLine()
+                        if let d = g.d { Text(d).font(.caption).foregroundStyle(PCV4.mut2).fitsOneLine() }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .gridColumnAlignment(.leading)
+                    tableCell(g.min, dim: true)
+                    tableCell(g.pts, over: lines["pts"]?.line)
+                    tableCell(g.reb, over: lines["reb"]?.line)
+                    tableCell(g.ast, over: lines["ast"]?.line)
+                    tableCell(g.fg3m, over: lines["fg3m"]?.line)
+                }
+            }
+        }
+    }
+
+    private var tableRule: some View {
+        Rectangle().fill(PCV4.line).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+    }
+    private func tableHead(_ word: String) -> some View {
+        Text(word).font(PCV4.label).tracking(0.8).foregroundStyle(PCV4.mut2).fixedSize()
+    }
+    private func tableCell(_ v: Double?, dim: Bool = false, over line: Double? = nil) -> some View {
+        let cleared = line.map { l in v.map { $0 > l } ?? false } ?? false
+        return Text(v.map { LabFormat.trim($0) } ?? "—")
+            .font(GaryFonts.data(15, .semibold)).monospacedDigit()
+            .foregroundStyle(cleared ? GaryColors.win : dim ? PCV4.mut2 : PCV4.ink)
+            .fixedSize()
+            .frame(minWidth: 32, alignment: .trailing)
+    }
+
     /// The stats his log carries, posted lines first in the card's order.
     private func hitRateStats(_ p: PlayerInsightPack) -> [LogStat] {
         guard let log = p.log else { return [] }
@@ -979,10 +1102,17 @@ struct PlayerCardV4: View {
         return out
     }
 
-    private func section<C: View>(_ cap: String, @ViewBuilder _ content: () -> C) -> some View {
+    private func section<C: View>(_ cap: String, trailing: String? = nil, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            Text(cap.uppercased()).font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
-                .foregroundStyle(GaryColors.gold)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(cap.uppercased()).font(GaryFonts.ui(10.5, .bold)).tracking(1.7)
+                    .foregroundStyle(GaryColors.gold)
+                if let trailing {
+                    Spacer(minLength: 8)
+                    Text(trailing.uppercased()).font(GaryFonts.ui(10.5, .bold)).tracking(1.2)
+                        .foregroundStyle(PCV4.mut2).fixedSize()
+                }
+            }
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

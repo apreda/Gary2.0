@@ -10,6 +10,7 @@
 //   * splits      — home and road points a game, and the injury report's status
 //   * props       — tonight's main lines, with how many of the window's games went over
 //   * log         — the last 20 games' points, rebounds, assists, threes and PRA for the HIT RATES ruler
+//   * box         — the same numbers as the card's tables: his averages, home / road / last five, the last five games
 // The window is this season once a player has three games, last season before that, labeled as last season.
 // Never throws; a missing source drops its section, a player with no games is skipped.
 
@@ -72,6 +73,28 @@ function props(markets, games) {
   return out.length ? out : null;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDate = (d) => { const [, m, day] = String(d || '').slice(0, 10).split('-').map(Number); return m && day ? `${MONTHS[m - 1]} ${day}` : null; };
+
+// THE BOX (founder, Oct 28 2026, on Clint Capela's three-game card: "a wildly unfinished player card"): the numbers
+// the card draws as tables rather than sentences. His averages over the window, home, road and the last five as
+// columns, and the last five games' box lines with their minutes.
+export function box(games, label, injury) {
+  const line = (gs) => ({ n: gs.length, min: avg(gs, 'min'), pts: avg(gs, 'pts'), reb: avg(gs, 'reb'), ast: avg(gs, 'ast'), fg3m: avg(gs, 'fg3m') });
+  const sides = [['HOME', games.filter((g) => g.isHome === true)], ['ROAD', games.filter((g) => g.isHome === false)]];
+  if (games.length > 5) sides.push(['LAST 5', games.slice(0, 5)]);
+  return {
+    window: label,
+    avg: { ...line(games), stl: avg(games, 'stl'), blk: avg(games, 'blk') },
+    splits: sides.filter(([, gs]) => gs.length).map(([l, gs]) => ({ label: l, ...line(gs) })),
+    games: games.slice(0, 5).map((g) => ({
+      d: shortDate(g.date), o: g.opponent || null, home: typeof g.isHome === 'boolean' ? g.isHome : null,
+      min: finite(g.min) == null ? null : Math.round(g.min), pts: finite(g.pts), reb: finite(g.reb), ast: finite(g.ast), fg3m: finite(g.fg3m),
+    })),
+    status: injury?.status ? { status: injury.status, detail: injury.detail || null } : null,
+  };
+}
+
 function gameLog(games) {
   const last = games.slice(0, KEEP).reverse();   // oldest first, as the NFL and MLB logs
   if (!last.length) return null;
@@ -119,9 +142,12 @@ async function buildGamePacks({ date, game, bdl, season, injuries, abbrById }) {
       safeCall(() => bdl.getNbaPlayerGameLogs(pid, 100, {}, { season, asOf }), null),
       safeCall(() => bdl.getNbaPlayerGameLogs(pid, 100, {}, { season: season - 1, asOf }), null),
     ]);
-    const thisSeason = cur?.games || [];
+    // Games before tonight's only: the feed dates a game by its day, so a card rebuilt after tonight's final
+    // would count tonight in its own window.
+    const before = (r) => (r?.games || []).filter((g) => String(g.date || '').slice(0, 10) < date);
+    const thisSeason = before(cur);
     const useCurrent = thisSeason.length >= 3;
-    const games = (useCurrent ? thisSeason : (prev?.games || [])).map((g) => ({ ...g, opponent: g.opponent || abbrById.get(String(g.opponentId)) || null }));
+    const games = (useCurrent ? thisSeason : before(prev)).map((g) => ({ ...g, opponent: g.opponent || abbrById.get(String(g.opponentId)) || null }));
     if (!games.length) continue;
     const windowLabel = useCurrent ? `${seasonName(season)} season` : `${seasonName(season - 1)} season, last season`;
     const injury = injuries.get(String(pid)) || null;
@@ -144,6 +170,7 @@ async function buildGamePacks({ date, game, bdl, season, injuries, abbrById }) {
         splits: splits(games, injury),
         props: props(lines.filter((m) => m.player_id === pid), games),
         statsSectionTitle: 'THE SHEET',
+        box: box(games, windowLabel, injury),
         ...(() => { const log = gameLog(games); return log ? { log } : {}; })(),
       },
     });
