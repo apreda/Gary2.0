@@ -49,6 +49,8 @@ struct HomeView: View {
     @State private var showDailyRecap = false
     /// A game opened from the board or the marquee, read over Home.
     @State private var openGame: PicksPinnedGame?
+    /// A story is lifted off the board: the board draws over the panels after it.
+    @State private var boardLifted = false
     @AppStorage("dailyRecapShownDate") private var dailyRecapShownDate = ""
     /// The full day's games + opening lines (daily_slate) — the slate works
     /// from the morning; Gary's picks overlay as they post.
@@ -1027,6 +1029,8 @@ struct HomeView: View {
 
         // ── THE BOARD — every game, one list, all day.
         homeSheet(sheetRows)
+            .zIndex(boardLifted ? 1 : 0)
+            .onPreferenceChange(HomeBoardLiftedKey.self) { boardLifted = $0 }
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.06), value: animateIn)
 
@@ -1868,7 +1872,7 @@ struct HomeView: View {
     /// "White Sox @ Red Sox" instead of "CHW @ BOS" — abbreviations are the
     /// queue's grammar, not the hero's. Carries the real start Date so the
     /// hero can tick down to first pitch instead of printing a static clock.
-    private var marqueeTomorrowTease: (matchup: String, time: String, start: Date?)? {
+    private var marqueeTomorrowTease: (matchup: String, time: String, start: Date?, league: String?)? {
         guard let big = tomorrowBoard?.big_games.first, let m = big.matchup else { return nil }
         let sides = m.components(separatedBy: " @ ")
         let title = sides.count == 2
@@ -1876,7 +1880,8 @@ struct HomeView: View {
             : m
         return (title,
                 TomorrowView.etTime(big.commence_time, withZone: false, meridiem: true).uppercased(),
-                big.commence_time.flatMap(parseISO8601))
+                big.commence_time.flatMap(parseISO8601),
+                big.league)
     }
 
     /// The sheet body — EARLIER (collapsed past), LIVE (glowing middle),

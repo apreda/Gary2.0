@@ -160,35 +160,41 @@ struct HomeWinnersBento: View {
         }
     }
 
+    /// The number fills the tile and the words sit beside it, STREAK over WINNING NIGHTS (founder, Oct 29 2026:
+    /// "make the two larger to fill the space ... move streak so it's just above winning nights"). Gary's own
+    /// flame rides the corner and burns hotter the longer the run.
     private var streakTile: some View {
         let r = run
         let hot = r.sign > 0
-        let words = r.count == 0 ? "" : "\(hot ? "WINNING" : "LOSING") \(r.count == 1 ? "NIGHT" : "NIGHTS")"
+        let words = r.count == 0 ? "NIGHTS" : "\(hot ? "WINNING" : "LOSING") \(r.count == 1 ? "NIGHT" : "NIGHTS")"
         return tileButton(label: r.count == 0 ? "Streak" : "Streak, \(r.count) \(words.lowercased())") {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack {
+            HStack(alignment: .lastTextBaseline, spacing: 9) {
+                Text(r.count == 0 ? "0" : "\(r.count)")
+                    .font(GaryFonts.display(70)).foregroundStyle(GaryColors.warmWhite)
+                    .opacity(bankroll == nil ? 0 : 1)
+                    .fixedSize()
+                VStack(alignment: .leading, spacing: 3) {
                     Text("STREAK")
                         .font(GaryFonts.kicker(11, .heavy)).tracking(1.3)
-                        .foregroundStyle(hot || r.count == 0 ? GaryColors.gold : LabInk.dim)
-                    Spacer()
-                    Image(systemName: hot || r.count == 0 ? "flame.fill" : "snowflake")
-                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(hot || r.count == 0 ? GaryColors.gold : GaryColors.silver)
-                }
-                Spacer(minLength: 0)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(r.count == 0 ? " " : "\(r.count)")
-                        .font(GaryFonts.display(43)).foregroundStyle(GaryColors.warmWhite)
                     Text(words)
-                        .font(GaryFonts.kicker(11, .bold)).tracking(0.9)
+                        .font(GaryFonts.kicker(11, .bold)).tracking(0.7)
                         .foregroundStyle(LabInk.dim)
                         .fitsOneLine()
                 }
+                .padding(.bottom, 2)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.leading, 14).padding(.trailing, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .overlay(alignment: .topTrailing) {
+                Group {
+                    if hot || r.count == 0 { GaryFlame(nights: r.count) } else { ColdMark() }
+                }
+                .padding(.top, 11).padding(.trailing, 12)
+            }
             .background(
-                RadialGradient(colors: [GaryColors.gold.opacity(hot ? 0.2 : 0), .clear],
+                RadialGradient(colors: [GaryFlame.heat(r.count).glow.opacity(hot ? 0.2 : 0), .clear],
                                center: .topTrailing, startRadius: 0, endRadius: 110)
             )
             .tilePlate(edge: GaryColors.gold.opacity(hot ? 0.5 : 0.25))
@@ -324,6 +330,90 @@ struct HomeWinnersBento: View {
             .accessibilityLabel(label)
             .accessibilityHint("Opens Winners")
             .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// Gary's flame, drawn for the app (founder, Oct 29 2026: the stock flame is one "we see all the time"): an
+/// outer fire with two side tongues and a lit core, warm gold on a short run, orange from three nights, red
+/// with a yellow-white core from five, and it flickers faster as it heats. Still for Reduce Motion.
+struct GaryFlame: View {
+    let nights: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var flicker = false
+
+    struct Heat { let base: Color; let tip: Color; let core: Color; let glow: Color; let pace: Double }
+    static func heat(_ nights: Int) -> Heat {
+        switch nights {
+        case 5...: return Heat(base: Color(hex: "#FFB02E"), tip: Color(hex: "#D7261E"), core: Color(hex: "#FFF4C8"),
+                               glow: Color(hex: "#FF5A1F"), pace: 0.38)
+        case 3...4: return Heat(base: Color(hex: "#F7C548"), tip: Color(hex: "#E8642A"), core: Color(hex: "#FFEDB0"),
+                                glow: Color(hex: "#F08A2A"), pace: 0.55)
+        default: return Heat(base: Color(hex: "#E8C35A"), tip: GaryColors.gold, core: Color(hex: "#FBEFC4"),
+                             glow: GaryColors.gold, pace: 0.8)
+        }
+    }
+
+    var body: some View {
+        let h = Self.heat(nights)
+        ZStack(alignment: .bottom) {
+            FlameOuter()
+                .fill(LinearGradient(colors: [h.base, h.tip], startPoint: .bottom, endPoint: .top))
+            FlameCore()
+                .fill(LinearGradient(colors: [h.core, h.base.opacity(0.9)], startPoint: .bottom, endPoint: .top))
+                .scaleEffect(flicker ? 0.94 : 1.0, anchor: .bottom)
+        }
+        .frame(width: 19, height: 24)
+        .scaleEffect(x: flicker ? 0.97 : 1.0, y: flicker ? 1.05 : 0.98, anchor: .bottom)
+        .shadow(color: h.glow.opacity(nights >= 3 ? 0.75 : 0.45), radius: nights >= 5 ? 7 : 4)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: h.pace).repeatForever(autoreverses: true)) { flicker = true }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// The outer fire: a round base, a tall tongue leaning right, a short tongue each side.
+private struct FlameOuter: Shape {
+    func path(in r: CGRect) -> Path {
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * r.width, y: r.minY + y * r.height) }
+        var path = Path()
+        path.move(to: p(0.50, 1.00))
+        path.addCurve(to: p(0.06, 0.62), control1: p(0.22, 1.00), control2: p(0.04, 0.84))
+        path.addCurve(to: p(0.22, 0.24), control1: p(0.08, 0.46), control2: p(0.18, 0.36))
+        path.addCurve(to: p(0.38, 0.44), control1: p(0.26, 0.34), control2: p(0.32, 0.42))
+        path.addCurve(to: p(0.60, 0.00), control1: p(0.34, 0.26), control2: p(0.46, 0.10))
+        path.addCurve(to: p(0.74, 0.38), control1: p(0.62, 0.16), control2: p(0.66, 0.30))
+        path.addCurve(to: p(0.84, 0.18), control1: p(0.80, 0.32), control2: p(0.84, 0.26))
+        path.addCurve(to: p(0.94, 0.64), control1: p(0.96, 0.32), control2: p(0.98, 0.50))
+        path.addCurve(to: p(0.50, 1.00), control1: p(0.90, 0.86), control2: p(0.74, 1.00))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The lit core, low in the fire.
+private struct FlameCore: Shape {
+    func path(in r: CGRect) -> Path {
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * r.width, y: r.minY + y * r.height) }
+        var path = Path()
+        path.move(to: p(0.50, 0.96))
+        path.addCurve(to: p(0.28, 0.74), control1: p(0.34, 0.96), control2: p(0.26, 0.86))
+        path.addCurve(to: p(0.50, 0.40), control1: p(0.30, 0.60), control2: p(0.44, 0.54))
+        path.addCurve(to: p(0.72, 0.74), control1: p(0.56, 0.54), control2: p(0.70, 0.60))
+        path.addCurve(to: p(0.50, 0.96), control1: p(0.74, 0.86), control2: p(0.66, 0.96))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// A cold run's mark: an ice shard, quiet silver-blue.
+private struct ColdMark: View {
+    var body: some View {
+        Image(systemName: "snowflake")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Color(hex: "#9DBBD3"))
+            .accessibilityHidden(true)
     }
 }
 

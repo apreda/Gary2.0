@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// A finished game's story, opened under its board row (founder, Oct 29 2026). The headline cards fold into
-/// the board: a tap on a finished game drops its story open in place, the way a headline card turned over,
-/// and the pick card that every tap used to open moves to a button inside it, with sharing beside it.
+/// A finished game's story on the board (founder, Oct 29 2026, mock F: "I really like that"). The headline
+/// cards fold into the board: a tap on a finished game lifts its story off the board, over the board's own
+/// rows dimmed and blurred (the rest of Home stays as it is), and the pick card that every tap used to open
+/// becomes one of the two choices under it.
 struct HomeBoardStory {
     let headline: String
     /// What else hit (game_recaps.bullets); a real price is pulled out to the gold column.
     let bullets: [String]
-    /// The money on a flat $100: "+$83", "-$100", "$0".
-    let money: String?
+    /// The price Gary took ("-110"); the story shows the bet, never a dollar amount (founder, Oct 29 2026).
+    let odds: String?
     /// The call behind the story and its grade, for the share card.
     let pick: GaryPick?
     let result: String?
@@ -24,19 +25,11 @@ struct HomeBoardStory {
             return picks[key(of: r.pick_text ?? "")] != nil
         }
         guard mine.count == 1, let recap = mine.first else { return nil }
-        let result = recap.result?.lowercased()
-        let odds = Int(Formatters.splitPickAndOdds(recap.pick_text, league: league).1
-            .replacingOccurrences(of: "−", with: "-").trimmingCharacters(in: .whitespaces))
-        let money: String? = {
-            switch result {
-            case "won": return "+" + LabFormat.dollars((100 * LabFormat.payout(odds)).rounded())
-            case "lost": return "-$100"
-            case "push": return "$0"
-            default: return nil
-            }
-        }()
-        return HomeBoardStory(headline: recap.headline ?? "", bullets: recap.bullets ?? [], money: money,
-                              pick: picks[key(of: recap.pick_text ?? "")], result: result)
+        let odds = Formatters.splitPickAndOdds(recap.pick_text, league: league).1
+            .replacingOccurrences(of: "−", with: "-").trimmingCharacters(in: .whitespaces)
+        return HomeBoardStory(headline: recap.headline ?? "", bullets: recap.bullets ?? [],
+                              odds: Int(odds) == nil ? nil : odds,
+                              pick: picks[key(of: recap.pick_text ?? "")], result: recap.result?.lowercased())
     }
 
     /// One spelling for a pick across the two tables: case, spaces and the minus sign.
@@ -46,74 +39,157 @@ struct HomeBoardStory {
     }
 }
 
-/// The story under an open row: the headline, what else hit with its prices, and the two ways on.
-struct HomeBoardStoryPanel: View {
+/// The lifted story (mock F): the card raised off the board and the two choices under it. The board
+/// dims and blurs behind it (HomeSheetPanel); a tap on the board outside puts it back.
+struct HomeBoardStoryPeek: View {
+    let row: HomeSheetRow
     let story: HomeBoardStory
     let onPickCard: () -> Void
-    let onShare: (() -> Void)?
+    @State private var shareItem: PickShareItem?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(story.headline)
-                .font(.system(size: 15.5, weight: .bold))
-                .foregroundStyle(GaryColors.warmWhite.opacity(0.94))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12).padding(.top, 12)
-
-            if !story.bullets.isEmpty {
-                Text("WHAT ELSE HIT")
-                    .font(GaryFonts.kicker(9.5, .heavy)).tracking(1.6)
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 6)
-                ForEach(Array(story.bullets.prefix(3).enumerated()), id: \.offset) { i, raw in
-                    if i > 0 {
-                        Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
-                    }
-                    let parts = HeadlineFlipCard.splitPrice(raw)
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(parts.stat)
-                            .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                        if let price = parts.price {
-                            Text(price)
-                                .font(GaryFonts.mono(11, bold: true))
-                                .foregroundStyle(GaryColors.warmGold)
-                                .fixedSize()
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                }
-            }
-
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1).padding(.top, 12)
-            HStack(spacing: 0) {
-                action("Open the pick card", icon: "list.bullet.rectangle.portrait", run: onPickCard)
-                if let onShare {
-                    Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 24)
-                    action("Share the pick", icon: "square.and.arrow.up", run: onShare)
-                }
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            HomeBoardStoryCard(row: row, story: story)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(hex: "#12100D")))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(GaryColors.gold.opacity(0.6), lineWidth: 1))
+                .shadow(color: .black.opacity(0.7), radius: 25, y: 12)
+                .scaleEffect(1.02)
+            menu
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-        )
-        .padding(.horizontal, 14).padding(.bottom, 12)
+        .onAppear { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
     }
 
-    private func action(_ title: String, icon: String, run: @escaping () -> Void) -> some View {
-        Button(action: run) {
-            HStack(spacing: 7) {
-                Image(systemName: icon).font(.system(size: 13, weight: .semibold))
-                Text(title).font(.system(size: 13.5, weight: .semibold)).fitsOneLine()
+    private var menu: some View {
+        VStack(spacing: 0) {
+            menuRow("Open the pick card", icon: "list.bullet.rectangle.portrait", run: onPickCard)
+            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            menuRow("Share the story", icon: "square.and.arrow.up") {
+                let renderer = ImageRenderer(content: HomeBoardStoryShareCard(row: row, story: story))
+                renderer.scale = 2
+                if let image = renderer.uiImage { shareItem = PickShareItem(images: [image]) }
             }
-            .foregroundStyle(GaryColors.warmWhite.opacity(0.88))
-            .frame(maxWidth: .infinity, minHeight: 46)
+        }
+        .frame(width: 236)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: "#28241E").opacity(0.97)))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.5), radius: 15, y: 8)
+    }
+
+    private func menuRow(_ title: String, icon: String, run: @escaping () -> Void) -> some View {
+        Button(action: run) {
+            HStack {
+                Text(title).font(.system(size: 15)).foregroundStyle(GaryColors.warmWhite)
+                Spacer(minLength: 8)
+                Image(systemName: icon).font(.system(size: 14)).foregroundStyle(.white.opacity(0.62))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 46)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// The story's face, in the peek and on the shared image: score and verdict, the call at its price, the
+/// headline, what else hit.
+struct HomeBoardStoryCard: View {
+    let row: HomeSheetRow
+    let story: HomeBoardStory
+    var scale: CGFloat = 1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8 * scale) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(row.title)
+                    .font(GaryFonts.display(22 * scale)).tracking(0.5)
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fitsOneLine()
+                Spacer(minLength: 4)
+                Text(row.statusText)
+                    .font(.system(size: 13.5 * scale, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(row.statusColor)
+                    .fixedSize()
+            }
+            HStack(alignment: .firstTextBaseline) {
+                if let call = row.callLine {
+                    // The bet as it was booked: the call and its price ("WIZARDS +9.5 -110"); a moneyline call
+                    // already carries its price.
+                    Text(story.odds.map { call.hasSuffix($0) ? call : "\(call) \($0)" } ?? call)
+                        .font(.system(size: 13.5 * scale, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(GaryColors.gold.opacity(0.95))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Text(row.league)
+                    .font(.system(size: 10 * scale, weight: .heavy)).tracking(1.2)
+                    .foregroundStyle(HomeSheetRowView.leagueColor(row.league))
+            }
+            Text(story.headline)
+                .font(.system(size: 16.5 * scale, weight: .bold))
+                .foregroundStyle(GaryColors.warmWhite.opacity(0.96))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2 * scale)
+            if !story.bullets.isEmpty {
+                Text("WHAT ELSE HIT")
+                    .font(.system(size: 9.5 * scale, weight: .heavy)).tracking(1.6)
+                    .foregroundStyle(GaryColors.gold)
+                    .padding(.top, 4 * scale)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(story.bullets.prefix(3).enumerated()), id: \.offset) { i, raw in
+                        if i > 0 {
+                            Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.vertical, 7 * scale)
+                        }
+                        let parts = HeadlineFlipCard.splitPrice(raw)
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(parts.stat)
+                                .font(.system(size: 13.5 * scale, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                            if let price = parts.price {
+                                Text(price)
+                                    .font(.system(size: 12.5 * scale, weight: .bold).monospacedDigit())
+                                    .foregroundStyle(GaryColors.warmGold)
+                                    .fixedSize()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 15 * scale).padding(.vertical, 14 * scale)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The shared image: the story card under Gary's mark, the site at the foot. The card is the image edge,
+/// like the pick share card, so it reads as a card in Messages.
+private struct HomeBoardStoryShareCard: View {
+    let row: HomeSheetRow
+    let story: HomeBoardStory
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                Text("GARY'S BOARD · FINAL")
+                    .font(GaryFonts.mono(13, bold: true)).tracking(3)
+                    .foregroundStyle(GaryColors.gold)
+                Spacer()
+                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 48, height: 48)
+            }
+            .padding(.horizontal, 26).padding(.top, 22)
+            HomeBoardStoryCard(row: row, story: story, scale: 1.3)
+                .padding(.horizontal, 11).padding(.top, 6)
+            Rectangle().fill(.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 26).padding(.top, 8)
+            Text("betwithgary.ai")
+                .font(GaryFonts.mono(12.5))
+                .foregroundStyle(GaryColors.gold.opacity(0.8))
+                .padding(.horizontal, 26).padding(.vertical, 18)
+        }
+        .frame(width: 460, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color(hex: "#121110")))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(.white.opacity(0.10), lineWidth: 1))
     }
 }

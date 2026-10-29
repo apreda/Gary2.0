@@ -82,6 +82,10 @@ style guide; everything else follows his current request.
   (Adam, Oct 29 2026: "kinda distracting"). Home advertises Winners with the
   Bento at the top (Adam, Oct 29 2026: "Bento is 1,000% the best one"): last
   night with Gary's face, the streak, the week's bars, tonight's card; every
-  tile opens Winners. The headline rail came off: a finished game on the board
-  opens its own story in place (headline, what else hit, the pick card and
-  sharing as buttons inside), so the pick card is no longer the default tap.
+  tile opens Winners. The streak's number fills its tile with STREAK stacked
+  over WINNING NIGHTS, and Gary's own drawn flame heats gold → orange → red
+  with the run. The headline rail came off: a tap on a finished game lifts its
+  story off the board where the row sat (mock F: score and verdict, the call at
+  its odds, never a dollar amount, headline, what else hit), the board's own
+  rows dimmed and blurred and the rest of Home untouched, with "Open the pick
+  card" and "Share the story" under it. The pick card is no longer the tap.

@@ -13,9 +13,24 @@ struct HomeSheetPanel<YouScorecard: View>: View {
     /// 24 2026), instead of switching to Picks.
     let onOpenGame: (PicksPinnedGame) -> Void
     @ViewBuilder let youScorecard: () -> YouScorecard
-    /// The finished game whose story is open under its row; one at a time.
-    @State private var openStoryID: String?
-    @State private var shareItem: PickShareItem?
+    /// The finished game whose story is lifted off the board (founder, Oct 29 2026, mock F), and where its row
+    /// sat when it was tapped.
+    @State private var lifted: Lifted?
+    @State private var peekHeight: CGFloat = 330
+    /// Where each row and the board sit on screen. Kept off state, so a scroll never redraws the board.
+    @State private var frames = FrameBook()
+
+    private struct Lifted: Equatable {
+        let id: String
+        /// The row's top in the board, and the board's top on screen, at the tap.
+        let rowTop: CGFloat
+        let boardScreenTop: CGFloat
+        let boardHeight: CGFloat
+    }
+    private final class FrameBook {
+        var rows: [String: CGRect] = [:]
+        var board: CGRect = .zero
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,34 +122,18 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 }
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
-                let open = r.story != nil && openStoryID == r.id
                 Button {
-                    // A finished game with a story opens it in place (founder, Oct 29 2026); the pick card is
-                    // a button inside it now. Every other row still opens its card.
-                    if r.story != nil {
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { openStoryID = open ? nil : r.id }
-                        return
-                    }
+                    // A finished game with a story lifts it (founder, Oct 29 2026: the pick card is a choice under
+                    // it now, not the default). Every other row still opens its card.
+                    if r.story != nil { lift(r); return }
                     guard !r.matchupFull.isEmpty else { return }
                     onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
                 } label: {
-                    HomeSheetRowView(row: r, showLeague: selected == .all, expanded: open)
+                    HomeSheetRowView(row: r, showLeague: selected == .all)
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint(r.story == nil ? "" : open ? "Closes the story" : "Opens the story")
-                if open, let story = r.story {
-                    HomeBoardStoryPanel(
-                        story: story,
-                        onPickCard: {
-                            guard !r.matchupFull.isEmpty else { return }
-                            onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
-                        },
-                        onShare: story.pick.map { pick in {
-                            let images = renderPickShareImages(pick: pick, gameResult: story.result)
-                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
-                        } })
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+                .accessibilityHint(r.story == nil ? "" : "Shows the story")
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.rows[r.id] = $0 }
                 if i < rows.count - 1 {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
                 }
@@ -158,14 +157,10 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                     .padding(.horizontal, 14).padding(.vertical, 12)
             }
         }
+        // The board under a lifted story blurs and dims (mock F); the rest of Home stays as it is.
+        .blur(radius: lifted == nil ? 0 : 5)
         .padding(.vertical, 3)
-        .clipped()
-        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
-        // `story Thunder`: open that finished game's story (the first one with a story when no name is given).
-        .onGaryTour { verb, arg in
-            guard verb == "story" else { return }
-            openStoryID = rows.first { $0.story != nil && (arg.isEmpty || $0.matchupFull.localizedCaseInsensitiveContains(arg)) }?.id
-        }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.board = $0 }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 // Self-contained card: adapts its own FILL for the ground
@@ -190,6 +185,67 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
                 .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
         )
+        .overlay {
+            if lifted != nil {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: "#080706").opacity(0.62))
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onTapGesture { close() }
+                    .accessibilityLabel("Close the story")
+                    .accessibilityAddTraits(.isButton)
+                    .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .top) {
+            if let lifted, let r = rows.first(where: { $0.id == lifted.id }), let story = r.story {
+                HomeBoardStoryPeek(row: r, story: story, onPickCard: {
+                    close()
+                    guard !r.matchupFull.isEmpty else { return }
+                    onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
+                })
+                .padding(.horizontal, 10)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { peekHeight = $0 }
+                .offset(y: peekTop(lifted))
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+            }
+        }
+        .onChange(of: selected) { _ in lifted = nil }
+        // Home lifts the whole board over the panels after it while a story is up, so the card never slides under them.
+        .preference(key: HomeBoardLiftedKey.self, value: lifted != nil)
+        // `story Raptors`: lift that finished game's story (the first with one when no name is given).
+        .onGaryTour { verb, arg in
+            if verb == "dismiss" { close() }
+            guard verb == "story",
+                  let r = rows.first(where: { $0.story != nil && (arg.isEmpty || $0.matchupFull.localizedCaseInsensitiveContains(arg)) })
+            else { return }
+            lift(r)
+        }
         .pageGutter()
     }
+
+    private func lift(_ r: HomeSheetRow) {
+        let row = frames.rows[r.id] ?? .zero, board = frames.board
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+            lifted = Lifted(id: r.id, rowTop: row.minY - board.minY, boardScreenTop: board.minY, boardHeight: board.height)
+        }
+    }
+
+    private func close() {
+        withAnimation(.easeOut(duration: 0.2)) { lifted = nil }
+    }
+
+    /// The card rises where its row sat, inside the board and on screen: pulled up when it would run past the
+    /// board's foot or under the dock, never above the league tabs or the top of the screen.
+    private func peekTop(_ l: Lifted) -> CGFloat {
+        let screenTop = 60 - l.boardScreenTop
+        let screenBottom = UIScreen.main.bounds.height - 112 - l.boardScreenTop
+        let top = min(l.rowTop - 8, screenBottom - peekHeight, l.boardHeight - peekHeight - 8)
+        return max(top, max(screenTop, 44))
+    }
+}
+
+/// True while a story is lifted off the board.
+struct HomeBoardLiftedKey: PreferenceKey {
+    static var defaultValue = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }

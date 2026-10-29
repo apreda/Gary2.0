@@ -49,7 +49,7 @@ struct HomeMarqueeTracker: View {
 
     let entries: [Entry]
     /// (matchup, clock, start) — `start` drives the hero's live countdown.
-    var tomorrowTease: (matchup: String, time: String, start: Date?)? = nil
+    var tomorrowTease: (matchup: String, time: String, start: Date?, league: String?)? = nil
     /// The game's matchup and league; Home opens it over the page.
     let onOpenGame: (String, String?) -> Void
 
@@ -564,7 +564,7 @@ struct HomeMarqueeTracker: View {
 
     /// The all-live / all-done state still keeps an UP NEXT on the wall —
     /// tomorrow's marquee steps in as the hero.
-    private func tomorrowHeroView(_ tease: (matchup: String, time: String, start: Date?)) -> some View {
+    private func tomorrowHeroView(_ tease: (matchup: String, time: String, start: Date?, league: String?)) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TOMORROW")
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
@@ -582,7 +582,8 @@ struct HomeMarqueeTracker: View {
             if let start = tease.start, start > Date() {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     HomeCountdownText(target: start, size: 15)
-                    Text("· FIRST PITCH \(tease.time.uppercased())")
+                    // The sport's own start word: an NFL game kicks off (founder, Oct 29 2026: "it says First Pitch").
+                    Text("· \(startWord(tease.league)) \(tease.time.uppercased())")
                         .font(GaryFonts.mono(11.5, bold: true))
                         .foregroundStyle(.white.opacity(0.72))
                 }
