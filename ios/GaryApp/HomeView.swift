@@ -29,6 +29,9 @@ struct HomeView: View {
     @State private var animateIn = false
     /// Last night's betting recaps (game_recaps) — the story player's slides.
     @State private var nightRecaps: [GameRecapRow] = []
+    /// The slate day's own recaps, for the stories its finished board rows open (founder, Oct 29 2026).
+    @State private var boardRecaps: [GameRecapRow] = []
+    @State private var boardRecapsDate = ""
     /// "TODAY" once the rolling recap has crossed into today's graded picks, else "LAST NIGHT".
     @State private var recapLabel: String = "LAST NIGHT"
     /// Exact dated ticket → numeric away-home score, used only when the recap
@@ -608,6 +611,7 @@ struct HomeView: View {
                     let fetchedRecaps = recapsToday.isEmpty ? await recapsGradedF : recapsToday
                     guard canPublish() else { return }
                     nightRecaps = fetchedRecaps
+                    if !recapsToday.isEmpty || boardRecapsDate != date { boardRecaps = recapsToday; boardRecapsDate = date }
                     HomeHeadlinesCache.save(headlineStories)   // write-through; no-op if empty
                     // (Board + durable grades committed at the top of the
                     // cycle-clock block — the moment slateF resolved.)
@@ -870,6 +874,7 @@ struct HomeView: View {
             }
         }
 
+        if !recapsToday.isEmpty || boardRecapsDate != date { boardRecaps = recapsToday; boardRecapsDate = date }
         if !recapsToday.isEmpty {
             nightRecaps = recapsToday
         } else if nightRecaps.isEmpty, !recapsGraded.isEmpty {
@@ -979,26 +984,17 @@ struct HomeView: View {
 
     @ViewBuilder private var todaySections: some View {
         // Compute once per body eval (live ticks re-run this often).
-        let stories = headlineStories
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
-        // (The Winners hero that led Home came off the same day it went on, Oct 29 2026: the founder had not seen
-        // it and asked for free-form mocks first. Home carries no Winners door until one is picked.)
-
-        // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
-        // not move at first pitch and they do not move again at the last out:
-        // the stories own the top of Home, above the countdown, and each game's
-        // recap card lands up here as that game finishes. (Until Aug 5 this
-        // rendered twice — once above the marquee pre-slate, once below the
-        // board after — so the rail appeared to jump mid-day. One instance now.)
-        if !stories.isEmpty {
-            HomeHeadlinesBoard(stories: stories) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 4 }
-            }
-            .opacity(animateIn ? 1 : 0)
-            .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
+        // ── WINNERS leads Home: the Bento (founder pick, Oct 29 2026, after the first hero came off the same day
+        // unseen). The headline rail that led the page since Aug 5 came off with it: each finished game's story
+        // now opens from its own row on the board (HomeBoardStory), so the night's stories are told once.
+        HomeWinnersBento {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
         }
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
 
         // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
         // the exhibitions, so the dark days lead with them instead of a void.
@@ -1276,6 +1272,7 @@ struct HomeView: View {
             }
             var hitLines: [String] = []
             var clockText: String? = nil
+            var story: HomeBoardStory? = nil
             if let ls, ls.isLive {
                 title = ls.scoreLine ?? title
                 let verdicts = calls.map { HomeLiveVerdict.evaluate(pick: $0, live: ls) }
@@ -1358,6 +1355,9 @@ struct HomeView: View {
                     statusText = calls.isEmpty ? noPick : ""
                     statusColor = Color.white.opacity(0.62)
                 }
+                if !calls.isEmpty, boardRecapsDate == SupabaseAPI.todayEST() {
+                    story = HomeBoardStory.make(recaps: boardRecaps, league: lgUpper, matchup: full, calls: calls)
+                }
             }
             // (Per-row "PICK ~x:xx" labels removed Jul 27 — the Tonight header
             // carries one "PICKS DROP 90 MIN BEFORE" note instead.)
@@ -1411,6 +1411,7 @@ struct HomeView: View {
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
             )
+            row.story = story
             if lgUpper == "NCAAF", rankings.hasRankings {
                 row.collegeRankScore = rankings.away.flatMap { a in rankings.home.map { a + $0 } }
                     ?? 100 + (rankings.away ?? rankings.home ?? 99)

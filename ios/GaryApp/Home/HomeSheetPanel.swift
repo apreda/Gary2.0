@@ -13,6 +13,9 @@ struct HomeSheetPanel<YouScorecard: View>: View {
     /// 24 2026), instead of switching to Picks.
     let onOpenGame: (PicksPinnedGame) -> Void
     @ViewBuilder let youScorecard: () -> YouScorecard
+    /// The finished game whose story is open under its row; one at a time.
+    @State private var openStoryID: String?
+    @State private var shareItem: PickShareItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,13 +107,34 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 }
             }
             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                let open = r.story != nil && openStoryID == r.id
                 Button {
+                    // A finished game with a story opens it in place (founder, Oct 29 2026); the pick card is
+                    // a button inside it now. Every other row still opens its card.
+                    if r.story != nil {
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) { openStoryID = open ? nil : r.id }
+                        return
+                    }
                     guard !r.matchupFull.isEmpty else { return }
                     onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
                 } label: {
-                    HomeSheetRowView(row: r, showLeague: selected == .all)
+                    HomeSheetRowView(row: r, showLeague: selected == .all, expanded: open)
                 }
                 .buttonStyle(.plain)
+                .accessibilityHint(r.story == nil ? "" : open ? "Closes the story" : "Opens the story")
+                if open, let story = r.story {
+                    HomeBoardStoryPanel(
+                        story: story,
+                        onPickCard: {
+                            guard !r.matchupFull.isEmpty else { return }
+                            onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
+                        },
+                        onShare: story.pick.map { pick in {
+                            let images = renderPickShareImages(pick: pick, gameResult: story.result)
+                            if !images.isEmpty { shareItem = PickShareItem(images: images) }
+                        } })
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 if i < rows.count - 1 {
                     Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1).padding(.leading, 14)
                 }
@@ -135,6 +159,13 @@ struct HomeSheetPanel<YouScorecard: View>: View {
             }
         }
         .padding(.vertical, 3)
+        .clipped()
+        .sheet(item: $shareItem) { ActivityShareSheet(items: $0.images) }
+        // `story Thunder`: open that finished game's story (the first one with a story when no name is given).
+        .onGaryTour { verb, arg in
+            guard verb == "story" else { return }
+            openStoryID = rows.first { $0.story != nil && (arg.isEmpty || $0.matchupFull.localizedCaseInsensitiveContains(arg)) }?.id
+        }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 // Self-contained card: adapts its own FILL for the ground

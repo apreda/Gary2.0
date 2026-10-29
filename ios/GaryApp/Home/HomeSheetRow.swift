@@ -26,4 +26,6 @@ struct HomeSheetRow: Identifiable {
     /// A college game's standing for the ALL board: both schools ranked sort
     /// by their ranks' sum, one ranked by 100 plus its rank; unranked nil.
     var collegeRankScore: Int? = nil
+    /// A finished game's story (founder, Oct 29 2026): set, a tap opens it under the row instead of the pick card.
+    var story: HomeBoardStory? = nil
 }

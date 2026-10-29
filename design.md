@@ -79,5 +79,9 @@ style guide; everything else follows his current request.
   Adam, Sep 24 2026: "It doesn't have this error where it gets really small
   just because we're using fewer numbers."
 - **Winners has no ticker.** The results ticker on the Winners page is gone
-  (Adam, Oct 29 2026: "kinda distracting"). How Home advertises Winners is
-  open: the first hero came off the same day, mocks first.
+  (Adam, Oct 29 2026: "kinda distracting"). Home advertises Winners with the
+  Bento at the top (Adam, Oct 29 2026: "Bento is 1,000% the best one"): last
+  night with Gary's face, the streak, the week's bars, tonight's card; every
+  tile opens Winners. The headline rail came off: a finished game on the board
+  opens its own story in place (headline, what else hit, the pick card and
+  sharing as buttons inside), so the pick card is no longer the default tap.

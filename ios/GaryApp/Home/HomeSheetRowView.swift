@@ -8,6 +8,8 @@ struct HomeSheetRowView: View {
     /// sport's own color (founder, Sep 24 2026: "People will start to
     /// associate which accent colors go with each sport").
     var showLeague = false
+    /// The row's story is open under it: the verdict carries the money and the chevron turns up.
+    var expanded = false
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -79,14 +81,16 @@ struct HomeSheetRowView: View {
             VStack(alignment: .trailing, spacing: 3) {
                 HStack(spacing: 8) {
                     if !row.statusText.isEmpty {
-                        Text(row.statusText)
+                        Text(expanded ? [row.statusText, row.story?.money].compactMap { $0 }.joined(separator: " ") : row.statusText)
                             .font(.system(size: 13.5, weight: .semibold).monospacedDigit())
                             .foregroundStyle(row.statusColor)
                             .fixedSize()
                     }
-                    Image(systemName: "chevron.right")
+                    // A finished game with a story drops it open (down); every other row opens its card (right).
+                    Image(systemName: row.story == nil ? "chevron.right" : "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.62))
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
                 }
                 if showLeague {
                     Text(row.league)
