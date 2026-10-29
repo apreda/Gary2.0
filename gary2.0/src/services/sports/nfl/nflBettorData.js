@@ -734,18 +734,23 @@ function sidePlayers(d, x, code) {
       n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null,
       n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost) ? `${n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost)} fumble lost` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`);
   const tackles = (r) => n(r.def_tackles_solo) + n(r.def_tackles_with_assist) + n(r.def_tackle_assists);
-  const defense = rows.filter((r) => tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced))
-    .sort((a, b) => tackles(b) - tackles(a))
-    .map((r) => `    ${r.player_display_name} (${r.position}) ${[tackles(r) ? plural(tackles(r), 'tackle') : null, n(r.def_tackles_for_loss) ? `${n(r.def_tackles_for_loss)} for loss` : null,
+  // Under defense only who played a defensive snap; a tackle on special teams or after a turnover is listed apart (Oct 28
+  // 2026 sweep: the Ravens' center, 100% of the offensive snaps, and a Bengals running back read as defenders).
+  const defensiveStats = (r) => tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced);
+  const noDefensiveSnap = (r) => { const s = snapOf.get(sameKey(r.player_display_name)); return Boolean(s) && !n(s.defense_snaps) && !n(s.defense_pct); };
+  const statLine = (r) => `    ${r.player_display_name} (${r.position}) ${[tackles(r) ? plural(tackles(r), 'tackle') : null, n(r.def_tackles_for_loss) ? `${n(r.def_tackles_for_loss)} for loss` : null,
       n(r.def_sacks) ? `${n(r.def_sacks)} sack${n(r.def_sacks) === 1 ? '' : 's'}` : null, n(r.def_qb_hits) ? `${n(r.def_qb_hits)} QB hit${n(r.def_qb_hits) === 1 ? '' : 's'}` : null,
       n(r.def_interceptions) ? `${n(r.def_interceptions)} INT` : null, n(r.def_pass_defended) ? plural(n(r.def_pass_defended), 'pass defended', 'passes defended') : null,
-      n(r.def_fumbles_forced) ? `${n(r.def_fumbles_forced)} forced fumble${n(r.def_fumbles_forced) === 1 ? '' : 's'}` : null, n(r.def_tds) ? `${n(r.def_tds)} TD` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`);
+      n(r.def_fumbles_forced) ? `${n(r.def_fumbles_forced)} forced fumble${n(r.def_fumbles_forced) === 1 ? '' : 's'}` : null, n(r.def_tds) ? `${n(r.def_tds)} TD` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`;
+  const byTackles = (a, b) => tackles(b) - tackles(a);
+  const defense = rows.filter((r) => defensiveStats(r) && !noDefensiveSnap(r)).sort(byTackles).map(statLine);
+  const otherTackles = rows.filter((r) => defensiveStats(r) && noDefensiveSnap(r)).sort(byTackles).map((r) => statLine(r).trim());
   // Everyone else who played: his snap share.
   const named = new Set(rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets) || tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced)).map((r) => sameKey(r.player_display_name)));
   const others = snaps.filter((s) => !named.has(sameKey(s.player)) && (n(s.offense_snaps) || n(s.defense_snaps) || n(s.st_snaps)))
     .sort((a, b) => Math.max(n(b.offense_pct), n(b.defense_pct)) - Math.max(n(a.offense_pct), n(a.defense_pct)))
     .map((s) => `${s.player} (${s.position}) ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ')}`);
-  return { offense, defense, others, onFile: rows.length > 0, snapsOnFile: snaps.length > 0 };
+  return { offense, defense, otherTackles, others, onFile: rows.length > 0, snapsOnFile: snaps.length > 0 };
 }
 
 /** A team's games before `before` in the game-by-game layout's record words: W-L(-T). */
@@ -779,6 +784,7 @@ export function nflGameFull(d, x, code, before) {
     lines.push(`  ${teamName(c)}:${p.onFile ? '' : ' player lines not on file'}`);
     if (p.offense.length) lines.push('   offense', ...p.offense);
     if (p.defense.length) lines.push('   defense', ...p.defense);
+    if (p.otherTackles?.length) lines.push(`   tackles by players with no defensive snap: ${p.otherTackles.join('; ')}`);
     if (p.others.length) lines.push(`   also played (snaps): ${p.others.join('; ')}`);
     else if (!p.snapsOnFile) lines.push('   snap counts not on file');
   }
