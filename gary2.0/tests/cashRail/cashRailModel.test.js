@@ -54,6 +54,25 @@ out([b.hits[2].displayMarket, over.displayMarket, b.hits[0].displayMarket])`);
     expect(r).toEqual(['Rec yards 70+', 'Rec yards over 58.5', 'First TD scorer']);
   });
 
+  it('bills prime-time NFL games by night and everything else as NFL', () => {
+    const r = swiftJSON(`let iso = ISO8601DateFormatter()
+out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T00:15:00Z")),
+     CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-11-02T01:20:00Z")),
+     CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-11-03T01:15:00Z")),
+     CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-11-01T18:00:00Z")),
+     CashRailFormat.billing(league: "nfl", commence: nil)])`);
+    expect(r).toEqual(['THURSDAY NIGHT FOOTBALL', 'SUNDAY NIGHT FOOTBALL', 'MONDAY NIGHT FOOTBALL', 'NFL', 'NFL']);
+  });
+
+  it('puts the spread and Gary\'s pick under the team names', () => {
+    const r = swiftJSON(`out([
+  CashRailFormat.marketLine(oddsLine: "CAR +130 · GB -155 · O/U 46.5 · RL GB -2.5", pickLine: "Packers -2.5") ?? "nil",
+  CashRailFormat.marketLine(oddsLine: "CAR +130 · GB -155 · O/U 46.5 · RL GB -2.5", pickLine: nil) ?? "nil",
+  CashRailFormat.marketLine(oddsLine: "O/U 46.5", pickLine: "Over 46.5") ?? "nil",
+  CashRailFormat.marketLine(oddsLine: nil, pickLine: nil) ?? "nil"])`);
+    expect(r).toEqual(['GB −2.5 · GARY PACKERS −2.5', 'GB −2.5', 'O/U 46.5 · GARY OVER 46.5', 'nil']);
+  });
+
   it('an empty board has no hero and counts nothing', () => {
     const r = swiftJSON(`let e = CashRailBoard(league: "NFL", game_id: "1", status: "live", possession: nil, situation: nil, elapsed_s: 0, clock: nil, hits: [])
 out([e.hero == nil, e.ranked.isEmpty, e.cashedCount == 0])`);

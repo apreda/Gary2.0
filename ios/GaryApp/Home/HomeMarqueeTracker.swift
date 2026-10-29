@@ -82,7 +82,18 @@ struct HomeMarqueeTracker: View {
                 next = e
             }
         }
+        if live == nil, let done = finishedCashRail(next: next) { return done }
         return live ?? next
+    }
+    /// Cash Rail (Oct 29 2026): a finished NFL big game stays as the night's
+    /// record until the next big game is within the hour.
+    private func finishedCashRail(next: Entry?) -> Entry? {
+        if let n = next?.commence.flatMap(parseISO8601), n.timeIntervalSinceNow < 3600 { return nil }
+        return entries.filter { $0.heroEligible && $0.isFinal && ($0.league ?? "").uppercased() == "NFL" && $0.live?.game_id != nil }
+            .max { ($0.commence ?? "") < ($1.commence ?? "") }
+    }
+    private func isCashRail(_ e: Entry) -> Bool {
+        (e.league ?? "").uppercased() == "NFL" && e.live?.game_id != nil && !e.isInterrupted && (inPlay(e) || e.isFinal)
     }
     private func inPlay(_ e: Entry) -> Bool { (e.isLive || e.started) && !e.isFinal && !e.isInterrupted }
     private func byStart(_ a: Entry, _ b: Entry) -> Bool {
@@ -114,6 +125,7 @@ struct HomeMarqueeTracker: View {
         return "\(cashed)–\(lost) in the big ones"
     }
 
+    @ObservedObject private var cashStore = CashRailStore.shared
     #if DEBUG
     /// Sim-only Cash Rail replay (tour verb `cashrail demo`).
     @ObservedObject private var cashDemo = CashRailDemo.shared
@@ -139,6 +151,39 @@ struct HomeMarqueeTracker: View {
     }
 
     @ViewBuilder private var trackerBody: some View {
+        if let hero, isCashRail(hero) { cashRailBody(hero) } else { classicBody }
+    }
+
+    /// The live NFL big game: the Cash Rail card, the other big games' ribbon under it.
+    @ViewBuilder private func cashRailBody(_ e: Entry) -> some View {
+        let names = e.title.components(separatedBy: " @ ")
+        let gameID = e.live?.game_id ?? ""
+        let board = cashStore.board(league: "NFL", gameID: gameID)
+        let rail = rail(excluding: e.id)
+        VStack(spacing: 0) {
+            CashRailLabelRow(title: CashRailFormat.billing(league: e.league, commence: e.commence.flatMap(parseISO8601)),
+                             live: !e.isFinal)
+            CashRailCard(awayName: names.first ?? e.title,
+                         homeName: names.count > 1 ? names[1] : "",
+                         awayAbbr: e.live?.away_abbr, homeAbbr: e.live?.home_abbr,
+                         awayScore: e.live?.away_score, homeScore: e.live?.home_score,
+                         marketLine: CashRailFormat.marketLine(oddsLine: e.oddsLine, pickLine: e.pickLine),
+                         clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
+                         board: board,
+                         onOpenGame: { onOpenGame(e.matchupFull, e.league) })
+            if !rail.isEmpty || tomorrowTease != nil {
+                ribbonView(rail)
+                    .background(GaryColors.insetBand)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.top, 10)
+            }
+        }
+        .pageGutter()
+        .onAppear { if !gameID.isEmpty { cashStore.watch(league: "NFL", gameID: gameID) } }
+        .onChange(of: gameID) { id in if !id.isEmpty { cashStore.watch(league: "NFL", gameID: id) } }
+    }
+
+    @ViewBuilder private var classicBody: some View {
         // M1 — hero owns the full width; the rest of the day's big ones run
         // as one slim ticker ribbon along the card's bottom (founder-picked
         // over the side rail: shorter card, nothing competing with the hero).

@@ -81,6 +81,35 @@ enum CashRailFormat {
         p > 0 ? 1 + Double(p) / 100 : 1 + 100 / Double(abs(p))
     }
 
+    /// The line over the card: the NFL's night games by name, every other game as the league.
+    static func billing(league: String?, commence: Date?) -> String {
+        let lg = (league ?? "").uppercased()
+        guard lg == "NFL", let commence else { return lg.isEmpty ? "NFL" : lg }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        let c = cal.dateComponents([.weekday, .hour], from: commence)
+        guard (c.hour ?? 0) >= 19 else { return "NFL" }
+        switch c.weekday {
+        case 5: return "THURSDAY NIGHT FOOTBALL"
+        case 1: return "SUNDAY NIGHT FOOTBALL"
+        case 2: return "MONDAY NIGHT FOOTBALL"
+        default: return "NFL"
+        }
+    }
+
+    /// "GB −2.5 · GARY PACKERS −2.5": the spread off the board (the total when
+    /// there is no spread), then Gary's pick. Nil when there is neither.
+    static func marketLine(oddsLine: String?, pickLine: String?) -> String? {
+        let parts = (oddsLine ?? "").components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
+        let spread = parts.first { $0.uppercased().hasPrefix("RL ") }.map { String($0.dropFirst(3)) }
+        let total = parts.first { $0.uppercased().hasPrefix("O/U") }
+        var out: [String] = []
+        if let market = spread ?? total { out.append(market) }
+        if let pick = pickLine?.trimmingCharacters(in: .whitespaces), !pick.isEmpty { out.append("GARY \(pick)") }
+        guard !out.isEmpty else { return nil }
+        return out.joined(separator: " · ").uppercased().replacingOccurrences(of: "-", with: "\u{2212}")
+    }
+
     /// What $10 returned: whole dollars from $100 up, else cents with ".00" dropped.
     static func payout10(_ p: Int) -> String {
         let v = 10 * decimal(p)

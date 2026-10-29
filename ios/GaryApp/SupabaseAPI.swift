@@ -542,6 +542,21 @@ enum SupabaseAPI {
         return rows
     }
 
+    /// The Cash Rail board for one live game (cash-rail-worker.js writes it
+    /// every 15 seconds). nil on any failure, so the card keeps its last board.
+    static func fetchLiveBoard(league: String, gameID: String) async -> CashRailBoard? {
+        let url = buildURL(table: "live_boards", query: [
+            URLQueryItem(name: "select", value: "league,game_id,status,possession,situation,elapsed_s,clock,hits"),
+            URLQueryItem(name: "league", value: "eq.\(league)"),
+            URLQueryItem(name: "game_id", value: "eq.\(gameID)"),
+            URLQueryItem(name: "limit", value: "1")
+        ])
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([CashRailBoard].self, from: data) else { return nil }
+        return rows.first
+    }
+
     /// One betting-angle wire item for the Home "Wire" feed — a result framed
     /// against the closing number, a line move, an injury with its market
     /// consequence, a curated X voice, or league pace. Written 3x daily by
