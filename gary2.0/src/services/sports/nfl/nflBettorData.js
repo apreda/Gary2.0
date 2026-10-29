@@ -339,7 +339,11 @@ function lineupChanges(d, code, gs) {
     const departed = players.filter((id) => regular(id) && of(g, id) === 0 && gone(g, id));
     const absent = players.filter((id) => regular(id) && of(g, id) === 0 && !gone(g, id) && !backupQb(id));
     const missing = absent.filter((id) => !stillOnReserve(id));
-    const limited = players.filter((id) => snapRegular(id) && of(g, id) > 0 && of(g, id) < 0.25);
+    // A fill-in quarterback's late snaps behind the returning starter are not a regular hurt or held back (Oct 29 2026
+    // hunt: Jalon Daniels, the Bucs' starter for three weeks, read "left early or limited" at 10% the day Mayfield
+    // came back).
+    const starterBack = (id) => name.get(id).pos === 'QB' && players.some((q) => q !== id && name.get(q).pos === 'QB' && of(g, q) >= 0.5);
+    const limited = players.filter((id) => snapRegular(id) && of(g, id) > 0 && of(g, id) < 0.25 && !starterBack(id));
     const reserved = players.filter((id) => !absent.includes(id) && !departed.includes(id) && onReserve(g, id) && !stillOnReserve(id) && of(g, id) === 0 && prior.some((e) => of(e, id) >= 0.25));
     const back = i ? players.filter((id) => of(g, id) >= 0.25 && of(gs[i - 1], id) < 0.1 && prior.some((e) => of(e, id) >= 0.25)) : [];
     const fresh = i ? players.filter((id) => of(g, id) >= 0.25 && prior.every((e) => of(e, id) < 0.1)) : [];
