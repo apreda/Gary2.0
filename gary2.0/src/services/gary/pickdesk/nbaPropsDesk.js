@@ -110,27 +110,30 @@ async function playerSheet(player, markets, asOf) {
   const officialOf = new Map(recs.map((r) => [String(r.game_id), (r.record?.players || []).find((p) => String(p.id) === String(player.player_id))]));
   const games = (cur?.games || []).map((g) => {
     const o = officialOf.get(String(g.gameId));
-    const fixed = o ? { pts: o.pts, reb: o.reb, ast: o.ast, fg3m: o.fg3m, pra: o.pts + o.reb + o.ast } : {};
+    // Minutes too: the record's are the official box's (Oct 29 2026 hunt: Vassell's 35.5 at Houston was officially 34).
+    const fixed = o ? { pts: o.pts, reb: o.reb, ast: o.ast, fg3m: o.fg3m, pra: o.pts + o.reb + o.ast, ...(Number.isFinite(Number(o.min)) ? { min: Number(o.min) } : {}) } : {};
     return { ...g, ...fixed, opponent: g.opponent || teamsById.get(String(g.opponentId)) || 'opponent not on file' };
   });
   const fields = [...new Set(['min', ...markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)])])];
   const name = (f) => ({ min: 'min', pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' }[f]);
+  // One game's minutes in whole minutes, as the official box and the reads give them.
+  const one = (g, f) => (f === 'min' && g.min != null && g.min !== '' ? String(Math.round(Number(g.min))) : n1(g[f]));
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];
   if (!cur) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
   if (!games.length) { lines.push('  No games yet this season.'); return lines.join('\n'); }
   if (games.length < 3) {
-    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`).join(' | ')}`);
+    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${fields.map((f) => `${one(g, f)} ${name(f)}`).join(', ')}`).join(' | ')}`);
     return lines.join('\n');
   }
   if (propSheetsByGame()) {
     lines.push(`  This season, ${games.length} games; the last ${Math.min(10, games.length)}, newest first:`);
-    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${fields.map((f) => `${n1(g[f])} ${name(f)}`).join(', ')}`);
+    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${fields.map((f) => `${one(g, f)} ${name(f)}`).join(', ')}`);
     return lines.join('\n');
   }
   lines.push(`  This season, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);
   lines.push(`  Last ${Math.min(10, games.length)} of them, newest first:`);
   for (const f of fields.filter((x) => x !== 'min')) lines.push(`    ${name(f)}: ${games.slice(0, 10).map((g) => n1(g[f])).join(', ')}`);
-  lines.push(`    min: ${games.slice(0, 10).map((g) => n1(g.min)).join(', ')}`);
+  lines.push(`    min: ${games.slice(0, 10).map((g) => one(g, 'min')).join(', ')}`);
   return lines.join('\n');
 }
 

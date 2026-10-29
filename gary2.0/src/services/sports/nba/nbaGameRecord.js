@@ -287,7 +287,9 @@ export async function buildNbaGameRecord(gameId) {
     detail: official ? [corrected.length && `corrected: ${corrected.join('; ')}`, unmatched.length && `not matched to the official box: ${unmatched.join(', ')}`,
       missing.length && `played in the official box, not in ours: ${missing.join(', ')}`].filter(Boolean).join(' | ') || null : 'official player lines not on file' });
   checks.push({ check: "the players' shooting adds up to the official box", ok: !shotGaps.length, detail: shotGaps.join('; ') || null });
-  checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.paint != null && teams.away.paint != null) });
+  // BDL's own field: ESPN fills paint, fast break and off turnovers but not second chance (Oct 29 2026: 8 of 12 games built
+  // before BDL's advanced box posted read "undefined second chance" and this check passed on ESPN's paint).
+  checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.secondChance != null && teams.away.secondChance != null) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });
 
   const home = teamOf(g.home_team), away = teamOf(g.visitor_team);

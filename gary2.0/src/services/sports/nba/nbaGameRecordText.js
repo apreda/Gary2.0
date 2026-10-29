@@ -86,7 +86,9 @@ function playerRow(p) {
 
 function teamBox(rec, side) {
   const t = rec.teams[side];
-  const kinds = t.paint != null ? `points: ${t.paint} in the paint, ${t.secondChance} second chance, ${t.fastBreak} fast break, ${t.offTurnovers} off turnovers, ${t.bench} bench` : `points: ${t.bench} bench; paint, second chance, fast break and off turnovers not on file`;
+  const kindsOf = [['paint', 'in the paint'], ['secondChance', 'second chance'], ['fastBreak', 'fast break'], ['offTurnovers', 'off turnovers']];
+  const onFile = kindsOf.filter(([k]) => t[k] != null), off = kindsOf.filter(([k]) => t[k] == null);
+  const kinds = `points: ${[...onFile.map(([k, label]) => `${t[k]} ${label}`), `${t.bench} bench`].join(', ')}${off.length ? `; ${off.map(([, label]) => label.replace(/^in the /, '')).join(', ').replace(/, ([^,]*)$/, ' and $1')} not on file` : ''}`;
   const gap = t.official && t.playersSum && ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'].some((k) => t.playersSum[k] !== t[k])
     ? ` · its players' lines above add up to ${t.playersSum.fgm}-${t.playersSum.fga} FG, ${t.playersSum.fg3m}-${t.playersSum.fg3a} 3PT, ${t.playersSum.ftm}-${t.playersSum.fta} FT (the stats feed is missing what the official box has)` : '';
   const source = t.official ? 'official box' : "players' rows summed (the official box not on file; team turnovers and rebounds not included)";
