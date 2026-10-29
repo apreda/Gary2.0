@@ -8,6 +8,9 @@ struct HomeSheetRowView: View {
     /// sport's own color (founder, Sep 24 2026: "People will start to
     /// associate which accent colors go with each sport").
     var showLeague = false
+    /// Where the score and the call sit on the board, so a lifted story knows a tap on a score from a tap off
+    /// (founder, Oct 29 2026: "every click has to be on the score and then every click off is a true click off").
+    var onScoreFrame: ((CGRect) -> Void)? = nil
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -61,6 +64,7 @@ struct HomeSheetRowView: View {
                         .foregroundStyle(GaryColors.gold.opacity(0.8))
                 }
             }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(HomeSheetRowView.boardSpace)) } action: { onScoreFrame?($0) }
             Spacer(minLength: 8)
             // The status CENTERS on the row (founder, Aug 3): with the hits
             // ledger gone it's a single element against a two-line stack, so
@@ -114,6 +118,9 @@ struct HomeSheetRowView: View {
         }
         .contentShape(Rectangle())
     }
+
+    /// The board's coordinate space, for the score frames.
+    static let boardSpace = "homeBoard"
 
     /// Each sport's color, a step down in brightness so it sits in the row
     /// (founder, Sep 24 2026: MLB "a true normal green", not the light one).

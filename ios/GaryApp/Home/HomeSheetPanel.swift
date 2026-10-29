@@ -29,8 +29,11 @@ struct HomeSheetPanel<YouScorecard: View>: View {
     }
     private final class FrameBook {
         var rows: [String: CGRect] = [:]
+        /// Each row's score and call, in the board's space.
+        var scores: [String: CGRect] = [:]
         var board: CGRect = .zero
     }
+    @Environment(\.readingPageActive) private var activePage
 
     var body: some View {
         VStack(spacing: 0) {
@@ -126,12 +129,11 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                     // A finished game with a story lifts it (founder, Oct 29 2026: the pick card is a choice under
                     // it now, not the default). With one up, another game swaps straight in ("they could literally
                     // just check each game as they go down"). Every other row still opens its card.
-                    if r.story != nil { lifted?.id == r.id ? close() : lift(r); return }
-                    close()
+                    if r.story != nil { lift(r); return }
                     guard !r.matchupFull.isEmpty else { return }
                     onOpenGame(PicksPinnedGame(league: r.league, gameID: r.gameID, matchup: r.matchupFull))
                 } label: {
-                    HomeSheetRowView(row: r, showLeague: selected == .all)
+                    HomeSheetRowView(row: r, showLeague: selected == .all, onScoreFrame: { frames.scores[r.id] = $0 })
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(r.story == nil ? "" : "Shows the story")
@@ -163,7 +165,12 @@ struct HomeSheetPanel<YouScorecard: View>: View {
         // away (founder, Oct 29 2026: "if it wasn't so blurred they could literally just check each game").
         .opacity(lifted == nil ? 1 : 0.42)
         .padding(.vertical, 3)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.board = $0 }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { board in
+            frames.board = board
+            // Scrolling the page off a story puts it back (founder, Oct 29 2026: "it naturally removes when it's
+            // obvious that I'm no longer looking at it").
+            if let lifted, abs(board.minY - lifted.boardScreenTop) > 14 { close() }
+        }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 // Self-contained card: adapts its own FILL for the ground
@@ -188,6 +195,24 @@ struct HomeSheetPanel<YouScorecard: View>: View {
                 .shadow(color: .black.opacity(0.55), radius: 18, y: 10)
                 .shadow(color: .black.opacity(0.65), radius: 4, y: 2)
         )
+        // While a story is up the board takes every tap itself: on another game's score, that game's story; anywhere
+        // else, the story goes back. The rows under it never fire.
+        .overlay {
+            if lifted != nil {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(SpatialTapGesture(coordinateSpace: .named(HomeSheetRowView.boardSpace)).onEnded { tap in
+                        if let r = rows.first(where: { $0.story != nil && $0.id != lifted?.id
+                                                      && (frames.scores[$0.id]?.insetBy(dx: -6, dy: -8).contains(tap.location) ?? false) }) {
+                            lift(r)
+                        } else {
+                            close()
+                        }
+                    })
+                    .accessibilityLabel("Close the story")
+                    .accessibilityAddTraits(.isButton)
+            }
+        }
         .overlay(alignment: .top) {
             if let lifted, let r = rows.first(where: { $0.id == lifted.id }), let story = r.story {
                 HomeBoardStoryPeek(row: r, story: story, onPickCard: {
@@ -203,6 +228,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
             }
         }
         .onChange(of: selected) { _ in lifted = nil }
+        .onChange(of: activePage) { _ in lifted = nil }
         // Home lifts the whole board over the panels after it while a story is up, so the card never slides under them.
         .preference(key: HomeBoardLiftedKey.self, value: lifted != nil)
         // `story Raptors`: lift that finished game's story (the first with one when no name is given).
@@ -213,6 +239,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
             else { return }
             lift(r)
         }
+        .coordinateSpace(name: HomeSheetRowView.boardSpace)
         .pageGutter()
     }
 
