@@ -74,7 +74,9 @@ export function seasonClause(games, propType, label, line = null) {
 // THE GAME-BY-GAME SHEET (Oct 26 2026 side-by-side test, test runs only): GARY_PROP_SHEETS=games drops the per-game
 // rates (each market's average, the volume a game in the head, the targets share over three games and the season) and
 // lists every game, each with its opponent, his touches and his share of the team's targets that day.
-const propSheetsByGame = () => process.env.GARY_PROP_SHEETS === 'games';
+// The game-by-game sheet is the sheet (Oct 29 2026, founder: "unwind the averages ... give Gary the raw numbers and let
+// him do what he wants with them"); GARY_PROP_SHEETS=averages brings the old rates back for a side-by-side test.
+const propSheetsByGame = () => process.env.GARY_PROP_SHEETS !== 'averages';
 
 /**
  * LAST SEASON, TOLD HONESTLY (founder GO, Oct 7 2026): last season's numbers sit beside this season's on every

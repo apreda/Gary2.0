@@ -54,7 +54,9 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 9-10 (Oct 29 2026, founder GO: "everything that happened in the game"): each team's third and fourth downs with the
 // distance (and the field position and score of each fourth-down try), each game's scoring in order with the score
 // after it, the largest lead each way and when, lead changes, and time of possession.
-const LEDGER_SCHEMA = 10;
+// 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
+// score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
+const LEDGER_SCHEMA = 11;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -232,7 +234,8 @@ function extraUnit() {
     puntsBlocked: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
     penalties: 0, penaltyYards: 0,
     contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0,
-    thirdDowns: [], fourthDowns: []
+    thirdDowns: [], fourthDowns: [], bigPlays: [],
+    byScore: { close: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, ahead: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, behind: { runs: 0, runYards: 0, passes: 0, passYards: 0 } }
   };
 }
 
@@ -295,6 +298,15 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
     if (down === 3 && togo != null) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam });
     if (down === 4 && togo != null) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
       yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')) });
+  }
+  // Plays of 20 yards or more and who made them, and the runs and passes by the score at the snap (Oct 29 2026,
+  // founder: a defense gives up yards differently when it is far ahead or far behind). Penalty-nullified snaps carry
+  // play_type no_play and are not here.
+  if (SCRIMMAGE.has(playType) && E(posteam)) {
+    const e = E(posteam), yards = num(g('yards_gained')) ?? 0, diff = num(g('score_differential'));
+    if (yards >= 20) e.bigPlays.push({ kind: playType, yards, who: playType === 'pass' ? (g('receiver_player_name') || g('passer_player_name') || '?') : (g('rusher_player_name') || '?') });
+    const slot = diff == null ? null : diff >= 9 ? e.byScore.ahead : diff <= -9 ? e.byScore.behind : e.byScore.close;
+    if (slot) { if (playType === 'run') { slot.runs += 1; slot.runYards += yards; } else { slot.passes += 1; slot.passYards += yards; } }
   }
   if (SCRIMMAGE.has(playType) && E(posteam)) {
     const wp = num(g('wp'));
@@ -418,7 +430,7 @@ function finishGameDetail(e) {
     special_teams_fumbles: e.stFumbles, special_teams_fumbles_lost: e.stFumblesLost,
     onside_recoveries: e.onside,
     penalties: e.penalties, penalty_yards: e.penaltyYards,
-    third_downs: e.thirdDowns, fourth_downs: e.fourthDowns,
+    third_downs: e.thirdDowns, fourth_downs: e.fourthDowns, big_plays: e.bigPlays, by_score: e.byScore,
     contest_plays: e.contestPlays,
     contest_epa_per_play: e.contestEpaN ? Number((e.contestEpa / e.contestEpaN).toFixed(3)) : null,
     contest_success_rate: e.contestSuccN ? Number((e.contestSucc / e.contestSuccN).toFixed(4)) : null

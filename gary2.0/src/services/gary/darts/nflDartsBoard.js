@@ -55,6 +55,9 @@ async function seasonLines(season) {
     cur.carries += n(r.carries); cur.rushYds += n(r.rushing_yards); cur.rushTd += n(r.rushing_tds);
     cur.passTd += n(r.passing_tds); cur.int += n(r.passing_interceptions); cur.attempts += n(r.attempts);
     cur.weeks = cur.weeks || new Set(); cur.weeks.add(n(r.week));
+    cur.rows = cur.rows || [];
+    cur.rows.push({ week: n(r.week), opp: r.opponent_team, targets: n(r.targets), rec: n(r.receptions), recYds: n(r.receiving_yards), recTd: n(r.receiving_tds),
+      carries: n(r.carries), rushYds: n(r.rushing_yards), rushTd: n(r.rushing_tds), passTd: n(r.passing_tds), int: n(r.passing_interceptions) });
     byKey.set(key, cur);
   }
   // A game he played without a stat row counts as a game (withSnapGames; Oct 29 2026 hunt: Josh Whyle, in all seven of
@@ -77,12 +80,19 @@ async function seasonLines(season) {
   return { byKey, byName, missing: !rows };
 }
 
+// His last three games as games, newest first (Oct 29 2026, founder: no season totals; it read "7 games, 45 targets, 31
+// catches, 512 rec yds, 4 TD"). A game he played without a stat row is a game with nothing in it.
 function statText(pos, s) {
   if (!s) return null;
-  const g = `${s.games} game${s.games === 1 ? '' : 's'}`;
-  if (pos === 'QB') return `${g}, ${s.passTd} pass TD, ${s.int} INT, ${s.rushYds} rush yds, ${s.rushTd} rush TD`;
-  if (pos === 'RB' || pos === 'FB') return `${g}, ${s.carries} carries, ${s.rushYds} rush yds, ${s.rushTd} rush TD, ${s.targets} targets, ${s.recYds} rec yds, ${s.recTd} rec TD`;
-  return `${g}, ${s.targets} target${s.targets === 1 ? '' : 's'}, ${s.rec} catch${s.rec === 1 ? '' : 'es'}, ${s.recYds} rec yds, ${s.recTd} TD${s.rushTd ? `, ${s.rushTd} rush TD` : ''}`;
+  const rows = new Map((s.rows || []).map((r) => [r.week, r]));
+  const last = [...(s.weeks || [])].sort((a, b) => b - a).slice(0, 3).map((w) => {
+    const r = rows.get(w);
+    if (!r) return `Wk ${w} no touches`;
+    if (pos === 'QB') return `Wk ${w} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds`;
+    if (pos === 'RB' || pos === 'FB') return `Wk ${w} ${r.carries} carries ${r.rushYds} yds${r.rushTd ? ` ${r.rushTd} TD` : ''}, ${r.targets} tgt ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}`;
+    return `Wk ${w} ${r.targets} tgt, ${r.rec} catch${r.rec === 1 ? '' : 'es'} ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}${r.rushTd ? `, ${r.rushTd} rush TD` : ''}`;
+  });
+  return `${s.games} game${s.games === 1 ? '' : 's'}; last ${last.length}, newest first: ${last.join('; ')}`;
 }
 
 export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null }) {

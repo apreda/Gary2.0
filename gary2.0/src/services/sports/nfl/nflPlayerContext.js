@@ -88,10 +88,13 @@ export const defenseByPosition = (season) => once(`def|${season}`, async () => {
     const g = GROUP(r.position);
     const d = r.opponent_team;
     if (!g || !d) continue;
-    if (!out.has(d)) out.set(d, { weeks: new Set(), WR: {}, TE: {}, RB: {}, QB: {} });
+    if (!out.has(d)) out.set(d, { weeks: new Set(), WR: {}, TE: {}, RB: {}, QB: {}, games: new Map() });
     const t = out.get(d);
     t.weeks.add(n(r.week));
-    const add = (k, v) => { t[g][k] = (t[g][k] || 0) + v; };
+    // Each game on its own too, with the offense it faced (Oct 29 2026, founder: no totals over games).
+    if (!t.games.has(n(r.week))) t.games.set(n(r.week), { opp: r.team, WR: {}, TE: {}, RB: {}, QB: {} });
+    const wk = t.games.get(n(r.week));
+    const add = (k, v) => { t[g][k] = (t[g][k] || 0) + v; wk[g][k] = (wk[g][k] || 0) + v; };
     add('targets', n(r.targets)); add('rec', n(r.receptions)); add('recYds', n(r.receiving_yards)); add('recTd', n(r.receiving_tds));
     add('carries', n(r.carries)); add('rushYds', n(r.rushing_yards)); add('rushTd', n(r.rushing_tds));
     add('passYds', n(r.passing_yards)); add('passTd', n(r.passing_tds)); add('int', n(r.passing_interceptions));
@@ -105,6 +108,16 @@ const TEAM_WORD = { WR: 'wide receivers', TE: 'tight ends', RB: 'running backs',
 export function defenseLine(cur, prev, defense, position, season) {
   const g = GROUP(position);
   if (!g || !defense) return null;
+  // Game by game, newest first, with the offense it faced (Oct 29 2026, founder: "give Gary the numbers behind the
+  // average"; it read "PHI defense against wide receivers, 2026 (5 games): 29 catches on 41 targets, 388 yards, 3 TD").
+  const games = cur?.get(defense)?.games;
+  if (games?.size) {
+    const bits = (x) => (g === 'QB' ? `${x.passYds || 0} passing yards, ${x.passTd || 0} TD, ${x.int || 0} INT, ${x.rushYds || 0} rushing`
+      : g === 'RB' ? `${x.carries || 0} carries for ${x.rushYds || 0}, ${x.rushTd || 0} TD; ${x.rec || 0} catches for ${x.recYds || 0}, ${x.recTd || 0} TD`
+        : `${x.rec || 0} catches on ${x.targets || 0} targets, ${x.recYds || 0} yards, ${x.recTd || 0} TD`);
+    const rows = [...games].sort((a, b) => b[0] - a[0]).map(([wk, x]) => `Wk ${wk} vs ${x.opp}: ${bits(x[g])}`);
+    return `${defense} defense against ${TEAM_WORD[g]}, ${season} game by game, newest first: ${rows.join(' · ')}`;
+  }
   const one = (map, label) => {
     const t = map?.get(defense);
     if (!t) return null;

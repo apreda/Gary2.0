@@ -36,7 +36,7 @@ describe('THE NFL PROP SHEETS', () => {
     expect(out.players).toBe(1);
     expect(out.text).toContain('BUFFALO BILLS (away)');
     expect(out.text).toContain('Josh Allen (QB)');
-    expect(out.text).toContain('player_pass_yds 248.5 (Over -115 / Under -105) — 2025: 317 194 232 (3 g, 247.7 per game)');
+    expect(out.text).toContain('player_pass_yds 248.5 (Over -115 / Under -105) — 2025: 317 194 232 (3 g)');
     // Never this year's label on last year's numbers.
     expect(out.text).not.toContain('2026:');
   });
@@ -54,10 +54,10 @@ describe('THE NFL PROP SHEETS', () => {
     });
 
     const line = out.text.split('\n').find((l) => l.includes('player_pass_yds'));
-    expect(line).toContain('2026: 311 244 (2 g, 277.5 per game)');
+    expect(line).toContain('2026: 311 244 (2 g)');
     expect(line.indexOf('2026:')).toBeLessThan(line.indexOf('2025:'));
-    // The usage frame comes from the window in front.
-    expect(out.text).toContain('per game (2026)');
+    // No per-game rates (Oct 29 2026, founder: the games, not their average).
+    expect(out.text).not.toContain('per game');
   });
 
   it('counts touchdowns instead of averaging them', () => {
@@ -105,7 +105,7 @@ describe('THE NFL PROP SHEETS', () => {
     const count = calculateNflHitRate(games, 'player_receptions', 4.5);
 
     expect(games.map((g) => nflStatForProp(g, 'player_receptions'))).toEqual([6, 3, 5, 7]);
-    expect(clause).toBe('2025: 6 3 5 7 (4 g, 5.3 per game)');
+    expect(clause).toBe('2025: 6 3 5 7 (4 g)');
     expect(count.hitsOver).toBe(3);
   });
 

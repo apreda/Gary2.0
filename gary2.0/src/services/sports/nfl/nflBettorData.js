@@ -162,69 +162,27 @@ const nickname = (code) => teamName(code).split(' ').at(-1);
 // "vs Bills", "@ Bills", or "vs Jaguars at a neutral site (Tottenham Hotspur Stadium)"; `short` for a line of many games.
 const versus = (x, name, short = false) => (!x.neutral ? `${x.home ? 'vs' : '@'} ${name}`
   : short ? `vs ${name} (neutral site)` : `vs ${name} at a neutral site${x.stadium ? ` (${x.stadium})` : ''}`);
-// Who an opponent is this season: its points scored and allowed a game across the league's games before the pick,
-// placed among the teams ("2nd fewest", "5th most"). Oct 26 2026 read review: "422 yards" came against a winless
-// Chargers team and "allowed 506 and 523" against Baltimore and Kansas City, and nothing beside the numbers said who
-// the opponent was; Gary carried them into games against defenses and offenses nothing like them. As college shows it.
-const tables = new WeakMap();
-function leagueTable(d, before) {
-  const byDay = tables.get(d) || new Map(); tables.set(d, byDay);
-  const key = `${before}|${d.asOf ?? ''}`;
-  if (byDay.has(key)) return byDay.get(key);
-  const sums = new Map();
-  for (const g of played(d, d.season, before)) {
-    for (const [code, pf, pa] of [[g.home_team, n(g.home_score), n(g.away_score)], [g.away_team, n(g.away_score), n(g.home_score)]]) {
-      const s = sums.get(code) || { games: 0, pf: 0, pa: 0 }; s.games += 1; s.pf += pf; s.pa += pa; sums.set(code, s);
-    }
-  }
-  const table = new Map([...sums].map(([code, s]) => [code, { scores: s.pf / s.games, allows: s.pa / s.games }]));
-  byDay.set(key, table);
-  return table;
-}
-const ordinal = (k) => `${k}${k % 100 >= 11 && k % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][k % 10] || 'th'}`;
-// Where a value sits among the teams, from whichever end is nearer: "the most", "5th most", "tied for 2nd fewest".
-function place(values, v) {
-  const more = values.filter((x) => x > v + 1e-9).length, fewer = values.filter((x) => x < v - 1e-9).length;
-  const tied = values.length - more - fewer > 1 ? 'tied for ' : '';
-  const [k, end] = more <= fewer ? [more + 1, 'most'] : [fewer + 1, 'fewest'];
-  return k === 1 ? `${tied ? 'tied for ' : ''}the ${end}` : `${tied}${ordinal(k)} ${end}`;
-}
-function opponentSeason(d, before, code) {
-  const table = leagueTable(d, before); const t = table.get(code);
-  if (!t) return null;
-  const all = [...table.values()];
-  return `scoring ${t.scores.toFixed(1)} points a game, ${place(all.map((x) => x.scores), t.scores)}, and allowing ${t.allows.toFixed(1)}, ${place(all.map((x) => x.allows), t.allows)}`;
-}
-// Who the opponent was that day: its record now and its points with the quarterback who played that day (Oct 26 2026:
-// "Packers scoring 20.6 a game" can blend a starter's games with a backup's, the Bears read's problem from the other
-// side). When he played all its games, the season is his. When it has had others, its points allowed stay the season's
-// (the defense is the same whoever throws) and its scoring and record are his other full games (75%+ of the passes),
-// as counts with no place among the teams: the game being described is left out, or a backup's one start reads as the
-// opponent's level (the Bears with Case Keenum read "scoring 27.0, allowing 7.0", the Eagles game itself).
+// Who the opponent was that day: its record now, its quarterback that day, and its other games as results with the
+// quarterback in each (founder, Oct 29 2026: no averages and no league places, "give Gary the numbers behind the
+// average"; it replaced "allowing 21.6 points a game, 14th fewest; Baker Mayfield 0-3 in his 3 other full games,
+// scoring 20.7 points a game"). The scores carry the points both ways, and a backup's games show his name (the Oct 26
+// Bears-with-Keenum lesson), so nothing is blended.
+const surname = (name) => String(name || '').trim().split(/\s+/).slice(1).join(' ') || String(name || '');
 function opponentThatDay(d, before, x) {
   const games = teamGames(d, x.opp, d.season, before);
-  const now = `${record(games)} now`;
-  const season = opponentSeason(d, before, x.opp);
-  if (!x.oppQb) return `${now}${season ? `, ${season}` : ''}`;
   // The starter who left early is named too (Oct 29 2026 hunt, round 7: the Patriots' Week 1 opponent read "Drew Lock at
   // QB that day", Sam Darnold's start and exit unsaid).
-  const qbThat = `${x.oppQb}${x.oppStartedQb && !sameQb(x.oppStartedQb, x.oppQb) ? ` (${x.oppStartedQb} started, left early)` : ''}`;
-  const roles = games.map((g) => qbRole(g, x.oppQb));
-  if (roles.includes('unknown')) return `${now}${season ? `, ${season}` : ''}; ${qbThat} at QB that day`;
-  if (roles.every((r) => r === 'with')) return `${now}${season ? `, ${season}` : ''}; ${qbThat} at QB that day and in every game`;
-  const table = leagueTable(d, before); const t = table.get(x.opp);
-  const allows = t ? `, allowing ${t.allows.toFixed(1)} points a game, ${place([...table.values()].map((v) => v.allows), t.allows)}` : '';
-  const others = games.filter((g, i) => roles[i] === 'with' && g.g.game_id !== x.g.game_id);
-  const sharedThatDay = qbRole(games.find((g) => g.g.game_id === x.g.game_id) || { passers: [] }, x.oppQb) === 'shared' ? ', sharing it' : '';
-  if (!others.length) return `${now}${allows}; ${qbThat} at QB that day${sharedThatDay}, with no other full game for them this season`;
-  const scored = others.reduce((a, g) => a + g.pf, 0) / others.length;
-  return `${now}${allows}; ${qbThat} at QB that day${sharedThatDay}: ${record(others)} in his ${others.length} other full game${others.length === 1 ? '' : 's'}, scoring ${scored.toFixed(1)} points a game`;
+  const qbThat = x.oppQb ? `; ${x.oppQb}${x.oppStartedQb && !sameQb(x.oppStartedQb, x.oppQb) ? ` (${x.oppStartedQb} started, left early)` : ''} at QB that day` : '';
+  const others = games.filter((g) => g.g.game_id !== x.g.game_id).slice().reverse()
+    .map((g) => `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa} ${versus(g, g.opp, true)}${g.qb ? ` (${surname(g.qb)}${g.startedQb && !sameQb(g.startedQb, g.qb) ? `, ${surname(g.startedQb)} started` : ''})` : ''}`);
+  return `${record(games)} now${qbThat}; ${others.length ? `their other games, newest first: ${others.join(', ')}` : 'no other games yet'}`;
 }
-/** The defense a player faced, for the prop sheets: "allowing 26.3 points a game, 5th most" for each team code. */
+/** The defense a player faced, for the prop sheets: its record now and the points it allowed in each of its games,
+ * newest first (Oct 29 2026, founder: no averages or places; it read "allowing 26.3 points a game, 5th most"). */
 export function defensesFaced(schedule, season, before, asOf = null) {
   const d = { schedule: schedule || [], season, asOf };
-  const table = leagueTable(d, before); const all = [...table.values()].map((x) => x.allows);
-  return new Map([...table].map(([code, t]) => [code, `allowing ${t.allows.toFixed(1)} points a game, ${place(all, t.allows)}`]));
+  const codes = [...new Set((d.schedule || []).filter((g) => String(g.season) === String(season)).flatMap((g) => [g.home_team, g.away_team]))];
+  return new Map(codes.map((code) => { const gs = teamGames(d, code, season, before); return [code, gs.length ? `${record(gs)} now; allowed ${gs.slice().reverse().map((g) => g.pa).join(', ')} in its games, newest first` : 'no games yet']; }));
 }
 // Each game with the opponent's record and season now and who played quarterback for it that day, as the game log gives
 // them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
@@ -606,6 +564,20 @@ function downsLine(x, code) {
   };
   return `downs: ${one(code, x.opp)} · ${one(x.opp, code)}`;
 }
+// Plays of 20 yards or more, and the runs and passes by the score at the snap, for both teams.
+function bigPlaysLine(x, code) {
+  const L = x.ledger?.lines;
+  if (!L?.[code]?.big_plays || !L?.[x.opp]?.big_plays) return null;
+  const one = (c) => { const b = L[c].big_plays; return `${nickname(c)} ${b.length ? b.map((p) => `${p.who} ${p.yards} ${p.kind === 'pass' ? 'catch' : 'run'}`).join(', ') : 'none'}`; };
+  return `plays of 20+ yards: ${one(code)} · ${one(x.opp)}`;
+}
+function byScoreLine(x, code) {
+  const L = x.ledger?.lines;
+  if (!L?.[code]?.by_score || !L?.[x.opp]?.by_score) return null;
+  const part = (s) => `${s.runs} run${s.runs === 1 ? '' : 's'} for ${s.runYards} yds, ${s.passes} pass play${s.passes === 1 ? '' : 's'} for ${s.passYards}`;
+  const one = (c) => { const b = L[c].by_score; return `${nickname(c)} ${[['within one score', b.close], ['ahead by 9+', b.ahead], ['behind by 9+', b.behind]].filter(([, s]) => s.runs || s.passes).map(([k, s]) => `${k}: ${part(s)}`).join('; ')}`; };
+  return `by the score at the snap: ${one(code)} · ${one(x.opp)}`;
+}
 
 // The box score both ways, as counts.
 const boxLine = (x, code) => (!x.off || !x.def ? 'box score not on file'
@@ -691,7 +663,7 @@ export function gameByGame(d, team, before) {
     const kicking = x.off && x.def ? `kicking: ${nickname(c)} ${kicks(x.off.kicking)}; ${nickname(x.opp)} ${kicks(x.def.kicking)}` : null;
     const scoring = !d.ledgerGames ? null : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, c);
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
-    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null, flowLine(x, c), downsLine(x, c),
+    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null, flowLine(x, c), downsLine(x, c), bigPlaysLine(x, c), byScoreLine(x, c),
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
@@ -918,6 +890,8 @@ export function nflGameFull(d, x, code, before) {
     `  ${pressureLine(d, x, code)}`,
     flowLine(x, code) ? `  ${flowLine(x, code)}` : null,
     downsLine(x, code) ? `  ${downsLine(x, code)}` : null,
+    bigPlaysLine(x, code) ? `  ${bigPlaysLine(x, code)}` : null,
+    byScoreLine(x, code) ? `  ${byScoreLine(x, code)}` : null,
     `  without that day: ${nickname(code)} ${absent(code, ourGames)} · ${nickname(o)} ${absent(o, oppGames)}`,
     // The missing regulars are on the "without that day" line; the lineup line keeps the rest, and goes when nothing is
     // left (Oct 29 2026 hunt, round 7: a team with absences only read its missing regulars twice).
