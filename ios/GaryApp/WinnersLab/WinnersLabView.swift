@@ -64,10 +64,6 @@ struct WinnersLabView: View {
                 ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        // The ticker runs at the very top of the page (founder, Oct 28 2026), over the header.
-                        if !showsRecap && todayHasResult {
-                            resultsTicker.pageGutter().padding(.bottom, 6)
-                        }
                         header
                         // Yesterday's line rides the header, between the date and
                         // the profile (founder, Sep 23 2026), so the page starts
@@ -568,28 +564,6 @@ struct WinnersLabView: View {
             .fixedSize()
             .accessibilityElement(children: .combine)
         }
-    }
-
-    /// THE TICKER (founder, Oct 4 2026, mock 31 "slim ticker"): a slim strip
-    /// at the top of the page (over the header since Oct 28 2026) once today has a result; each result runs past,
-    /// latest game first. The day's record and money moved to TODAY's row
-    /// (Oct 7 2026), so the strip no longer repeats them.
-    private var resultsTicker: some View {
-        let items: [LabResultsTicker.Item] = (board?.tickets ?? [])
-            .filter { !$0.scratched && ["won", "lost", "push"].contains(resultWord($0) ?? "") }
-            .sorted { (LabFormat.parseISO($0.commence) ?? .distantPast) > (LabFormat.parseISO($1.commence) ?? .distantPast) }
-            .map { t in
-                let stake = t.stakeUnits ?? 0
-                let word = resultWord(t) ?? ""
-                let net = word == "won" ? stake * LabFormat.payout(t.price) : word == "lost" ? -stake : 0
-                return LabResultsTicker.Item(
-                    id: t.candidateID,
-                    word: word == "won" ? "WIN" : word == "lost" ? "LOSS" : "PUSH",
-                    color: word == "won" ? GaryColors.win : word == "lost" ? GaryColors.loss : GaryColors.silver,
-                    pick: LabPlayModule.shortTitle(LabFormat.ticketBody(t.pickText).uppercased(), player: t.prop?.player, matchup: t.matchup),
-                    amount: word == "push" ? "$0" : LabFormat.unitsNet(net))
-            }
-        return LabResultsTicker(items: items, running: refreshActive)
     }
 
     private var filtering: Bool { kindFilter != .all || statusFilter != .all }
@@ -1438,60 +1412,6 @@ struct ComingWindow: Identifiable, Equatable {
     }
 }
 
-/// The slim results ticker at the top of Winners (founder, Oct 4 2026; over the header since Oct 28):
-/// the day's results running past. Results that fit simply sit still; with
-/// Reduce Motion the strip scrolls by hand instead of moving.
-struct LabResultsTicker: View {
-    struct Item: Identifiable, Equatable {
-        let id: Int
-        let word: String
-        let color: Color
-        let pick: String
-        let amount: String
-    }
-    let items: [Item]
-    /// The page is on screen; the tape stops when it isn't.
-    var running: Bool = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var tapeWidth: CGFloat = 0
-    private static let gap: CGFloat = 14
-    private static let speed: Double = 28 // points a second
-
-    var body: some View {
-        HStack(spacing: 10) {
-            GeometryReader { geo in
-                Group {
-                    if reduceMotion || tapeWidth <= geo.size.width {
-                        ScrollView(.horizontal, showsIndicators: false) { tape }
-                    } else {
-                        // Moved by Core Animation (MarqueeTape in DartsParts.swift, Oct 7 2026): the main thread
-                        // rests while the results run. The tape has no buttons, so touches pass through it.
-                        MarqueeTape(lap: LabResultsTape(items: items, gap: Self.gap), lapKey: tapeKey, gap: Self.gap,
-                                    speed: Self.speed, running: running, holdsUnderFinger: false)
-                    }
-                }
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .leading)
-            }
-            .clipped()
-            // The tape's width keeps being measured while it runs inside the marquee.
-            .background(alignment: .leading) { tape.hidden() }
-        }
-        .frame(height: 30)
-        .overlay(alignment: .bottom) { LabHairline() }
-        .onPreferenceChange(LabResultsTapeWidthKey.self) { tapeWidth = $0 }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Today's results. " + items.map { "\($0.word) \($0.pick), \($0.amount)" }.joined(separator: "; "))
-    }
-
-    /// One pass of the results, at its natural width.
-    private var tape: some View {
-        LabResultsTape(items: items, gap: Self.gap).equatable()
-    }
-
-    /// What the tape shows; a new key rebuilds the moving strip.
-    private var tapeKey: String { items.map { "\($0.id)|\($0.word)|\($0.pick)|\($0.amount)" }.joined(separator: "\n") }
-}
-
 /// The gold rule under the Winners header, made of the day's plays (founder
 /// GO, Oct 7 2026, mock 38): one segment a play in game order, as long as its
 /// bet, green won, red lost, grey push; a play still to come is a short gold
@@ -1612,29 +1532,3 @@ struct WinnersRunSpark: View {
     }
 }
 
-/// The ticker's content. Equal when it shows the same results.
-private struct LabResultsTape: View, Equatable {
-    let items: [LabResultsTicker.Item]
-    let gap: CGFloat
-
-    var body: some View {
-        HStack(spacing: gap) {
-            ForEach(items) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(item.word).font(GaryFonts.mono(11.5, bold: true)).foregroundStyle(item.color)
-                    Text(item.pick).font(GaryFonts.mono(11.5)).foregroundStyle(GaryColors.warmWhite)
-                    Text(item.amount).font(GaryFonts.mono(11.5)).foregroundStyle(item.color)
-                }
-                Text("·").font(GaryFonts.mono(11.5)).foregroundStyle(LabInk.dimmer)
-            }
-        }
-        .fixedSize()
-        .background(GeometryReader { g in Color.clear.preference(key: LabResultsTapeWidthKey.self, value: g.size.width) })
-    }
-}
-
-/// The ticker strip's natural width (one lap of the tape).
-private struct LabResultsTapeWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}

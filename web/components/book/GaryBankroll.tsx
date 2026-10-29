@@ -24,6 +24,8 @@ export interface BankrollSnapshot {
   flat_profit_units: number;
   max_drawdown_units: number;
   curve: { date: string; net_units: number; flat_units: number }[];
+  /** Days taken off the record, each with the note fans read (Oct 29 2026: Oct 17's bug day). */
+  scrubbed?: { date: string; note: string }[];
 }
 const units = (n: number) => `${n.toFixed(2)}u`;
 const signed = (n: number) => `${n >= 0 ? '+' : ''}${units(n)}`;
@@ -62,6 +64,7 @@ export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
         <figcaption className="flex justify-between text-xs text-low"><span>{points[1].date}</span><span>Gold: Gary · Dashed: flat 1u</span><span>{points.at(-1)?.date}</span></figcaption>
         <details className="mt-3 text-xs text-mid"><summary className="cursor-pointer">Daily results</summary><table className="mt-2 w-full text-left"><thead><tr><th>Date</th><th>Gary net</th><th>Flat net</th></tr></thead><tbody>{b.curve.map(p => <tr key={p.date}><td>{p.date}</td><td>{signed(p.net_units)}</td><td>{signed(p.flat_units)}</td></tr>)}</tbody></table></details>
       </figure> : <p className="mt-6 text-sm text-mid">{b.bets ? 'The curve begins when the first bets settle.' : 'The bankroll is ready for the next published Winners bets.'}</p>}
+      {(b.scrubbed ?? []).map(d => <p key={d.date} className="mt-5 text-sm leading-relaxed text-mid"><span className="font-mono text-xs uppercase tracking-widest text-gold">{new Date(`${d.date}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' })} · Scrubbed</span><br />{d.note}</p>)}
       <p className="mt-5 text-xs leading-relaxed text-low">1u is 1% of the starting simulated bankroll. Stakes are amounts risked, locked before play. ROI is net profit / settled stakes, excluding voids. The flat comparison uses these exact bets and odds. Earlier flat-stake history remains below.</p>
     </section>
   );

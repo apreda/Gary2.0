@@ -1820,6 +1820,12 @@ struct GaryBankrollSnapshot: Decodable {
         let losses: Int
     }
     var days: [Day]? = nil
+    /// Days taken off the record, each with the note fans read (founder, Oct 29 2026: Oct 17's bug day).
+    struct Scrub: Decodable {
+        let date: String
+        let note: String
+    }
+    var scrubbed: [Scrub]? = nil
 }
 
 /// One unit is 1% of Gary's $10,000 bankroll, so the server's units read as
@@ -1901,6 +1907,15 @@ private struct GaryBankrollPanel: View {
                             .font(.system(size: 14)).foregroundStyle(.secondary)
                     }
                     calendar(b)
+                    ForEach(b.scrubbed ?? [], id: \.date) { scrub in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("\(LabFormat.monthDay(scrub.date).uppercased()) · SCRUBBED")
+                                .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
+                            Text(scrub.note)
+                                .font(.system(size: 14)).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                 } else if !failed { ProgressView("Loading bankroll") }
                 if failed {
                     Button("Bankroll unavailable · Tap to retry") { Task { await refresh() } }

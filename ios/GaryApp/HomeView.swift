@@ -983,6 +983,14 @@ struct HomeView: View {
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
+        // ── WINNERS leads Home (founder, Oct 29 2026: "in like a hero style ... advertise the winners page on
+        // the home page"): Gary's day on Winners, one tap to the page. It replaced the sealed stub at the foot.
+        HomeWinnersHero(onOpen: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+        })
+        .opacity(animateIn ? 1 : 0)
+        .animation(.easeOut(duration: 0.6).delay(0.03), value: animateIn)
+
         // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
         // not move at first pitch and they do not move again at the last out:
         // the stories own the top of Home, above the countdown, and each game's
@@ -1054,13 +1062,6 @@ struct HomeView: View {
             // the Wire now lives on Picks.
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
         }
-        // ── WINNERS — the sealed card, slip-styled (the one conversion door).
-        HomeWinnersStub(onOpen: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-        })
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.08), value: animateIn)
-
         // (The Record now travels with the day cycle — see recordBlock above.
         // The page ends on the discovery shelf + the quiet social footer.)
     }
