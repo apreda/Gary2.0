@@ -38,10 +38,11 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   const LATE = ['the advanced box is on file', 'the official team box is on file', 'the venue is on file', 'the injury report at tip is on file',
     "each player's quarters add up to his minutes and points"];
   // The league corrects a box days after the final (Oct 28 2026: Clingan's 10 rebounds at Sacramento on Oct 23 became
-  // 11 and Camara's 3 became 2 after the record was built on Oct 27): a game is built again two days and seven days
-  // after its date, once each.
+  // 11 and Camara's 3 became 2 after the record was built on Oct 27): a game is built again the morning after (8 AM ET;
+  // Oct 29 2026 hunt: ESPN moved Washington's fast-break points at Cleveland from 10 to 12 overnight), two days and seven
+  // days after its date, once each.
   const at = (ymd, days) => Date.parse(`${String(ymd).slice(0, 10)}T12:00:00Z`) + days * 86_400_000;
-  const beforeCorrections = (s) => Boolean(s.builtAt) && [2, 7].some((d) => Date.parse(s.builtAt) < at(s.date, d) && Date.now() >= at(s.date, d));
+  const beforeCorrections = (s) => Boolean(s.builtAt) && [1, 2, 7].some((d) => Date.parse(s.builtAt) < at(s.date, d) && Date.now() >= at(s.date, d));
   const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || beforeCorrections(s) || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
   for (const g of missing) {
@@ -65,7 +66,9 @@ async function tonightSetting(tonight, team, games) {
 }
 
 // What is different tonight from the games shown: each regular (started one of them, or played 15+ minutes in two)
-// whose status tonight differs from the last game. It points to the games; it concludes nothing.
+// listed tonight, or back tonight after missing the last game. It points to the games; it concludes nothing. (Oct 29 2026
+// hunt: a regular Out tonight who also missed the last game was left out, and the line read "no regular ... is listed
+// tonight" over Keegan Murray, Out; a team that had not filed read the same.)
 function whatsDifferent(team, records, listing) {
   const shown = records.slice(0, NBA_WINDOW).map((r) => r.record);
   if (!shown.length) return `${team.name}: no games yet`;
@@ -88,11 +91,12 @@ function whatsDifferent(team, records, listing) {
     const status = tonight?.status && tonight.status !== 'Available' ? tonight.status : null;
     const playedLast = last.players.some((p) => p.side === sideOf(last, team.id) && p.name === e.name && p.min > 0);
     const games = `played ${e.played.length} of the ${shown.length} games below${e.missed.length ? `, not in ${e.missed.join(', ')}` : ''}`;
-    if (status && playedLast) lines.push(`  ${e.name}: ${status} tonight; ${games}`);
-    else if (status && /questionable|probable|doubtful/i.test(status)) lines.push(`  ${e.name}: ${status} tonight; ${games}`);
-    else if (!status && !playedLast && listing && listing !== 'unfiled') lines.push(`  ${e.name}: not on tonight's injury report; did not play the last game; ${games}`);
+    if (status) lines.push(`  ${e.name}: ${status} tonight; ${games}`);
+    else if (!playedLast && listing && listing !== 'unfiled') lines.push(`  ${e.name}: not on tonight's injury report; did not play the last game; ${games}`);
   }
-  return `${team.name}:${lines.length ? `\n${lines.join('\n')}` : ' no regular of the games below is listed tonight or back tonight'}`;
+  const none = listing === 'unfiled' ? " tonight's injury report not filed yet" : !listing ? " tonight's injury report not on file"
+    : ' no regular of the games below is listed tonight or back tonight';
+  return `${team.name}:${lines.length ? `\n${lines.join('\n')}` : none}`;
 }
 
 /** The game as the game-by-game system shows it. `news` is the live read's news for the same desk. */

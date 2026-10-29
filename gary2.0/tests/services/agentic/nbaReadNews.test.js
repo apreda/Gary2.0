@@ -54,4 +54,12 @@ describe('the NBA news Gary reads', () => {
     ].join('\n'));
     expect(news).toBe("Holmgren left Tuesday's game briefly and returned; Embiid departed with a left knee injury.");
   });
+  it('checks "fouled out" against the box, game by game (Oct 29 2026 hunt)', () => {
+    const fouls = (pf) => Object.assign(side([{ ...row('Jared McCain', 30, 10, 4, 9, 2, 5), pf }], 'Thunder', 'Oklahoma City Thunder'),
+      { opponent: side([row('Victor Wembanyama', 34, 12, 1, 13, 0, 4)], 'Spurs', 'San Antonio Spurs') });
+    const f = (pf) => newsFacts([{ ...seasons[0], boxes: [fouls(pf)] }, seasons[1]], names, [spurs, thunder]);
+    const said = (pf) => newsForGary(deskWith('McCain fouled out against San Antonio.\n\nTip is 8 p.m.'), { facts: f(pf), start: '2026-10-20', asOf: new Date('2026-10-23T00:07:00Z'), season: 2026 });
+    expect(said(5)).not.toContain('fouled out');
+    expect(said(6)).toContain('McCain fouled out against San Antonio');
+  });
 });

@@ -129,7 +129,7 @@ export async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf })
     const theirs = new Map();
     for (const side of Object.values(listing)) {
       if (side === 'unfiled') continue;
-      for (const [k, r] of side) if (r.status !== 'Available' && !/g league/i.test(r.reason)) theirs.set(k, statusKey(r.status));
+      for (const [k, r] of side) if (r.status !== 'Available' && !/g league - two-way/i.test(r.reason)) theirs.set(k, statusKey(r.status));
     }
     if (theirs.size === mine.size && [...mine].every(([k, s]) => theirs.get(k) === s)) return { postedAt: report.postedAt };
   }
@@ -159,7 +159,7 @@ export async function availableListed(desk, { homeTeam, awayTeam, tip, asOf }) {
     for (const [tag, team] of [['AWAY', awayTeam], ['HOME', homeTeam]]) {
       const side = listing[team];
       if (!side || side === 'unfiled') continue;
-      const rows = [...side.values()].filter((r) => r.status === 'Available' && !/g league/i.test(r.reason));
+      const rows = [...side.values()].filter((r) => r.status === 'Available' && !/g league - two-way/i.test(r.reason));
       if (rows.length) lines.push(`[${tag}] ${team}: ${rows.map((r) => `${r.name} (${String(r.reason || '').replace(/^Injury\/Illness - /, '')})`).join('; ')}`);
     }
     return lines.length ? `Listed Available on the same report:\n${lines.join('\n')}` : '';
@@ -370,8 +370,8 @@ export function newsFacts(seasons, names, league = []) {
       if (!box) return;
       const game = ts.games[i]?.id;
       teamRows.push(box.totals, box.opponent.totals);
-      for (const p of box) add(p.name, ts.team, { ...p, game }, true);
-      for (const p of box.opponent) add(p.name, box.opponent.fullName, { ...p, game }, false);
+      for (const p of box) add(p.name, ts.team, { ...p, game, opp: box.opponent.fullName }, true);
+      for (const p of box.opponent) add(p.name, box.opponent.fullName, { ...p, game, opp: box.fullName || ts.team }, false);
     });
   }
   for (const [team, list] of names) for (const n of list) add(n, team, null, false);
@@ -513,6 +513,18 @@ function uncheckedNumbers(line, facts) {
     // points in New York, while Cleveland's supporting group includes Tyson's shooting").
     const playedToo = groups.some((g) => (g.team ? facts.here.has(sentence.slice(g.at, g.end)) && !facts.zeroWords.includes(sentence.slice(g.at, g.end))
       : g.members.some((names) => names.some((n) => { const t = facts.players.get(n)?.team; return facts.tonight.has(t) && !facts.zero.has(t); }))));
+    // "Fouled out" against the box's fouls, game by game when the sentence names the opponents (Oct 29 2026 hunt: "He
+    // fouled out against Minnesota and Charlotte"; he had 5 fouls against Minnesota).
+    for (const m of sentence.matchAll(/\bfoul(?:ed|s)? out\b/gi)) {
+      const owner = ownerAt(m.index);
+      if (!owner || owner.team) continue;
+      const named = [...facts.teamWords].filter((w) => new RegExp(`\\b${esc(w)}\\b`).test(sentence.slice(m.index)));
+      const vs = (r, w) => plain(String(r.opp || '')).includes(w);
+      const ok = owner.members.every((names) => (named.length
+        ? named.every((w) => claimOk(facts, names, (r) => vs(r, w) && r.pf >= 6) || !names.some((n) => rowsOf(facts, n).some((r) => vs(r, w))))
+        : claimOk(facts, names, (r) => r.pf >= 6)));
+      if (!ok) bad.push(m[0]);
+    }
     const away = facts.elsewhere?.test(sentence) && !playedToo && !/\b(?:tonight|today|next|upcoming|will)\b/i.test(sentence);
     if (zeroIn(sentence, [...groups, ...(he ? [he] : [])]) && (PERFORMANCE.test(sentence) || GAME_TOLD.test(sentence) || away)) bad.push('a game by a team with no games yet');
     const last = [...groups].reverse().find((g) => !g.team);

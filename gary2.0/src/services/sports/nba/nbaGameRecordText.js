@@ -11,6 +11,8 @@ const periodName = (q) => (q <= 4 ? `${ord(q)} quarter` : q === 5 ? 'overtime' :
 const mins = (m) => (m > 0 && m < 0.5 ? '<1' : String(Math.round(m)));
 const possessive = (name) => (/s$/.test(name) ? `${name}'` : `${name}'s`);
 const signed = (n) => (n == null ? '' : n > 0 ? `+${n}` : String(n));
+import { samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
+
 export const sideOf = (rec, teamId) => (String(rec.home.id) === String(teamId) ? 'home' : 'away');
 const other = (s) => (s === 'home' ? 'away' : 'home');
 
@@ -64,13 +66,16 @@ function flowText(rec, us) {
 function reportText(rec, side, before) {
   const r = rec.report[side]; const short = rec[side].short;
   if (!r || r.notOnFile) return `${short}: not on file`;
-  const rows = r.rows.filter((x) => !/g league/i.test(x.reason));
+  const rows = r.rows.filter((x) => !/g league - two-way/i.test(x.reason));
   if (!rows.length) return `${short}: nobody listed`;
   const reason = (x) => String(x.reason || '').replace(/^Injury\/Illness - /, '').replace(/;\s*/g, ' ');
-  const played = new Set(before.flatMap((b) => b.summary.played[summarySide(b.summary, rec[side].id)] || []));
+  // Report names against box names the way the live read matches them (Oct 29 2026 hunt: the report's "Sergio de Larrea"
+  // and "Morez Johnson Jr." are the box's "Sergio De Larrea" and "Morez Johnson", and read as not in any game before).
+  const played = [...new Set(before.flatMap((b) => b.summary.played[summarySide(b.summary, rec[side].id)] || []))];
+  const names = rows.map((x) => x.name);
   const groups = new Map();
   for (const x of rows) {
-    const fresh = before.length && !played.has(x.name);
+    const fresh = before.length && !samePlayerIn(x.name, played, names);
     const key = `${x.status}${fresh ? ` (not in ${before.length === 1 ? 'their one game' : `any of their ${before.length} games`} before this one)` : ''}`;
     if (!groups.has(key)) groups.set(key, []); groups.get(key).push(`${x.name} (${reason(x)})`);
   }
@@ -118,17 +123,19 @@ export function fullGameText(rec, teamId, byTeam) {
   for (const side of [us, them]) {
     const mine = rec.players.filter((p) => p.side === side);
     const played = mine.filter((p) => p.min > 0).sort((a, b) => (b.starter - a.starter) || (b.min - a.min));
-    const listed = new Set((rec.report[side].rows || []).filter((x) => x.status !== 'Available').map((x) => x.name));
-    const sat = mine.filter((p) => p.min <= 0 && !listed.has(p.name)).map((p) => p.name);
+    const listed = (rec.report[side].rows || []).filter((x) => x.status !== 'Available').map((x) => x.name);
+    const sat = mine.filter((p) => p.min <= 0 && !samePlayerIn(p.name, listed, mine.map((q) => q.name))).map((p) => p.name);
     lines.push(`  ${rec[side].short} (* started):`, ...played.map(playerRow));
     if (sat.length) lines.push(`    did not play, not on the injury report: ${sat.join(', ')}`);
     // Who was on the team's next listing that wasn't on this one, among those who played here.
     const n = next(rec[side].id);
     if (n) {
-      const listedHere = new Set((rec.report[side].rows || []).map((x) => x.name));
-      const after = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []).filter((x) => x.status !== 'Available' && !listedHere.has(x.name) && played.some((p) => p.name === x.name) && !/g league/i.test(x.reason));
+      const listedHere = (rec.report[side].rows || []).map((x) => x.name);
+      const nextRows = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []);
+      const box = (x) => played.find((p) => p.name === samePlayerIn(x.name, played.map((q) => q.name), nextRows.map((y) => y.name)));
+      const after = nextRows.filter((x) => x.status !== 'Available' && !samePlayerIn(x.name, listedHere, nextRows.map((y) => y.name)) && box(x) && !/g league - two-way/i.test(x.reason));
       const left = (name) => { const o = rec.lastOff?.[name]; return !o ? '' : o.clock === 'end' ? `, on the floor to the end of the ${periodName(o.period)}` : `, last left the floor in the ${periodName(o.period)} with ${o.clock} left`; };
-      if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(played.find((p) => p.name === x.name).min)} min here${left(x.name)})`).join(', ')}`);
+      if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(box(x).min)} min here${left(box(x).name)})`).join(', ')}`);
     }
   }
   lines.push(teamBox(rec, us), teamBox(rec, them));

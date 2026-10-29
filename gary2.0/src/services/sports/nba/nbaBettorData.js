@@ -138,13 +138,13 @@ function whoPlayed(box, others, out, starters, scoring, official) {
 }
 
 // Who the opponent was missing that night: its Out list on the league's report at or before the tip (Oct 23 2026 data
-// audit: a win over a team without its starters read the same as one over the full roster). G League assignments are
-// not absences from the rotation and stay off.
+// audit: a win over a team without its starters read the same as one over the full roster). Two-way players' G League
+// listings stay off; a player sent down on assignment counts (Oct 29 2026 hunt).
 export const reportClock = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 const ailment = (reason) => String(reason || '').replace(/^Injury\/Illness - /, '').replace(/;\s*/g, ' ').trim();
 const reportDate = (tip) => tip.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
-// A team's Out rows on one listing (G League assignments are not absences from the rotation).
-const outRows = (side) => [...side.values()].filter((r) => r.status === 'Out' && !/g league/i.test(r.reason));
+// A team's Out rows on one listing (two-way players' G League listings are not absences from the rotation).
+const outRows = (side) => [...side.values()].filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason));
 
 // Who played for a team in its last PLAYED_FROM_GAMES games before `before`, from their box scores: { n, keys }, or
 // null when a box is not on file (Oct 27 2026 data audit: Golden State's Out list read "Jimmy Butler III, Kristaps

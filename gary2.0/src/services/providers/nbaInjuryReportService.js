@@ -72,8 +72,9 @@ function isActionableInjury(entry) {
   // Skip players cleared to play
   if (status === 'available') return false;
 
-  // Skip G-League assignments (not injuries)
-  if (reason.includes('g league') || reason.includes('g-league')) return false;
+  // Skip two-way players' G League listings; a player sent down on assignment is out of the rotation that night and
+  // stays (Oct 29 2026 hunt: Brooklyn's Drake Powell, 12 minutes two nights before, read as nobody listed).
+  if (/g[ -]league - two-way/.test(reason)) return false;
 
   return true;
 }

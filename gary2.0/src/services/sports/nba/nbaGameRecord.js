@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 15;
+export const NBA_RECORD_VERSION = 16;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -61,9 +61,25 @@ export async function settingOf(g, team, teamGames) {
 // Technicals, flagrants and ejections, in order, from the play-by-play (Oct 27 2026 loop); defensive three-seconds and
 // delay technicals are routine and left out.
 const INCIDENT = /^(?:Technical Foul|Double Technical Foul|Flagrant Foul Type [12]|Flopping Technical|Ejection|Taunting Technical)$/i;
+// The feed now and then carries a play twice (one double technical read as two at Atlanta on Oct 24), cuts a name off
+// ("Double technical foul: Kenrich Williams and", in ESPN's feed too), or has a flagrant reviewed and called only as its
+// free throws (Dallas at Miami, Oct 26); each said as such (Oct 29 2026 hunt).
 export function incidentsOf(plays) {
-  return [...(plays || [])].sort((a, b) => a.order - b.order).filter((p) => INCIDENT.test(String(p.type || '')))
-    .map((p) => ({ period: p.period, text: String(p.text || p.type).trim() }));
+  const ordered = [...(plays || [])].sort((a, b) => a.order - b.order);
+  const seen = new Set(), out = [];
+  for (const p of ordered) {
+    const at = `${p.period}|${p.clock}`;
+    if (INCIDENT.test(String(p.type || ''))) {
+      const text = String(p.text || p.type).trim();
+      if (seen.has(`${at}|${text}`)) continue;
+      seen.add(`${at}|${text}`);
+      out.push({ period: p.period, text: / and$/.test(text) ? `${text} (the second name not on file)` : text });
+    } else if (/^Free Throw - Flagrant 1 of/i.test(String(p.type || '')) && !ordered.some((q) => `${q.period}|${q.clock}` === at && /^Flagrant Foul/i.test(String(q.type || '')))) {
+      const fouled = String(p.text || '').replace(/\s+(?:makes|misses)\b.*$/i, '').trim();
+      out.push({ period: p.period, text: `Flagrant foul against ${fouled || 'a player'} (the play-by-play has only the free throws)` });
+    }
+  }
+  return out;
 }
 
 /** How the game went, from the play-by-play (home/away as the game has them). Null when the plays don't end at the final
@@ -303,7 +319,7 @@ export async function buildNbaGameRecord(gameId) {
     wholeMinuteQuarters,
     report, players, teams, flow };
   checks.push({ check: 'the venue is on file', ok: Boolean(record.setting.home.venue) });
-  const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason)).map((r) => r.name);
+  const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason)).map((r) => r.name);
   const summary = { date: g.date, home: { ...home, score: final.home }, away: { ...away, score: final.away }, ot: ots.length,
     out: { home: outOf('home'), away: outOf('away') },
     listed: { home: report.home.rows || null, away: report.away.rows || null },
