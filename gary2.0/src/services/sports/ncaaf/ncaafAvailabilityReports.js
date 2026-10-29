@@ -56,9 +56,16 @@ export function sameSchool(reportTeam, team) {
 }
 
 /** "RB #0 KJ Edwards" -> { position: 'RB', number: '0', name: 'KJ Edwards' }. */
+// A row with no jersey number ("S CJ Christian") keeps its position apart too (round 8: the name read "S CJ Christian",
+// matched no history, and he read both "new this week" and "not on this week's report").
+const POSITIONS = /^(QB|RB|FB|WR|TE|OL|OT|OG|C|G|T|DL|DT|DE|NT|EDGE|LB|ILB|OLB|DB|CB|S|FS|SS|K|PK|P|LS|ATH|KR|PR|IOL|OLB\/DE|DE\/OLB)$/;
 export function parseReportRow(text) {
-  const m = String(text || '').trim().match(/^([A-Z/]{1,5})\s+#?(\d{1,3})\s+(.+)$/);
-  return m ? { position: m[1], number: m[2], name: m[3].trim() } : { position: null, number: null, name: String(text || '').trim() };
+  const raw = String(text || '').trim();
+  const m = raw.match(/^([A-Z/]{1,5})\s+#?(\d{1,3})\s+(.+)$/);
+  if (m) return { position: m[1], number: m[2], name: m[3].trim() };
+  const p = raw.match(/^([A-Z/]{1,7})\s+(\S.+)$/);
+  if (p && POSITIONS.test(p[1])) return { position: p[1], number: null, name: p[2].trim() };
+  return { position: null, number: null, name: raw };
 }
 
 function stripImages(value) {

@@ -350,6 +350,9 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
       first.unavailable = true;
       first.reason = [first.reason, searchFailure].filter(Boolean).join('; ');
       first.warnings = [...(first.warnings || []), `the search for starting quarterbacks and coaches failed (${searchFailure}); they are not on file`];
+      // Each team says so where its quarterback and coaches would be (round 8: "could not be verified from current
+      // reporting" read as a real quarterback competition when no reporting was read).
+      for (const side of ['home', 'away']) if (first.sides?.[side]) first.sides[side].searchFailed = searchFailure;
       return first;
     }
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
@@ -401,6 +404,13 @@ export function formatNcaafGameContext(context, { listInjuries = true } = {}) {
     ...(context.warnings || []).map(warning => `UNCERTAINTY: ${warning}`),
     ...['away', 'home'].flatMap(side => {
       const row = context.sides[side], qb = row.quarterback;
+      if (row.searchFailed) {
+        return [row.team, `Quarterback: not on file (the search for starting quarterbacks and coaches failed: ${row.searchFailed})`,
+          `Coaches: not on file (the same search)`,
+          `Availability source: ${row.availability}${row.availability_note ? ` (${row.availability_note})` : ''}. Empty list means no absences reported by these sources, not confirmed healthy.`,
+          ...(listInjuries ? row.injuries.map(p => `${p.name}: ${p.status}. ${p.description}`) : []),
+          ...row.sources.map(s => `[${s.id}] ${s.title || ''} (${s.reported}) ${s.url}`)];
+      }
       return [row.team, qb ? `Quarterback: ${qb.name} — ${qb.status}. ${qb.note || ''}` : `Quarterback: unresolved. ${row.quarterback_uncertainty || ''}`,
         `Availability source: ${row.availability}${row.availability_note ? ` (${row.availability_note})` : ''}. Empty list means no absences reported by these sources, not confirmed healthy.`,
         ...(listInjuries ? row.injuries.map(p => `${p.name}: ${p.status}. ${p.description}`) : []),

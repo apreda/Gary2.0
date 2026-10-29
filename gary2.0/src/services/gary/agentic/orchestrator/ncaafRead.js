@@ -278,7 +278,9 @@ export function seasonGames(desk) {
     // The first passer, past a starter who threw none ("Dylan Lonergan started, no pass; AJ Surace 7-of-18"; Oct 29
     // 2026 hunt: Rutgers' game read "passer not on file").
     if (/^\s+quarterback: /.test(l)) {
-      game.passers = [...l.matchAll(/(?:quarterback: |; )([A-Z][^;:]*?) \d+-of-\d+/g)].map((m) => m[1].trim());
+      // His own team's part only (round 8: with the team's lines not on file, "· opponent's quarterback: Braden Atkinson
+      // 31-of-34" made Oregon State's passer Colorado State's).
+      game.passers = [...l.split(" · opponent's quarterback:")[0].matchAll(/(?:quarterback: |; )([A-Z][^;:]*?) \d+-of-\d+/g)].map((m) => m[1].trim());
       game.qb = game.passers[0] || null;
     }
     else if (/^\s+offense: /.test(l)) game.off = yards(l);
@@ -356,7 +358,9 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
     spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
     // The availability source lines stay with the report, not the coaches (Oct 29 2026 hunt, round 7: "Availability
     // source: checked." under each team).
-    'Quarterbacks and coaches:', quarterbacksAndCoachesText(desk), '',
+    // The week's reporting on who plays rides here too (round 8: the board had lost it; the reads carry it under the
+    // availability report), without the bare "Availability source: checked." lines.
+    'Quarterbacks and coaches:', quarterbacksAndCoaches(desk).split('\n').filter((l) => !/^Availability source:/.test(l)).join('\n').trim() || quarterbacksAndCoachesText(desk), '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
     'This season:', howGood(desk), '',
     'Schedule, travel and weather:', situation(desk) || 'Nothing unusual.',

@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -306,10 +306,12 @@ async function teamBoxBuilder(season, weeks) {
     const ownEntry = game.teams.find((t) => cfbdTeamMatches(t.team, team));
     return { game, teamId: ownEntry?.teamId, own: stats(ownEntry), opp: stats(game.teams.find((t) => !cfbdTeamMatches(t.team, team))) };
   };
-  const lines = (team, result, sackPlays = null) => {
+  // ESPN's team totals over CFBD's where ESPN has them (round 8: CFBD's box was wrong in games where the official
+  // school box agrees with ESPN); CFBD's sacks and tackles for loss, which ESPN's team totals lack, stay.
+  const lines = (team, result, sackPlays = null, espn = null) => {
     const found = find(team, result);
-    if (!found) return ['      units: the per-game unit lines are not available for this game'];
-    const { own, opp } = found;
+    if (!found && !espn) return ['      units: the per-game unit lines are not available for this game'];
+    const own = new Map([...(found?.own || []), ...(espn?.own || [])]), opp = new Map([...(found?.opp || []), ...(espn?.opp || [])]);
     const count = (n, word) => `${n ?? '—'} ${word}${String(n) === '1' ? '' : 's'}`;
     // College box scores count sacks as runs (Oct 23 2026 data audit: Virginia's "40 runs for 37" held 10 sacks for 68
     // yards), so the run line says how many of them were sacks.
@@ -369,7 +371,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map(), flow = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map(), flow = new Map(), unitTotals = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -380,6 +382,9 @@ async function playerGames(sides, boxes) {
         const none = { n: 0, yards: 0 };
         sackPlays.set(String(r.gameId), { mine: box.sacks[String(found.teamId)] || none, theirs: (oppSide && box.sacks[oppSide]) || none });
       }
+      const oppSideId = (box.teams || []).find((t) => t.id && t.id !== String(found.teamId))?.id;
+      const ownT = espnUnitTotals(box, found.teamId), oppT = oppSideId ? espnUnitTotals(box, oppSideId) : null;
+      if (ownT && oppT) unitTotals.set(String(r.gameId), { own: ownT, opp: oppT });
       if (boxAddsUp(box, found.teamId, found.own)) {
         rows.push(...playerGameRows(box, found.teamId, r.gameId, positions));
         onFile.add(String(r.gameId));
@@ -393,7 +398,9 @@ async function playerGames(sides, boxes) {
       }
       // Both kickers' field goals and extra points (Oct 24 2026 read check: Indiana's kicker missed from 32 and 55 in a
       // four-point loss to Ohio State, and nothing Gary read had kicking).
-      const oppId = scored ? Object.keys(scored).find((id) => id !== String(found.teamId)) : null;
+      // The opponent from the box's own two teams (round 8: one wrong scoring-play score emptied pointsByKind and took the
+      // opponent's quarterback, both kicking lines and both drive lines with it).
+      const oppId = (box.teams || []).find((t) => t.id && t.id !== String(found.teamId))?.id || null;
       const kicks = (teamId) => {
         const rs = playerGameRows(box, teamId, r.gameId, positions);
         const sum = (k) => rs.reduce((a, x) => a + (Number(x[k]) || 0), 0);
@@ -440,7 +447,7 @@ async function playerGames(sides, boxes) {
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, jerseys: roster?.jerseys || {} };
+    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, unitTotals, jerseys: roster?.jerseys || {} };
   }));
 }
 
@@ -835,7 +842,8 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     const theirs = opponentHistory.get(Number(r.opponentId));
     const opp = theirs?.found ? outOnGameDay(theirs, day) : null;
     if (mine == null && opp == null) return null;
-    const list = (names) => (names.length ? `${names.slice(0, 8).join(', ')}${names.length > 8 ? ` and ${names.length - 8} more` : ''}` : 'nobody');
+    // Every name (round 8: the list stopped at 8 and hid starters who missed only that game behind season-long absentees).
+    const list = (names) => (names.length ? names.join(', ') : 'nobody');
     return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)} · opponent: ${opp == null ? 'not on file' : list(opp)}`;
   };
 
@@ -853,7 +861,7 @@ snow, a storm, wind of 15 mph or more, or freezing.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
-      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)));
+      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)), played[i].unitTotals?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
       const theirQb = played[i].oppQb?.get(String(r.gameId));
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`

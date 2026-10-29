@@ -127,6 +127,34 @@ const NCAAF_CONFERENCE_NAMES_BY_ID = Object.freeze({
 
 const NCAAF_CONFERENCE_NAMES = new Set(Object.values(NCAAF_CONFERENCE_NAMES_BY_ID));
 
+/** Each team's next game after this one and the days between, from its season schedule (round 8, Oct 29 2026: the NFL
+ * and NBA reads had it and college did not; Miami's next game after North Carolina is at Notre Dame). */
+export async function ncaafNextGames(game, homeTeam, awayTeam) {
+  const etDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const today = etDay(game.commence_time);
+  const teams = await ballDontLieService.getTeams('americanfootball_ncaaf');
+  const lines = [];
+  for (const name of [awayTeam, homeTeam]) {
+    const team = findTeam(teams, name);
+    if (!team) { lines.push(`${name}: next game not on file (the team is not in the schedule feed)`); continue; }
+    let rows;
+    try {
+      rows = await ballDontLieService.getGames('americanfootball_ncaaf', { team_ids: [team.id], seasons: [footballSeasonForDate('NCAAF', game.commence_time)], per_page: 100 });
+    } catch (e) { lines.push(`${name}: next game not on file (the schedule feed failed: ${e.message})`); continue; }
+    const sorted = (rows || []).filter((g) => g.date).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const now = sorted.find((g) => etDay(g.date) === today);
+    const next = sorted.find((g) => etDay(g.date) > today);
+    if (!next) { lines.push(`${name}: no game after this one on its schedule`); continue; }
+    const days = Math.round((Date.parse(`${etDay(next.date)}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86_400_000);
+    const off = now && Number(next.week) > Number(now.week) + 1 ? ', after a week off' : '';
+    const home = String(next.home_team?.id) === String(team.id);
+    const opp = home ? `vs ${next.visitor_team?.full_name}` : `@ ${next.home_team?.full_name}`;
+    const day = new Date(`${etDay(next.date)}T16:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+    lines.push(`${name}: next game ${day} ${opp}, ${days} days later${off}`);
+  }
+  return lines.join('\n');
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CFP HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════
@@ -1295,6 +1323,7 @@ ${line(homeTeam)}
   // HOME, ROAD AND THE SCHEDULE (founder GO, Oct 3 2026): the site, this
   // season game by game, each team's home and road results, the starting
   // quarterback by site, and the schedule behind the season totals.
+  const nextGames = await ncaafNextGames(game, homeTeam, awayTeam).catch((e) => `next games not on file (${e.message})`);
   let schedule = null;
   let scheduleMissing = null;
   try {
@@ -1431,6 +1460,7 @@ ${fcsGap}
 REST & SCHEDULE SITUATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${formatRestSituation(homeTeam, awayTeam, calculateRestSituation(recentHome, game.commence_time, homeTeam), calculateRestSituation(recentAway, game.commence_time, awayTeam))}
+${nextGames}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${ncaafKeyPlayers ? formatNcaafKeyPlayers(homeTeam, awayTeam, ncaafKeyPlayers) : ''}

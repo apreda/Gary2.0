@@ -68,6 +68,8 @@ export function gameBoxFromSummary(summary, eventId) {
   // Every field goal try with its distance and result, from the play-by-play (Oct 24 2026: "FG 0-of-2" needs the 32 and
   // the 55 behind it). Only the drives' plays are read.
   const fieldGoals = [];
+  // The kickers the box itself lists, to name each try by (round 8).
+  const boxKickers = players.filter((p) => p.stats?.kicking).map((p) => ({ last: String(p.last || '').toLowerCase().trim(), label: `${String(p.first || '').charAt(0)}.${p.last}` })).filter((k) => k.last);
   for (const drive of summary?.drives?.previous || []) {
     const teamId = String(drive?.team?.id ?? '');
     for (const play of drive?.plays || []) {
@@ -83,9 +85,12 @@ export function gameBoxFromSummary(summary, eventId) {
       // Who kicked it (founder, Oct 24 2026: a miss says nothing about today if someone else kicks today).
       // ESPN's short form too, "Gabe Panikowski 46 yd FG GOOD" (Oct 29 2026 hunt, round 7: read "kicker not named").
       const named = returned ? '' : (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:[Yy][Dd][Ss]?|yards?)\s+)?(?:[Ff]ield [Gg]oal|FG\b)/)?.[1] || '').trim();
-      // One spelling per kicker: ESPN writes both "D.Kelly" and "Dieter Kelly" in one game.
+      // One spelling per kicker: ESPN writes both "D.Kelly" and "Dieter Kelly" in one game. The box's own kicker when the
+      // last word of the name matches one (round 8: "Jacobo Echeverria Lozano" read as two kickers, J.Echeverria Lozano and
+      // E.Lozano).
       const parts = named.split(/\s+/);
-      const kicker = !named ? null : parts.length > 1 && !named.includes('.') ? `${parts[0][0]}.${parts.slice(1).join(' ')}` : named;
+      const boxKicker = named ? boxKickers.find((k) => k.last && named.toLowerCase().endsWith(k.last)) : null;
+      const kicker = !named ? null : boxKicker ? boxKicker.label : parts.length > 1 && !named.includes('.') ? `${parts[0][0]}.${parts.slice(1).join(' ')}` : named;
       fieldGoals.push({ teamId, yards, kicker, made: /good/i.test(type) && !/no good|missed|blocked/i.test(type), blocked: /blocked/i.test(type) });
     }
   }
@@ -104,8 +109,18 @@ export function gameBoxFromSummary(summary, eventId) {
     // A drive that ends on a kneel-down ran out the half or the game; any other drive ESPN leaves blank says so (Oct 29
     // 2026 hunt, round 7: Oregon State's last drive at Colorado State, kneel-downs at 0:43 and 0:40, read "1 ;").
     const kneel = /kneel/i.test(String(lastPlay?.text || '')) ? (Number(lastPlay?.period?.number) >= 4 ? 'END OF GAME' : 'END OF HALF') : null;
-    const result = String(d?.result || d?.displayResult || LAST_PLAY.find(([re]) => re.test(lastType))?.[1] || kneel || (d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
-    return { teamId: String(d?.team?.id ?? ''), result, oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
+    // "END OF QUARTER" is not how a drive ends: its last play says, or the result is not on file (round 8: three Penn State
+    // drives at Wisconsin, a punt among them, read "ended a half").
+    const given = String(d?.result || d?.displayResult || '').toUpperCase();
+    const fromPlay = LAST_PLAY.find(([re]) => re.test(lastType))?.[1];
+    const result = (given && given !== 'END OF QUARTER' ? given : fromPlay || kneel || (given === 'END OF QUARTER' || d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
+    // Where it began from ESPN's yard line, counted from the home team's goal line (round 8: Buffalo is "BUFF" but its
+    // field says "BUF 25", and every Buffalo and Air Force drive read "began in the other team's half"). A start at the
+    // 0 is not a place a drive begins: not on file (ESPN gave Wisconsin four "PSU 0" starts).
+    const yl = Number(d?.start?.yardLine), home = teams.find((t) => t.homeAway === 'home')?.id;
+    const own = Number.isFinite(yl) && yl > 0 && yl < 100 ? (String(d?.team?.id ?? '') === home ? yl : 100 - yl) : null;
+    const oppHalf = own != null ? own > 50 : Boolean(at && Number(at[2]) > 0 && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50);
+    return { teamId: String(d?.team?.id ?? ''), result, oppHalf };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
   // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
@@ -154,6 +169,13 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
   return jersey != null && jersey !== '' ? named.includes(`${Number(jersey)}|${key}`) : named.some((k) => k.endsWith(`|${key}`));
 }
 
+/** ESPN's team totals for one side of a game as the unit lines read them (CFBD's keys; "26/36" as "26-36"), or null. */
+export function espnUnitTotals(box, teamId) {
+  const t = (box?.teams || []).find((x) => x.id === String(teamId))?.totals;
+  if (!t?.completionAttempts) return null;
+  return new Map(Object.entries(t).map(([k, v]) => [k, k === 'completionAttempts' ? String(v).replace('/', '-') : v]));
+}
+
 /** A game's flow from one team's side, from the box: every score in order with the score after it (that team's first),
  * the largest lead each way, lead changes, possession, quarterback hurries and plays of 20+ yards for both (Oct 29 2026,
  * founder: "who got ahead, how, when did the team go up 14 versus being close the whole game"). Null without scoring. */
@@ -182,8 +204,8 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+.
-  return cachedResearch(`espn_cfb_box_v14:${eventId}`, async () => {
+  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers.
+  return cachedResearch(`espn_cfb_box_v15:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -230,8 +252,13 @@ const sumOf = (players, category, key) => players.reduce((total, p) => total + (
  */
 export function boxAddsUp(box, teamId, teamLine) {
   const players = (box?.players || []).filter((p) => p.teamId === String(teamId));
-  const [completions, attempts] = String(teamLine?.get?.('completionAttempts') ?? '').split('-').map(Number);
-  const carries = Number(teamLine?.get?.('rushingAttempts'));
+  // Against ESPN's own team totals first (round 8: CFBD's team box was the wrong one in Missouri-Troy, Colorado State-
+  // Oregon State and an Arizona game, where the official school boxes agree with ESPN, and ESPN's correct player lines
+  // were dropped as not adding up); CFBD's line only when ESPN gives none.
+  const espn = (box?.teams || []).find((t) => t.id === String(teamId))?.totals;
+  const line = espn?.completionAttempts && espn?.rushingAttempts != null ? new Map([['completionAttempts', String(espn.completionAttempts).replace('/', '-')], ['rushingAttempts', espn.rushingAttempts]]) : teamLine;
+  const [completions, attempts] = String(line?.get?.('completionAttempts') ?? '').split('-').map(Number);
+  const carries = Number(line?.get?.('rushingAttempts'));
   if (!players.length || ![completions, attempts, carries].every(Number.isFinite)) return false;
   // Within one of each: the two sources score the odd play differently (a shovel pass as a run, a scramble as a pass),
   // and an exact match threw out whole games over one carry (Oct 24 2026 read check: Texas Tech at Oregon State, Clemson

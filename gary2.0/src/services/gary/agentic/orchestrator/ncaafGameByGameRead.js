@@ -173,13 +173,23 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${wl(gs)}` : null; }));
   const meetings = awayGames.filter((g) => g.them.id === homeId);
   const meetingIds = new Set(meetings.map((g) => g.id));
+  // An older game says who threw for each side (round 8: Utah State's Sep 5 loss read with no quarterback, McCae
+  // Hillstead's start before Grady Brosterhous took over).
+  const olderLine = async (g) => {
+    const box = await getNcaafGameBox(g.id).catch(() => null);
+    const passers = (id) => (box?.players || []).filter((p) => p.teamId === String(id) && (Number(p.stats?.passing?.passingAttempts) || 0) >= 5)
+      .sort((a, b) => Number(b.stats.passing.passingAttempts) - Number(a.stats.passing.passingAttempts))
+      .map((p) => `${p.name} ${p.stats.passing.completions}-of-${p.stats.passing.passingAttempts}`).join(', ');
+    const qbs = box && !box.unavailable ? ` · QB ${passers(g.us.id) || 'not on file'} · theirs ${passers(g.them.id) || 'not on file'}` : ' · quarterbacks not on file';
+    return `  ${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.name}${g.neutral ? ' at a neutral site' : ''}${qbs}`;
+  };
   const teamPart = async (name, games) => {
     if (!games.length) return `${name.toUpperCase()}: no games yet this season`;
     const newest = games.slice().reverse();
     const full = await Promise.all(newest.slice(0, NCAAF_WINDOW).map((g) => (meetingIds.has(g.id) ? `${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.short}: in this season's meetings above` : fullGame(g, yr, tonight))));
     const older = newest.slice(NCAAF_WINDOW);
     return [`${name.toUpperCase()}: ${wl(games)}${games.length > NCAAF_WINDOW ? `; the last ${NCAAF_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
-      full.join('\n\n'), older.length ? `Older games, one line each:\n${older.map((g) => `  ${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.name}`).join('\n')}` : null].filter(Boolean).join('\n\n');
+      full.join('\n\n'), older.length ? `Older games, one line each:\n${(await Promise.all(older.map(olderLine))).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
   const story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
     `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
