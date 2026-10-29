@@ -1301,8 +1301,11 @@ ${line(homeTeam)}
     schedule = await ncaafScheduleSections({ homeTeam, awayTeam, season: ncaafSeasonYear, game, apRankOf,
       quarterbacks: { home: injuries?.collegeContext?.sides?.home?.quarterback, away: injuries?.collegeContext?.sides?.away?.quarterback },
       availability: { home: injuries?.home || [], away: injuries?.away || [] },
-      availabilityState: Object.fromEntries(['home', 'away'].map((side) => [side, injuries?.sourceOk === false ? 'unavailable'
-        : injuries?.collegeContext?.sides?.[side]?.availability || 'unavailable'])) });
+      exempt: { home: injuries?.collegeContext?.sides?.home?.exempt || [], away: injuries?.collegeContext?.sides?.away?.exempt || [] },
+      // A side whose conference report was read is checked whatever the other side's search did (Oct 29 2026 hunt, round
+      // 7: Ohio State's unresolved quarterback marked USC's applied Big Ten report "unavailable" too).
+      availabilityState: Object.fromEntries(['home', 'away'].map((side) => [side, injuries?.collegeContext?.sides?.[side]?.official_report ? 'checked'
+        : injuries?.sourceOk === false ? 'unavailable' : injuries?.collegeContext?.sides?.[side]?.availability || 'unavailable'])) });
     if (schedule.site && !game.venue) {
       game.venue = [schedule.site.name, schedule.site.city, schedule.site.state].filter(Boolean).join(', ');
       if (schedule.site.confirmed && schedule.site.neutral) game.isNeutralSite = true;

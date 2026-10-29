@@ -273,6 +273,7 @@ export function applyOfficialReport(context, official, { game, rosters } = {}) {
         sources: ['official'] };
     });
     row.availability = 'checked';
+    row.exempt = report.exempt || [];
     row.sources = [...(row.sources || []).filter(s => s.id !== 'official'), source];
     row.official_report = { conference: official.conference, report: official.reportType, published: official.published, players_listed: report.players };
     covered.push(fullName(side === 'home' ? game.home_team : game.away_team ?? game.visitor_team));
@@ -316,9 +317,12 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     const answer = await cachedResearch(`ncaaf-search-v4:${date}:${away.id}:${home.id}`,
       () => search(prompt, { model: BACKGROUND_GPT, effort: 'medium', timeoutMs: 600_000, maxTokens: 9000 }),
       { ttlMs: 30 * 60_000, valid: value => value?.success === true, ...cache });
-    if (!answer?.success) return { unavailable: true, reason: answer?.error || 'College context search unavailable' };
-    let parsed = parseCollegeContext(answer.data);
-    if (!parsed) {
+    // A failed or unreadable search no longer drops the conference's own report (Oct 29 2026 hunt, round 7: Miami at North
+    // Carolina lost the ACC's Initial report, 11 players Out, when the search failed): both teams go on as the prompt's
+    // "nothing established" answer, the report is applied, and the quarterbacks and coaches read unresolved.
+    let searchFailure = answer?.success ? null : (answer?.error || 'College context search unavailable');
+    let parsed = searchFailure ? null : parseCollegeContext(answer.data);
+    if (!parsed && !searchFailure) {
       // Some successful searches refuse JSON merely because no public injury
       // report exists. Reformat the already retrieved evidence once, without
       // buying another search or inventing a complete report.
@@ -333,11 +337,21 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
         if (name && !nameKey(answer.data).includes(nameKey(name))) parsed[side].quarterback = null;
       }
     }
-    if (!parsed) return { unavailable: true, reason: 'College search did not return a complete structured report for both teams' };
+    if (!parsed) {
+      searchFailure = searchFailure || 'College search did not return a complete structured report for both teams';
+      const nothing = (team) => ({ team_id: team.id, availability: 'unavailable', quarterback: { name: null, status: 'unresolved', note: null, sources: [] }, injuries: [], coaches: [], context: [], sources: [] });
+      parsed = { home: nothing(home), away: nothing(away) };
+    }
     // The conference's own report, when the game has one, comes before any search for it.
     const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch((e) => ({ found: false, errors: [`all: ${e.message}`] }));
     const withOfficial = ctx => labelSearchedAvailability(markOfficialMissing(applyOfficialReport(ctx, official, { game, rosters }), official, { game }), { game });
-    const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '', lastGames }));
+    const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer?.raw || '', lastGames }));
+    if (searchFailure) {
+      first.unavailable = true;
+      first.reason = [first.reason, searchFailure].filter(Boolean).join('; ');
+      first.warnings = [...(first.warnings || []), `the search for starting quarterbacks and coaches failed (${searchFailure}); they are not on file`];
+      return first;
+    }
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
     // for Iowa State but not for BYU, the same report). A team left without a
     // current availability report gets one search for that report alone. Its

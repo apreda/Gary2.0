@@ -9,7 +9,7 @@
  * without recaps of the games shown.
  */
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation } from './ncaafRead.js';
+import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quarterbacksAndCoachesText } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
@@ -155,7 +155,7 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   const event = await findEspnCollegeEvent({ date: gameDate, homeTeam, awayTeam, commenceTime }).catch(() => null);
   const homeId = event?.homeTeamId || '', awayId = event?.awayTeamId || '';
   const tonightPart = ['TONIGHT',
-    `THE QUARTERBACKS AND COACHES\n${quarterbacksAndCoaches(desk, { availability: false })}`,
+    `THE QUARTERBACKS AND COACHES\n${quarterbacksAndCoachesText(desk)}`,
     // Season totals leave the report's lines (the games are below, game by game).
     // The desk points its regulars to the live read's own game-by-game section; here their games are below (Oct 27 2026
     // data loop: "game by game under CARRIES AND CATCHES, GAME BY GAME" named a section this read doesn't have).

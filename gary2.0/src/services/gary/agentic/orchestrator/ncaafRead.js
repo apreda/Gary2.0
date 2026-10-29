@@ -47,6 +47,21 @@ export function withoutBettingLines(text) {
   return withoutSentences(text, (s) => BETTING.test(s.replace(OUTLET, 'the outlet')));
 }
 
+// The news desk's notes on its own search, and last season, are not news (Oct 29 2026 hunt, round 7: Boise State's
+// news read "The search tool did not return article URLs, so none could be listed." and "Several Boise State stories
+// ... could not be opened, so they were left out."; Bengals at Ravens, "he regretted coming back too early from a
+// hamstring injury last season"; the NBA news has dropped both since Oct 29). A line's team label ("BOISE STATE: ")
+// stays with what is left of it.
+const SEARCH_NOTE = /^(?:No|Nothing)\b[^.]*\b(?:found|verified|located|identified)\b|\bsearch (?:tool|results?)\b|\bcould not be (?:opened|dated)\b|\bso (?:they|it|none) (?:was|were|could be) (?:left out|listed)\b|\b(?:article|preview|page|post|piece)s? (?:has|have) no date\b|\bGary already has\b|^This is not new\b|\bas requested\b|\bin the request\b|\bresearch cutoff\b/i;
+const LAST_SEASON = /\blast (?:season|year)\b|\b(?:previous|prior) seasons?\b|\ba year ago\b|\bpreseason\b|\btraining camp\b|\bspring (?:game|practice)\b/i;
+export function footballNews(text) {
+  return String(text || '').split('\n').map((l) => {
+    const label = l.match(/^((?:[A-Z][A-Z0-9 .'&()-]*[A-Z)]|BOTH)\s*[:–-]\s+)/)?.[1] || '';
+    const body = withoutSentences(l.slice(label.length), (x) => SEARCH_NOTE.test(x.trim()) || LAST_SEASON.test(x));
+    return body.trim() ? label + body : (l.trim() ? null : l);
+  }).filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // The halves and the turnovers stay in each game's line (Oct 23 2026): a 42-3 halftime lead explains the yards after
 // it, and a box score without turnovers hid why games went the way they did (Oregon's 15 points came with 7 giveaways).
 
@@ -115,6 +130,16 @@ function quarterbackSectionLines(desk) {
 
 // The quarterbacks and coaching staff, without the desk's sourcing lines. `availability: false` leaves out each team's
 // availability source, official report and notes about who plays, which the read gives with the availability report.
+/** The quarterbacks and coaches without the availability notes, or "not on file" with the desk's reason (Oct 29 2026
+ * hunt, round 7: a failed context search left the section out of the read without a word, and an empty heading in the
+ * second system). */
+export function quarterbacksAndCoachesText(desk) {
+  const text = quarterbacksAndCoaches(desk, { availability: false });
+  if (text) return text;
+  const why = String(desk || '').match(/College availability\/context unavailable: ([^\n]+)/)?.[1]?.trim();
+  return `not on file${why ? ` (${why})` : ''}`;
+}
+
 export function quarterbacksAndCoaches(desk, { availability = true } = {}) {
   const lines = quarterbackSectionLines(desk);
   return lines.filter((l) => availability || !(l.kind === 'source' || l.kind === 'official' || (l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, l.team)))))
@@ -148,7 +173,10 @@ export function availabilityReport(desk) {
   const lines = quarterbackSectionLines(desk);
   // The researcher's own working ("after the requested 9:07 a.m. research cutoff") is not news (Oct 24 2026).
   // Its notes on its own sources too ("as transcribed by Kickoff Status; they do not establish ...", Oct 29 2026 hunt).
-  const withoutProcess = (text) => text.split(/(?<=[.!?])\s+/).filter((x) => !/\bcutoff\b|\bresearch\b|\brequested\b|\btranscribed\b|\breproduced by\b|\bdo(?:es)? not establish\b|\btimestamp\b|\breflects the\b[^.]*\breport\b|\bportal\b|\bdid not expose\b|\bunlisted players?\b/i.test(x)).join(' ').trim();
+  // Split as withoutSentences splits, never after "8 p.m." before its time zone (Oct 29 2026 hunt, round 7: "The
+  // availability designations reproduced here are from the October 28, 8 p.m." reached Gary, cut off).
+  const withoutProcess = (text) => text.split(/(?<=[.!?](?:\*\*)?)\s+(?=[A-Z"“]|\*\*[A-Z"“])(?!(?:\*\*)?(?:Eastern|ET|EDT|EST|Central|Mountain|Pacific)\b)/)
+    .filter((x) => !/\bcutoff\b|\bresearch\b|\brequested\b|\btranscribed\b|\breproduced (?:by|here)\b|\b(?:listed|shown) here\b|\bdo(?:es)? not establish\b|\bnot established by\b|\btimestamp\b|\breflects the\b[^.]*\breport\b|\bportal\b|\bdid not expose\b|\bunlisted players?\b/i.test(x)).join(' ').trim();
   const notes = new Map(teams.map((t) => [t, lines.filter((l) => l.team === t && l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, t)))
     .map((l) => withoutProcess(l.text)).filter(Boolean).map((text) => `  reporting: ${text}`)]));
   const rows = afterIntro(sectionOf(desk, 'WHO PRODUCED IT'));
@@ -307,7 +335,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
   // who carry the offense, the situation.
   const parts = [
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoaches(desk, { availability: false })],
+    ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoachesText(desk)],
     ['THE AVAILABILITY REPORT', availabilityReport(desk)],
     // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
@@ -326,11 +354,13 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}`,
     spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
-    'Quarterbacks and coaches:', quarterbacksAndCoaches(desk) || 'Not on the desk.', '',
+    // The availability source lines stay with the report, not the coaches (Oct 29 2026 hunt, round 7: "Availability
+    // source: checked." under each team).
+    'Quarterbacks and coaches:', quarterbacksAndCoachesText(desk), '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
     'This season:', howGood(desk), '',
     'Schedule, travel and weather:', situation(desk) || 'Nothing unusual.',
-    news ? `\nThe news desk:\n${news}` : ''].join('\n');
+    footballNews(news) ? `\nThe news desk:\n${footballNews(news)}` : ''].join('\n');
 }
 
 // The news desk's latest on who plays (nflResearchPrompts.js, college's items), from the game as Gary reads it.
@@ -356,7 +386,7 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
   if (!news) console.warn(`[NCAAF Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
   // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
   // the market (founder, Oct 23 2026).
-  return { news: news ? withoutBettingLines(String(news).trim()).trim() || null : null, model: news ? research.model : null };
+  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null };
 }
 
 export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {

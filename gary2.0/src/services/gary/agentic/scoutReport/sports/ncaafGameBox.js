@@ -81,7 +81,8 @@ export function gameBoxFromSummary(summary, eventId) {
       const fromLine = Number.isFinite(Number(play?.start?.yardsToEndzone)) ? Number(play.start.yardsToEndzone) + 17 : null;
       const yards = returned ? fromLine : num(text.match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
       // Who kicked it (founder, Oct 24 2026: a miss says nothing about today if someone else kicks today).
-      const named = returned ? '' : (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:[Yy][Dd][Ss]?|yards?)\s+)?[Ff]ield [Gg]oal/)?.[1] || '').trim();
+      // ESPN's short form too, "Gabe Panikowski 46 yd FG GOOD" (Oct 29 2026 hunt, round 7: read "kicker not named").
+      const named = returned ? '' : (text.match(/(?:#\d+\s+)?([A-Z][A-Za-z.'-]*(?:\s[A-Z][A-Za-z'-]+)?)\s+(?:\d+\s*(?:[Yy][Dd][Ss]?|yards?)\s+)?(?:[Ff]ield [Gg]oal|FG\b)/)?.[1] || '').trim();
       // One spelling per kicker: ESPN writes both "D.Kelly" and "Dieter Kelly" in one game.
       const parts = named.split(/\s+/);
       const kicker = !named ? null : parts.length > 1 && !named.includes('.') ? `${parts[0][0]}.${parts.slice(1).join(' ')}` : named;
@@ -99,8 +100,11 @@ export function gameBoxFromSummary(summary, eventId) {
     return d?.result || d?.displayResult || !plays.length || !plays.every((p) => /penalty/i.test(String(p?.type?.text || '')));
   }).map((d) => {
     const at = String(d?.start?.text || '').match(/^([A-Za-z&]+)\s+(\d+)$/);
-    const lastType = String((d?.plays || []).at(-1)?.type?.text || '');
-    const result = String(d?.result || d?.displayResult || LAST_PLAY.find(([re]) => re.test(lastType))?.[1] || '').toUpperCase();
+    const lastPlay = (d?.plays || []).at(-1), lastType = String(lastPlay?.type?.text || '');
+    // A drive that ends on a kneel-down ran out the half or the game; any other drive ESPN leaves blank says so (Oct 29
+    // 2026 hunt, round 7: Oregon State's last drive at Colorado State, kneel-downs at 0:43 and 0:40, read "1 ;").
+    const kneel = /kneel/i.test(String(lastPlay?.text || '')) ? (Number(lastPlay?.period?.number) >= 4 ? 'END OF GAME' : 'END OF HALF') : null;
+    const result = String(d?.result || d?.displayResult || LAST_PLAY.find(([re]) => re.test(lastType))?.[1] || kneel || (d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
     return { teamId: String(d?.team?.id ?? ''), result, oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
@@ -144,7 +148,8 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v11:${eventId}`, async () => {
+  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings.
+  return cachedResearch(`espn_cfb_box_v12:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -300,11 +305,11 @@ export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 
   INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', SF: 'safety', 'INT TD': 'interception returned for a TD',
   'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD', 'PUNT TD': 'punt returned for a TD',
   'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
-  'END OF HALF': 'end of half', 'END OF GAME': 'end of game' };
+  'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file' };
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
 /** Drive results counted in words: "6 punts, 1 safety, 3 on downs, 1 TD". */
 export function ncaafDriveTally(results) {
   const counts = new Map();
   for (const r of results) { const w = ncaafDriveWord(r); counts.set(w, (counts.get(w) || 0) + 1); }
-  return [...counts].map(([w, n]) => `${n} ${n === 1 || /on downs|TD$|FG$|^end of/.test(w) ? w : w === 'safety' ? 'safeties' : `${w}s`}`).join(', ');
+  return [...counts].map(([w, n]) => `${n} ${n === 1 || /on downs|TD$|FG$|^end of|not on file$/.test(w) ? w : w === 'safety' ? 'safeties' : `${w}s`}`).join(', ');
 }

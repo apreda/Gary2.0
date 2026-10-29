@@ -53,7 +53,8 @@ const get = (url, fetchImpl) => fetchImpl(url, { headers: HEADERS, signal: Abort
 const decode = (s) => String(s).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
   .replace(/&amp;/g, '&').replace(/&apos;|&#39;/g, "'").replace(/&quot;/g, '"');
 const text = (html) => decode(String(html).replace(/<!--.*?-->/gs, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-export const nameKey = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+// A quoted nickname is left out (Oct 29 2026 hunt, round 7: 'Brenten "Inky" Jones' never met the box's Brenten Jones).
+export const nameKey = (s) => String(s || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 const schoolKey = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
 // "Hawkins Jr., Michael" is Michael Hawkins Jr.
 // "Glover,Jr." (a site that kept only the suffix as the first name) is Glover Jr.

@@ -142,7 +142,10 @@ export async function officialAvailabilityForGame({ homeTeam, awayTeam, date }, 
   const homeHit = newest('home'), awayHit = newest('away');
   const { report } = [homeHit, awayHit].filter(Boolean).sort((a, b) => order(b.report).localeCompare(order(a.report)))[0];
   const listed = side => side.rows.filter(row => !NOT_LISTED.has(row.status.toLowerCase()));
-  const sideOf = (hit, side) => (hit ? { team: hit[side].team, listed: listed(hit[side]), players: hit[side].rows.length } : null);
+  // The players the report lists Exempt (Oct 29 2026 hunt, round 7): on this week's report, so never "not on this week's";
+  // the report gives no reason, and the SEC lists fifteen or more a team, so the read names only those who matter.
+  const exempt = side => side.rows.filter(row => row.status.toLowerCase() === 'exempt').map(row => row.name);
+  const sideOf = (hit, side) => (hit ? { team: hit[side].team, listed: listed(hit[side]), exempt: exempt(hit[side]), players: hit[side].rows.length } : null);
   return {
     found: true,
     conference: REPORT_CONFERENCES[report.conference]?.label || report.conference,
@@ -187,7 +190,8 @@ export async function conferenceArchive(conference, options = {}) {
   return result?.rows || [];
 }
 
-const playerKey = (name) => String(name || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+// A quoted nickname is left out of the key (Oct 29 2026 hunt, round 7: the report's 'Brenten "Inky" Jones').
+const playerKey = (name) => String(name || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 
 /**
  * A team's earlier reports this season, before `date`: { found, byPlayer: Map playerKey → [{ week, opponent, gameDay }]

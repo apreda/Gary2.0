@@ -48,7 +48,9 @@ const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { weekday: 'sho
 const plural = (n, word) => `${n} ${word}${Number(n) === 1 ? '' : 's'}`;
 const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th'}`;
 // Without the suffix: a report's "Dierre Hill" is the box score's "Dierre Hill Jr.".
-const nameKey = (value) => String(value || '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+// A quoted nickname is left out (Oct 29 2026 hunt, round 7: the report's 'Brenten "Inky" Jones', with two tackles this
+// season, read "no stat row this season").
+const nameKey = (value) => String(value || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
 const record = (results) => `${results.filter((r) => r.won).length}-${results.filter((r) => !r.won).length}`;
 
 function miles(a, b) {
@@ -522,7 +524,7 @@ const playedPerPlays = (plays, gameId, entry) => namedInPlays(plays?.named?.get(
  * player lines on file are left out of the counts and named once beside the
  * team.
  */
-function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null, starts = new Map()) {
+function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null, starts = new Map(), exempt = []) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
   // Whether he started (Oct 27 2026 data loop: an offensive lineman read "OL (out)" with nothing to say whether he was
   // the starting left tackle or a reserve): the official box's starting lineup of each game the schools post one for.
@@ -559,7 +561,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   const weight = (entry) => (kicking(entry.position) ? entry.games.size : [...entry.games.values()].reduce((sum, row) => sum + (Number(row.passing_attempts) || 0) + (Number(row.rushing_attempts) || 0)
     + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0));
   const lines = [], none = [], linemen = [], positions = [];
-  const reportedKeys = new Set((reported || []).map((i) => nameKey(reportName(i))));
+  const reportedKeys = new Set([...(reported || []).map((i) => nameKey(reportName(i))), ...exempt.map(nameKey)]);
   for (const injury of reported || []) {
     const name = reportName(injury);
     const found = [...byPlayer].find(([player]) => nameKey(player) === nameKey(name));
@@ -600,7 +602,12 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   // Back, or coming back (Oct 24 2026 read check: Indiana's starting corner A.J. Harris had returned two games earlier,
   // and the story only said his replacement was missing): out on an earlier game day, not on this week's report, and
   // the games he has played since.
-  const back = backFromReports(history, (reported || []).map(reportName)).map((b) => {
+  // A player the report lists Exempt is on this week's report: he is named apart, with his earlier outs (Oct 29 2026
+  // hunt, round 7: Clemson's Peyton Streko and five more read "out on an earlier report, not on this week's").
+  const exemptKeys = new Set(exempt.map(nameKey));
+  const backAll = backFromReports(history, (reported || []).map(reportName));
+  const exemptBack = backAll.filter((b) => exemptKeys.has(nameKey(b.name))).map((b) => `${b.name} (out on game day Wk ${b.outWeeks.join(', ')})`);
+  const back = backAll.filter((b) => !exemptKeys.has(nameKey(b.name))).map((b) => {
     const entry = [...byPlayer].find(([player]) => nameKey(player) === nameKey(b.name));
     const after = (r) => !b.lastOutDate || new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) > b.lastOutDate;
     const since = entry ? games.filter((r) => entry[1].games.has(String(r.gameId)) && after(r)) : [];
@@ -610,13 +617,20 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     const parts = [startedSince.length ? `started since: ${startedSince.map(day).join(', ')}` : null, since.length ? `stat rows since: ${since.map(day).join(', ')}` : null].filter(Boolean);
     return `${b.name}${entry?.[1].position ? ` ${entry[1].position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${parts.length ? parts.join('; ') : `no stat row since${lineups.some(after) ? ' and no start in a lineup on file' : ''}`})`;
   });
-  if (back.length) lines.push(`  out on an earlier report, not on this week's: ${back.join('; ')}`);
+  // When this week's report was not read, that comes first, and the earlier outs are not set against it (Oct 29 2026
+  // hunt, round 7: Fresno State's "absences unknown" was hidden under its earlier outs, and North Carolina's six "not on
+  // this week's" were Out on the ACC's report that the build had not read).
+  if (back.length) lines.push(state === 'checked' ? `  out on an earlier report, not on this week's: ${back.join('; ')}` : `  out on an earlier game day (this week's report not read): ${back.join('; ')}`);
+  if (exemptBack.length) lines.push(`  listed Exempt on this week's report (the report gives no reason): ${exemptBack.join('; ')}`);
+  if (state !== 'checked' && lines.length) lines.unshift(empty);
   return [`${team}${lines.length ? notOnFile(results, onFile) : ''}`, ...(lines.length ? lines : [empty])];
 }
 
-/** A player's line on this week's report: { status: "out", position }, or null when he is not on it. */
-function onReport(name, reported) {
+/** A player's line on this week's report: { status: "out", position }, or null when he is not on it. A player the report
+ * lists Exempt reads { status: "Exempt" } (Oct 29 2026 hunt, round 7). */
+function onReport(name, reported, exempt = []) {
   const hit = (reported || []).find((i) => nameKey(reportName(i)) === nameKey(name));
+  if (!hit && exempt.some((x) => nameKey(x) === nameKey(name))) return { status: 'Exempt', position: '' };
   return hit ? { status: String(hit.status || 'listed').toLowerCase(), position: hit.player?.position_abbreviation || hit.player?.position || '' } : null;
 }
 
@@ -627,7 +641,7 @@ function onReport(name, reported) {
  * "no stat row" (college publishes no snap counts, so it is not "did not play"); a game whose player lines are not on
  * file says so.
  */
-function offenseLines(team, reported, rows, results, onFile, core) {
+function offenseLines(team, reported, rows, results, onFile, core, exempt = []) {
   const games = [...results].sort((a, b) => new Date(b.date) - new Date(a.date));
   const counted = games.filter((r) => onFile.has(String(r.gameId)));
   if (!counted.length) return [team, '  player lines not on file for any game this season'];
@@ -641,7 +655,7 @@ function offenseLines(team, reported, rows, results, onFile, core) {
     ].filter(Boolean).join(', ') || 'no carry or catch';
   };
   const lines = [...core].map(([name, entry]) => {
-    const report = onReport(name, reported);
+    const report = onReport(name, reported, exempt);
     const position = entry.position || report?.position;
     const list = games.map((r) => `${day(r)} ${versus(r)}: ${!onFile.has(String(r.gameId)) ? 'player lines not on file'
       : entry.games.has(String(r.gameId)) ? cell(entry.games.get(String(r.gameId))) : 'no stat row'}`);
@@ -659,7 +673,10 @@ function offenseLines(team, reported, rows, results, onFile, core) {
  * whether he is on this week's report; a player on it has his last games beside his status in the availability section,
  * so here he gets his status only.
  */
-function regularsLines(team, reported, rows, results, onFile, core, plays = null, starts = new Map()) {
+function regularsLines(team, reported, rows, results, onFile, core, plays = null, starts = new Map(), state = 'checked', exempt = []) {
+  // Not on the report only when the report was read (Oct 29 2026 hunt, round 7: Kansas State's Avery Johnson, Out on the
+  // Big 12's report the build had not read, read "not on this week's availability report").
+  const offReport = state === 'checked' ? "not on this week's availability report" : "this week's availability report not read";
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
   const last = games.at(-1);
   if (!last) return [`${team}: no completed games this season.`];
@@ -698,17 +715,17 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
     const listed = kept.map((p) => ({ name: p.name, key: starterKey(p.name) }));
     for (const e of [...byStarter.values()].filter((x) => x.games.length >= 2 && x.games.length * 2 > earlierLineups.length && !startedIn(lastLineup, x.name, x.position) && !startedIn(listed, x.name))
       .sort((a, b) => b.games.length - a.games.length || a.name.localeCompare(b.name))) {
-      const report = onReport(e.name, reported);
+      const report = onReport(e.name, reported, exempt);
       lineup.push(`  ${e.name}${e.position ? ` (${e.position})` : ''}: started ${e.games.length} of the ${earlierLineups.length} earlier games with a starting lineup on file, the last ${day(e.games.at(-1))} ${versus(e.games.at(-1))}; `
-        + `not in the last game's starting lineup · ${report ? `${report.status} on this week's availability report` : "not on this week's availability report"}`);
+        + `not in the last game's starting lineup · ${report ? `${report.status} on this week's availability report` : offReport}`);
     }
   }
   const missing = kept.map((p) => {
-    const report = onReport(p.name, reported);
+    const report = onReport(p.name, reported, exempt);
     const who = `  ${p.name}${p.entry.position || report?.position ? ` (${p.entry.position || report.position})` : ''}`;
     if (report) return `${who}: ${report.status} on this week's availability report`;
     return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}; `
-      + `${core.has(p.name) ? UNDER_OFFENSE : recentGames(p.entry, earlier)} · not on this week's availability report`;
+      + `${core.has(p.name) ? UNDER_OFFENSE : recentGames(p.entry, earlier)} · ${offReport}`;
   });
   return [`${head}${notOnFile(games.slice(0, -1), onFile)}:`, ...(missing.length ? missing : [lineup.length ? '  no regular without a stat row' : '  none']),
     ...(lineup.some((l) => !/not on file/.test(l)) ? ["  starters of the earlier games who did not start the last one:", ...lineup] : lineup)];
@@ -720,7 +737,7 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
  *   scheduleBehind:{home:string|null, away:string|null}}>}
  */
 export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, apRankOf = () => null,
-  quarterbacks = {}, availability = {}, availabilityState = {}, service = ballDontLieService }) {
+  quarterbacks = {}, availability = {}, availabilityState = {}, exempt = {}, service = ballDontLieService }) {
   const teams = await service.getTeams(SPORT);
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
@@ -872,7 +889,7 @@ Each player on this game's availability report beside the games he started
 three games, and the other players at his position with theirs. College
 publishes no snap counts; these stat rows are the record of who played.
 
-${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i], starts[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => availabilityLines(s.team, reportOf(s), rows[i], s.results, availabilityState[s.atHome ? 'home' : 'away'] || 'checked', played[i].onFile, cores[i], histories[i], played[i], starts[i], exempt[s.atHome ? 'home' : 'away'] || []).join('\n')).join('\n\n')}
 ${RULE}`;
 
   // One intro paragraph each, which the read leaves out: "no stat row" says what the box score shows and no more.
@@ -884,7 +901,7 @@ the player's line
 in the game's box score; college publishes no snap counts, so "no stat row" is
 not proof that a player did not play.
 
-${sides.map((s, i) => offenseLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => offenseLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], exempt[s.atHome ? 'home' : 'away'] || []).join('\n')).join('\n\n')}
 ${RULE}`;
 
   const regulars = `REGULARS WITH NO STAT ROW IN THE LAST GAME
@@ -898,7 +915,7 @@ them), and whether each is on this week's availability report. A stat row is
 the player's line in the game's box score; college publishes no snap counts,
 so "no stat row" is not proof that a player did not play.
 
-${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], played[i], starts[i]).join('\n')).join('\n\n')}
+${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, played[i].onFile, cores[i], played[i], starts[i], availabilityState[s.atHome ? 'home' : 'away'] || 'checked', exempt[s.atHome ? 'home' : 'away'] || []).join('\n')).join('\n\n')}
 ${RULE}`;
 
   const behind = (s) => (s.results.length
