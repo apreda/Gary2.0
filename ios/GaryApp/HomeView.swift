@@ -1046,17 +1046,12 @@ struct HomeView: View {
         // (The second headlines instance that used to sit here came out Aug 5 —
         // the rail lives at the top of the page now, in every day-state.)
 
-        // ── THE WIRE — the day's moments. The fun-room doors that rode its
-        // top came off with the Hub (Sep 23-24 2026); a lone "Free Pick" door
-        // read as the Wire's own title, and Picks is one tap away in the dock.
-        HomeWireMini(
-            doors: [],
-            items: wireItems
-        ) {
-            // The Hub is retired (founder, Sep 23 2026): tab 2 is Darts, and
-            // the Wire now lives on Picks.
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 3 }
-        }
+        // ── TONIGHT ON X — real people's takes on tonight's games, X's own embeds in a slow slideshow (founder,
+        // Oct 29 2026). It replaced the Wire's moment and injury lines here: "people get that kind of information
+        // elsewhere. That's not what Gary is."
+        HomeXWire()
+            .opacity(animateIn ? 1 : 0)
+            .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         // (The Record now travels with the day cycle — see recordBlock above.
         // The page ends on the discovery shelf + the quiet social footer.)
     }

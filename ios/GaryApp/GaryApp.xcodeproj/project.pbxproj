@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF06182E7B8C9740E22A012 /* CashRailModel.swift */; };
+		10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4E8CD23C526CD205E10607 /* CashRailCard.swift */; };
+		78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FE63AC8845ADF41948E75E /* CashRailRailView.swift */; };
+		BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */; };
 		777E3671E910DCC68EC80983 /* LabModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958086BBEEB1C76916D435F9 /* LabModels.swift */; };
 		94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */; };
 		4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E364F49796338B2D876663BF /* LabTracker.swift */; };
@@ -126,6 +130,7 @@
 		C3AA68D864B07B91581DA522 /* GamePickModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630D04BBA1596DEE49C95B1E /* GamePickModels.swift */; };
 		C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */; };
 		C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4536063BFE66307137544F6 /* HomeSheetRowView.swift */; };
+		33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */; };
 		D4FC45AD5F44665F7C6DB30C /* HomeWinnersBento.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11361AC8006F914161B6944F /* HomeWinnersBento.swift */; };
 		4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */; };
 		C920D1248BE2F9B6BB1AA083 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8646793345451E9ACFBEC6 /* HubJudgment.swift */; };
@@ -164,6 +169,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		4AF06182E7B8C9740E22A012 /* CashRailModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailModel.swift; sourceTree = "<group>"; };
+		EF4E8CD23C526CD205E10607 /* CashRailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCard.swift; sourceTree = "<group>"; };
+		52FE63AC8845ADF41948E75E /* CashRailRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailRailView.swift; sourceTree = "<group>"; };
+		D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailSheet.swift; sourceTree = "<group>"; };
 		958086BBEEB1C76916D435F9 /* LabModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabModels.swift; sourceTree = "<group>"; };
 		C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabDesign.swift; sourceTree = "<group>"; };
 		E364F49796338B2D876663BF /* LabTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabTracker.swift; sourceTree = "<group>"; };
@@ -266,6 +275,7 @@
 		A3B653B8942A10915030EA69 /* BookQuickLogSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookQuickLogSheet.swift; sourceTree = "<group>"; };
 		A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBBallparks.swift; sourceTree = "<group>"; };
 		A4536063BFE66307137544F6 /* HomeSheetRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSheetRowView.swift; sourceTree = "<group>"; };
+		B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeXWire.swift; sourceTree = "<group>"; };
 		11361AC8006F914161B6944F /* HomeWinnersBento.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWinnersBento.swift; sourceTree = "<group>"; };
 		F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeBoardStory.swift; sourceTree = "<group>"; };
 		A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueWordsOverlay.swift; sourceTree = "<group>"; };
@@ -334,6 +344,17 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		C568940569BDA7093C695587 /* CashRail */ = {
+			isa = PBXGroup;
+			children = (
+				4AF06182E7B8C9740E22A012 /* CashRailModel.swift */,
+				EF4E8CD23C526CD205E10607 /* CashRailCard.swift */,
+				52FE63AC8845ADF41948E75E /* CashRailRailView.swift */,
+				D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */,
+			);
+			path = CashRail;
+			sourceTree = "<group>";
+		};
 		02F13D03245A29657A46163C /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -459,6 +480,7 @@
 		A9B7A0DCD1996F4BF6D28171 /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				C568940569BDA7093C695587 /* CashRail */,
 				44E924B51A0530631BCA01C4 /* DailyRecapOverlay.swift */,
 				DAE92047709CBFC7EF21709F /* GamePickSources.swift */,
 				D19016671EB6FE8BA2D21AA5 /* HomeAllStarTakeover.swift */,
@@ -484,6 +506,7 @@
 				A836D05EE2951750872171D4 /* HomeSheetPanel.swift */,
 				122335EF5B948F60065E2A59 /* HomeSheetRow.swift */,
 				A4536063BFE66307137544F6 /* HomeSheetRowView.swift */,
+				B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */,
 				11361AC8006F914161B6944F /* HomeWinnersBento.swift */,
 				F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */,
 				A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */,
@@ -750,6 +773,10 @@
 				3970CDAC01ED5D05D6448664 /* HomeLiveVerdict.swift in Sources */,
 				EB862D1F777BDFF490F421A4 /* HomeMarqueeHero.swift in Sources */,
 				66A58BD776985470ED7F5842 /* HomeMarqueeTracker.swift in Sources */,
+				9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */,
+				10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */,
+				78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */,
+				BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */,
 				3292358B12933B1F8DD2A4D2 /* HomePersonalScorecard.swift in Sources */,
 				9F2CE5FFECBC920827D175D6 /* HomePresentation.swift in Sources */,
 				00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */,
@@ -760,6 +787,7 @@
 				8D5767617569EF3EA45DC781 /* HomeSheetPanel.swift in Sources */,
 				115572DD1FE450DE26665445 /* HomeSheetRow.swift in Sources */,
 				C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */,
+				33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */,
 				D4FC45AD5F44665F7C6DB30C /* HomeWinnersBento.swift in Sources */,
 				4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */,
 				1D6F6CCF87C3ADD493EA4537 /* HomeView.swift in Sources */,

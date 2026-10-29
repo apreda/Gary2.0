@@ -89,3 +89,10 @@ style guide; everything else follows his current request.
   its odds, never a dollar amount, headline, what else hit), the board's own
   rows dimmed and blurred and the rest of Home untouched, with "Open the pick
   card" and "Share the story" under it. The pick card is no longer the tap.
+- **Under the board: Tonight on X.** The Wire's moment and injury lines are
+  gone (Adam, Oct 29 2026: "people get that kind of information elsewhere").
+  In their place, X's own embeds of real people's takes on tonight's games,
+  betting voices and talking heads, never a company or a news bulletin, as a
+  slow slideshow (7 seconds a post, swipeable). Accounts live in
+  `x_wire_accounts`; the x-wire function reads their new posts every 20
+  minutes with Gary's X keys, under a daily read cap.

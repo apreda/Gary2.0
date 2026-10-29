@@ -937,6 +937,15 @@ enum SupabaseAPI {
         return f.string(from: d.addingTimeInterval(86_400))
     }
 
+    /// Tonight on X (founder, Oct 29 2026): the slate day's posts for Home's slideshow, from get_x_wire. Nil on a
+    /// failed read, so a hiccup never empties a slideshow already showing.
+    static func fetchXWire(date: String) async -> [XWirePost]? {
+        let url = buildURL(table: "rpc/get_x_wire", query: [URLQueryItem(name: "p_date", value: date)])
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+        return try? JSONDecoder().decode([XWirePost].self, from: data)
+    }
+
     static func fetchGameRecaps(date: String) async -> [GameRecapRow] {
         // A sporting night spans two UTC dates: a 9pm-ET game (a World Cup night
         // kickoff, a late west-coast game) is graded under the NEXT day's UTC
