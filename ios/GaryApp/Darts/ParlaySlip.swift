@@ -23,7 +23,22 @@ struct ParlayLeg: Decodable, Identifiable {
     /// The player on a player leg (his card opens from the leg); nil on a game leg.
     let player: String?
     let player_id: String?
+    /// A player leg's count so far against its line, while its game is on and after.
+    let progress: LegProgress?
     var id: String { key }
+}
+
+/// THE LEG, LIVE (founder, Oct 28 2026: "instead of tracking the score ... can we actually live track their
+/// stats"): the player's count so far, the leg's line and side.
+struct LegProgress: Decodable {
+    let actual: Double
+    let line: Double
+    let bet: String
+    let is_final: Bool?
+
+    /// An over past its line has landed; an under past it has missed.
+    var cleared: Bool { bet == "over" && actual > line }
+    var busted: Bool { bet == "under" && actual > line }
 }
 
 extension ParlayLeg {
@@ -426,10 +441,20 @@ struct ParlayTicket: View {
         }
     }
 
-    /// The matchup; while the game is on, where it stands; before, when it starts.
+    /// The matchup; while the game is on, where it stands (a player leg: his count against the line and the
+    /// clock, the score says nothing about it); before, when it starts.
     @ViewBuilder private func sub(_ leg: ParlayLeg) -> some View {
         let matchup = leg.matchup ?? ""
-        if LabTicketState(result: leg.result) == .open, let live = leg.live, live.isLive {
+        if let p = leg.progress, leg.live?.isLive == true || leg.live?.isFinal == true || LabTicketState(result: leg.result) != .open {
+            VStack(alignment: .leading, spacing: 6 * scale) {
+                Text(progressWords(p, leg)).font(GaryFonts.ui(11.5 * scale, .semibold)).foregroundStyle(GaryColors.gold)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+                // A yes-or-no line (a home run, a touchdown) has nothing to fill.
+                if p.line >= 1 { progressBar(p) }
+            }
+            .padding(.top, 1 * scale)
+        } else if LabTicketState(result: leg.result) == .open, let live = leg.live, live.isLive {
             Text(liveWords(live)).font(GaryFonts.ui(11.5 * scale, .semibold)).foregroundStyle(GaryColors.gold)
                 .fixedSize(horizontal: false, vertical: true)
         } else if LabTicketState(result: leg.result) == .open, leg.live?.isFinal != true, let c = leg.commence_time {
@@ -440,6 +465,34 @@ struct ParlayTicket: View {
             Text(matchup).font(GaryFonts.ui(12.5 * scale)).foregroundStyle(TicketInk.faint)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// "26 / 33.5 · Q4 3:41"; "36 / 33.5 · Final".
+    private func progressWords(_ p: LegProgress, _ leg: ParlayLeg) -> String {
+        let count = "\(Self.number(p.actual)) / \(Self.number(p.line))"
+        let done = leg.live?.isFinal == true || p.is_final == true || LabTicketState(result: leg.result) != .open
+        let clock = done ? "Final" : (leg.live?.detail ?? "")
+        return [count, clock].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private static func number(_ v: Double) -> String {
+        v.rounded() == v ? String(Int(v)) : String(format: "%.1f", v)
+    }
+
+    /// The count filling toward the line, the line a mark across the bar at four fifths of it. Green once an
+    /// over has passed the line, red once an under has.
+    private func progressBar(_ p: LegProgress) -> some View {
+        let top = max(p.line * 1.25, p.actual, 1)
+        let tint = p.cleared ? GaryColors.win : p.busted ? GaryColors.loss : GaryColors.gold
+        let bar = RoundedRectangle(cornerRadius: 2 * scale, style: .continuous)
+        return ZStack(alignment: .leading) {
+            bar.fill(GaryColors.warmWhite.opacity(0.14))
+            bar.fill(tint).scaleEffect(x: CGFloat(min(p.actual / top, 1)), y: 1, anchor: .leading)
+        }
+        .frame(height: 4 * scale)
+        .overlay(BarMark(at: CGFloat(p.line / top)).fill(GaryColors.warmWhite.opacity(0.85)).padding(.vertical, -3 * scale))
+        .padding(.vertical, 3 * scale)
+        .accessibilityHidden(true)
     }
 
     private func liveWords(_ s: LiveScore) -> String {
@@ -469,6 +522,14 @@ struct ParlayTicket: View {
         }
         let first = slip.legs.compactMap(\.commence_time).min { (LabFormat.parseISO($0) ?? .distantFuture) < (LabFormat.parseISO($1) ?? .distantFuture) }
         return first.map { "\(LabFormat.timeET($0)) ET" } ?? ""
+    }
+}
+
+/// The line's mark across a leg's bar, `at` of the way along it.
+private struct BarMark: Shape {
+    let at: CGFloat
+    func path(in r: CGRect) -> Path {
+        Path(CGRect(x: r.minX + r.width * at - 0.75, y: r.minY, width: 1.5, height: r.height))
     }
 }
 

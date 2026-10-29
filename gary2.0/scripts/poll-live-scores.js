@@ -54,6 +54,7 @@ import {
 import { loadIncompleteFinalFootballGames } from './lib/footballFinalReconciliation.js';
 import { syncNbaTeamGames } from '../src/services/sports/nba/nbaTeamGames.js';
 import { syncNcaafTeamGames } from '../src/services/sports/ncaaf/ncaafTeamGames.js';
+import { trackParlayLegs } from './lib/parlayLegLive.js';
 
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 // MLB Stats API: BDL has neither outs nor baserunners, so live MLB game state
@@ -635,6 +636,14 @@ async function run() {
     } catch (e) {
       console.warn(`[events] write ${r.league} ${r.game_id}: ${e.message}`);
     }
+  }
+
+  // The parlay's player legs, counted from their games' live stat feeds (parlayLegLive.js).
+  if (!dryRun) {
+    await trackParlayLegs({
+      date: targetDate, games: stamped, supabaseUrl, serviceKey: adminKey,
+      bdlApiKey: process.env.BALLDONTLIE_API_KEY || process.env.VITE_BALL_DONT_LIE_API_KEY || process.env.BALL_DONT_LIE_API_KEY,
+    });
   }
 
   // Phantom-row cleanup: a prior poll (or a bad source frame) can leave a DUPLICATE

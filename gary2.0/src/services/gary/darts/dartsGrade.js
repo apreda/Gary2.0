@@ -20,7 +20,7 @@ async function bdl(path, apiKey) {
   return res.json();
 }
 
-async function bdlAll(path, apiKey) {
+export async function bdlAll(path, apiKey) {
   const rows = [];
   let cursor = null;
   do {
