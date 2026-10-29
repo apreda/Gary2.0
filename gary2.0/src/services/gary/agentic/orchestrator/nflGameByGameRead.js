@@ -40,7 +40,9 @@ export async function buildNflGameByGameStory(desk, { homeTeam, awayTeam, gameDa
     const full = newest.slice(0, NFL_WINDOW).map((x) => (meetingIds.has(x.g.game_id) ? `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}: in this season's meetings above` : nflGameFull(data, x, code, before)));
     const older = newest.slice(NFL_WINDOW);
     return [`${team.toUpperCase()}: ${w}-${games.length - w - t}${t ? `-${t}` : ''}${games.length > NFL_WINDOW ? `; the last ${NFL_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
-      full.join('\n\n'), older.length ? `Older games, one line each:\n${older.map((x) => nflGameShort(data, x, code, before)).join('\n')}` : null].filter(Boolean).join('\n\n');
+      // A meeting past the window points to the meetings too (Oct 29 2026 hunt, round 7: the Eagles' Week 1 game with
+      // Washington printed in full there and again as an older game).
+      full.join('\n\n'), older.length ? `Older games, one line each:\n${older.map((x) => (meetingIds.has(x.g.game_id) ? `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}: in this season's meetings above` : nflGameShort(data, x, code, before))).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
   const story = [[header, spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonight,
     `LEAGUE RECORDS BEFORE TONIGHT\n${nflLeagueRecords(data, before)}`,

@@ -21,13 +21,15 @@ const n = (v) => Number(v || 0);
 
 // The season's weekly rows in the official box's counts, the same rows the sheet's game log reads (Oct 27 2026 darts bug
 // audit: the totals and the volume model read nflverse's own counts beside a game log in the official ones).
-const weeklyRows = async (season) => (await officialWeeklyRows(season)) || [];
+// Null when the weekly stats did not load: the sheets say so rather than "no games yet" (Oct 29 2026 hunt, round 7).
+const weeklyRows = async (season) => officialWeeklyRows(season);
 
 /** normalized name → the season's regular-season games, newest first (the shape the sheets and the volume model read). */
 export async function nflSeasonGames(season) {
   const rows = await weeklyRows(season);
   const byName = new Map();
-  for (const r of rows) {
+  if (!rows) byName.missing = true;
+  for (const r of rows || []) {
     if (r.season_type !== 'REG' || !isNflSkillRow(r)) continue;
     const key = normName(r.player_display_name);
     if (!byName.has(key)) byName.set(key, []);
@@ -45,7 +47,7 @@ async function seasonLines(season) {
   const rows = await weeklyRows(season);
   const byKey = new Map();
   const byName = new Map();
-  for (const r of rows) {
+  for (const r of rows || []) {
     if (r.season_type !== 'REG' || !isNflSkillRow(r)) continue;
     const key = `${normName(r.player_display_name)}|${r.team}`;
     const cur = byKey.get(key) || { games: 0, targets: 0, rec: 0, recYds: 0, recTd: 0, carries: 0, rushYds: 0, rushTd: 0, passTd: 0, int: 0, attempts: 0 };
@@ -72,7 +74,7 @@ async function seasonLines(season) {
     const nk = key.split('|')[0];
     if (!byName.has(nk) || byName.get(nk).games < cur.games) byName.set(nk, cur);
   }
-  return { byKey, byName };
+  return { byKey, byName, missing: !rows };
 }
 
 function statText(pos, s) {
@@ -190,7 +192,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const cur = now26 || thisYear.byName.get(nk);
         const facts = [`${info.name} ${pos}`];
         if (status) facts.push(status.toLowerCase());
-        facts.push(cur ? `${season}: ${statText(pos, cur)}` : `${season}: no games yet`);
+        facts.push(cur ? `${season}: ${statText(pos, cur)}` : thisYear.missing ? `${season}: games not on file (the weekly stats did not load)` : `${season}: no games yet`);
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;

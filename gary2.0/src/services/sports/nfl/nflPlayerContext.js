@@ -12,13 +12,19 @@ const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const day = (d) => { const [, m, dd] = String(d || '').split('-').map(Number); return m ? `${MONTHS[m - 1]} ${dd}` : null; };
 
+// A failed load is not kept (Oct 29 2026 hunt, round 7: one failed download read "no games yet" on every dart for the
+// rest of the process); the next call asks again.
 const memo = new Map();
-const once = (key, fn) => { if (!memo.has(key)) memo.set(key, fn().catch(() => null)); return memo.get(key); };
+const once = (key, fn) => {
+  if (!memo.has(key)) memo.set(key, fn().catch(() => null).then((v) => { if (v == null) memo.delete(key); return v; }));
+  return memo.get(key);
+};
 
 /** One season's weekly player rows (nflverse stats_player_week), regular season, in the official box's counts
  * (espnNflBox.js; Oct 27 2026: Brock Bowers' 13 targets were officially 14). */
 export const weeklyRows = (season) => once(`week|${season}`, async () => {
-  const rows = (await fetchCsv(`${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`)).filter((r) => r.season_type === 'REG');
+  const url = `${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`;
+  const rows = (await fetchCsv(url).catch(() => fetchCsv(url))).filter((r) => r.season_type === 'REG');
   const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => []);
   return (await withOfficialBox(rows, schedule, season).catch(() => null))?.rows ?? rows;
 });
@@ -48,8 +54,16 @@ export const snapCounts = (season) => once(`snaps|${season}`, async () => {
     if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k));
     const pct = n(r.offense_pct);
     out.get(k).push({ week: n(r.week), team: r.team, opp: r.opponent, snaps: n(r.offense_snaps), teamSnaps: pct > 0 ? Math.round(n(r.offense_snaps) / pct) : null });
+    // One count per team game (Oct 29 2026 hunt, round 7: worked back from each player's rounded share, one Panthers game
+    // read 79, 78 and 77 team snaps on one sheet): the share of the player with the most snaps, 100% for a full game.
+    const tk = `${r.team}|${n(r.week)}`, top = out.teamTop?.get(tk);
+    if (!out.teamTop) out.teamTop = new Map();
+    if (pct > 0 && (!top || n(r.offense_snaps) > top.snaps)) out.teamTop.set(tk, { snaps: n(r.offense_snaps), total: Math.round(n(r.offense_snaps) / pct) });
   }
-  for (const list of out.values()) list.sort((a, b) => b.week - a.week);
+  for (const list of out.values()) {
+    for (const x of list) { const t = out.teamTop?.get(`${x.team}|${x.week}`); if (t) x.teamSnaps = t.total; }
+    list.sort((a, b) => b.week - a.week);
+  }
   return out;
 });
 
@@ -108,12 +122,40 @@ export function defenseLine(cur, prev, defense, position, season) {
 }
 
 
+/** Each player's roster word for a week ("inactive", "injured reserve", "commissioner's exempt list"), keyed
+ * "GSIS id|week", from the weekly roster (Oct 29 2026 hunt, round 7: Josh Jacobs' sheet read "did not play" for the six
+ * weeks he was on the exempt list, Lamar Jackson's for three weeks inactive). */
+export function rosterWeekWords(roster) {
+  const out = new Map();
+  for (const r of roster || []) {
+    const w = r.status === 'INA' ? 'inactive' : r.status === 'EXE' ? "commissioner's exempt list"
+      : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'injured reserve' : 'on a reserve list')
+        : r.status === 'DEV' ? 'practice squad' : null;
+    if (w && r.gsis_id) out.set(`${r.gsis_id}|${Number(r.week)}`, w);
+  }
+  return out;
+}
+
+/** The team's quarterbacks each week, keyed "season|week|TEAM": every passer with 5+ attempts, most first (Oct 29 2026
+ * hunt, round 7: the Ravens' receivers read the same with Lamar Jackson and with Tyler Huntley). */
+export function weekPassers(rows) {
+  const by = new Map();
+  for (const r of rows || []) {
+    if (!(n(r.attempts) >= 5)) continue;
+    const k = `${r.season}|${Number(r.week)}|${r.team}`;
+    by.set(k, [...(by.get(k) || []), r]);
+  }
+  return new Map([...by].map(([k, list]) => [k, list.sort((a, b) => n(b.attempts) - n(a.attempts)).map((r) => r.player_display_name)]));
+}
+
 /** "Wk 2 Sep 14 vs DAL: 7 targets, 5 catches, 72 yards, 1 TD; 2 carries, 9 yards; 54 of 66 snaps" — newest first. */
 // `defenses`: team code → the defense that week's opponent is this season ("allowing 26.3 points a game, 5th most"),
 // so "120 yards vs DAL" says whether Dallas was a soft defense (Oct 26 2026, as the game lines show it).
 // A game his club played that he has no row in reads "did not play" (Oct 27 2026 darts bug audit: Josh Jacobs' sheet
 // showed one game, Week 7, with nothing to say he had missed Weeks 1 to 6 and was one game back).
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null } = {}) {
+// `passers` (weekPassers) names his team's quarterback each game for a non-passer; `rosterWords` (rosterWeekWords) says
+// why a game he missed was missed.
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
@@ -124,12 +166,14 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
+    const qbs = !n(r.attempts) ? passers?.get(`${r.season}|${wk}|${r.team}`) : null;
+    if (qbs?.length) bits.push(`QB ${qbs.join(', ')}`);
     const faced = defenses?.get(r.opponent_team);
     const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
     return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
   };
   const played = (rows || []).map((r) => ({ wk: n(r.week), text: line(r) }));
-  const team = rows?.[0]?.team;
+  const team = rows?.[0]?.team, gsis = rows?.[0]?.player_id;
   const end = today || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const missed = [];
   if (team && days) {
@@ -137,7 +181,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       const [s, w, t] = key.split('|');
       if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
         const on = snaps.find((x) => x.week === Number(w) && x.snaps > 0);
-        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : 'did not play'}` });
+        const why = gsis ? rosterWords?.get(`${gsis}|${Number(w)}`) : null;
+        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : `did not play${why ? ` (${why})` : ''}`}` });
       }
     }
   }
@@ -231,8 +276,15 @@ export function withOfficialReport(injuries, reports) {
     const designated = report.players.some((r) => r.game_status);
     const mine = rows.filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === team);
     const byName = new Map(mine.map((i) => [full(i), i]));
+    // Then a last name only one player on each side has, as the read matches them (nfl.js; Oct 29 2026 hunt, round 7:
+    // the report's "Andrew Ogletree" and the feed's "Drew Ogletree" stayed two rows, the feed's status beside the report's).
+    const lastOf = (name) => normName(String(name || '').trim().split(/\s+/).slice(1).join(' '));
+    const feedLast = new Map(), reportLast = new Map();
+    for (const i of mine) { const k = normName(i?.player?.last_name); feedLast.set(k, [...(feedLast.get(k) || []), i]); }
+    for (const r of report.players) reportLast.set(lastOf(r.name), (reportLast.get(lastOf(r.name)) || 0) + 1);
     for (const r of report.players) {
-      const listed = byName.get(normName(r.name));
+      const k = lastOf(r.name);
+      const listed = byName.get(normName(r.name)) || (k && feedLast.get(k)?.length === 1 && reportLast.get(k) === 1 ? feedLast.get(k)[0] : null);
       if (listed) { if (r.game_status) rows[rows.indexOf(listed)] = { ...listed, status: r.game_status }; continue; }
       if (!r.game_status) continue;
       const [first, ...rest] = String(r.name || '').trim().split(/\s+/);

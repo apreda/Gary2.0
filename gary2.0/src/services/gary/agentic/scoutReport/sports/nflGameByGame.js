@@ -488,7 +488,12 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       for (const nm of [r.full_name, `${r.first_name || ''} ${r.last_name || ''}`, r.football_name ? `${r.football_name} ${r.last_name || ''}` : null]) if (nm && nm.trim()) set.add(nm.trim());
       namesOf.set(r.pfr_id, set);
     }
-    const reported = reportLookup(list, [...byPlayer.keys()], (player) => [...(namesOf.get(pfrOf.get(player)) || [])]);
+    // The report's league id first (Oct 29 2026 hunt, round 7: the feed's "JuJu Brents" is the report's and the snap
+    // file's Julius Brents, and lost his "played in the last game" tag), then the names.
+    const pfrByGsis = new Map(rosterRows.filter((r) => r.gsis_id && r.pfr_id).map((r) => [r.gsis_id, r.pfr_id]));
+    const byId = new Map(list.filter((i) => i.gsis_id && pfrByGsis.has(i.gsis_id)).map((i) => [pfrByGsis.get(i.gsis_id), i]));
+    const byNames = reportLookup(list, [...byPlayer.keys()], (player) => [...(namesOf.get(pfrOf.get(player)) || [])]);
+    const reported = (player) => byId.get(pfrOf.get(player)) || byNames(player);
     for (const [player, shares] of byPlayer) {
       const injury = reported(player);
       if (!injury) continue;

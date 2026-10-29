@@ -15,7 +15,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
-import { withoutBettingLines } from './ncaafRead.js';
+import { withoutBettingLines, footballNews } from './ncaafRead.js';
 import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
@@ -93,7 +93,7 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
     'Injury report:', injuriesAsReported(desk), '',
     'This season:', `${strength(data, awayTeam, before, deskStarter(qbs, awayTeam))}\n${strength(data, homeTeam, before, deskStarter(qbs, homeTeam))}`, '',
     'Schedule, travel and weather:', where.text || 'Nothing unusual.',
-    news ? `\nThe news desk:\n${news}` : ''].join('\n');
+    footballNews(news) ? `\nThe news desk:\n${footballNews(news)}` : ''].join('\n');
 }
 
 // The news desk's latest on who plays (nflResearchPrompts.js), from the game as Gary reads it. Optional: a failed or
@@ -119,7 +119,7 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
   if (!news) console.warn(`[NFL Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
   // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
   // the market (founder, Oct 23 2026).
-  return { news: news ? withoutBettingLines(String(news).trim()).trim() || null : null, model: news ? research.model : null };
+  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null };
 }
 
 /** The news desk's report for the props desk, from the same story (Oct 29 2026 hunt: NFL props read no news, so a

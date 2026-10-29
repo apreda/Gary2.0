@@ -69,7 +69,10 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     // first-sentence + 60-char cut printed "did not participate in Monday's
     // practic" into the dossier, live Aug 20). Newlines fold to spaces only.
     // The NBA's official report carries its reason as durationContext (audit, Oct 13 2026).
-    const reason = (i.description || i.comment || i.injury || i.durationContext || '').replace(/\s+/g, ' ').trim();
+    // A note that is only a status word repeats the status (Oct 29 2026 hunt, round 7: "Keisean Nixon ... (Questionable)
+    // - questionable"); the feed gave no injury.
+    const said = (i.description || i.comment || i.injury || i.durationContext || '').replace(/\s+/g, ' ').trim();
+    const reason = /^(?:questionable|doubtful|out|probable|active|day-to-day)\.?$/i.test(said) ? 'injury not on file' : said;
     const shortReason = reason ? ` - ${reason}` : '';
 
     // Build duration tag with ACTUAL DATE, days, and games missed for Gary to see clearly

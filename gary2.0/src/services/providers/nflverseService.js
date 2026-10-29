@@ -188,7 +188,10 @@ export async function getPracticeReport(teamName, season, week = null, opts = {}
     game_status: r.report_status || null,
     practice: PRACTICE_SHORT[r.practice_status] || r.practice_status || null,
     injury: r.report_primary_injury || r.practice_primary_injury || null,
-    secondary: r.report_secondary_injury || null
+    // The practice rows carry the second injury too (Oct 29 2026 hunt, round 7: Golden's foot, Evans' knee, Brents'
+    // concussion, Chase's ankle behind "resting player"); the league id joins a report name the feed spells otherwise.
+    secondary: r.report_secondary_injury || r.practice_secondary_injury || null,
+    gsis_id: r.gsis_id || null
   }));
 
   return { week: targetWeek, team: teamName, players };

@@ -1090,10 +1090,12 @@ export async function buildNflScoutReport(game, options = {}) {
         // check: Jaylon Carlies and Kaden Elliss, back from missed games, practiced fully with no designation and read
         // as "missed the last game, not on this week's injury report").
         const p = raw.game_status || !designated ? raw : { ...raw, game_status: 'No game designation' };
-        const said = `${p.game_status || 'game statuses not issued yet'}${p.injury ? ` (${p.injury})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}`;
+        const hurt = [p.injury, p.secondary].filter(Boolean).join(', ');
+        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}`;
         const listed = findListed(first, rest.join(' '));
         if (listed) {
           if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }
+          if (p.gsis_id) listed.gsis_id = p.gsis_id;
           // The feed's comment when it says more than a status word (Oct 29 2026 hunt: "... practice: Limited. questionable").
           const feedNote = /^\s*(?:questionable|doubtful|out|probable|active)\.?\s*$/i.test(String(listed.comment || '')) ? '' : listed.comment || '';
           listed.comment = `Official injury report, Wk ${report.week}: ${said}. ${feedNote}`.trim();
@@ -1101,7 +1103,7 @@ export async function buildNflScoutReport(game, options = {}) {
         }
         list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status || 'No game status yet',
           comment: `Official injury report, Wk ${report.week}: ${said}.`,
-          freshness: 'FRESH', noteCurrent: true, source: 'NFL official report' });
+          freshness: 'FRESH', noteCurrent: true, source: 'NFL official report', gsis_id: p.gsis_id || null });
       }
     }
   }

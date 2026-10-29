@@ -14,6 +14,7 @@ import { getNflSchedule, sideFacts, restPhrase, tripPhrase } from './nflSchedule
 import { getPlayLedger } from './nflPlayLedger.js';
 import { loadNflGameWeather, gameWeatherLine } from './nflGameWeather.js';
 import { withOfficialBox } from './espnNflBox.js';
+import { getNflHeadCoach } from '../../providers/espnNflCoaches.js';
 
 const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
 export const codeOf = (team) => NFLVERSE_TEAM_CODES[team];
@@ -41,9 +42,12 @@ export async function loadBettorData(season) {
   const weather = await loadNflGameWeather(playedRows, kickoffMs).catch((e) => { console.warn(`[NFL data] game weather not on file: ${e.message}`); return null; });
   // Each player's line in the official box's counts (espnNflBox.js: tackles, targets, QB hits, passes defended).
   const official = await withOfficialBox(rows(pw), scheduleRows, season).catch((e) => { console.warn(`[NFL data] official box not checked: ${e.message}`); return null; });
+  // Each club's head coach this season from ESPN (espnNflCoaches.js, as the desk reads it; Oct 29 2026 hunt, round 7:
+  // the second system printed the schedule's out-of-date "coach Sean McDermott" on every Bills game). Null: not on file.
+  const coaches = new Map(await Promise.all(Object.entries(NFLVERSE_TEAM_CODES).map(async ([name, code]) => [code, await getNflHeadCoach(name, season).catch(() => null)])));
   return { season, schedule: scheduleRows, scheduleMissing: !schedule || Boolean(schedule.unavailable),
     teamWeek: rows(tw), playerWeek: official?.rows ?? rows(pw), officialCorrections: official?.corrected ?? null, snaps: rows(sc), rosterWeekly: rows(rw),
-    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather };
+    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather, coaches };
 }
 
 // The schedule's kickoff (Eastern date and time) as an instant: try standard time, then correct by the hour Eastern
@@ -200,16 +204,19 @@ function opponentThatDay(d, before, x) {
   const now = `${record(games)} now`;
   const season = opponentSeason(d, before, x.opp);
   if (!x.oppQb) return `${now}${season ? `, ${season}` : ''}`;
+  // The starter who left early is named too (Oct 29 2026 hunt, round 7: the Patriots' Week 1 opponent read "Drew Lock at
+  // QB that day", Sam Darnold's start and exit unsaid).
+  const qbThat = `${x.oppQb}${x.oppStartedQb && !sameQb(x.oppStartedQb, x.oppQb) ? ` (${x.oppStartedQb} started, left early)` : ''}`;
   const roles = games.map((g) => qbRole(g, x.oppQb));
-  if (roles.includes('unknown')) return `${now}${season ? `, ${season}` : ''}; ${x.oppQb} at QB that day`;
-  if (roles.every((r) => r === 'with')) return `${now}${season ? `, ${season}` : ''}; ${x.oppQb} at QB that day and in every game`;
+  if (roles.includes('unknown')) return `${now}${season ? `, ${season}` : ''}; ${qbThat} at QB that day`;
+  if (roles.every((r) => r === 'with')) return `${now}${season ? `, ${season}` : ''}; ${qbThat} at QB that day and in every game`;
   const table = leagueTable(d, before); const t = table.get(x.opp);
   const allows = t ? `, allowing ${t.allows.toFixed(1)} points a game, ${place([...table.values()].map((v) => v.allows), t.allows)}` : '';
   const others = games.filter((g, i) => roles[i] === 'with' && g.g.game_id !== x.g.game_id);
   const sharedThatDay = qbRole(games.find((g) => g.g.game_id === x.g.game_id) || { passers: [] }, x.oppQb) === 'shared' ? ', sharing it' : '';
-  if (!others.length) return `${now}${allows}; ${x.oppQb} at QB that day${sharedThatDay}, with no other full game for them this season`;
+  if (!others.length) return `${now}${allows}; ${qbThat} at QB that day${sharedThatDay}, with no other full game for them this season`;
   const scored = others.reduce((a, g) => a + g.pf, 0) / others.length;
-  return `${now}${allows}; ${x.oppQb} at QB that day${sharedThatDay}: ${record(others)} in his ${others.length} other full game${others.length === 1 ? '' : 's'}, scoring ${scored.toFixed(1)} points a game`;
+  return `${now}${allows}; ${qbThat} at QB that day${sharedThatDay}: ${record(others)} in his ${others.length} other full game${others.length === 1 ? '' : 's'}, scoring ${scored.toFixed(1)} points a game`;
 }
 /** The defense a player faced, for the prop sheets: "allowing 26.3 points a game, 5th most" for each team code. */
 export function defensesFaced(schedule, season, before, asOf = null) {
@@ -421,7 +428,11 @@ export function skillPlayers(d, team, before, reportText = '') {
     const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last, x.g.game_id))}% of snaps)` : stShare(last, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last, x.g.game_id))}% of special-teams snaps)` : 'did not play'}`);
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
-    const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];
+    // A player on a reserve list has his status after his name there (Oct 29 2026 hunt, round 7: De'Von Achane, out for
+    // the season, read only "on this week's injury report"; the line is "also on reserve lists: ... De'Von Achane (IR)").
+    const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1]
+      || (/reserve lists?:/i.test(reportLine || '') ? [...reportLine.split(/reserve lists?:/i)[1].matchAll(/\s*([^,(]+?) \(([^)]+)\)/g)]
+        .find((m) => sameKey(m[1]) === sameKey(last.player_display_name))?.[2] : undefined);
     const listed = text.includes(sameKey(last.player_display_name)) ? ` · ${status ? `${status} on` : 'on'} this week\'s injury report` : '';
     return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}`;
   });
@@ -577,13 +588,30 @@ function driveLine(x, code) {
   return `drives: ${side(code, x.opp)} · ${side(x.opp, code)}`;
 }
 
+// A club's coach in one of this season's games: the schedule's name when its latest game names ESPN's coach (so a change
+// during the season shows game by game), ESPN's when the schedule's column is out of date for the club, null when ESPN
+// has no answer.
+function coachThatDay(d, g, code) {
+  const current = d.coaches?.get(code);
+  if (!current) return null;
+  const col = (r) => (r.home_team === code ? r.home_coach : r.away_coach) || null;
+  const latest = (d.schedule || []).filter((r) => String(r.season) === String(d.season) && (r.home_team === code || r.away_team === code) && r.home_score !== '' && r.home_score != null)
+    .sort((a, b) => Number(b.week) - Number(a.week))[0];
+  return latest && col(latest) === current ? col(g) || current : current;
+}
+
 export function gameByGame(d, team, before) {
   if (d.scheduleMissing) return `${team}: the season game by game is not on file (the schedule file did not load).`;
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
   const changes = lineupChanges(d, c, gs);
   return [seasonHeader(d, gs, team, before), ...gs.slice().reverse().map((x) => {
-    const qb = x.passers.length ? ` · QB ${[...x.passers, ...(x.relief || [])].map((r) => `${r.player_display_name}${x.relief?.includes(r) ? ' (relief)' : ''} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
+    // The starter who left early first, said so, as the second system says it (Oct 29 2026 hunt, round 7: the Vikings'
+    // Week 1 read "Carson Wentz 12-of-19 ...; Kyler Murray 3-of-5", Murray's start read as late relief).
+    const st = startedEarlyExit(d, x.g, c);
+    const all = [...x.passers, ...(x.relief || [])];
+    const ordered = st && all.includes(st) ? [st, ...all.filter((r) => r !== st)] : all;
+    const qb = x.passers.length ? ` · QB ${ordered.map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : x.relief?.includes(r) ? ' (relief)' : ''} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
       : ' · QB not on file';
     // Who the opponent was without that day: its own regulars who did not play, its quarterback first, at most four
     // (Oct 23 2026 data audit: Herbert's 121 yards in Week 5 came against a Denver secondary without Pat Surtain II and
@@ -810,12 +838,12 @@ export function nflGameFull(d, x, code, before) {
   const first = (c) => teamGames(d, c, d.season, before)[0]?.g.game_id === x.g.game_id;
   const rest = (k, c) => (first(c) ? 'first game of the season' : x.g[`${k}_rest`] ? `${x.g[`${k}_rest`]} days since their last game` : 'days since their last game not on file');
   const ourKey = x.home ? 'home' : 'away', theirKey = x.home ? 'away' : 'home';
-  const setting = `  setting: ${nickname(code)} ${rest(ourKey, code)}, coach ${x.g[`${ourKey}_coach`] || 'not on file'} · ${nickname(o)} ${rest(theirKey, o)}, coach ${x.g[`${theirKey}_coach`] || 'not on file'}`;
+  const setting = `  setting: ${nickname(code)} ${rest(ourKey, code)}, coach ${coachThatDay(d, x.g, code) || 'not on file'} · ${nickname(o)} ${rest(theirKey, o)}, coach ${coachThatDay(d, x.g, o) || 'not on file'}`;
   const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
   const scoring = !d.ledgerGames ? 'score by quarter and drives: not on file' : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, code);
   const kicking = x.off && x.def ? `kicking: ${nickname(code)} ${kicks(x.off.kicking)}; ${nickname(o)} ${kicks(x.def.kicking)}` : null;
   const theirs = teamGames(d, o, d.season, before).find((g) => g.g.game_id === x.g.game_id);
-  const qb = (sideCode) => { const st = startedEarlyExit(d, x.g, sideCode); const ps = passersOf(d, x.g, sideCode); const rel = reliefOf(d, x.g, sideCode, ps); return ps.length ? [...ps, ...rel].map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : rel.includes(r) ? ' (relief)' : ''} ${passLine(r)}`).join('; ') : 'not on file'; };
+  const qb = (sideCode) => { const st = startedEarlyExit(d, x.g, sideCode); const ps = passersOf(d, x.g, sideCode); const rel = reliefOf(d, x.g, sideCode, ps); return ps.length ? [...(st && ps.includes(st) ? [st] : []), ...ps.filter((r) => r !== st), ...rel].map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : rel.includes(r) ? ' (relief)' : ''} ${passLine(r)}`).join('; ') : 'not on file'; };
   const ourGames = teamGames(d, code, d.season, before), oppGames = teamGames(d, o, d.season, before);
   // A team's first game has no regulars to be without yet (Oct 29 2026 hunt: every Week 1 game read "none of its
   // regulars", the Packers' too, Josh Jacobs on the exempt list).
@@ -827,8 +855,9 @@ export function nflGameFull(d, x, code, before) {
     `  quarterbacks: ${nickname(code)} ${qb(code)} · ${nickname(o)} ${qb(o)}`,
     `  ${boxLine(x, code)}`,
     `  without that day: ${nickname(code)} ${absent(code, ourGames)} · ${nickname(o)} ${absent(o, oppGames)}`,
-    changesUs ? `  ${nickname(code)} lineup: ${changesUs.replace(/^missing regulars: [^·]*· ?/, '')}` : null,
-    changesThem ? `  ${nickname(o)} lineup: ${changesThem.replace(/^missing regulars: [^·]*· ?/, '')}` : null];
+    // The missing regulars are on the "without that day" line; the lineup line keeps the rest, and goes when nothing is
+    // left (Oct 29 2026 hunt, round 7: a team with absences only read its missing regulars twice).
+    ...[[code, changesUs], [o, changesThem]].map(([c, ch]) => { const rest = ch ? ch.replace(/^missing regulars: [^·]*(?:· ?|$)/, '').trim() : ''; return rest ? `  ${nickname(c)} lineup: ${rest}` : null; })];
   for (const c of [code, o]) {
     const p = sidePlayers(d, x, c);
     lines.push(`  ${teamName(c)}:${p.onFile ? '' : ' player lines not on file'}`);

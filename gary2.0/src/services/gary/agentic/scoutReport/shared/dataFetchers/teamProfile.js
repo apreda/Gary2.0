@@ -214,7 +214,9 @@ export async function fetchTeamProfile(teamName, sport) {
         const otLosses = teamStanding?.ot_losses ?? 0;
         record = `${standingWins ?? 0}-${standingLosses ?? 0}-${otLosses}`;
       } else {
-        record = `${standingWins ?? 0}-${standingLosses ?? 0}`;
+        // A tie is the third number (Oct 29 2026 hunt, round 7: the Giants' 3-2-1 read "3-2" on their card).
+        const ties = Number(teamStanding?.ties) || 0;
+        record = `${standingWins ?? 0}-${standingLosses ?? 0}${ties ? `-${ties}` : ''}`;
       }
       recordSeason = currentSeason;
       recordSource = 'standings';
@@ -224,7 +226,8 @@ export async function fetchTeamProfile(teamName, sport) {
         const otLosses = seasonStats?.ot_losses ?? 0;
         record = `${statsWins ?? 0}-${statsLosses ?? 0}-${otLosses}`;
       } else {
-        record = `${statsWins ?? 0}-${statsLosses ?? 0}`;
+        const ties = Number(seasonStats?.ties) || 0;
+        record = `${statsWins ?? 0}-${statsLosses ?? 0}${ties ? `-${ties}` : ''}`;
       }
       recordSeason = seasonStatsSeason;
       recordSource = seasonStatsScope;

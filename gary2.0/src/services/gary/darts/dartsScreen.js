@@ -320,7 +320,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const lines = [`${c.player} ${c.position || ''} · ${c.team ? c.team.replace(/^.* /, '') : ''}${c.status ? ` · ${c.status}` : ''} · ${c.matchup} ${etClock(c.commence)}`.replace(/\s+·\s+·/g, ' ·')];
   lines.push(`${nflLabel(kind)} ${priceText}`);
   const cur = seasonClause(games, propType, seasonLabel), prev = seasonClause(prior, propType, priorLabel);
-  if (cur) lines.push(cur); else lines.push(`${seasonLabel}: no games yet`);
+  if (cur) lines.push(cur); else lines.push(ctx.seasonMissing ? `${seasonLabel}: games not on file (the weekly stats did not load)` : `${seasonLabel}: no games yet`);
   if (prev) lines.push(prev);
   const roleNote = prev ? priorRoleNote(games, prior, priorLabel) : null;
   if (roleNote) lines.push(roleNote);
@@ -344,7 +344,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   if (def) lines.push(def);
   const out = outAroundLine(ctx.injuries, c.team, c.player);
   if (out) lines.push(out);
-  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [] });
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
 }
