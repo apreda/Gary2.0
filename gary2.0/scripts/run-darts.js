@@ -33,7 +33,9 @@ const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbG
 const { loadMlbGameFrames, loadMlbPlayerSplits } = await import('../src/services/sports/mlb/mlbGameFrames.js');
 const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/providers/baseballSavantService.js');
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
-const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals } = await import('../src/services/sports/nfl/nflPlayerContext.js');
+const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport } = await import('../src/services/sports/nfl/nflPlayerContext.js');
+const { loadNflverseFile, getPracticeReport, nflverseCode } = await import('../src/services/providers/nflverseService.js');
+const { getNflSchedule, scheduleRowFor } = await import('../src/services/sports/nfl/nflSchedule.js');
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoard.js');
@@ -167,12 +169,22 @@ async function throwLeague(league) {
     } else {
       await refreshNflRedZone({ supabase, seasons: [board.season], log: { warn: log } }).catch((e) => log(`${league}: red zone refresh failed (${e.message})`));
       // This season only, and no price history (founder, Oct 23 2026: no last season ever, no market data).
-      const [gamesByName, contexts, rz, days, snaps, defCur, weekRows, injuries] = await Promise.all([
+      const [gamesByName, contexts, rz, days, snapFile, defCur, weekRows, feedInjuries, roster, schedule] = await Promise.all([
         nflSeasonGames(board.season), loadNflContexts(board.frames, board.season, { log: { warn: log } }),
         loadNflRedZone({ supabase, seasons: [board.season] }).catch(() => null),
         gameDays(), snapCounts(board.season), defenseByPosition(board.season), nflWeeklyRows(board.season),
         bdl.getNflPlayerInjuries().catch(() => []),
+        loadNflverseFile('roster_weekly', board.season).catch(() => null), getNflSchedule().catch(() => null),
       ]);
+      // Snap counts under the stats feed's spellings too, and the league's official report for each game's week over the
+      // injury feed (Oct 29 2026 hunt; nflPlayerContext.js aliasByRoster and withOfficialReport, as the props desk).
+      const snaps = aliasByRoster(snapFile, weekRows, roster && !roster.unavailable ? roster.rows : null);
+      const reports = schedule && !schedule.unavailable ? await Promise.all(board.frames.flatMap((f) => {
+        const week = Number(scheduleRowFor(schedule, board.season, nflverseCode(f.homeFull), nflverseCode(f.awayFull), f.commence)?.week) || null;
+        return week ? [f.homeFull, f.awayFull].map((team) => getPracticeReport(team, board.season, week)
+          .then((report) => ({ team, report: report?.unavailable ? null : report })).catch(() => ({ team, report: null }))) : [];
+      })) : [];
+      const injuries = withOfficialReport(feedInjuries, reports);
       const priorByName = new Map(), defPrev = null, history = null;
       const weeksByName = new Map();
       for (const r of [...(weekRows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }

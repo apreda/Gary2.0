@@ -39,17 +39,31 @@ export const gameDays = () => once('days', async () => {
 
 /** normalized name → [{ week, team, opp, snaps, teamSnaps }] newest first. */
 export const snapCounts = (season) => once(`snaps|${season}`, async () => {
-  const out = new Map();
+  // `.byPfr`: the same lists by PFR id, for players the stats feed spells differently (aliasByRoster).
+  const out = new Map(); out.byPfr = new Map();
   for (const r of await fetchCsv(`${RELEASE_BASE}/snap_counts/snap_counts_${season}.csv`)) {
     if (r.game_type !== 'REG' || !(n(r.offense_snaps) > 0)) continue;
     const k = normName(r.player);
     if (!out.has(k)) out.set(k, []);
+    if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k));
     const pct = n(r.offense_pct);
     out.get(k).push({ week: n(r.week), team: r.team, opp: r.opponent, snaps: n(r.offense_snaps), teamSnaps: pct > 0 ? Math.round(n(r.offense_snaps) / pct) : null });
   }
   for (const list of out.values()) list.sort((a, b) => b.week - a.week);
   return out;
 });
+
+/** Adds each weekly stats row's spelling to `snaps` through the weekly roster's GSIS-to-PFR ids (Oct 29 2026 hunt: the
+ * stats feed's Kenny Gainwell is the snap file's Kenneth Gainwell, and his prop sheet read no snaps). */
+export function aliasByRoster(snaps, statRows, roster) {
+  if (!snaps?.byPfr || !roster?.length) return snaps;
+  const pfr = new Map(roster.filter((r) => r.gsis_id && r.pfr_id).map((r) => [r.gsis_id, r.pfr_id]));
+  for (const r of statRows || []) {
+    const k = normName(r.player_display_name), list = snaps.byPfr.get(pfr.get(r.player_id));
+    if (list && !snaps.has(k)) snaps.set(k, list);
+  }
+  return snaps;
+}
 
 const GROUP = (pos) => (pos === 'WR' ? 'WR' : pos === 'TE' ? 'TE' : pos === 'RB' || pos === 'FB' ? 'RB' : pos === 'QB' ? 'QB' : null);
 
@@ -165,14 +179,45 @@ export function outAroundLine(injuries, teamFull, name) {
   const mine = normName(name);
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
-    && /^(out|doubtful|questionable|ir|injured reserve|pup)/i.test(String(i?.status || '')));
+    && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup)/i.test(String(i?.status || '')));
   if (!list.length) return null;
-  const rank = (s) => ['out', 'doubtful', 'questionable'].findIndex((w) => String(s).toLowerCase().startsWith(w));
+  const rank = (s) => ['out', 'doubtful', 'questionable', 'no game status yet'].findIndex((w) => String(s).toLowerCase().startsWith(w));
   const word = (i) => `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()})`.trim();
   const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
   const reserve = list.filter((i) => rank(i.status) < 0);
   return [week.length ? `his club's report: ${week.map(word).join(', ')}` : "his club's report: nobody listed this week",
     reserve.length ? `on reserve: ${reserve.map(word).join(', ')}` : null].filter(Boolean).join(' · ');
+}
+
+/**
+ * The injury feed's rows under the league's official report for this game's week (Oct 29 2026 hunt: the props sheets
+ * read the feed alone, which had no row for Akayleb Evans, Out on the Panthers' report). The report's game status wins
+ * for a player both list; a report player the feed lacks is added; before the week's statuses are issued (the final
+ * report), a feed's weekly word reads "no game status yet". `reports`: [{ team: full name, report }].
+ */
+export function withOfficialReport(injuries, reports) {
+  const rows = [...(injuries || [])];
+  const full = (i) => normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`);
+  for (const { team, report } of reports || []) {
+    if (!report?.players?.length) continue;
+    const designated = report.players.some((r) => r.game_status);
+    const mine = rows.filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === team);
+    const byName = new Map(mine.map((i) => [full(i), i]));
+    for (const r of report.players) {
+      const listed = byName.get(normName(r.name));
+      if (listed) { if (r.game_status) rows[rows.indexOf(listed)] = { ...listed, status: r.game_status }; continue; }
+      if (!r.game_status) continue;
+      const [first, ...rest] = String(r.name || '').trim().split(/\s+/);
+      rows.push({ player: { first_name: first, last_name: rest.join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: r.game_status });
+    }
+    if (!designated) {
+      for (let k = 0; k < rows.length; k++) {
+        const i = rows[k];
+        if ((i?.player?.team?.full_name || i?.team?.full_name) === team && /^(questionable|doubtful|probable)$/i.test(String(i.status || ''))) rows[k] = { ...i, status: 'no game status yet' };
+      }
+    }
+  }
+  return rows;
 }
 
 /** A club's regular season from the schedule: "11-6, 25.1 points a game, 19.2 allowed (17 games)"; null before a final. */

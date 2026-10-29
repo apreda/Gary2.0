@@ -47,12 +47,13 @@ import {
 } from './propsBrain.js';
 import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
 import { refreshNflRedZone, loadNflRedZone } from '../../sports/nfl/nflRedZone.js';
-import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals } from '../../sports/nfl/nflPlayerContext.js';
+import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport } from '../../sports/nfl/nflPlayerContext.js';
+import { loadNflverseFile, getPracticeReport, nflverseCode } from '../../providers/nflverseService.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
-import { buildNflReadStory } from '../agentic/orchestrator/nflRead.js';
+import { buildNflReadStory, nflNewsFor, NEWS_NOT_ON_FILE as NFL_NEWS_NOT_ON_FILE } from '../agentic/orchestrator/nflRead.js';
 import { etDate, defensesFaced } from '../../sports/nfl/nflBettorData.js';
-import { getNflSchedule } from '../../sports/nfl/nflSchedule.js';
+import { getNflSchedule, scheduleRowFor } from '../../sports/nfl/nflSchedule.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
 
@@ -235,12 +236,19 @@ async function loadNflSheetContext({ season, game, players }) {
   if (supabase) await refreshNflRedZone({ supabase, seasons: [season], log: { warn: () => {} } }).catch(() => 0);
   // This season only, and no prop price history: a prop's line and price before today are the market's opinion, and
   // Gary reads the player and the game (founder, Oct 23 2026). The board still prints today's line he bets.
-  const [rz, days, snaps, defCur, rows, injuries, schedule] = await Promise.all([
+  const [rz, days, snapFile, defCur, rows, injuries, schedule, roster] = await Promise.all([
     supabase ? loadNflRedZone({ supabase, seasons: [season] }).catch(() => null) : null,
     gameDays(), snapCounts(season), defenseByPosition(season), weeklyRows(season),
     ballDontLieService.getNflPlayerInjuries().catch(() => []),
     getNflSchedule().catch(() => null),
+    loadNflverseFile('roster_weekly', season).catch(() => null),
   ]);
+  const snaps = aliasByRoster(snapFile, rows, roster && !roster.unavailable ? roster.rows : null);
+  // The league's official report for this game's week over the feed's rows (withOfficialReport).
+  const week = schedule && !schedule.unavailable ? Number(scheduleRowFor(schedule, season, nflverseCode(game.home_team), nflverseCode(game.away_team), game.commence_time)?.week) || null : null;
+  const reports = week ? await Promise.all([game.home_team, game.away_team].map((team) => getPracticeReport(team, season, week)
+    .then((report) => ({ team, report: report?.unavailable ? null : report })).catch(() => ({ team, report: null })))) : [];
+  const reported = withOfficialReport(injuries, reports);
   // Who each game's defense is this season, beside the player's games (Oct 26 2026); a schedule that did not load
   // leaves the rows as they were.
   const defenses = schedule && !schedule.unavailable ? defensesFaced(schedule.rows, season, etDate(), new Date().toISOString()) : null;
@@ -254,7 +262,7 @@ async function loadNflSheetContext({ season, game, players }) {
     weeksByName.get(k).push(r);
   }
   const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
-  return { season, rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(rows), injuries, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
+  return { season, rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(rows), injuries: reported, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team) };
 }
 
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */
@@ -329,12 +337,16 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   })();
   console.log(`   [Football Props] desk: ${publishedDesk ? 'the game pick\'s stored desk' : 'built fresh'} (${scoutText.length} chars)`);
   if (!scoutText) throw new Error(`${league} props desk: football scout report rendered empty`);
-  // NFL: the game as the side pick reads it (nflRead.js), built from the same desk; the full desk if that fails.
-  const nflStory = league === 'NFL'
-    ? await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
-      gameDate: game.commence_time ? etDate(game.commence_time) : null }).then((r) => r.story).catch((e) => { console.warn(`   [Football Props] NFL story unavailable (${e.message}); the full desk`); return null; })
-    : null;
-  const deskText = nflStory || scoutText;
+  // NFL: the game as the side pick reads it (nflRead.js), built from the same desk, with the news desk's report on it. No
+  // fallback to the full desk, which carries last season and the line (Oct 29 2026 hunt; the NBA props desk the same):
+  // a story that fails fails the props run.
+  let deskText = scoutText;
+  if (league === 'NFL') {
+    const { story } = await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
+      gameDate: game.commence_time ? etDate(game.commence_time) : null });
+    const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time }).catch(() => null);
+    deskText = `${story}\n\nTODAY'S NEWS\n${news || NFL_NEWS_NOT_ON_FILE}`;
+  }
 
   // 3. Cleared counts from NFL game logs ("over in 4 of his last 5 games").
   // NCAAF has season totals only — no per-game logs, so no counts (fail-soft;

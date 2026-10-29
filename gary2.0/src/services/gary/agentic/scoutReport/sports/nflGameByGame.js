@@ -464,15 +464,19 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
     const weeks = [...new Set(snaps.rows.map((r) => r.week))].sort((a, b) => a - b);
     const finals = results.map((r) => Number(r.week)).filter((w) => Number.isFinite(w) && w > 0);
     if (!finals.length || Math.max(...finals) > weeks.at(-1)) continue;
-    // A week counts as played on an offensive or defensive snap, with that week's share: a special-teams-only row read
-    // as "played in the last game", and Doubs' 3% (hurt early) read the same as a full game (Oct 23 2026 data audit).
+    // A week counts as played on any snap, with that week's share: offense or defense, or special teams named as such
+    // (Oct 23 2026 data audit: Doubs' 3%, hurt early, read the same as a full game; Oct 29 2026 hunt: a special-teams
+    // week was left out, so the Panthers' kicker read "did not play the last 5 games" in games he kicked in). A kicker,
+    // punter or long snapper's share is of the special-teams snaps.
     const byPlayer = new Map();
     for (const row of snaps.rows) {
-      const share = Math.max(Number(row.offense_pct) || 0, Number(row.defense_pct) || 0);
-      if (!(share > 0)) continue;
+      const share = Math.max(Number(row.offense_pct) || 0, Number(row.defense_pct) || 0), st = Number(row.st_pct) || 0;
+      if (!(share > 0) && !(st > 0)) continue;
+      const kick = /^(K|P|LS)$/i.test(String(row.position || ''));
       if (!byPlayer.has(row.player)) byPlayer.set(row.player, new Map());
-      byPlayer.get(row.player).set(row.week, share);
+      byPlayer.get(row.player).set(row.week, kick ? { st, kick } : share > 0 ? { share } : { st });
     }
+    const textOf = (x) => (x.kick ? `${x.st}% of special-teams snaps` : x.share != null ? `${x.share}% of snaps` : `special teams only, ${x.st}% of special-teams snaps`);
     const reported = reportLookup(list, [...byPlayer.keys()]);
     for (const [player, shares] of byPlayer) {
       const injury = reported(player);
@@ -480,10 +484,12 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       const missedWeeks = [];
       for (let i = weeks.length - 1; i >= 0 && !shares.has(weeks[i]); i--) missedWeeks.unshift(weeks[i]);
       const lastPlayedWeek = Math.max(...shares.keys());
+      const last = shares.get(lastPlayedWeek);
       // The games before his last one, newest first (Oct 26 2026 blind review: Kobie Turner read "32% of snaps" from the
       // game he was hurt in, after 59-79% in every game before it, and the read took him for a rotation player).
-      const earlier = [...shares.keys()].filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5).map((w) => shares.get(w));
-      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: shares.get(lastPlayedWeek), earlier };
+      const earlier = [...shares.keys()].filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5)
+        .map((w) => { const x = shares.get(w); return x.kick ? `${x.st}%` : x.share != null ? `${x.share}%` : 'special teams only'; });
+      injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: last.share ?? null, lastText: textOf(last), earlier };
     }
     // A listed player with no offensive or defensive snap all season says so (Oct 23 2026 data audit: Kansas City's 4-0
     // was all without Josh Simmons and his row carried no tag). Decided only on an exact name match in this team's

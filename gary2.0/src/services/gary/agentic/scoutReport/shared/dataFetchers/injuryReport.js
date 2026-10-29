@@ -114,12 +114,13 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       shownStatus = reconciled.status || i.status;
       const rawStatus = String(reconciled.status || 'Unknown').trim().toUpperCase() || 'UNKNOWN';
       const status = (({ Q: 'QUESTIONABLE', D: 'DOUBTFUL', O: 'OUT' })[rawStatus] || rawStatus)
-        + (reconciled.feed ? reconciled.official ? ` per a note after the official report, which reads ${String(reconciled.feed).toUpperCase()}`
+        + (reconciled.feed ? reconciled.pending ? ` (the league has not issued this week's game statuses); the feed reads ${String(reconciled.feed).toUpperCase()}`
+          : reconciled.official ? ` per a note after the official report, which reads ${String(reconciled.feed).toUpperCase()}`
           : ` per this week's note; the feed still reads ${String(reconciled.feed).toUpperCase()}` : '');
       const oldNote = i.noteCurrent === false && i.reportDateStr ? ` (note from ${i.reportDateStr}, before the last game)` : '';
       const p = i.participation;
-      const before = p?.earlier?.length ? `; the games before, newest first: ${p.earlier.map((x) => `${x}%`).join(', ')}` : '';
-      const share = p?.lastShare != null ? `, ${p.lastShare}% of snaps${before}` : '';
+      const before = p?.earlier?.length ? `; the games before, newest first: ${p.earlier.map((x) => (typeof x === 'number' ? `${x}%` : x)).join(', ')}` : '';
+      const share = p?.lastText ? `, ${p.lastText}${before}` : p?.lastShare != null ? `, ${p.lastShare}% of snaps${before}` : '';
       const played = !p ? '' : p.neverPlayed ? `; has not played this season${p.reserveAll ? ' (on reserve every week so far)' : ''}` : p.missed > 0
         ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}${share}`
         : p.lastShare != null && p.lastShare < 10 ? `; on the field for ${p.lastShare}% of snaps in the last game (Wk ${p.lastPlayedWeek}${before})`

@@ -391,11 +391,11 @@ export function skillPlayers(d, team, before, reportText = '') {
   const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
   // A game with no stats row is "did not play" only when the snap counts have no snap for him either: Rice left Week 4
   // after 10% of the snaps without a touch.
-  const snapRow = (name, gameId) => { const k = sameKey(name); return (d.snaps || []).find((x) => x.team === c && x.game_id === gameId && sameKey(x.player) === k) || null; };
-  const snapShare = (name, gameId) => { const r = snapRow(name, gameId); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
+  const snapRow = snapMatcher(d, c);
+  const snapShare = (row, gameId) => { const r = snapRow(row, gameId); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
   // Special-teams snaps are playing too (Oct 27 2026 data check: KaVontae Turpin, hurt on his first return in Week 6,
   // read "did not play").
-  const stShare = (name, gameId) => n(snapRow(name, gameId)?.st_pct);
+  const stShare = (row, gameId) => n(snapRow(row, gameId)?.st_pct);
   const game = (r) => [n(r.carries) ? `${n(r.carries)} ${n(r.carries) === 1 ? 'carry' : 'carries'} ${n(r.rushing_yards)} yds${n(r.rushing_tds) ? ` ${n(r.rushing_tds)} TD` : ''}` : null,
     n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null].filter(Boolean).join(', ') || 'no touches';
   const lines = chosen.map((rs) => {
@@ -403,8 +403,8 @@ export function skillPlayers(d, team, before, reportText = '') {
     const played = new Map(rs.map((r) => [r.game_id, r]));
     // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
     // A stat row with no carry or target (a return) says how much he played.
-    const rowGame = (x) => { const t = game(played.get(x.g.game_id)); if (t !== 'no touches') return t; const off = snapShare(last.player_display_name, x.g.game_id), sts = stShare(last.player_display_name, x.g.game_id); return off > 0 ? `no touches (${Math.round(100 * off)}% of snaps)` : sts > 0 ? `no carries or targets; special teams only (${Math.round(100 * sts)}% of special-teams snaps)` : t; };
-    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last.player_display_name, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last.player_display_name, x.g.game_id))}% of snaps)` : stShare(last.player_display_name, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last.player_display_name, x.g.game_id))}% of special-teams snaps)` : 'did not play'}`);
+    const rowGame = (x) => { const t = game(played.get(x.g.game_id)); if (t !== 'no touches') return t; const off = snapShare(last, x.g.game_id), sts = stShare(last, x.g.game_id); return off > 0 ? `no touches (${Math.round(100 * off)}% of snaps)` : sts > 0 ? `no carries or targets; special teams only (${Math.round(100 * sts)}% of special-teams snaps)` : t; };
+    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last, x.g.game_id))}% of snaps)` : stShare(last, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last, x.g.game_id))}% of special-teams snaps)` : 'did not play'}`);
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
     const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1];
@@ -430,6 +430,19 @@ export function notOnReport(d, team, before, reportText = '') {
   return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? 'left early or limited' : p.why === 'special teams only' ? 'special teams only' : 'missed'} Wk ${gs.at(-1).week})`).join(', ')}`;
 }
 const sameKey = (x) => qbKey(x).join('');
+// A weekly stats row's snap-count row in one game: through the weekly roster's GSIS-to-PFR ids, then the name (Oct 29 2026
+// hunt: the two feeds spell about 25 players differently, Kenny and Kenneth Gainwell, Bam and Zonovan Knight, so the same
+// player read twice in a box, once with no snap share, or "did not play" in games he played).
+function snapMatcher(d, code) {
+  const pfr = new Map();
+  for (const r of d.rosterWeekly || []) if (r.team === code && r.gsis_id && r.pfr_id) pfr.set(r.gsis_id, r.pfr_id);
+  const byGame = new Map();
+  for (const s of d.snaps || []) if (s.team === code) { if (!byGame.has(s.game_id)) byGame.set(s.game_id, []); byGame.get(s.game_id).push(s); }
+  return (row, gameId) => {
+    const snaps = byGame.get(gameId) || [], id = pfr.get(row.player_id), k = sameKey(row.player_display_name);
+    return (id && snaps.find((s) => s.pfr_player_id === id)) || snaps.find((s) => sameKey(s.player) === k) || null;
+  };
+}
 
 /** THIS SEASON GAME BY GAME: each game newest first, its first line the result and score (overtime said), the
  * opponent's record and points scored and allowed a game now, its quarterback that day, and who played quarterback
@@ -725,29 +738,29 @@ const passLine = (r) => `${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_
 function sidePlayers(d, x, code) {
   const rows = (d.playerWeek || []).filter((r) => r.game_id === x.g.game_id && r.team === code);
   const snaps = (d.snaps || []).filter((s) => s.game_id === x.g.game_id && s.team === code);
-  const snapOf = new Map(snaps.map((s) => [sameKey(s.player), s]));
+  const snapFor = snapMatcher(d, code), snapOf = (r) => snapFor(r, x.g.game_id);
   const pct = (v) => `${Math.round(100 * n(v))}%`;
-  const snapText = (name) => { const s = snapOf.get(sameKey(name)); return !s ? '' : ` · ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ') || 'no snaps'}`; };
+  const snapText = (r) => { const s = snapOf(r); return !s ? '' : ` · ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ') || 'no snaps'}`; };
   const offense = rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets)).sort((a, b) => (n(b.attempts) - n(a.attempts)) || (n(b.carries) + n(b.targets) - n(a.carries) - n(a.targets)))
     .map((r) => `    ${r.player_display_name} (${r.position}) ${[n(r.attempts) ? passLine(r) : null,
       n(r.carries) ? `${n(r.carries)} ${n(r.carries) === 1 ? 'carry' : 'carries'} ${n(r.rushing_yards)} yds${n(r.rushing_tds) ? ` ${n(r.rushing_tds)} TD` : ''}` : null,
       n(r.targets) ? `${n(r.receptions)} of ${n(r.targets)} targets ${n(r.receiving_yards)} yds${n(r.receiving_tds) ? ` ${n(r.receiving_tds)} TD` : ''}` : null,
-      n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost) ? `${n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost)} fumble lost` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`);
+      n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost) ? `${n(r.rushing_fumbles_lost) + n(r.receiving_fumbles_lost) + n(r.sack_fumbles_lost)} fumble lost` : null].filter(Boolean).join(', ')}${snapText(r)}`);
   const tackles = (r) => n(r.def_tackles_solo) + n(r.def_tackles_with_assist) + n(r.def_tackle_assists);
   // Under defense only who played a defensive snap; a tackle on special teams or after a turnover is listed apart (Oct 28
   // 2026 sweep: the Ravens' center, 100% of the offensive snaps, and a Bengals running back read as defenders).
   const defensiveStats = (r) => tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced);
-  const noDefensiveSnap = (r) => { const s = snapOf.get(sameKey(r.player_display_name)); return Boolean(s) && !n(s.defense_snaps) && !n(s.defense_pct); };
+  const noDefensiveSnap = (r) => { const s = snapOf(r); return Boolean(s) && !n(s.defense_snaps) && !n(s.defense_pct); };
   const statLine = (r) => `    ${r.player_display_name} (${r.position}) ${[tackles(r) ? plural(tackles(r), 'tackle') : null, n(r.def_tackles_for_loss) ? `${n(r.def_tackles_for_loss)} for loss` : null,
       n(r.def_sacks) ? `${n(r.def_sacks)} sack${n(r.def_sacks) === 1 ? '' : 's'}` : null, n(r.def_qb_hits) ? `${n(r.def_qb_hits)} QB hit${n(r.def_qb_hits) === 1 ? '' : 's'}` : null,
       n(r.def_interceptions) ? `${n(r.def_interceptions)} INT` : null, n(r.def_pass_defended) ? plural(n(r.def_pass_defended), 'pass defended', 'passes defended') : null,
-      n(r.def_fumbles_forced) ? `${n(r.def_fumbles_forced)} forced fumble${n(r.def_fumbles_forced) === 1 ? '' : 's'}` : null, n(r.def_tds) ? `${n(r.def_tds)} TD` : null].filter(Boolean).join(', ')}${snapText(r.player_display_name)}`;
+      n(r.def_fumbles_forced) ? `${n(r.def_fumbles_forced)} forced fumble${n(r.def_fumbles_forced) === 1 ? '' : 's'}` : null, n(r.def_tds) ? `${n(r.def_tds)} TD` : null].filter(Boolean).join(', ')}${snapText(r)}`;
   const byTackles = (a, b) => tackles(b) - tackles(a);
   const defense = rows.filter((r) => defensiveStats(r) && !noDefensiveSnap(r)).sort(byTackles).map(statLine);
   const otherTackles = rows.filter((r) => defensiveStats(r) && noDefensiveSnap(r)).sort(byTackles).map((r) => statLine(r).trim());
   // Everyone else who played: his snap share.
-  const named = new Set(rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets) || tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced)).map((r) => sameKey(r.player_display_name)));
-  const others = snaps.filter((s) => !named.has(sameKey(s.player)) && (n(s.offense_snaps) || n(s.defense_snaps) || n(s.st_snaps)))
+  const named = new Set(rows.filter((r) => n(r.attempts) || n(r.carries) || n(r.targets) || tackles(r) || n(r.def_sacks) || n(r.def_qb_hits) || n(r.def_interceptions) || n(r.def_pass_defended) || n(r.def_fumbles_forced)).map(snapOf).filter(Boolean));
+  const others = snaps.filter((s) => !named.has(s) && (n(s.offense_snaps) || n(s.defense_snaps) || n(s.st_snaps)))
     .sort((a, b) => Math.max(n(b.offense_pct), n(b.defense_pct)) - Math.max(n(a.offense_pct), n(a.defense_pct)))
     .map((s) => `${s.player} (${s.position}) ${[n(s.offense_pct) ? `${pct(s.offense_pct)} off` : null, n(s.defense_pct) ? `${pct(s.defense_pct)} def` : null, n(s.st_pct) ? `${pct(s.st_pct)} ST` : null].filter(Boolean).join(', ')}`);
   return { offense, defense, otherTackles, others, onFile: rows.length > 0, snapsOnFile: snaps.length > 0 };

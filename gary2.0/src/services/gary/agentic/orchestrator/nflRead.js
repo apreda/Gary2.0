@@ -30,7 +30,7 @@ import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
-const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+export const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
 
 
 // Regulars who missed or left the last game and are not on this week's report, under it (nflBettorData notOnReport).
@@ -120,6 +120,13 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
   // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
   // the market (founder, Oct 23 2026).
   return { news: news ? withoutBettingLines(String(news).trim()).trim() || null : null, model: news ? research.model : null };
+}
+
+/** The news desk's report for the props desk, from the same story (Oct 29 2026 hunt: NFL props read no news, so a
+ * game-day downgrade or inactive never reached them; NBA props read the desk's news). Null when nothing came back. */
+export async function nflNewsFor(story, sport, homeTeam, awayTeam, options = {}) {
+  const costTracker = createCostTracker(`NFL props news: ${awayTeam} @ ${homeTeam} (${sport})`);
+  try { return (await latestNews(story, sport, homeTeam, awayTeam, options, costTracker)).news; } finally { costTracker.logSummary(); }
 }
 
 export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {

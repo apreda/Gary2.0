@@ -100,6 +100,13 @@ export function reconcileNflStatus(row) {
     if (down && down[1].toLowerCase() !== status.toLowerCase()) return { status: down[1][0].toUpperCase() + down[1].slice(1).toLowerCase(), feed: status, official: true };
     return { status, feed: null };
   }
+  // Before the week's final report no game statuses are issued: a weekly word is the feed's placeholder, unless this
+  // week's note has him ruled out already (Oct 29 2026 hunt).
+  if (row?.statusesPending && isWeeklyNflDesignation(status)) {
+    const out = row?.noteCurrent === true && /\b(?:ruled|declared|downgraded to)\s+out\b|\b(?:will not|won't)\s+play\b/i.test(note);
+    if (out) return /^out$/i.test(status) ? { status, feed: null } : { status: 'Out', feed: status };
+    return { status: 'No game status yet', feed: status, pending: true };
+  }
   if (row?.noteCurrent !== true || !note) return { status, feed: null };
   const named = note.match(/\b(?:listed as|ruled|downgraded to|upgraded to|designated as|declared|is|was|remains)\s+(out|questionable|doubtful)\b/i);
   const reserve = /^(ir|pup|nfi|reserve|injured reserve)/i.test(status);

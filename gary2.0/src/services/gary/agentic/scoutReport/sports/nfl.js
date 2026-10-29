@@ -1080,6 +1080,9 @@ export async function buildNflScoutReport(game, options = {}) {
       // designation" (Oct 28 2026 sweep: the night before Panthers-Packers every player read "No game designation",
       // Golden under a note saying he was listed questionable and Franklin, Phillips and Lewis under "out").
       const designated = report.players.some((r) => r.game_status);
+      // Until then a feed's weekly word is its placeholder too (Oct 29 2026 hunt: on Thursday nine Eagles read Questionable
+      // for Sunday, Omenihu's under a note from Oct 20); nflAvailability.js says the statuses are not issued yet.
+      if (!designated) for (const i of list) i.statusesPending = true;
       for (const raw of report.players) {
         const [first, ...rest] = String(raw.name || '').trim().split(/\s+/);
         if (!first) continue;

@@ -56,14 +56,17 @@ const gamesOf = (logs) => {
  * One season's clause for one market: the actual values newest first, how
  * many games they are, and the per-game rate over them.
  */
-export function seasonClause(games, propType, label) {
+export function seasonClause(games, propType, label, line = null) {
   const values = (games || []).map((g) => nflStatForProp(g, propType)).filter((v) => v != null);
   if (!values.length) return null;
   const total = values.reduce((a, b) => a + Number(b || 0), 0);
   const printed = values.map(fmtValue).join(' ');
   if (isTouchdownMarket(propType)) {
-    const scored = values.filter((v) => Number(v) > 0).length;
-    return `${label}: ${printed} (${values.length} g, scored in ${scored})`;
+    // Counted at the market's own line: a 2+ touchdown market (1.5) read the 1+ count (Oct 29 2026 hunt: "1 1 3 1 0 2
+    // ... scored in 5" on the 1.5, cleared in 2).
+    const need = Number(line) >= 1 ? Math.floor(Number(line)) + 1 : 1;
+    const scored = values.filter((v) => Number(v) >= need).length;
+    return `${label}: ${printed} (${values.length} g, ${need > 1 ? `${need}+ TDs in` : 'scored in'} ${scored})`;
   }
   if (propSheetsByGame()) return `${label}: ${printed} (${values.length} g)`;
   return `${label}: ${printed} (${values.length} g, ${fmtRate(total / values.length)} per game)`;
@@ -180,8 +183,8 @@ export function buildFootballPropSheets({
     const lines = [];
     for (const m of entry.markets) {
       const line = marketLine(m.prop_type, m.line, priceOf(m), [
-        seasonClause(current, m.prop_type, seasonLabel || 'this season'),
-        seasonClause(prior, m.prop_type, priorSeasonLabel || 'last season'),
+        seasonClause(current, m.prop_type, seasonLabel || 'this season', m.line),
+        seasonClause(prior, m.prop_type, priorSeasonLabel || 'last season', m.line),
       ]);
       if (line) lines.push(`   ${line}`);
     }
