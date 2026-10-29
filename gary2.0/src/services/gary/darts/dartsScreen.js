@@ -15,7 +15,7 @@ import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickde
 import { seasonClause, usageLine, priorRoleNote } from '../pickdesk/footballPropSheets.js';
 import { sideRole, snapScale } from '../pickdesk/nflRoleChanges.js';
 import { priceHistoryLine } from '../pickdesk/priceHistory.js';
-import { nflGameLog, targetShareLine, defenseLine, outAroundLine } from '../../sports/nfl/nflPlayerContext.js';
+import { nflGameLog, targetShareLine, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
 import { redZoneLine } from '../../sports/nfl/nflRedZone.js';
 import {
   hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine, contactQualityLine,
@@ -334,7 +334,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
   if (hist) lines.push(hist);
   const weeks = ctx.weeksByName?.get(normName(c.player)) || [];
-  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks, ctx.teamTargets) : null;
+  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks, ctx.teamTargets, ctx.snaps?.get(normName(c.player)), Number(seasonLabel)) : null;
   if (share) lines.push(share);
   const rz = redZoneLine(ctx.rz, c.player, season, c.position);
   if (rz) lines.push(rz);
@@ -362,7 +362,11 @@ export function clearsNflFloor(kind, games, prior) {
   return tds(games) >= 1 || tds(prior) >= 5;
 }
 
-export function screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season, ctx = {}, log = console }) {
+export function screenNflCategory({ kind, board, gamesByName: logged, priorByName, contexts, season, ctx = {}, log = console }) {
+  // Each player's games with the ones he played without a stat row, as zeros (withSnapGames): the floor, the volume
+  // model, the sheet and the board line count them.
+  const filled = new Map();
+  const gamesByName = { get: (k) => { if (!filled.has(k)) filled.set(k, withSnapGames(logged.get(k) || [], ctx.snaps?.get(k) || [], { season, days: ctx.days })); return filled.get(k); } };
   const markets = nflMarkets(kind, board).filter((m) => { const k = normName(board.candidates.get(m.id)?.player); return clearsNflFloor(kind, gamesByName.get(k), priorByName.get(k)); });
   const profiles = new Map();
   const sideOf = (ctx, team) => {

@@ -7,7 +7,9 @@
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { nflSeason } from '../../../utils/dateUtils.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
-import { weeklyRows as officialWeeklyRows } from '../../sports/nfl/nflPlayerContext.js';
+import { weeklyRows as officialWeeklyRows, withOfficialReport, snapCounts, aliasByRoster } from '../../sports/nfl/nflPlayerContext.js';
+import { getPracticeReport, nflverseCode, loadNflverseFile } from '../../providers/nflverseService.js';
+import { getNflSchedule, scheduleRowFor } from '../../sports/nfl/nflSchedule.js';
 import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
@@ -47,12 +49,27 @@ async function seasonLines(season) {
     if (r.season_type !== 'REG' || !isNflSkillRow(r)) continue;
     const key = `${normName(r.player_display_name)}|${r.team}`;
     const cur = byKey.get(key) || { games: 0, targets: 0, rec: 0, recYds: 0, recTd: 0, carries: 0, rushYds: 0, rushTd: 0, passTd: 0, int: 0, attempts: 0 };
-    cur.games += 1;
     cur.targets += n(r.targets); cur.rec += n(r.receptions); cur.recYds += n(r.receiving_yards); cur.recTd += n(r.receiving_tds);
     cur.carries += n(r.carries); cur.rushYds += n(r.rushing_yards); cur.rushTd += n(r.rushing_tds);
     cur.passTd += n(r.passing_tds); cur.int += n(r.passing_interceptions); cur.attempts += n(r.attempts);
+    cur.weeks = cur.weeks || new Set(); cur.weeks.add(n(r.week));
     byKey.set(key, cur);
-    const nk = normName(r.player_display_name);
+  }
+  // A game he played without a stat row counts as a game (withSnapGames; Oct 29 2026 hunt: Josh Whyle, in all seven of
+  // the Packers' games, read "no games yet").
+  const [snapFile, roster] = await Promise.all([snapCounts(season).catch(() => null), loadNflverseFile('roster_weekly', season).catch(() => null)]);
+  const snaps = snapFile ? aliasByRoster(snapFile, rows, roster && !roster.unavailable ? roster.rows : null) : null;
+  for (const [nk, list] of snaps || []) {
+    for (const s of list || []) {
+      if (!(s.snaps > 0)) continue;
+      const key = `${nk}|${s.team}`;
+      const cur = byKey.get(key) || { games: 0, targets: 0, rec: 0, recYds: 0, recTd: 0, carries: 0, rushYds: 0, rushTd: 0, passTd: 0, int: 0, attempts: 0, weeks: new Set() };
+      cur.weeks.add(s.week); byKey.set(key, cur);
+    }
+  }
+  for (const [key, cur] of byKey) {
+    cur.games = cur.weeks.size;
+    const nk = key.split('|')[0];
     if (!byName.has(nk) || byName.get(nk).games < cur.games) byName.set(nk, cur);
   }
   return { byKey, byName };
@@ -78,12 +95,23 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   if (!games.length) return { league: 'NFL', games: 0, text: '', candidates: new Map(), eligible: {} };
 
-  const [odds, injuries, thisYear] = await Promise.all([
+  const [odds, feed, thisYear, schedule] = await Promise.all([
     bdl.getOddsV2({ game_ids: games.map((g) => g.id) }, 'nfl').catch(() => []),
     bdl.getNflPlayerInjuries().catch(() => []),
     seasonLines(season),
+    getNflSchedule().catch(() => null),
   ]);
+  // Each player's status and the Out filter from the league's report for the game's week, over the injury feed (Oct 29
+  // 2026 hunt: only the sheets' report line had it), as the sheets read it.
+  const reports = schedule && !schedule.unavailable ? await Promise.all(games.flatMap((g) => {
+    const week = Number(scheduleRowFor(schedule, season, nflverseCode(g.home_team.full_name), nflverseCode(g.visitor_team.full_name), g.date)?.week) || null;
+    return week ? [g.home_team.full_name, g.visitor_team.full_name].map((team) => getPracticeReport(team, season, week)
+      .then((report) => ({ team, report: report?.unavailable ? null : report })).catch(() => ({ team, report: null }))) : [];
+  })) : [];
+  const injuries = withOfficialReport(feed, reports);
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
+  const teamOfRow = (i) => i?.player?.team?.full_name || i?.team?.full_name || '';
+  const injuryByName = new Map(injuries.filter((i) => i?.player?.id == null).map((i) => [`${teamOfRow(i)}|${normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`)}`, String(i.status || '')]));
   // The quarterbacks' write-up (the Arms take ported to football) from the morning board, when it ran.
   const qbTake = new Map();
   if (supabase) {
@@ -137,7 +165,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
       roster.sort((a, b) => order[POS[a.info.position]] - order[POS[b.info.position]]);
       for (const { pid, info } of roster) {
         const pos = POS[info.position];
-        const status = injuryById.get(pid) || '';
+        const status = injuryById.get(pid) || injuryByName.get(`${teamName}|${normName(info.name)}`) || '';
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const td = overPrice(r, { propType: 'anytime_td', line: 0.5 });

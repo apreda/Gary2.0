@@ -255,7 +255,7 @@ export async function getSnapWeeks(teamName, season, opts = {}) {
   }
   const rows = teamRows
     .map((r) => ({ player: latestName.get(r.pfr_player_id)?.name || r.player, position: r.position || '', week: Number(r.week) || null, opponent: r.opponent || null,
-      offense_pct: share(r.offense_pct), defense_pct: share(r.defense_pct) }))
+      offense_pct: share(r.offense_pct), defense_pct: share(r.defense_pct), st_pct: share(r.st_pct), pfr: r.pfr_player_id || null }))
     .filter((r) => r.player && r.week);
   if (!rows.length) return { unavailable: true, reason: `No ${season} regular-season snap-count rows for ${teamName}.` };
   return { rows };

@@ -17,7 +17,7 @@
  * Gary's.
  */
 import { nflStatForProp } from '../agentic/nflPropsAgenticContext.js';
-import { nflGameLog, targetShareLine, defenseLine, outAroundLine } from '../../sports/nfl/nflPlayerContext.js';
+import { nflGameLog, targetShareLine, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
 import { redZoneLine } from '../../sports/nfl/nflRedZone.js';
 import { priceHistoryLine } from './priceHistory.js';
 import { normName } from '../darts/dartsCommon.js';
@@ -177,7 +177,10 @@ export function buildFootballPropSheets({
   let players = 0;
 
   const sheetFor = (key, entry, tag = null) => {
-    const current = gamesOf(gamesByName?.get(key));
+    // The games he played without a stat row, as zeros (withSnapGames), before the sheet's cut.
+    const logged = gamesByName?.get(key);
+    const current = withSnapGames(Array.isArray(logged?.games) ? logged.games : Array.isArray(logged) ? logged : [],
+      context.snaps?.get(normName(entry.name)) || [], { season: Number(context.season || seasonLabel), days: context.days }).slice(0, SHEET_GAMES);
     const prior = gamesOf(priorGamesByName?.get(key));
     if (!current.length && !prior.length) return null;
     const lines = [];
@@ -204,7 +207,7 @@ export function buildFootballPropSheets({
     for (const m of entry.markets) { const h = priceHistoryLine(context.history, entry.name, m.prop_type); if (h) facts.push(h); }
     const weeks = context.weeksByName?.get(normName(entry.name)) || [];
     const pos = String(position || '').toUpperCase();
-    if (['WR', 'TE', 'RB'].includes(pos) && !propSheetsByGame()) { const sh = targetShareLine(weeks, context.teamTargets); if (sh) facts.push(sh); }
+    if (['WR', 'TE', 'RB'].includes(pos) && !propSheetsByGame()) { const sh = targetShareLine(weeks, context.teamTargets, context.snaps?.get(normName(entry.name)), season); if (sh) facts.push(sh); }
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);

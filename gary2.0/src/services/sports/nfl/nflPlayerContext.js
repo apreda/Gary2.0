@@ -136,11 +136,36 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     for (const [key, date] of days) {
       const [s, w, t] = key.split('|');
       if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
-        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: did not play` });
+        const on = snaps.find((x) => x.week === Number(w) && x.snaps > 0);
+        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : 'did not play'}` });
       }
     }
   }
   return [...played, ...missed].sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
+}
+
+// A game he played without a catch, carry or pass has no stat row in either feed, so it read "did not play" and dropped
+// out of his per-game rates (Oct 29 2026 hunt: Kendrick Bourne, 42 snaps at the Giants with no catch, read 39.0
+// receiving yards a game over 6 against 33.4 over 7). His offensive snaps put it back, as a zero.
+const ZERO_GAME = { pass_comp: 0, pass_att: 0, pass_yds: 0, pass_tds: 0, ints: 0, rush_att: 0, rush_yds: 0, rush_tds: 0, receptions: 0, targets: 0, rec_yds: 0, rec_tds: 0 };
+const etYmd = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(String(x)) ? String(x) : new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }));
+/** `games` (newest first; by week, or by date for the stats feed's game logs) with each week of `snapList` (snapCounts'
+ * entries: week, team, snaps) that has no game added as a zero game; `days` places a week on a date. */
+export function withSnapGames(games, snapList, { season, days } = {}) {
+  const list = [...(games || [])];
+  if (!snapList?.length) return list;
+  const byDate = list.some((g) => g.week == null);
+  const weeks = new Set(list.filter((g) => g.week != null).map((g) => Number(g.week)));
+  const dates = new Set(list.filter((g) => g.date).map((g) => etYmd(g.date)));
+  for (const s of snapList) {
+    if (!(s.snaps > 0)) continue;
+    const date = days?.get(`${season}|${s.week}|${s.team}`) || null;
+    if (weeks.has(s.week) || (date && dates.has(date)) || (byDate && !date)) continue;
+    list.push({ ...ZERO_GAME, week: s.week, date, team: s.team, opp: s.opp, noTouches: true });
+  }
+  return byDate || list.some((g) => g.week == null)
+    ? list.sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
+    : list.sort((a, b) => Number(b.week) - Number(a.week));
 }
 
 /** Each team's targets in each week, from every player's weekly row: `${season}|${week}|${team}` → targets. */
@@ -158,9 +183,12 @@ export function teamTargetTotals(rows) {
  * totals, every game he has a row for counts, a no-target game as "0 of 31" (round 2 audit, Oct 13 2026: the
  * share came from his own target_share, so a game he was not targeted added nothing and was not counted).
  */
-export function targetShareLine(rows, totals = null) {
+export function targetShareLine(rows, totals = null, snapList = null, season = null) {
   const fromTotals = (r) => (totals ? totals.get(`${r.season}|${r.week}|${r.team}`) : undefined);
-  const list = (rows || []).filter((r) => n(r.targets) > 0 || n(r.target_share) > 0 || fromTotals(r) > 0);
+  // A game he played with no target counts, with the team's targets that day (see withSnapGames).
+  const have = new Set((rows || []).map((r) => n(r.week)));
+  const zeros = season ? (snapList || []).filter((s) => s.snaps > 0 && !have.has(s.week)).map((s) => ({ season, week: s.week, team: s.team, targets: 0 })) : [];
+  const list = [...(rows || []), ...zeros].sort((a, b) => n(b.week) - n(a.week)).filter((r) => n(r.targets) > 0 || n(r.target_share) > 0 || fromTotals(r) > 0);
   if (list.length < 2) return null;
   const teamTargets = (r) => fromTotals(r) || (n(r.target_share) > 0 ? Math.round(n(r.targets) / n(r.target_share)) : null);
   const sum = (xs) => xs.reduce((a, r) => ({ mine: a.mine + n(r.targets), team: a.team + (teamTargets(r) || 0) }), { mine: 0, team: 0 });

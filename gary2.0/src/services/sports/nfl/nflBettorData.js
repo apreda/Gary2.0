@@ -77,6 +77,11 @@ function passersOf(d, g, code) {
   const starter = startedEarlyExit(d, g, code);
   return starter && !list.includes(starter) ? [...list, starter] : list;
 }
+// A quarterback who threw one to four passes in relief (Oct 29 2026 hunt: Kenny Pickett ran the Panthers' last two drives
+// in Week 7, 3-of-4, and nothing said he played), named after the game's quarterbacks.
+function reliefOf(d, g, code, passers) {
+  return (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && r.position === 'QB' && n(r.attempts) > 0 && !passers.includes(r));
+}
 // The player-stat row of a game's starting quarterback when someone else threw most of its passes (the play ledger names
 // him "S.Darnold": first initial and last name), or null.
 function startedEarlyExit(d, g, code) {
@@ -126,10 +131,11 @@ export function teamGames(d, code, season, before) {
     const us = tw.find((r) => r.game_id === g.game_id && r.team === code); const them = tw.find((r) => r.game_id === g.game_id && r.team === opp);
     const pf = n(home ? g.home_score : g.away_score), pa = n(home ? g.away_score : g.home_score);
     const passers = passersOf(d, g, code);
+    const relief = reliefOf(d, g, code, passers);
     // Who the opponent had at quarterback: Atlanta's loss to a 4-1 Baltimore was to Tyler Huntley, Lamar Jackson out
     // (Oct 23 2026 data check).
     const oppQb = passersOf(d, g, opp)[0]?.player_display_name || null;
-    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers, oppQb,
+    return { g, home, opp, pf, pa, won: pf > pa, tied: pf === pa, week: Number(g.week), date: g.gameday, passers, relief, oppQb,
       qb: passers[0]?.player_display_name || null, startedQb: startedEarlyExit(d, g, code)?.player_display_name || null,
       oppStartedQb: startedEarlyExit(d, g, opp)?.player_display_name || null,
       // Overtime from the schedule (Oct 23 2026 data audit: Kansas City's 3-point win over Indianapolis read as a
@@ -293,8 +299,10 @@ function lineupChanges(d, code, gs) {
   }
   const keysOf = (id) => [id, ...keys(name.get(id)?.name)];
   const statusAt = (g, id) => keysOf(id).map((k) => status.get(`${g.week}|${k}`)).find(Boolean) || null;
-  const onReserve = (g, id) => statusAt(g, id)?.status === 'RES';
-  const reserveWord = (g, id) => { const st = statusAt(g, id); return st?.status === 'RES' ? (RESERVE[st.code] || 'reserve') : null; };
+  // The commissioner's exempt list is off the active roster the same way (Oct 29 2026 hunt: Josh Jacobs, exempt for
+  // Weeks 1-6, read as a plain "did not play").
+  const onReserve = (g, id) => ['RES', 'EXE'].includes(statusAt(g, id)?.status);
+  const reserveWord = (g, id) => { const st = statusAt(g, id); return st?.status === 'RES' ? (RESERVE[st.code] || 'reserve') : st?.status === 'EXE' ? "commissioner's exempt list" : null; };
   const wasInactive = (g, id) => statusAt(g, id)?.status === 'INA';
   // Off the team that week: matched on an earlier week's roster and on none of this week's (Oct 23 2026 audit: an id
   // missing from every week read as "no longer on the roster" for every lineman).
@@ -336,7 +344,9 @@ function lineupChanges(d, code, gs) {
     // A quarterback who was active and did not play is the backup that day, and the game's QB line names who played
     // (Oct 23 2026 data audit: Seattle read "without Drew Lock" the week Sam Darnold came back).
     const backupQb = (id) => name.get(id).pos === 'QB' && statusAt(g, id)?.status === 'ACT';
-    const departed = players.filter((id) => regular(id) && of(g, id) === 0 && gone(g, id));
+    // Named on the first game he was gone only (Oct 29 2026 hunt: Marvin Harrison Jr., traded after Week 5, read "no
+    // longer on the roster" under Weeks 6 and 7).
+    const departed = players.filter((id) => regular(id) && of(g, id) === 0 && gone(g, id) && !(i > 0 && gone(gs[i - 1], id)));
     const absent = players.filter((id) => regular(id) && of(g, id) === 0 && !gone(g, id) && !backupQb(id));
     const missing = absent.filter((id) => !stillOnReserve(id));
     // A fill-in quarterback's late snaps behind the returning starter are not a regular hurt or held back (Oct 29 2026
@@ -361,7 +371,7 @@ function lineupChanges(d, code, gs) {
       departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos})`)}` : null,
       reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos}, ${reserveWord(g, id)})`)}` : null,
       back.length ? `back: ${list(back, (id) => label(g, id, true))}` : null,
-      fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? ', off reserve' : ''))}` : null,
+      fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? `, off ${statusAt(gs[i - 1], id)?.status === 'EXE' ? "the commissioner's exempt list" : 'reserve'}` : ''))}` : null,
     ].filter(Boolean);
     out.set(g.g.game_id, parts.join(' · '));
     out.missing = { names: [...missing, ...limited].map((id) => ({ name: name.get(id).name, pos: name.get(id).pos, limited: limited.includes(id), why: missing.includes(id) ? why(g, id) : null })) };
@@ -428,7 +438,10 @@ export function notOnReport(d, team, before, reportText = '') {
   const changes = lineupChanges(d, c, gs);
   // Anywhere in the report counts, the reserve lists under it included.
   const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
-  const back = (changes.missing?.names || []).filter((p) => !text.includes(sameKey(p.name)));
+  // Each of his names on the weekly roster (Oct 29 2026 hunt: the snaps' "Patrick Surtain II" read "not on this week's
+  // injury report" under "Pat Surtain II", listed).
+  const variants = rosterNames(d, c);
+  const back = (changes.missing?.names || []).filter((p) => !variants(p.name).some((k) => k && text.includes(k)));
   if (!back.length) return null;
   // How he missed it, as the game log says it (Oct 24 2026: "missed Wk 6" for a safety who played special teams only).
   // How many straight games he has been without, so a month away does not read as one missed week (Oct 29 2026 hunt:
@@ -438,6 +451,17 @@ export function notOnReport(d, team, before, reportText = '') {
   return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? `left early or limited Wk ${gs.at(-1).week}` : p.why === 'special teams only' ? `special teams only Wk ${gs.at(-1).week}` : missed(p)})`).join(', ')}`;
 }
 const sameKey = (x) => qbKey(x).join('');
+// Every name a team's player goes by in the weekly roster (full name, first and last, the name he plays under) and the
+// snap counts, joined by his PFR id: name -> those names as keys.
+function rosterNames(d, code) {
+  const byId = new Map();
+  const add = (id, nm) => { if (!id || !nm || !String(nm).trim()) return; if (!byId.has(id)) byId.set(id, new Set()); byId.get(id).add(sameKey(nm)); };
+  for (const r of d.rosterWeekly || []) if (r.team === code) { add(r.pfr_id, r.full_name); add(r.pfr_id, `${r.first_name || ''} ${r.last_name || ''}`); if (r.football_name) add(r.pfr_id, `${r.football_name} ${r.last_name || ''}`); }
+  for (const s of d.snaps || []) if (s.team === code) add(s.pfr_player_id, s.player);
+  const byKey = new Map();
+  for (const set of byId.values()) for (const k of set) byKey.set(k, set);
+  return (nm) => [...(byKey.get(sameKey(nm)) || new Set([sameKey(nm)]))];
+}
 // A weekly stats row's snap-count row in one game: through the weekly roster's GSIS-to-PFR ids, then the name (Oct 29 2026
 // hunt: the two feeds spell about 25 players differently, Kenny and Kenneth Gainwell, Bam and Zonovan Knight, so the same
 // player read twice in a box, once with no snap share, or "did not play" in games he played).
@@ -559,7 +583,7 @@ export function gameByGame(d, team, before) {
   if (!gs.length) return `${team}: no games played yet this season.`;
   const changes = lineupChanges(d, c, gs);
   return [seasonHeader(d, gs, team, before), ...gs.slice().reverse().map((x) => {
-    const qb = x.passers.length ? ` · QB ${x.passers.map((r) => `${r.player_display_name} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
+    const qb = x.passers.length ? ` · QB ${[...x.passers, ...(x.relief || [])].map((r) => `${r.player_display_name}${x.relief?.includes(r) ? ' (relief)' : ''} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
       : ' · QB not on file';
     // Who the opponent was without that day: its own regulars who did not play, its quarterback first, at most four
     // (Oct 23 2026 data audit: Herbert's 121 yards in Week 5 came against a Denver secondary without Pat Surtain II and
@@ -780,7 +804,7 @@ export const recordOf = (d, code, before) => record(teamGames(d, code, d.season,
 /** One game in full, from `code`'s side (the second system). */
 export function nflGameFull(d, x, code, before) {
   const o = x.opp;
-  const head = `Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(o))}${x.g.stadium ? ` at ${x.g.stadium}` : ''}${x.g.roof ? ` (${[x.g.roof, x.g.surface].filter(Boolean).join(', ')})` : ''} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}`;
+  const head = `Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(o))}${x.g.stadium && !x.neutral ? ` at ${x.g.stadium}` : ''}${x.g.roof ? ` (${[x.g.roof, x.g.surface].filter(Boolean).join(', ')})` : ''} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}`;
   // A team's first game has no rest: the schedule's 7 there is a filler (Oct 29 2026 hunt: every Week 1 game read "7 days
   // since their last game", the Thursday opener and the Monday games too).
   const first = (c) => teamGames(d, c, d.season, before)[0]?.g.game_id === x.g.game_id;
@@ -791,9 +815,11 @@ export function nflGameFull(d, x, code, before) {
   const scoring = !d.ledgerGames ? 'score by quarter and drives: not on file' : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, code);
   const kicking = x.off && x.def ? `kicking: ${nickname(code)} ${kicks(x.off.kicking)}; ${nickname(o)} ${kicks(x.def.kicking)}` : null;
   const theirs = teamGames(d, o, d.season, before).find((g) => g.g.game_id === x.g.game_id);
-  const qb = (sideCode) => { const st = startedEarlyExit(d, x.g, sideCode); const ps = passersOf(d, x.g, sideCode); return ps.length ? ps.map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : ''} ${passLine(r)}`).join('; ') : 'not on file'; };
+  const qb = (sideCode) => { const st = startedEarlyExit(d, x.g, sideCode); const ps = passersOf(d, x.g, sideCode); const rel = reliefOf(d, x.g, sideCode, ps); return ps.length ? [...ps, ...rel].map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : rel.includes(r) ? ' (relief)' : ''} ${passLine(r)}`).join('; ') : 'not on file'; };
   const ourGames = teamGames(d, code, d.season, before), oppGames = teamGames(d, o, d.season, before);
-  const absent = (c, gs) => { const a = lineupChanges(d, c, gs).absent?.get(x.g.game_id) || []; return a.length ? a.map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ') : 'none of its regulars'; };
+  // A team's first game has no regulars to be without yet (Oct 29 2026 hunt: every Week 1 game read "none of its
+  // regulars", the Packers' too, Josh Jacobs on the exempt list).
+  const absent = (c, gs) => { const a = lineupChanges(d, c, gs).absent?.get(x.g.game_id) || []; return a.length ? a.map((p) => `${p.name} (${p.pos}, ${p.why})`).join(', ') : first(c) ? 'regulars not yet set (its first game)' : 'none of its regulars'; };
   const changesUs = lineupChanges(d, code, ourGames).get(x.g.game_id), changesThem = lineupChanges(d, o, oppGames).get(x.g.game_id);
   const lines = [head, setting, weather ? `  ${weather}` : null,
     `  how it went: ${[scoring, kicking].filter(Boolean).join(' · ')}`,
@@ -823,7 +849,8 @@ export function nflGameFull(d, x, code, before) {
 export function nflGameShort(d, x, code, before) {
   const a = lineupChanges(d, code, teamGames(d, code, d.season, before)).absent?.get(x.g.game_id) || [];
   const qbOf = (name, started) => `${name || 'not on file'}${started ? ` (${started} started, left early)` : ''}`;
-  return `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} ${versus(x, teamName(x.opp), true)} · QB ${qbOf(x.qb, x.startedQb)} · theirs ${qbOf(x.oppQb, x.oppStartedQb)} · without: ${a.length ? a.map((p) => p.name).join(', ') : 'none of its regulars'}`;
+  const firstGame = teamGames(d, code, d.season, before)[0]?.g.game_id === x.g.game_id;
+  return `  Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa} ${versus(x, teamName(x.opp), true)} · QB ${qbOf(x.qb, x.startedQb)} · theirs ${qbOf(x.oppQb, x.oppStartedQb)} · without: ${a.length ? a.map((p) => p.name).join(', ') : firstGame ? 'regulars not yet set (its first game)' : 'none of its regulars'}`;
 }
 
 /** Every team's record before `before`, best first, as one table. */

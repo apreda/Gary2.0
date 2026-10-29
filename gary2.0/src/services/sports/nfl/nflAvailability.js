@@ -103,7 +103,10 @@ export function reconcileNflStatus(row) {
   // Before the week's final report no game statuses are issued: a weekly word is the feed's placeholder, unless this
   // week's note has him ruled out already (Oct 29 2026 hunt).
   if (row?.statusesPending && isWeeklyNflDesignation(status)) {
-    const out = row?.noteCurrent === true && /\b(?:ruled|declared|downgraded to)\s+out\b|\b(?:will not|won't)\s+play\b/i.test(note);
+    // A roster move is not a game status either: a player placed on a list cannot play (Oct 29 2026 hunt: Michael
+    // Briscoe, on the Vikings' practice squad injured list, read "No game status yet").
+    const out = row?.noteCurrent === true && (/\b(?:ruled|declared|downgraded to)\s+out\b|\b(?:will not|won't)\s+play\b/i.test(note)
+      || (/^out$/i.test(status) && /\b(?:placed|put|landed|moved)\b[^.]*\b(?:injured reserve|IR|injured list|reserve(?:\/[\w-]+)? list|PUP|non-football injury|NFI|suspended|waived|released)\b|\b(?:waived|released|suspended)\b/i.test(note)));
     if (out) return /^out$/i.test(status) ? { status, feed: null } : { status: 'Out', feed: status };
     return { status: 'No game status yet', feed: status, pending: true };
   }

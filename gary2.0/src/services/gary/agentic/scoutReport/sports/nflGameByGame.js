@@ -373,7 +373,7 @@ function weekShares(rows, weeks, side) {
  * snap counts), so a full-name miss falls back to surname plus first initial,
  * and only when that is one player on this team.
  */
-function reportLookup(injuries, players) {
+function reportLookup(injuries, players, aliasesOf = () => []) {
   const surnameKey = (value) => {
     const parts = String(value || '').replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/gi, '').trim().split(/\s+/);
     return parts.length > 1 ? `${nameKey(parts.at(-1))}|${nameKey(parts[0]).slice(0, 1)}` : null;
@@ -396,8 +396,9 @@ function reportLookup(injuries, players) {
   const firstOf = (value) => nameKey(String(value || '').trim().split(/\s+/)[0]);
   const shortForm = (a, b) => !!a && !!b && (a.startsWith(b) || b.startsWith(a));
   return (player) => {
-    const exact = full.get(nameKey(player));
-    if (exact) return exact;
+    // The snap file's name, then the weekly roster's names for the same player (Oct 29 2026 hunt: "Michael Hall" in the
+    // snaps is "Mike Hall Jr." on the report, "Patrick" and "Pat Surtain II").
+    for (const name of [player, ...aliasesOf(player)]) { const exact = full.get(nameKey(name)); if (exact) return exact; }
     if (snapLoose.get(surnameKey(player)) !== 1) return null;
     const row = loose.get(surnameKey(player));
     return row && shortForm(firstOf(player), firstOf(named(row))) ? row : null;
@@ -477,7 +478,17 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       byPlayer.get(row.player).set(row.week, kick ? { st, kick } : share > 0 ? { share } : { st });
     }
     const textOf = (x) => (x.kick ? `${x.st}% of special-teams snaps` : x.share != null ? `${x.share}% of snaps` : `special teams only, ${x.st}% of special-teams snaps`);
-    const reported = reportLookup(list, [...byPlayer.keys()]);
+    const code0 = nflverseCode(team);
+    const rosterRows = (await loadNflverseFile('roster_weekly', season).catch(() => null))?.rows || [];
+    const pfrOf = new Map(snaps.rows.filter((r) => r.pfr).map((r) => [r.player, r.pfr]));
+    const namesOf = new Map();
+    for (const r of rosterRows) {
+      if (r.team !== code0 || !r.pfr_id) continue;
+      const set = namesOf.get(r.pfr_id) || new Set();
+      for (const nm of [r.full_name, `${r.first_name || ''} ${r.last_name || ''}`, r.football_name ? `${r.football_name} ${r.last_name || ''}` : null]) if (nm && nm.trim()) set.add(nm.trim());
+      namesOf.set(r.pfr_id, set);
+    }
+    const reported = reportLookup(list, [...byPlayer.keys()], (player) => [...(namesOf.get(pfrOf.get(player)) || [])]);
     for (const [player, shares] of byPlayer) {
       const injury = reported(player);
       if (!injury) continue;
