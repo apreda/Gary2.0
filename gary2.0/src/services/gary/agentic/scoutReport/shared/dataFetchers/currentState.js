@@ -9,7 +9,7 @@ import { fetchAnthropicFootballCurrentState } from '../anthropicFootballGroundin
 // CURRENT STATE / NARRATIVE
 // ============================================================================
 
-export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
+export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate, { inDoubt = [] } = {}) {
   const isNFL = sport === 'NFL' || sport === 'americanfootball_nfl';
   const isNCAAF = sport === 'NCAAF' || sport === 'americanfootball_ncaaf';
   const isFootball = isNFL || isNCAAF;
@@ -66,7 +66,10 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate) {
       // What the coach and the reporters say about a questionable player (founder, Oct 28 2026: "what the stories are
       // saying, what the insiders are saying on the two teams, and what the injury report is saying"): the report has
       // only his status, and the picks run hours before tip.
-      searchQueries.push(`${homeTeam} ${awayTeam} NBA game tonight ${today}. Player availability, rest decisions, load management, who is sitting out, who is playing, game-day status, lineup decisions. For every player listed questionable, doubtful or probable or called a game-time decision: the coach's latest update and what team beat reporters and league insiders are reporting about whether he plays, with who said it and when.`);
+      // The search names the players the league's report has in doubt: asked generically it missed same-day word on
+      // them (Oct 28 2026 read check: Anthony Black cleared at 6:05 PM, a 6:38 PM write-up still had him unconfirmed).
+      const named = inDoubt.length ? ` Players in doubt on the league's latest report: ${inDoubt.map((p) => `${p.name} (${p.team}, ${p.status})`).join('; ')}.` : '';
+      searchQueries.push(`${homeTeam} ${awayTeam} NBA game tonight ${today}. Player availability, rest decisions, load management, who is sitting out, who is playing, game-day status, lineup decisions. For every player listed questionable, doubtful or probable or called a game-time decision: the coach's latest update and what team beat reporters and league insiders are reporting about whether he plays, with who said it and when.${named}`);
       queryLabels.push('AVAILABILITY');
     }
 
@@ -156,7 +159,7 @@ ${footballNarrativeInstructions}
 **TODAY'S MATCHUP NEWS (${today}):**
 - Game preview context: time, broadcast, venue
 - Announcements about who plays tonight (starters, returns, rest)
-${isNBA ? `- **UNCERTAIN PLAYERS:** For every player whose playing tonight is in doubt (listed questionable, doubtful or probable, or called a game-time decision): what his coach said and what beat reporters or league insiders have reported about whether he plays, each with who said it and when. Nothing reported: say so for him.
+${isNBA ? `- **UNCERTAIN PLAYERS:** For every player whose playing tonight is in doubt (listed questionable, doubtful or probable, or called a game-time decision${inDoubt.length ? `; the league's latest report lists ${inDoubt.map((p) => p.name).join(', ')}` : ''}): what his coach said and what beat reporters or league insiders have reported about whether he plays, each with who said it and when. Nothing reported: say so for him.
 ` : ''}- Any breaking news affecting tonight's game
 
 RULES:

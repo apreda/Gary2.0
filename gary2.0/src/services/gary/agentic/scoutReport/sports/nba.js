@@ -797,7 +797,10 @@ VENUE: [arena name, city]
   // Fetch in parallel: BDL roster depth + current state (news/headlines)
   const [rosterDepth, nbaCurrentState] = await Promise.all([
     ballDontLieService.getNbaRosterDepth(homeTeam, awayTeam, nbaSeasonYear),
-    fetchCurrentState(homeTeam, awayTeam, 'basketball_nba').catch(e => {
+    fetchCurrentState(homeTeam, awayTeam, 'basketball_nba', undefined, { inDoubt: [[homeTeam, injuries?.home], [awayTeam, injuries?.away]]
+      .flatMap(([team, list]) => (list || []).filter((inj) => /questionable|doubtful|probable|game.?time|gtd/i.test(String(inj.status || '')))
+        .map((inj) => ({ name: `${inj.player?.first_name || ''} ${inj.player?.last_name || ''}`.trim(), team, status: inj.status })))
+      .filter((p) => p.name) }).catch(e => {
       console.warn('[Scout Report] NBA current state error (non-fatal):', e.message);
       return null;
     })
