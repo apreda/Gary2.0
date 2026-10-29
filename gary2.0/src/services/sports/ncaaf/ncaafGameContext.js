@@ -80,7 +80,7 @@ export function searchSourceTrace(record) {
  * The CLI does not expose every opened URL in its event stream; that is not
  * evidence the report is missing. Source attribution comes from the report.
  */
-export function validateCollegeContext(raw, { game, date, rosters, sourceRecord = '', now = new Date() }) {
+export function validateCollegeContext(raw, { game, date, rosters, sourceRecord = '', now = new Date(), lastGames = {} }) {
   const out = { version: 1, game_id: game.id ?? game.bdl_game_id, date, observed_at: new Date(now).toISOString(), sides: {} };
   const trace = searchSourceTrace(sourceRecord);
   const searched = retrievedSearchRecords(sourceRecord).length > 0;
@@ -106,6 +106,10 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
       ...rows(input?.sources),
       ...rows(raw?.sources).filter(source => citedIds.has(source?.id)),
     ].filter(Boolean).filter((source, index, all) => all.findIndex(other => other.id === source.id && other.url === source.url) === index);
+    // A report dated after the team's last game is about this one, however long the bye (Oct 28 2026 sweep: Georgia,
+    // off since Oct 17, lost the Oct 21 report on Gunner Stockton's shoulder to the eight-day window, and its
+    // quarterback note pointed at a fact the desk no longer had). The fixed windows still bound a team that just played.
+    const sinceLastGame = source => Boolean(lastGames?.[side]) && dateMs(source.reported) > dateMs(lastGames[side]);
     const datedSources = suppliedSources.filter(source => {
       try {
         const url = new URL(source.url);
@@ -113,7 +117,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
         return ['http:', 'https:'].includes(url.protocol) && searched
           && agreesWithRetrievedAge(source, sourceAges, now)
           && dateMs(source.reported) <= dateMs(new Date(now).toISOString().slice(0, 10))
-          && Number.isFinite(age) && age >= 0 && age <= 8 * 86_400_000;
+          && Number.isFinite(age) && age >= 0 && (age <= 8 * 86_400_000 || sinceLastGame(source));
       } catch { return false; }
     });
     // A current-season staff directory can establish a coach without a new
@@ -124,7 +128,7 @@ export function validateCollegeContext(raw, { game, date, rosters, sourceRecord 
     const sources = [...datedSources, ...staffSources.filter(s => !datedSources.some(d => d.id === s.id))];
     // A report filed for last week's game can still pass the QB's eight-day
     // window. Availability is a game-week assertion and needs a newer report.
-    const availabilitySources = datedSources.filter(source => dateMs(date) - dateMs(source.reported) <= 4 * 86_400_000);
+    const availabilitySources = datedSources.filter(source => dateMs(date) - dateMs(source.reported) <= 4 * 86_400_000 || sinceLastGame(source));
     const currentCitations = ids => Array.isArray(ids) ? ids.filter(id => datedSources.some(s => s.id === id)) : [];
     const availabilityCitations = ids => Array.isArray(ids) ? ids.filter(id => availabilitySources.some(s => s.id === id)) : [];
     const coachCitations = ids => Array.isArray(ids) ? ids.filter(id => sources.some(s => s.id === id)) : [];
@@ -279,11 +283,23 @@ export function applyOfficialReport(context, official, { game, rosters } = {}) {
   return out;
 }
 
+// Each team's last game before `date` (Eastern calendar), or null: none yet, or the schedule did not load.
+async function lastGameDates(bdl, { home, away, date, season }) {
+  const of = async (team) => {
+    const games = await bdl.getGames?.('americanfootball_ncaaf', { team_ids: [team.id], seasons: [season], per_page: 100 }).catch(() => null);
+    const days = (games || []).map((g) => g?.date && new Date(g.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })).filter((d) => d && d < date).sort();
+    return days.at(-1) || null;
+  };
+  const [h, a] = await Promise.all([of(home), of(away)]);
+  return { home: h, away: a };
+}
+
 export async function getNcaafGameContext({ game, date, bdl, search = searchGrounded, cache = {}, rosters: suppliedRosters, repair = reformatCollegeContext }) {
   const home = game.home_team, away = game.away_team ?? game.visitor_team;
   if (!home?.id || !away?.id || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { unavailable: true, reason: 'Exact college teams/date unavailable' };
-  const result = await cachedResearch(`ncaaf-context-v14:${date}:${away.id}:${home.id}`, async () => {
+  const result = await cachedResearch(`ncaaf-context-v15:${date}:${away.id}:${home.id}`, async () => {
     const rosters = suppliedRosters || { home: await bdl.getNcaafTeamPlayers(home.id, 60), away: await bdl.getNcaafTeamPlayers(away.id, 60) };
+    const lastGames = await lastGameDates(bdl, { home, away, date, season: Number(game.season || date.slice(0, 4)) });
     if (!rosters.home?.length || !rosters.away?.length) return { unavailable: true, reason: 'College active roster unavailable' };
     if (!suppliedRosters) rosters.wide = await cfbdRosters({ home, away, season: Number(game.season || date.slice(0, 4)) });
     const teamInput = side => {
@@ -319,7 +335,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     // The conference's own report, when the game has one, comes before any search for it.
     const official = await officialAvailabilityForGame({ homeTeam: home, awayTeam: away, date }).catch((e) => ({ found: false, errors: [`all: ${e.message}`] }));
     const withOfficial = ctx => labelSearchedAvailability(markOfficialMissing(applyOfficialReport(ctx, official, { game, rosters }), official, { game }), { game });
-    const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '' }));
+    const first = withOfficial(validateCollegeContext(parsed, { game, date, rosters, sourceRecord: answer.raw || '', lastGames }));
     // ONE FOCUSED AVAILABILITY SEARCH (Oct 9 2026: the Big 12 report reached Gary
     // for Iowa State but not for BYU, the same report). A team left without a
     // current availability report gets one search for that report alone. Its
@@ -353,7 +369,7 @@ Always return BOTH team objects even when reporting is incomplete. Missing infor
     }
     if (!changed) return first;
     const record = [answer.raw, again.raw].map(r => typeof r === 'string' ? r : JSON.stringify(r ?? '')).join('\n');
-    const second = withOfficial(validateCollegeContext(merged, { game, date, rosters, sourceRecord: record }));
+    const second = withOfficial(validateCollegeContext(merged, { game, date, rosters, sourceRecord: record, lastGames }));
     return lacking(second).length < lacking(first).length ? second : first;
   }, { ttlMs: value => value.unavailable ? 120_000 : 2 * 60 * 60_000, valid: value => Boolean(value), ...cache });
   await publishCollegeComponentHealth(result, {game,date});

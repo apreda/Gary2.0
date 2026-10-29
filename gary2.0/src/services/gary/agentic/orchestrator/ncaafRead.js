@@ -191,7 +191,9 @@ function howGood(desk) {
   return [poll, conferences, seasons].filter(Boolean).join('\n\n');
 }
 
-const nameKey = (name) => String(name || '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+// A note in parentheses is not part of the name (Oct 28 2026 sweep: the log's "Gunner Stockton (started)" never matched
+// "Gunner Stockton", and the read said this week's quarterback threw the most passes in none of his seven starts).
+const nameKey = (name) => String(name || '').toLowerCase().replace(/\([^)]*\)/g, '').replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
 
 // This week's quarterback for each team, as the desk's quarterbacks section names him under the team's name.
 function thisWeeksQuarterbacks(desk, teams) {
