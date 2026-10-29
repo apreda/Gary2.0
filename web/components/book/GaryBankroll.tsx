@@ -33,6 +33,8 @@ const dollars = (u: number) => `$${Math.abs(Math.round(u * 100)).toLocaleString(
 const signed = (u: number) => `${Math.round(u * 100) < 0 ? '-' : '+'}${dollars(u)}`;
 
 export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
+  // Where it starts, what it counts and what it is sit behind ⓘ, as on the app (Oct 29 2026).
+  const [about, setAbout] = useState(false);
   const points = [{ date: 'Start', net_units: 0, flat_units: 0 }, ...b.curve];
   const values = points.flatMap(p => [p.net_units, p.flat_units]);
   const low = Math.min(...values, -1), high = Math.max(...values, 1);
@@ -40,14 +42,27 @@ export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
     `${i ? 'L' : 'M'}${12 + i / Math.max(1, points.length - 1) * 576},${148 - (p[field] - low) / (high - low) * 136}`).join(' ');
   return (
     <section className="rounded-panel border border-gold/30 bg-card p-5 sm:p-7" aria-label="Gary's simulated bankroll">
-      <p className="font-mono text-xs uppercase tracking-widest text-gold">Gary&apos;s bankroll · Simulated</p>
+      <p className="font-mono text-xs uppercase tracking-widest text-gold">Gary&apos;s bankroll</p>
       <div className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2">
         <h2 className="font-display text-5xl text-hi">{dollars(b.bankroll_units)}</h2>
-        <p className={b.profit_units < 0 ? 'text-loss' : 'text-win'}>{signed(b.profit_units)} · {b.growth_pct.toFixed(2)}% growth</p>
+        <p className={b.profit_units < 0 ? 'text-loss' : 'text-win'}>{signed(b.profit_units)} · {b.growth_pct.toFixed(2)}%
+          <button type="button" onClick={() => setAbout(v => !v)} aria-expanded={about} aria-label="About Gary's bankroll"
+            className="ml-2 inline-flex h-6 w-6 items-center justify-center rounded-full border border-gold text-xs font-bold text-gold align-middle">i</button>
+        </p>
         {/* A day off the record rides the number's corner, one click from its card (Oct 29 2026). */}
         {(b.scrubbed ?? []).map(d => <ScrubCorner key={d.date} scrub={d} standing={b} />)}
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-mid">Started with {dollars(b.initial_units)} on {new Date(b.started_at).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}. All sports and Winners markets · Since inception.</p>
+      {about && <dl className="mt-3 grid grid-cols-3 divide-x divide-line rounded-card border border-line bg-white/[0.03] py-3 text-center">
+        {[
+          ['Started', dollars(b.initial_units), new Date(b.started_at).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })],
+          ['Counts', 'All sports', 'Every Winners bet'],
+          ['Money', 'Simulated', '$100 = 1 unit'],
+        ].map(([label, value, sub]) => <div key={label} className="px-2">
+          <dt className="font-mono text-[10px] uppercase tracking-widest text-low">{label}</dt>
+          <dd className="mt-1 font-semibold text-hi">{value}</dd>
+          <dd className="text-xs text-low">{sub}</dd>
+        </div>)}
+      </dl>}
       <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
         {[
           ['Win rate', b.win_pct === null ? '—' : `${b.win_pct.toFixed(1)}%`],
