@@ -5,6 +5,7 @@
 // seven NFL dart categories. Sources: BDL
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
+import { nflSeason } from '../../../utils/dateUtils.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
 import { weeklyRows as officialWeeklyRows } from '../../sports/nfl/nflPlayerContext.js';
 import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
@@ -66,7 +67,8 @@ function statText(pos, s) {
 }
 
 export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null }) {
-  const season = Number(date.slice(0, 4));
+  // The season the date falls in, not its calendar year (Oct 29 2026 hunt: Week 18 and the playoffs are in January).
+  const season = nflSeason(new Date(`${date}T17:00:00Z`));
   const listed = [...await bdl.getNflGamesForDate(date), ...await bdl.getNflGamesForDate(nextUtcDay(date))];
   const seen = new Set();
   const games = listed

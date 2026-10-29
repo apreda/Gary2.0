@@ -54,10 +54,14 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
   for (const g of games) for (const t of [g.home_team, g.visitor_team]) {
     if (!recordsOf.has(String(t.id))) recordsOf.set(String(t.id), await teamRecords('NBA', season, t.id, date, 100).catch(() => null));
   }
-  const statusOf = (gameId, teamName, name) => {
+  // A team's players this season as the stats feed names them: a first initial pairs a board name with a report name only
+  // when no teammate shares it (Oct 29 2026 hunt: Jaylin Williams matched Jalen Williams, Out).
+  const feedNames = (teamId) => [...new Set((recordsOf.get(String(teamId)) || []).flatMap((r) => (r.record?.players || [])
+    .filter((p) => p.side === (String(r.record.home?.id) === String(teamId) ? 'home' : 'away')).map((p) => p.name)))];
+  const statusOf = (gameId, teamName, name, peers) => {
     const side = listings.get(String(gameId))?.[teamName];
     if (!side || side === 'unfiled') return '';
-    const hit = samePlayerIn(name, [...side.values()].map((r) => r.name));
+    const hit = samePlayerIn(name, [...side.values()].map((r) => r.name), peers);
     const row = hit ? [...side.values()].find((r) => r.name === hit) : null;
     return row && row.status !== 'Available' ? row.status : '';
   };
@@ -90,7 +94,7 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
       const roster = [...byPlayer.keys()].map((pid) => ({ pid, info: people[pid] || people[Number(pid)] })).filter((p) => p.info?.team === team.full_name);
       const priced = [];
       for (const { pid, info } of roster) {
-        const status = statusOf(g.id, team.full_name, info.name);
+        const status = statusOf(g.id, team.full_name, info.name, [...new Set([...feedNames(team.id), ...roster.map((p) => p.info.name)])]);
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const markets = Object.fromEntries(Object.entries(NBA_MARKET).map(([k, m]) => {
@@ -145,9 +149,10 @@ function gameLines(c, records, stat, abbrById) {
   return rows.map((x) => {
     const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}`;
     const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason || ''));
-    const mine = outRows.find((r) => samePlayerIn(c.player, [r.name]));
+    const names = (x.rec.players || []).filter((p) => p.side === x.side).map((p) => p.name);
+    const mine = outRows.find((r) => samePlayerIn(c.player, [r.name], names));
     if (!x.me || !(x.me.min > 0)) return `${where}: did not play${mine ? ` (out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')})` : ''}`;
-    const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(r.name, [n]))).map((r) => r.name);
+    const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
     return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min, ${one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
   });
 }

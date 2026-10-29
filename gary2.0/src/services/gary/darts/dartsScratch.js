@@ -83,7 +83,10 @@ export async function scratchDarts({ supabase, date, now = Date.now(), log = con
     const day = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
     for (const d of report ? nba : []) {
       const rows = report.rows.filter((r) => r.gameDate === day(d.commence_time) && nick(r.team) === nick(d.team));
-      const hit = samePlayerIn(d.player, rows.map((r) => r.name || r.player));
+      // The report's names as peers: a first initial alone never scratches a teammate's dart (Oct 29 2026 hunt: Jaylin
+      // Williams would have been scratched for Jalen Williams, Out).
+      const names = rows.map((r) => r.name || r.player);
+      const hit = samePlayerIn(d.player, names, names);
       const row = hit && rows.find((r) => (r.name || r.player) === hit);
       if (row?.status === 'Out') {
         await mark(supabase, d.id, `out (${String(row.reason || '').replace(/^Injury\/Illness - /, '').toLowerCase()})`);
