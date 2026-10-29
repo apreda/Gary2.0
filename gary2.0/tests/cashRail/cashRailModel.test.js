@@ -47,6 +47,13 @@ out([b.hits[2].showsStrip, one.showsStrip, b.hits[0].showsStrip])`);
     expect(r).toEqual([true, false, false]);
   });
 
+  it('names a ladder by its top cashed rung', () => {
+    const r = swiftJSON(`${board}
+let over = CashRailHit(key: "m", who: "McMillan", market: "Rec yards", price: -115, rungs: [CashRailRung(label: "O 58.5", price: -115)], elapsed: 900, when: "Q1 0:00", play: nil, gary: nil)
+out([b.hits[2].displayMarket, over.displayMarket, b.hits[0].displayMarket])`);
+    expect(r).toEqual(['Rec yards 70+', 'Rec yards over 58.5', 'First TD scorer']);
+  });
+
   it('an empty board has no hero and counts nothing', () => {
     const r = swiftJSON(`let e = CashRailBoard(league: "NFL", game_id: "1", status: "live", possession: nil, situation: nil, elapsed_s: 0, clock: nil, hits: [])
 out([e.hero == nil, e.ranked.isEmpty, e.cashedCount == 0])`);

@@ -30,6 +30,12 @@ struct CashRailHit: Codable, Equatable, Identifiable {
 
     /// One rung is already said by the market line; the strip starts at two.
     var showsStrip: Bool { (rungs?.count ?? 0) >= 2 }
+
+    /// "Rec yards 70+" / "Rec yards over 58.5": a ladder reads as its top cashed rung.
+    var displayMarket: String {
+        guard let top = rungs?.last else { return market }
+        return top.label.hasPrefix("O ") ? "\(market) over \(top.label.dropFirst(2))" : "\(market) \(top.label)"
+    }
 }
 
 struct CashRailBoard: Codable, Equatable {
