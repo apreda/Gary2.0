@@ -25,10 +25,11 @@ export const etDate = (when = new Date()) => new Date(when).toLocaleDateString('
 
 /** Everything the desk reads, loaded once per call. Unavailable files leave their sections out, said so. */
 export async function loadBettorData(season) {
-  const [schedule, tw, pw, sc, rw, led] = await Promise.all([
+  const [schedule, tw, pw, sc, rw, led, pp, dp] = await Promise.all([
     getNflSchedule().catch(() => null), loadNflverseFile('stats_team_week', season), loadNflverseFile('stats_player_week', season),
     loadNflverseFile('snap_counts', season).catch(() => null), loadNflverseFile('roster_weekly', season).catch(() => null),
     getPlayLedger(season).catch(() => null),
+    loadNflverseFile('advstats_week_pass', season).catch(() => null), loadNflverseFile('advstats_week_def', season).catch(() => null),
   ]);
   const rows = (f) => (f && !f.unavailable ? f.rows : null);
   // The play ledger's per-game counts: the score by quarter, how drives ended, QB hits beside the sacks and kneel-downs.
@@ -47,7 +48,8 @@ export async function loadBettorData(season) {
   const coaches = new Map(await Promise.all(Object.entries(NFLVERSE_TEAM_CODES).map(async ([name, code]) => [code, await getNflHeadCoach(name, season).catch(() => null)])));
   return { season, schedule: scheduleRows, scheduleMissing: !schedule || Boolean(schedule.unavailable),
     teamWeek: rows(tw), playerWeek: official?.rows ?? rows(pw), officialCorrections: official?.corrected ?? null, snaps: rows(sc), rosterWeekly: rows(rw),
-    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather, coaches };
+    ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather, coaches,
+    pressure: pressureByGame(rows(pp), rows(dp)) };
 }
 
 // The schedule's kickoff (Eastern date and time) as an instant: try standard time, then correct by the hour Eastern
@@ -546,6 +548,32 @@ function rushing(x, code) {
   const c = x.off.carries - qbs.reduce((a, r) => a + n(r.carries), 0), y = x.off.rushing - qbs.reduce((a, r) => a + n(r.rushing_yards), 0);
   return `${x.off.rushing} rushing: ${theirs.join(', ')}${c > 0 ? `, the rest ${y} on ${c}` : ''}`;
 }
+// THE PASS RUSH, GAME BY GAME (founder, Oct 29 2026: Gary had each game's sacks and QB hits but not how often a
+// quarterback was under pressure, or who brought it; Bryce Young's 5 sacks against Tampa came on 6 pressures, the game
+// his tackle and guard went down, after 20 pressures on Chicago's rush in Week 1). Pro Football Reference's charting
+// via nflverse (advstats_week_pass, advstats_week_def): each quarterback's pressures, sacks, hits, hurries and the
+// blitzes he saw, and each defense's leading rushers that day. Null when the files did not load.
+function pressureByGame(passRows, defRows) {
+  if (!passRows || !defRows) return null;
+  const qbs = new Map(), rushers = new Map();
+  for (const r of passRows) { const k = `${r.game_id}|${r.team}`; qbs.set(k, [...(qbs.get(k) || []), r]); }
+  for (const r of defRows) { const k = `${r.game_id}|${r.team}`; rushers.set(k, [...(rushers.get(k) || []), r]); }
+  return { qbs, rushers };
+}
+const pct = (v) => (v === '' || v == null ? null : Math.round(Number(v) * 100));
+function pressureLine(d, x, code) {
+  if (!d.pressure) return 'pressure: not on file';
+  const side = (team) => {
+    const qbs = (d.pressure.qbs.get(`${x.g.game_id}|${team}`) || []).filter((r) => n(r.times_pressured) || n(r.times_sacked));
+    return qbs.length ? qbs.map((r) => `${r.pfr_player_name} pressured ${n(r.times_pressured)} time${n(r.times_pressured) === 1 ? '' : 's'}${pct(r.times_pressured_pct) != null ? ` (${pct(r.times_pressured_pct)}% of dropbacks)` : ''}: ${n(r.times_sacked)} sacked, ${n(r.times_hit)} hit, ${n(r.times_hurried)} hurried; blitzed ${n(r.times_blitzed)}`).join('; ') : null;
+  };
+  const rush = (team) => (d.pressure.rushers.get(`${x.g.game_id}|${team}`) || []).filter((r) => n(r.def_pressures) > 0)
+    .sort((a, b) => n(b.def_pressures) - n(a.def_pressures)).slice(0, 3).map((r) => `${r.pfr_player_name} ${n(r.def_pressures)}`).join(', ');
+  const ours = side(code), theirs = side(x.opp);
+  if (!ours && !theirs) return 'pressure: not on file for this game';
+  return `pressure: ${nickname(code)} ${ours || 'not on file'}${rush(x.opp) ? ` (${nickname(x.opp)} rushers: ${rush(x.opp)})` : ''} · ${nickname(x.opp)} ${theirs || 'not on file'}${rush(code) ? ` (${nickname(code)} rushers: ${rush(code)})` : ''}`;
+}
+
 // The box score both ways, as counts.
 const boxLine = (x, code) => (!x.off || !x.def ? 'box score not on file'
   : `${Math.round(x.off.yards)} yards (${rushing(x, code)}), allowed ${Math.round(x.def.yards)} (${x.def.rushing} rushing) · ${giveaways(x.off)}, ${count(x.def.giveaways, 'takeaway')} · ${count(x.off.sacked, 'sack')} allowed, ${x.def.sacked} made · QB hits (sacks included): ${x.def.hitsMade} taken, ${x.off.hitsMade} made`);
@@ -630,7 +658,7 @@ export function gameByGame(d, team, before) {
     const kicking = x.off && x.def ? `kicking: ${nickname(c)} ${kicks(x.off.kicking)}; ${nickname(x.opp)} ${kicks(x.def.kicking)}` : null;
     const scoring = !d.ledgerGames ? null : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, c);
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
-    const detail = [without, boxLine(x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
+    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
@@ -854,6 +882,7 @@ export function nflGameFull(d, x, code, before) {
     d.ledgerGames && x.ledger ? `  ${driveLine(x, code)}` : null,
     `  quarterbacks: ${nickname(code)} ${qb(code)} · ${nickname(o)} ${qb(o)}`,
     `  ${boxLine(x, code)}`,
+    `  ${pressureLine(d, x, code)}`,
     `  without that day: ${nickname(code)} ${absent(code, ourGames)} · ${nickname(o)} ${absent(o, oppGames)}`,
     // The missing regulars are on the "without that day" line; the lineup line keeps the rest, and goes when nothing is
     // left (Oct 29 2026 hunt, round 7: a team with absences only read its missing regulars twice).

@@ -98,7 +98,8 @@ export function parseCsv(text) {
  * reports as "the season has not started", a wrong and very believable
  * message. Anything that differs is declared here rather than assumed.
  */
-const RELEASE_TAGS = { roster: 'rosters', roster_weekly: 'weekly_rosters', stats_team_week: 'stats_team', stats_player_week: 'stats_player' };
+const RELEASE_TAGS = { roster: 'rosters', roster_weekly: 'weekly_rosters', stats_team_week: 'stats_team', stats_player_week: 'stats_player',
+  advstats_week_pass: 'pfr_advstats', advstats_week_def: 'pfr_advstats' };
 
 async function fetchRelease(url, fetchImpl) {
   const controller = new AbortController();
