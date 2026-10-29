@@ -72,6 +72,19 @@ export function flowFacts(rec, teamId) {
   return flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
 }
 
+/** An older game's people and boxes from one team's side, for the live log (loop 3, Oct 29 2026: its ten older games
+ * read a score, the quarters and the flow, and nothing of who played): each side's starters and who was out at tip,
+ * then both team boxes. */
+export function olderGameFacts(rec, teamId) {
+  const us = String(rec.home?.id) === String(teamId) ? 'home' : 'away', them = other(us);
+  const starters = (side) => (rec.players || []).filter((p) => p.side === side && p.starter).map((p) => p.name).join(', ') || 'not on file';
+  const out = (side) => (!rec.report?.[side] || rec.report[side].notOnFile ? 'the injury report not on file'
+    : rec.report[side].rows.filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || '')).map((r) => r.name).join(', ') || 'nobody');
+  return [`started: ${rec[us].short} ${starters(us)} · ${rec[them].short} ${starters(them)}`,
+    `out at tip: ${rec[us].short} ${out(us)} · ${rec[them].short} ${out(them)}`,
+    teamBox(rec, us).trim(), teamBox(rec, them).trim()];
+}
+
 // A team's listing at tip, its players who had not played in any of the team's games before this one set apart.
 function reportText(rec, side, before) {
   const r = rec.report[side]; const short = rec[side].short;

@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts } from './nbaGameRecordText.js';
+import { flowFacts, olderGameFacts } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -110,8 +110,11 @@ function scoringLine(rows, teams, official = null) {
     const mine = (rows || []).filter((r) => r.team?.id === t?.id);
     const sum = (k) => mine.reduce((a, r) => a + (Number(r[k]) || 0), 0);
     const of = (k, bdl) => (o?.[k] != null ? o[k] : sum(bdl));
-    return mine.length ? `${t.name} ${of('paint', 'points_paint')} in the paint, ${sum('points_second_chance')} second-chance, ${of('fastBreak', 'points_fast_break')} fast-break, ${of('offTurnovers', 'points_off_turnovers')} off turnovers` : null;
+    return mine.length ? `${t.name} ${of('paint', 'points_paint')} in the paint, ${unsettled ? 'second-chance not on file' : `${sum('points_second_chance')} second-chance`}, ${of('fastBreak', 'points_fast_break')} fast-break, ${of('offTurnovers', 'points_off_turnovers')} off turnovers` : null;
   };
+  // Both sides at 0 second-chance points with offensive rebounds is BDL's box before it settled (round 8).
+  const second = (t) => (rows || []).filter((r) => r.team?.id === t?.id).reduce((a, r) => a + (Number(r.points_second_chance) || 0), 0);
+  const unsettled = teams.every((t) => second(t) === 0) && [official?.us, official?.them].some((o) => Number(o?.oreb) > 0);
   const both = teams.map((t, i) => side(t, official ? [official.us, official.them][i] : null));
   return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
 }
@@ -379,7 +382,8 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     const stored = flows.get(String(g.id));
     const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : '      flow: not on file (the game record is not built yet)';
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${flow}`;
+    const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

@@ -54,7 +54,9 @@ export async function settingOf(g, team, teamGames) {
   out.prev = { date: prev.date, opponent: opp.full_name, home: prev.home_team.id === team.id, city: prevVenue?.city || null };
   out.daysOff = dayNum(g.date) - dayNum(prev.date) - 1;
   out.miles = here && there ? milesBetween(there, here) : null;
-  out.tzShift = here && there ? utcOffsetHours(here.tz, tip) - utcOffsetHours(there.tz, Date.parse(prev.datetime || prev.date)) : null;
+  // Both arenas' clocks at the same instant: geography only (round 8: across the Nov 1 daylight-saving change every
+  // trip gained an hour, San Francisco to Los Angeles "1 time zone west").
+  out.tzShift = here && there ? utcOffsetHours(here.tz, tip) - utcOffsetHours(there.tz, tip) : null;
   return out;
 }
 
@@ -325,6 +327,10 @@ export async function buildNbaGameRecord(gameId) {
   checks.push({ check: "the players' shooting adds up to the official box", ok: !shotGaps.length, detail: shotGaps.join('; ') || null });
   // BDL's own field: ESPN fills paint, fast break and off turnovers but not second chance (Oct 29 2026: 8 of 12 games built
   // before BDL's advanced box posted read "undefined second chance" and this check passed on ESPN's paint).
+  // Both sides at 0 second-chance points with offensive rebounds is BDL's box before it settled, not a count (round 8:
+  // Hornets-Pistons, Knicks-Bulls, Spurs-Jazz on Oct 28; 8-5, 23-15, 12-10 once filled): not on file, and the late
+  // rebuild tries again.
+  if (teams.home.secondChance === 0 && teams.away.secondChance === 0 && (teams.home.oreb > 0 || teams.away.oreb > 0)) { teams.home.secondChance = null; teams.away.secondChance = null; }
   checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.secondChance != null && teams.away.secondChance != null) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });
 

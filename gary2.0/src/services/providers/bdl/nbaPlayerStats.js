@@ -132,7 +132,9 @@ export const nbaPlayerStatsMethods = {
    * One game's advanced box (BDL v2, the whole game: period 0), one row per player with his paint, second-chance,
    * fast-break and off-turnover points among 117 fields. Null when the feed fails, so the read can say not on file.
    */
-  async getNbaAdvancedBox(gameId, ttlMinutes = 24 * 60) {
+  // Two hours, not a day (round 8: a copy fetched an hour after the final held 0 second-chance points for every player,
+  // and the 24-hour shared cache kept it through the next morning's correction rebuilds).
+  async getNbaAdvancedBox(gameId, ttlMinutes = 120) {
     if (!gameId) return null;
     try {
       return await getCachedOrFetch(`nba_advanced_box_${gameId}`, async () => {
