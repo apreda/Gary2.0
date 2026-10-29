@@ -35,6 +35,7 @@ const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/serv
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
 const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords } = await import('../src/services/sports/nfl/nflPlayerContext.js');
 const { loadNflverseFile, getPracticeReport, nflverseCode } = await import('../src/services/providers/nflverseService.js');
+const { finalReportNotDue } = await import('../src/services/sports/nfl/nflAvailability.js');
 const { getNflSchedule, scheduleRowFor } = await import('../src/services/sports/nfl/nflSchedule.js');
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
@@ -181,8 +182,9 @@ async function throwLeague(league) {
       const snaps = aliasByRoster(snapFile, weekRows, roster && !roster.unavailable ? roster.rows : null);
       const reports = schedule && !schedule.unavailable ? await Promise.all(board.frames.flatMap((f) => {
         const week = Number(scheduleRowFor(schedule, board.season, nflverseCode(f.homeFull), nflverseCode(f.awayFull), f.commence)?.week) || null;
+        const pending = finalReportNotDue(f.commence);
         return week ? [f.homeFull, f.awayFull].map((team) => getPracticeReport(team, board.season, week)
-          .then((report) => ({ team, report: report?.unavailable ? null : report })).catch(() => ({ team, report: null }))) : [];
+          .then((report) => ({ team, report: report?.unavailable ? null : report, pending })).catch(() => ({ team, report: null, pending }))) : [];
       })) : [];
       const injuries = withOfficialReport(feedInjuries, reports);
       const priorByName = new Map(), defPrev = null, history = null;

@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { withoutBettingLines, footballNews } from './ncaafRead.js';
-import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate, rosterMoves } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -70,6 +70,7 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
+    ["ROSTER MOVES", await rosterMoves(data, homeTeam, awayTeam, before)],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
     ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],

@@ -56,7 +56,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // after it, the largest lead each way and when, lead changes, and time of possession.
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
-const LEDGER_SCHEMA = 11;
+// 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
+const LEDGER_SCHEMA = 12;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -379,7 +380,8 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
 function driveTotals(list) {
   const t = { drives: 0, drive_points: 0, drive_tds: 0, drive_fgs: 0, drive_punts: 0, drive_turnovers: 0, drive_downs: 0,
     drive_missed_fgs: 0, drive_safeties: 0, drive_end_of_half: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0,
-    opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0, top_seconds: 0 };
+    opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0, top_seconds: 0, first_downs: 0 };
+  for (const d of list) t.first_downs += Number(d.firstDowns) || 0;
   // Time of possession: every drive's clock, the ones that ran out a half included.
   for (const d of list) { const m = String(d.top || '').match(/^(\d+):(\d{2})$/); if (m) t.top_seconds += Number(m[1]) * 60 + Number(m[2]); }
   // The feed's drive result, except where the drive's own last play says otherwise (Oct 27 2026 data loop, against

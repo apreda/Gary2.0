@@ -32,12 +32,13 @@ export const weeklyRows = (season) => once(`week|${season}`, async () => {
 /** "season|week|TEAM" → game date, from the nflverse schedule; `.site` has where the team played it ("vs", "@" or
  * "vs ... (neutral site)"). Oct 26 2026: every prop log line read "vs" the opponent, road games included. */
 export const gameDays = () => once('days', async () => {
-  const out = new Map(); out.site = new Map();
+  const out = new Map(); out.site = new Map(); out.opp = new Map();
   for (const g of await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`)) {
     for (const t of [g.home_team, g.away_team]) {
       const key = `${g.season}|${Number(g.week)}|${t}`;
       out.set(key, g.gameday);
       out.site.set(key, g.location === 'Neutral' ? 'neutral' : t === g.home_team ? 'home' : 'away');
+      out.opp.set(key, t === g.home_team ? g.away_team : g.home_team);
     }
   }
   return out;
@@ -195,7 +196,12 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
         const on = snaps.find((x) => x.week === Number(w) && x.snaps > 0);
         const why = gsis ? rosterWords?.get(`${gsis}|${Number(w)}`) : null;
-        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : `did not play${why ? ` (${why})` : ''}`}` });
+        // The game as a played line has it: where, against whom, that defense and his team's quarterback (round 8: "Wk 6
+        // Oct 18: no touches; 33 of 46 snaps" lost the opponent, the site, the defense and the passer).
+        const opp = days.opp?.get(key), site = days.site?.get(key);
+        const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}` : '';
+        const qbs = passers?.get(`${season}|${Number(w)}|${team}`);
+        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}${where}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : `did not play${why ? ` (${why})` : ''}`}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}` });
       }
     }
   }
@@ -284,8 +290,12 @@ export function outAroundLine(injuries, teamFull, name) {
 export function withOfficialReport(injuries, reports) {
   const rows = [...(injuries || [])];
   const full = (i) => normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`);
-  for (const { team, report } of reports || []) {
-    if (!report?.players?.length) continue;
+  for (const { team, report, pending = false } of reports || []) {
+    // A report not filed yet, before the final report is due: the feed's weekly word is its placeholder (round 8).
+    if (!report?.players?.length) {
+      if (pending) for (let k = 0; k < rows.length; k++) { const i = rows[k]; if ((i?.player?.team?.full_name || i?.team?.full_name) === team && /^(questionable|doubtful|probable)$/i.test(String(i.status || ''))) rows[k] = { ...i, status: 'no game status yet' }; }
+      continue;
+    }
     const designated = report.players.some((r) => r.game_status);
     const mine = rows.filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === team);
     const byName = new Map(mine.map((i) => [full(i), i]));

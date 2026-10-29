@@ -22,6 +22,7 @@ import { nflSituationSection } from './nflSituation.js';
 import { getNflSchedule, scheduleRowFor, siteFor } from '../../../../sports/nfl/nflSchedule.js';
 import { nflverseCode, getPracticeReport } from '../../../../providers/nflverseService.js';
 import { getPlayLedger } from '../../../../sports/nfl/nflPlayLedger.js';
+import { finalReportNotDue } from '../../../../sports/nfl/nflAvailability.js';
 import { formatNflPlayers, loadNflOffenseGameLogs } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
@@ -1064,7 +1065,12 @@ export async function buildNflScoutReport(game, options = {}) {
     for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
       const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch(() => null);
       if (!report?.players?.length) {
-        (injuries.notOnFile ||= []).push(`Official injury report, Wk ${scheduleWeek}, ${team}: not on file; the statuses below are the injury feed's.`);
+        // Before the week's final report is due (the day before a Thursday game, two days before any other), the
+        // feed's weekly word is its placeholder too, whether or not the report file loaded (round 8: Monday's Seahawks
+        // read backup Drew Lock and Zach Charbonnet "Questionable" from a bulk stamp on 34 players).
+        const pending = finalReportNotDue(game.commence_time);
+        (injuries.notOnFile ||= []).push(`Official injury report, Wk ${scheduleWeek}, ${team}: ${pending ? "not filed yet; this week's game statuses come with the final report" : 'not on file'}; the statuses below are the injury feed's.`);
+        if (pending && Array.isArray(injuries[side])) for (const i of injuries[side]) i.statusesPending = true;
         continue;
       }
       const list = Array.isArray(injuries[side]) ? injuries[side] : (injuries[side] = []);
@@ -1090,8 +1096,11 @@ export async function buildNflScoutReport(game, options = {}) {
         // check: Jaylon Carlies and Kaden Elliss, back from missed games, practiced fully with no designation and read
         // as "missed the last game, not on this week's injury report").
         const p = raw.game_status || !designated ? raw : { ...raw, game_status: 'No game designation' };
-        const hurt = [p.injury, p.secondary].filter(Boolean).join(', ');
-        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practice ? `; practice: ${p.practice}` : ''}`;
+        // One injury once (round 8: B.J. Hill read "Achilles, Achilles", the practice row's second injury his first).
+        const hurt = [p.injury, p.secondary].filter(Boolean).filter((v, i, a) => a.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === i).join(', ');
+        // The practice word is the latest one the league's file holds, which can trail the feed's dated note by a day
+        // (round 8: Kelce read "practice: Full" beside "limited in Thursday's practice"); it says so.
+        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practice ? `; practice, the latest day in the league's file: ${p.practice}` : ''}`;
         const listed = findListed(first, rest.join(' '));
         if (listed) {
           if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }

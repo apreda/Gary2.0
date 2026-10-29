@@ -9,7 +9,7 @@
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { injuriesAsReported, backOffReport } from './nflRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
-import { loadBettorData, quarterbacks, spot, etDate, nflGameFull, nflGameShort, nflLeagueRecords, nflTeamGames, codeOf } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, quarterbacks, spot, etDate, nflGameFull, nflGameShort, nflLeagueRecords, nflTeamGames, codeOf, rosterMoves } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 
 export const NFL_WINDOW = 6;
@@ -27,6 +27,7 @@ export async function buildNflGameByGameStory(desk, { homeTeam, awayTeam, gameDa
   const tonight = ['TONIGHT',
     `THE QUARTERBACKS\n${quarterbacks(data, qbs, homeTeam, awayTeam, before)}`,
     `THE INJURY REPORT\n${[injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')}`,
+    `ROSTER MOVES\n${await rosterMoves(data, homeTeam, awayTeam, before)}`,
     `SCHEDULE, TRAVEL AND WEATHER\n${situation || 'not on file'}`].join('\n\n');
 
   const home = codeOf(homeTeam), away = codeOf(awayTeam);

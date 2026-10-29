@@ -128,3 +128,14 @@ export function reconcileNflStatus(row) {
   }
   return { status, feed: null };
 }
+
+/** True before the week's final injury report is due for a kickoff: the day before a Thursday game, two days before
+ * any other, at 4 PM ET (round 8). */
+export function finalReportNotDue(kickoff, now = new Date()) {
+  const k = new Date(kickoff || now);
+  if (Number.isNaN(k.getTime())) return false;
+  const et = (d) => new Date(d.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const kEt = et(k);
+  const due = new Date(kEt); due.setDate(due.getDate() - (kEt.getDay() === 4 ? 1 : 2)); due.setHours(16, 0, 0, 0);
+  return et(now) < due;
+}
