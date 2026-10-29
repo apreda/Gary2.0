@@ -20,11 +20,12 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 14;
+export const NBA_RECORD_VERSION = 15;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
-const minutesOf = (m) => { const [a, b] = String(m ?? '0').split(':'); return Math.round(((Number(a) || 0) + (Number(b) || 0) / 60) * 10) / 10; };
+// To the hundredth, so the whole minutes shown round once (38:28 was kept as 38.5 and shown as 39).
+const minutesOf = (m) => { const [a, b] = String(m ?? '0').split(':'); return Math.round(((Number(a) || 0) + (Number(b) || 0) / 60) * 100) / 100; };
 const dayNum = (ymd) => Math.round(Date.parse(`${String(ymd).slice(0, 10)}T12:00:00Z`) / 86_400_000);
 const clockSeconds = (c) => { const s = String(c ?? '0'); if (s.includes(':')) { const [m, sec] = s.split(':'); return Number(m) * 60 + Number(sec); } return Number(s) || 0; };
 const reportDate = (tip) => new Date(tip).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', year: 'numeric' });
@@ -233,6 +234,11 @@ export async function buildNbaGameRecord(gameId) {
       matched.add(o);
       const fixed = [];
       for (const f of STATS) if (o[f] != null && o[f] !== p[f]) { fixed.push(`${f} ${p[f]} to ${o[f]}`); p[f] = o[f]; }
+      // Minutes where the box's whole minutes are not the official's (Oct 27 2026: BDL had Vassell 35:31 for 33:33).
+      if (Number.isFinite(o.min) && Math.round(p.min) !== o.min) {
+        fixed.push(`min ${Math.round(p.min)} to ${o.min}`); p.min = o.min;
+        if (p.quarters && Math.abs(sum(p.quarters, 'min') - p.min) > 1 + cutQuarters) { quarterMismatch.push(`${p.name} (${p.min} official minutes, ${Math.round(sum(p.quarters, 'min'))} by quarter)`); p.quarters = null; }
+      }
       if (fixed.length) {
         corrected.push(`${p.name} (${fixed.join(', ')})`);
         if (p.quarters && p.quarterPts !== false && p.quarters.reduce((a, x) => a + x.pts, 0) !== p.pts) { p.quarterPts = false; quarterMismatch.push(`${p.name} (corrected to the official box; points by quarter no longer add up)`); }

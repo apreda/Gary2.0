@@ -103,7 +103,8 @@ export async function withOfficialPlayerLines(g, box) {
   if (!official) return box;
   const fix = (side, key) => side && ({ ...side, players: (side.players || []).map((p) => {
     const o = officialLineFor(`${p.player?.first_name} ${p.player?.last_name}`, official.filter((x) => x.side === key));
-    return o ? { ...p, ...Object.fromEntries(COUNTED.filter((k) => o[k] != null).map((k) => [k, o[k]])) } : p;
+    // His official minutes too, ESPN's whole minutes (Oct 27 2026 data check: BDL had Vassell 35:31 for the official 33:33).
+    return o ? { ...p, ...Object.fromEntries(COUNTED.filter((k) => o[k] != null).map((k) => [k, o[k]])), ...(Number.isFinite(o.min) ? { min: String(o.min) } : {}) } : p;
   }) });
   return { ...box, home_team: fix(box.home_team, 'home'), visitor_team: fix(box.visitor_team, 'away') };
 }
