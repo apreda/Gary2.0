@@ -100,14 +100,17 @@ const boxLine = (side, official) => {
 const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null].filter(Boolean).join(', ');
 // Where each team's points came from, its players' rows in BDL's advanced box summed (Oct 27 2026, founder GO: the reads
 // quoted "60 points in the paint", "26 second-chance points" and "38 points off 26 turnovers" from the news, unchecked;
-// summed, the feed gives the same numbers).
-function scoringLine(rows, teams) {
-  const side = (t) => {
+// summed, the feed gives the same numbers). The official team box's paint, fast-break and off-turnover points where ESPN
+// has it (Oct 28 2026 data check: the sums gave Brooklyn 42 in the paint for the official 40 and Orlando 21 off turnovers
+// for 23); second-chance points are BDL's alone.
+function scoringLine(rows, teams, official = null) {
+  const side = (t, o) => {
     const mine = (rows || []).filter((r) => r.team?.id === t?.id);
     const sum = (k) => mine.reduce((a, r) => a + (Number(r[k]) || 0), 0);
-    return mine.length ? `${t.name} ${sum('points_paint')} in the paint, ${sum('points_second_chance')} second-chance, ${sum('points_fast_break')} fast-break, ${sum('points_off_turnovers')} off turnovers` : null;
+    const of = (k, bdl) => (o?.[k] != null ? o[k] : sum(bdl));
+    return mine.length ? `${t.name} ${of('paint', 'points_paint')} in the paint, ${sum('points_second_chance')} second-chance, ${of('fastBreak', 'points_fast_break')} fast-break, ${of('offTurnovers', 'points_off_turnovers')} off turnovers` : null;
   };
-  const both = teams.map(side);
+  const both = teams.map((t, i) => side(t, official ? [official.us, official.them][i] : null));
   return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
 }
 function whoPlayed(box, others, out, starters, scoring, official) {
@@ -346,7 +349,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : ''})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
-    const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team]) : null;
+    const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     return i < BOX_GAMES ? `${line}\n${[rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : line;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
