@@ -1094,7 +1094,9 @@ export async function buildNflScoutReport(game, options = {}) {
         const listed = findListed(first, rest.join(' '));
         if (listed) {
           if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }
-          listed.comment = `Official injury report, Wk ${report.week}: ${said}. ${listed.comment || ''}`.trim();
+          // The feed's comment when it says more than a status word (Oct 29 2026 hunt: "... practice: Limited. questionable").
+          const feedNote = /^\s*(?:questionable|doubtful|out|probable|active)\.?\s*$/i.test(String(listed.comment || '')) ? '' : listed.comment || '';
+          listed.comment = `Official injury report, Wk ${report.week}: ${said}. ${feedNote}`.trim();
           continue;
         }
         list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status || 'No game status yet',

@@ -13,7 +13,7 @@ const OUTSIDE = new Set(['outdoors', 'open']);
 
 async function stadiumHours(site, start, end, fetchImpl, attempt = 1) {
   const params = new URLSearchParams({ latitude: String(site.lat), longitude: String(site.lon), start_date: start, end_date: end,
-    hourly: 'precipitation,snowfall,weather_code', precipitation_unit: 'inch', timezone: 'UTC' });
+    hourly: 'precipitation,snowfall,weather_code,temperature_2m,wind_speed_10m', precipitation_unit: 'inch', temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', timezone: 'UTC' });
   const res = await fetchImpl(`${API}?${params}`, { signal: AbortSignal.timeout(20_000) });
   // The free archive limits bursts: one stadium at a time, and a 429 waits and tries again (twice at most).
   if (res.status === 429 && attempt < 3) { await new Promise((r) => setTimeout(r, 4000 * attempt)); return stadiumHours(site, start, end, fetchImpl, attempt + 1); }
@@ -42,7 +42,7 @@ export async function loadNflGameWeather(rows, kickoffOf, { fetchImpl = globalTh
     const end = new Date(Date.parse(days.at(-1)) + 86_400_000).toISOString().slice(0, 10);
     let hourly;
     try {
-      hourly = await cachedResearch(`nfl_game_weather_v1:${site.id}:${days[0]}:${end}`, () => stadiumHours(site, days[0], end, fetchImpl),
+      hourly = await cachedResearch(`nfl_game_weather_v2:${site.id}:${days[0]}:${end}`, () => stadiumHours(site, days[0], end, fetchImpl),
         { ttlMs: TTL_MS, valid: (v) => Array.isArray(v?.time), enabled: fetchImpl === globalThis.fetch && !process.env.VITEST });
     } catch (e) {
       console.warn(`[NFL data] weather at ${site.name} not on file: ${e.message}`);
@@ -54,7 +54,10 @@ export async function loadNflGameWeather(rows, kickoffOf, { fetchImpl = globalTh
       if (first < 0) continue;
       const span = [0, 1, 2, 3].map((k) => first + k).filter((i) => i < hourly.time.length);
       const sum = (key) => Math.round(span.reduce((a, i) => a + (Number(hourly[key]?.[i]) || 0), 0) * 100) / 100;
-      out.set(r.game_id, { precip: sum('precipitation'), snow: sum('snowfall'),
+      // Kickoff's temperature and wind too, for a schedule row without them (Oct 29 2026 hunt: Weeks 5-7 had none, and
+      // the heading read their games as dry and calm).
+      const at = (key) => (Number.isFinite(Number(hourly[key]?.[first])) && hourly[key]?.[first] != null ? Math.round(Number(hourly[key][first])) : null);
+      out.set(r.game_id, { precip: sum('precipitation'), snow: sum('snowfall'), temp: at('temperature_2m'), wind: at('wind_speed_10m'),
         conditions: [...new Set(span.map((i) => weatherCodeWords(hourly.weather_code?.[i])).filter(Boolean))] });
     }
   }
@@ -68,8 +71,13 @@ export async function loadNflGameWeather(rows, kickoffOf, { fetchImpl = globalTh
 export function gameWeatherLine(row, w) {
   if (!row || !OUTSIDE.has(row.roof)) return null;
   if (!w || w.missing) return 'weather: rain and snow not on file';
-  const temp = row.temp === '' || row.temp == null ? null : Number(row.temp);
-  const wind = row.wind === '' || row.wind == null ? null : Number(row.wind);
+  // The schedule's kickoff reading; else the weather archive's hour at kickoff; else not on file, never calm.
+  const temp = row.temp === '' || row.temp == null ? w.temp ?? null : Number(row.temp);
+  const wind = row.wind === '' || row.wind == null ? w.wind ?? null : Number(row.wind);
+  if (temp == null || wind == null) {
+    const wet = w.precip >= 0.05 || w.snow > 0;
+    if (!wet && !(wind >= 15) && !(Number.isFinite(temp) && temp <= 32)) return `weather: ${[temp == null ? 'temperature' : null, wind == null ? 'wind' : null].filter(Boolean).join(' and ')} not on file`;
+  }
   const wet = w && (w.precip >= 0.05 || w.snow > 0);
   if (!wet && !(wind >= 15) && !(Number.isFinite(temp) && temp <= 32)) return null;
   return `weather: ${[wet ? `${w.snow > 0 ? `${w.snow.toFixed(1)} in. of snow, ` : ''}${w.precip.toFixed(2)} in. of precipitation over the game's first four hours${w.conditions.length ? ` (${w.conditions.join(', then ')})` : ''}` : null,

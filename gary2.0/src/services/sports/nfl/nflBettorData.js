@@ -431,7 +431,11 @@ export function notOnReport(d, team, before, reportText = '') {
   const back = (changes.missing?.names || []).filter((p) => !text.includes(sameKey(p.name)));
   if (!back.length) return null;
   // How he missed it, as the game log says it (Oct 24 2026: "missed Wk 6" for a safety who played special teams only).
-  return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? 'left early or limited' : p.why === 'special teams only' ? 'special teams only' : 'missed'} Wk ${gs.at(-1).week})`).join(', ')}`;
+  // How many straight games he has been without, so a month away does not read as one missed week (Oct 29 2026 hunt:
+  // Lane Johnson, retired Oct 6 and still on both rosters, read "missed Wk 7").
+  const straight = (p) => { let k = 0; for (let i = gs.length - 1; i >= 0 && (changes.absent?.get(gs[i].g.game_id) || []).some((a) => a.name === p.name); i--) k += 1; return k; };
+  const missed = (p) => { const k = straight(p); return k > 1 ? `missed Wk ${gs.at(-k).week}-${gs.at(-1).week}, ${k} straight games` : `missed Wk ${gs.at(-1).week}`; };
+  return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? `left early or limited Wk ${gs.at(-1).week}` : p.why === 'special teams only' ? `special teams only Wk ${gs.at(-1).week}` : missed(p)})`).join(', ')}`;
 }
 const sameKey = (x) => qbKey(x).join('');
 // A weekly stats row's snap-count row in one game: through the weekly roster's GSIS-to-PFR ids, then the name (Oct 29 2026
@@ -777,9 +781,12 @@ export const recordOf = (d, code, before) => record(teamGames(d, code, d.season,
 export function nflGameFull(d, x, code, before) {
   const o = x.opp;
   const head = `Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(o))}${x.g.stadium ? ` at ${x.g.stadium}` : ''}${x.g.roof ? ` (${[x.g.roof, x.g.surface].filter(Boolean).join(', ')})` : ''} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}`;
-  const rest = (k) => (x.g[`${k}_rest`] ? `${x.g[`${k}_rest`]} days` : 'not on file');
+  // A team's first game has no rest: the schedule's 7 there is a filler (Oct 29 2026 hunt: every Week 1 game read "7 days
+  // since their last game", the Thursday opener and the Monday games too).
+  const first = (c) => teamGames(d, c, d.season, before)[0]?.g.game_id === x.g.game_id;
+  const rest = (k, c) => (first(c) ? 'first game of the season' : x.g[`${k}_rest`] ? `${x.g[`${k}_rest`]} days since their last game` : 'days since their last game not on file');
   const ourKey = x.home ? 'home' : 'away', theirKey = x.home ? 'away' : 'home';
-  const setting = `  setting: ${nickname(code)} ${rest(ourKey)} since their last game, coach ${x.g[`${ourKey}_coach`] || 'not on file'} · ${nickname(o)} ${rest(theirKey)}, coach ${x.g[`${theirKey}_coach`] || 'not on file'}`;
+  const setting = `  setting: ${nickname(code)} ${rest(ourKey, code)}, coach ${x.g[`${ourKey}_coach`] || 'not on file'} · ${nickname(o)} ${rest(theirKey, o)}, coach ${x.g[`${theirKey}_coach`] || 'not on file'}`;
   const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
   const scoring = !d.ledgerGames ? 'score by quarter and drives: not on file' : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, code);
   const kicking = x.off && x.def ? `kicking: ${nickname(code)} ${kicks(x.off.kicking)}; ${nickname(o)} ${kicks(x.def.kicking)}` : null;
