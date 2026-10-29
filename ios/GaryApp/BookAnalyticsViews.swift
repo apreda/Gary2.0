@@ -87,6 +87,8 @@ struct BookCalendarView: View {
     let onShift: (Int) -> Void
     let onSelect: (BookDayCell) -> Void
     var style: BookCalendarStyle = .book
+    /// Days with a notice (Gary's scrubbed days): a gold mark on the tile, and a tap opens it on any calendar.
+    var flagged: Set<String> = []
 
     private static let spacing: CGFloat = 6
     private let columns = Array(repeating: GridItem(.flexible(), spacing: BookCalendarView.spacing), count: 7)
@@ -154,7 +156,7 @@ struct BookCalendarView: View {
                     ForEach(weeks.flatMap { $0 }) { cell in
                         // Only a tappable day is a button: a disabled plain button
                         // is faded by the system, which washed out every tile.
-                        if cell.inMonth && cell.hasActivity && !style.isGary {
+                        if cell.inMonth && ((cell.hasActivity && !style.isGary) || flagged.contains(cell.date)) {
                             Button { onSelect(cell) } label: { dayCell(cell) }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel(accessibility(cell))
@@ -243,6 +245,15 @@ struct BookCalendarView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(t.fill)
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.edge, lineWidth: 1))
             )
+            .overlay(alignment: .topLeading) {
+                if flagged.contains(cell.date) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(GaryColors.gold)
+                        .padding(4)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 // Open bets beside a settled result.
                 if figure != nil && cell.pendingCount > 0 {
@@ -270,6 +281,7 @@ struct BookCalendarView: View {
         else if let figure = figure(cell) { parts.append("net \(figure), \(cell.settledCount) settled") }
         if cell.pendingCount > 0 { parts.append("\(cell.pendingCount) open") }
         if parts.count == 1 { parts.append("no plays") }
+        if flagged.contains(cell.date) { parts.append("has a notice") }
         return parts.joined(separator: ", ")
     }
 }

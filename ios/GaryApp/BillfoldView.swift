@@ -1823,11 +1823,15 @@ struct GaryBankrollSnapshot: Decodable {
     /// Days taken off the record, each with the note fans read (founder, Oct 29 2026: Oct 17's bug day).
     /// Before its effective date the note is the notice of what will happen (founder, Oct 29 2026: "we cant
     /// scrub until people understand and it should go into effect nov 1").
-    struct Scrub: Decodable {
+    struct Scrub: Decodable, Identifiable {
         let date: String
         let note: String
         var effective_date: String? = nil
         var in_effect: Bool? = nil
+        var charge_units: Double? = nil
+        var id: String { date }
+        /// Still to come: the record shows the day until its effective date.
+        var pending: Bool { in_effect == false }
     }
     var scrubbed: [Scrub]? = nil
 }
@@ -1845,8 +1849,10 @@ private struct GaryBankrollPanel: View {
     @State private var missed = 0
     private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
     @State private var calendarAnchor: String = BookDates.today()
-    /// The scrubbed day whose reason is open.
-    @State private var openScrub: String?
+    /// The scrubbed day whose card is open.
+    @State private var openScrub: GaryBankrollSnapshot.Scrub?
+    /// Where the bankroll starts and what it counts, behind the ⓘ by the number.
+    @State private var showAbout = false
     /// Whole dollars from the server's units: "$10,309".
     private func dollars(_ units: Double) -> String {
         "$" + Int((units * garyUnitDollars).rounded()).formatted(.number.grouping(.automatic))
@@ -1860,21 +1866,31 @@ private struct GaryBankrollPanel: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 22) {
-                Text("GARY’S BANKROLL · SIMULATED")
-                    .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
+            // The Bankroll menu above names the page, so the number leads (founder, Oct 29 2026: the
+            // "GARY'S BANKROLL · SIMULATED" title and the start/scope lines took the top; they live behind ⓘ).
+            VStack(alignment: .leading, spacing: 18) {
                 if let b = snapshot {
-                    VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).fitsOneLine()
-                        Text("\(signedDollars(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct)) growth")
-                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
-                        Text("Started at \(dollars(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("\(signedDollars(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct))")
+                                .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
+                            Button {
+                                withAnimation(.easeOut(duration: 0.2)) { showAbout.toggle() }
+                            } label: {
+                                Image(systemName: showAbout ? "info.circle.fill" : "info.circle")
+                                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(gold)
+                                    .frame(width: 40, height: 36).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("About Gary's bankroll")
+                        }
+                        if showAbout { aboutStrip(b).padding(.top, 6).transition(.opacity) }
                     }
-                    // A day taken off the record says so right under the number it changes, one tap from the
-                    // reason (founder, Oct 29 2026: "a little disclaimer button ... that then unveils the reason
-                    // ... at the top, not at the very bottom, hidden").
-                    ForEach(b.scrubbed ?? [], id: \.date) { scrub in scrubNotice(scrub) }
+                    // A day taken off the record says so right under the number it changes; the card behind it shows
+                    // the day and the numbers before and after (founder, Oct 29 2026: "at the top, not at the very
+                    // bottom, hidden" and "design things ... not just words on a page").
+                    ForEach(b.scrubbed ?? []) { scrub in scrubBanner(scrub) }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
                         metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
@@ -1923,9 +1939,11 @@ private struct GaryBankrollPanel: View {
                         .font(.system(size: 14)).foregroundStyle(gold)
                 }
             }
-            .pageGutter().padding(.top, 16).padding(.bottom, 120)
+            .pageGutter().padding(.top, 6).padding(.bottom, 120)
         }
         .refreshable { await refresh() }
+        .popupCard(item: $openScrub) { scrub in ScrubDayCard(scrub: scrub, bankroll: snapshot) }
+        .onGaryTour { verb, _ in if verb == "scrubnote" { openScrub = snapshot?.scrubbed?.first } }
         .task(id: activePage && scenePhase == .active) {
             guard activePage, scenePhase == .active else { return }
             while !Task.isCancelled {
@@ -1945,43 +1963,55 @@ private struct GaryBankrollPanel: View {
     }()
     private static func chartDay(_ raw: String) -> Date? { chartDayFormat.date(from: "\(raw.prefix(10)) 12:00") }
 
-    /// The notice for a day off the record: its title, tap for the reason.
-    private func scrubNotice(_ scrub: GaryBankrollSnapshot.Scrub) -> some View {
-        let open = openScrub == scrub.date
-        let day = LabFormat.monthDay(scrub.date).uppercased()
-        let title = scrub.in_effect == false
-            ? "\(day) COMES OFF THE RECORD \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())"
-            : "WHY \(day) IS OFF THE RECORD"
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { openScrub = open ? nil : scrub.date }
-            } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: "info.circle").font(.system(size: 15, weight: .semibold))
-                    Text(title).font(.system(size: 12, weight: .bold)).tracking(0.8).fitsOneLine()
-                    Spacer(minLength: 6)
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
-                        .rotationEffect(.degrees(open ? 180 : 0))
+    /// The notice for a day off the record: the day as a date tile, when it comes off, one tap to its card.
+    private func scrubBanner(_ scrub: GaryBankrollSnapshot.Scrub) -> some View {
+        let day = LabFormat.monthDay(scrub.date)
+        return Button { openScrub = scrub } label: {
+            HStack(spacing: 12) {
+                ScrubDateTile(ymd: scrub.date)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(scrub.pending ? "OFF THE RECORD \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())" : "OFF THE RECORD")
+                        .font(.system(size: 10.5, weight: .bold)).tracking(1).foregroundStyle(gold)
+                    Text(scrub.pending ? "\(day) comes off Gary's record" : "\(day) is off Gary's record")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .fitsOneLine()
                 }
-                .foregroundStyle(gold)
-                .frame(minHeight: 46)
-                .contentShape(Rectangle())
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(gold)
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(open ? "Hides the reason" : "Shows the reason")
-            if open {
-                Text(scrub.note)
-                    .font(.system(size: 14)).foregroundStyle(.white.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 14)
-                    .transition(.opacity)
-            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(gold.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(gold.opacity(0.45), lineWidth: 1))
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(gold.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(gold.opacity(0.45), lineWidth: 1))
-        .onGaryTour { verb, _ in if verb == "scrubnote" { openScrub = scrub.date } }
+        .buttonStyle(.plain)
+        .accessibilityHint("Shows the day and what changes")
     }
+
+    /// Where the bankroll starts, what it counts and what it is, as three facts.
+    private func aboutStrip(_ b: GaryBankrollSnapshot) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            aboutFact("STARTED", dollars(b.initial_units), LabFormat.monthDay(b.started_date))
+            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 44)
+            aboutFact("COUNTS", "All sports", "Every Winners bet")
+            Rectangle().fill(Color.white.opacity(0.1)).frame(width: 1, height: 44)
+            aboutFact("MONEY", "Simulated", "$100 = 1 unit")
+        }
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+    }
+
+    private func aboutFact(_ label: String, _ value: String, _ sub: String) -> some View {
+        VStack(spacing: 3) {
+            Text(label).font(.system(size: 10, weight: .semibold)).tracking(1).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 16, weight: .semibold)).foregroundStyle(.white).fitsOneLine()
+            Text(sub).font(.system(size: 11)).foregroundStyle(.secondary).fitsOneLine()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 4)
+    }
+
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -2001,9 +2031,11 @@ private struct GaryBankrollPanel: View {
         let grid = BookCalendar.month(year: m.year, month: m.month, days: totals)
         let now = BookCalendar.monthOf(today)
         let canForward = m.year < now.year || (m.year == now.year && m.month < now.month)
+        let scrubs = b.scrubbed ?? []
         return BookCalendarView(grid: grid, today: today, canMoveForward: canForward,
                                 onShift: { steps in calendarAnchor = BillfoldView.shiftMonth(calendarAnchor, by: steps) },
-                                onSelect: { _ in }, style: .garyMoney)
+                                onSelect: { cell in openScrub = scrubs.first { $0.date == cell.date } }, style: .garyMoney,
+                                flagged: Set(scrubs.map(\.date)))
     }
     @MainActor private func refresh() async {
         do {
@@ -2017,5 +2049,240 @@ private struct GaryBankrollPanel: View {
             missed += 1
             failed = snapshot == nil || missed >= 2
         }
+    }
+}
+
+/// A day as a calendar leaf: the month over the day's number.
+struct ScrubDateTile: View {
+    let ymd: String
+    var body: some View {
+        let parts = LabFormat.monthDay(ymd).split(separator: " ").map(String.init)
+        VStack(spacing: 0) {
+            Text((parts.first ?? "").uppercased())
+                .font(.system(size: 9.5, weight: .bold)).tracking(1).foregroundStyle(GaryColors.gold)
+            Text(parts.count > 1 ? parts[1] : "")
+                .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
+        }
+        .frame(width: 44, height: 46)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.5), lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+}
+
+/// A day taken off Gary's record, drawn rather than told (founder, Oct 29 2026: "there are a million ways to do
+/// this disclaimer ... without us just splattering the words"): the day's bets as tiles by sport, five to a row,
+/// the rows past the daily max dimmed under a gold line; the day's record and money; then the record, the
+/// bankroll and the day itself now and after the scrub. The bets come from that day's own Winners board.
+struct ScrubDayCard: View {
+    let scrub: GaryBankrollSnapshot.Scrub
+    let bankroll: GaryBankrollSnapshot?
+
+    @State private var board: LabBoard?
+    @State private var failed = false
+    private let gold = GaryColors.gold
+    /// The most game bets Winners takes in one sport a day (the per-sport cap since Oct 18 2026).
+    private static let dailyMax = 5
+
+    private struct Bet: Identifiable { let id: Int; let state: LabTicketState; let net: Double }
+    private struct Sport: Identifiable {
+        let league: String
+        let bets: [Bet]
+        var id: String { league }
+    }
+    private struct Line { var won = 0, lost = 0, push = 0, net = 0.0 }
+
+    private var bets: [(league: String, bet: Bet)] {
+        (board?.tickets ?? []).compactMap { t in
+            guard !t.scratched, let r = t.outcome?.result, !r.isEmpty else { return nil }
+            let state = LabTicketState(result: r)
+            let stake = t.stakeUnits ?? 0
+            let net = state == .won ? stake * LabFormat.payout(t.price) : state == .lost ? -stake : 0
+            return (t.league, Bet(id: t.candidateID, state: state, net: net))
+        }
+    }
+    private var sports: [Sport] {
+        var order: [String] = []
+        var byLeague: [String: [Bet]] = [:]
+        for (league, bet) in bets {
+            if byLeague[league] == nil { order.append(league) }
+            byLeague[league, default: []].append(bet)
+        }
+        return order.map { Sport(league: $0, bets: byLeague[$0] ?? []) }.sorted { $0.bets.count > $1.bets.count }
+    }
+    private func line(_ list: [Bet]) -> Line {
+        var l = Line()
+        for b in list {
+            switch b.state {
+            case .won: l.won += 1
+            case .lost: l.lost += 1
+            case .push, .open: l.push += 1
+            }
+            l.net += b.net
+        }
+        return l
+    }
+    private func record(_ l: Line) -> String { "\(l.won)–\(l.lost)\(l.push > 0 ? "–\(l.push)" : "")" }
+    private func money(_ units: Double) -> String {
+        "$" + Int(abs(units * 100).rounded()).formatted(.number.grouping(.automatic))
+    }
+    private func signed(_ units: Double) -> String { ((units * 100).rounded() < 0 ? "-" : "+") + money(units) }
+    private func tint(_ units: Double) -> Color { units < -0.005 ? GaryColors.loss : units > 0.005 ? GaryColors.win : .white }
+
+    private var day: String { LabFormat.monthDay(scrub.date) }
+    private var effective: String { LabFormat.monthDay(scrub.effective_date ?? "") }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(day.uppercased()) · WINNERS BUG")
+                        .font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(gold)
+                    Text(board == nil ? day : "\(bets.count) bets in one day")
+                        .font(GaryFonts.display(34)).foregroundStyle(GaryColors.warmWhite)
+                        .fitsOneLine()
+                }
+                .padding(.trailing, 44)
+
+                if board != nil {
+                    ForEach(sports) { sport in sportBlock(sport) }
+                    dayLine
+                    Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+                    changes
+                } else if failed {
+                    Button("Couldn't load the day · Tap to retry") { Task { await load() } }
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(gold)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                }
+            }
+            .padding(.horizontal, 20).padding(.top, 22).padding(.bottom, 28)
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        failed = false
+        do { board = try await SupabaseAPI.fetchLabBoard(date: scrub.date) } catch { failed = true }
+    }
+
+    // MARK: - The day
+
+    private func sportBlock(_ sport: Sport) -> some View {
+        let l = line(sport.bets)
+        let rows = stride(from: 0, to: sport.bets.count, by: Self.dailyMax).map { Array(sport.bets[$0..<min($0 + Self.dailyMax, sport.bets.count)]) }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(sport.league).font(.system(size: 12, weight: .bold)).tracking(1.2).foregroundStyle(.white.opacity(0.8))
+                Text("\(sport.bets.count) BETS").font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(.secondary)
+                Spacer()
+                Text(record(l)).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white)
+                Text(signed(l.net)).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(tint(l.net))
+            }
+            ForEach(rows.indices, id: \.self) { r in
+                if r == 1 { overMax(sport.bets.count - Self.dailyMax) }
+                HStack(spacing: 6) {
+                    ForEach(rows[r]) { bet in tile(bet, over: r > 0) }
+                    ForEach(0..<(Self.dailyMax - rows[r].count), id: \.self) { _ in Color.clear.frame(height: 28) }
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(sport.league), \(sport.bets.count) bets, \(record(l)), \(signed(l.net))"
+            + (sport.bets.count > Self.dailyMax ? ", \(sport.bets.count - Self.dailyMax) over the daily max of \(Self.dailyMax)" : ""))
+    }
+
+    /// One bet: green won, red lost, grey push; a bet past the daily max is drawn faint.
+    private func tile(_ bet: Bet, over: Bool) -> some View {
+        let color = bet.state == .won ? GaryColors.win : bet.state == .lost ? GaryColors.loss : GaryColors.silver
+        return RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(color.opacity(over ? 0.28 : 0.9))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(color.opacity(over ? 0.7 : 0), lineWidth: 1))
+            .overlay(Text(bet.state == .won ? "W" : bet.state == .lost ? "L" : "P")
+                .font(.system(size: 11, weight: .heavy)).foregroundStyle(over ? color : .black.opacity(0.75)))
+            .frame(maxWidth: .infinity).frame(height: 28)
+    }
+
+    /// The gold line where the daily max ends: everything under it is over.
+    private func overMax(_ over: Int) -> some View {
+        HStack(spacing: 8) {
+            DashedLine().stroke(gold.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).frame(height: 1)
+            Text("DAILY MAX \(Self.dailyMax) · \(over) OVER")
+                .font(.system(size: 10, weight: .heavy)).tracking(1).foregroundStyle(gold)
+                .fixedSize()
+            DashedLine().stroke(gold.opacity(0.8), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).frame(height: 1)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var dayLine: some View {
+        let l = line(bets.map(\.bet))
+        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("THE DAY").font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(.secondary)
+            Spacer()
+            Text(record(l)).font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
+            Text(signed(l.net)).font(GaryFonts.display(30)).foregroundStyle(tint(l.net))
+        }
+        .monospacedDigit()
+    }
+
+    // MARK: - What changes
+
+    private struct Column { let head: String; let record: String; let bankroll: Double; let day: Double }
+
+    /// The record, the bankroll and the day, now and after the scrub (before and now, once it has run).
+    private var columns: (Column, Column)? {
+        guard let b = bankroll else { return nil }
+        let d = line(bets.map(\.bet))
+        let charge = scrub.charge_units ?? 0
+        func rec(_ w: Int, _ l: Int, _ p: Int) -> String { "\(w)–\(l)–\(p)" }
+        if scrub.pending {
+            return (Column(head: "NOW", record: rec(b.wins, b.losses, b.pushes), bankroll: b.bankroll_units, day: d.net),
+                    Column(head: effective.uppercased(), record: rec(b.wins - d.won, b.losses - d.lost, b.pushes - d.push),
+                           bankroll: b.bankroll_units - d.net - charge, day: -charge))
+        }
+        return (Column(head: "BEFORE", record: rec(b.wins + d.won, b.losses + d.lost, b.pushes + d.push),
+                       bankroll: b.bankroll_units + d.net + charge, day: d.net),
+                Column(head: "NOW", record: rec(b.wins, b.losses, b.pushes), bankroll: b.bankroll_units, day: -charge))
+    }
+
+    @ViewBuilder private var changes: some View {
+        if let (a, z) = columns {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(scrub.pending ? "ON \(effective.uppercased())" : "WHAT CHANGED")
+                    .font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(gold)
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 14) {
+                    GridRow {
+                        Color.clear.frame(width: 1, height: 1)
+                        Text(a.head).font(.system(size: 10.5, weight: .bold)).tracking(1).foregroundStyle(.secondary)
+                            .gridColumnAlignment(.trailing)
+                        Color.clear.frame(width: 1, height: 1)
+                        Text(z.head).font(.system(size: 10.5, weight: .bold)).tracking(1).foregroundStyle(gold)
+                            .gridColumnAlignment(.trailing)
+                    }
+                    changeRow("RECORD", a.record, z.record, .white, .white)
+                    changeRow("BANKROLL", money(a.bankroll), money(z.bankroll), .white, .white)
+                    changeRow(day.uppercased(), signed(a.day), signed(z.day), tint(a.day), tint(z.day), caption: "CHARGE")
+                }
+            }
+        }
+    }
+
+    private func changeRow(_ label: String, _ from: String, _ to: String, _ fromTint: Color, _ toTint: Color, caption: String? = nil) -> some View {
+        GridRow(alignment: .firstTextBaseline) {
+            Text(label).font(.system(size: 11, weight: .bold)).tracking(1).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text(from).font(.system(size: 17, weight: .semibold, design: .rounded)).foregroundStyle(fromTint.opacity(0.7))
+                // Struck through once it is the old number.
+                .strikethrough(!scrub.pending, color: .white.opacity(0.35))
+                .fixedSize()
+            Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(gold.opacity(0.8))
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(to).font(.system(size: 19, weight: .bold, design: .rounded)).foregroundStyle(toTint)
+                if let caption { Text(caption).font(.system(size: 9, weight: .heavy)).tracking(1).foregroundStyle(gold) }
+            }
+            .fixedSize()
+        }
+        .monospacedDigit()
     }
 }
