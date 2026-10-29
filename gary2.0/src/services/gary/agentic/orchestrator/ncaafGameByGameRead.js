@@ -75,7 +75,8 @@ function playerLines(box, teamId, positions = {}, starters = null) {
       s(p, 'fumbles', 'fumblesLost') ? `${plural(s(p, 'fumbles', 'fumblesLost'), 'fumble')} lost` : null].filter(Boolean).join(', ')}`);
   // Under defense only defenders: an offensive player's or a specialist's tackle (after a turnover, on a return) is listed
   // apart, as the NFL second system does (Oct 29 2026 hunt: Kansas's quarterback and a guard read as defenders).
-  const offensive = (p) => /^(QB|RB|FB|WR|TE|OL|OT|OG|OC|C|G|T|IOL|PK|K|P|LS)$/i.test(String(positions[p.id] || '')) || unit(p) === 'offense';
+  // The roster position decides; with none on file, his stat line (a safety's fake-punt run is still a safety's).
+  const offensive = (p) => (positions[p.id] ? /^(QB|RB|FB|WR|TE|OL|OT|OG|OC|C|G|T|IOL|PK|K|P|LS)$/i.test(String(positions[p.id])) : unit(p) === 'offense');
   const defRows = ps.filter((p) => s(p, 'defensive', 'totalTackles') || s(p, 'defensive', 'sacks') || s(p, 'interceptions', 'interceptions') || s(p, 'defensive', 'passesDefended'));
   const defLine = (list) => list.sort((a, b) => (s(b, 'defensive', 'totalTackles') || 0) - (s(a, 'defensive', 'totalTackles') || 0))
     .map((p) => `    ${who(p)} ${[s(p, 'defensive', 'totalTackles') ? plural(s(p, 'defensive', 'totalTackles'), 'tackle') : null, s(p, 'defensive', 'tacklesForLoss') ? `${s(p, 'defensive', 'tacklesForLoss')} for loss` : null,
