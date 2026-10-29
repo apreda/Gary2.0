@@ -197,7 +197,9 @@ function nbaRows() {
     let detail = null;
     if (status === 'live') {
       const q = Number.isFinite(Number(g.period)) && Number(g.period) > 0 ? `Q${g.period}` : 'LIVE';
-      detail = g.time ? `${q} ${g.time}`.trim() : q;
+      // BDL's clock already names the period ("Q4 8:29", "Half"); prefixing it read "Q4 Q4 8:29".
+      const clock = String(g.time ?? '').trim();
+      detail = /^(Q\d|\d*OT|Half)/i.test(clock) ? clock : clock ? `${q} ${clock}` : q;
     } else if (status === 'final') {
       detail = 'FINAL';
     }
