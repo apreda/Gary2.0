@@ -132,6 +132,39 @@ export function gradeNbaDart(dart, game, statRows) {
   return { result: clears(actual, leg.line, String(dart.bet || 'over').toLowerCase()) ? 'hit' : 'miss', actual };
 }
 
+/**
+ * NBA darts graded again from the stored game records (Oct 29 2026 hunt, round 7): a dart was graded once, at the final,
+ * on ESPN's box while it still settled, and the league's later corrections never reached it (Gobert's Oct 26 rebounds
+ * stored 19, officially 20; LaMelo Ball's Oct 28 rebounds 4, officially 3). The records take the corrections the morning
+ * after, the day after and a week after (ensureNbaRecords); a graded dart whose count differs from its game's record
+ * takes the record's count and result. No feed calls. Never fatal to its caller.
+ */
+export async function regradeNbaDarts({ supabase, date, days = 8, console = globalThis.console }) {
+  const from = new Date(Date.parse(`${date}T12:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+  const { data: darts, error } = await supabase.from('darts').select('id,kind,prop,bet,game_id,player_id,actual,result')
+    .eq('league', 'NBA').gte('game_date', from).lte('game_date', date).in('result', ['hit', 'miss']).is('scratched_at', null);
+  if (error) throw error;
+  const ids = [...new Set((darts || []).map((d) => d.game_id).filter((id) => id != null).map(String))];
+  if (!ids.length) return { regraded: 0 };
+  const { data: records, error: recError } = await supabase.from('game_records').select('game_id, record').eq('league', 'NBA').in('game_id', ids);
+  if (recError) throw recError;
+  const byGame = new Map((records || []).map((r) => [String(r.game_id), r.record]));
+  let regraded = 0;
+  for (const dart of darts) {
+    const row = byGame.get(String(dart.game_id))?.players?.find((p) => String(p.id) === String(dart.player_id));
+    const measure = NBA_ACTUAL[dart.kind], leg = dartLegs(dart.prop)[0];
+    if (!row || !(row.min > 0) || !measure || !leg) continue;
+    const actual = measure(row);
+    const result = clears(actual, leg.line, String(dart.bet || 'over').toLowerCase()) ? 'hit' : 'miss';
+    if (Number(dart.actual) === actual && dart.result === result) continue;
+    const { error: writeError } = await supabase.from('darts').update({ actual, result }).eq('id', dart.id);
+    if (writeError) throw writeError;
+    console.log(`  🎯 NBA dart ${dart.id} (${dart.prop} ${dart.bet}): ${dart.actual} → ${actual} from the corrected box${result !== dart.result ? `, ${dart.result} → ${result}` : ''}`);
+    regraded++;
+  }
+  return { regraded };
+}
+
 /** Grade every ungraded, unscratched lean for a date. Never fatal to its caller. */
 export async function gradeDarts({ supabase, bdlApiKey, date, console = globalThis.console }) {
   const { data: darts, error } = await supabase.from('darts')

@@ -9,11 +9,16 @@ const scoreboards = new Map();
 const summaries = new Map();
 const nick = (name) => String(name || '').toLowerCase().split(' ').pop();
 const get = (url) => fetch(url, { signal: AbortSignal.timeout(10_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+// A failed call is not kept (Oct 29 2026 hunt, round 7): a cached null left every game of that date "venue not on file"
+// and without the official box for the rest of the process. The next call asks again.
+const once = (map, key, load) => {
+  if (!map.has(key)) map.set(key, load().then((v) => { if (v == null) map.delete(key); return v; }));
+  return map.get(key);
+};
 
 async function eventOf(g) {
   const day = String(g.date || '').slice(0, 10).replace(/-/g, '');
-  if (!scoreboards.has(day)) scoreboards.set(day, get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${day}`).then((j) => j?.events || null));
-  const events = await scoreboards.get(day);
+  const events = await once(scoreboards, day, () => get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${day}`).then((j) => j?.events || null));
   return (events || []).find((e) => {
     const c = e.competitions?.[0]?.competitors || [];
     const home = c.find((x) => x.homeAway === 'home')?.team, away = c.find((x) => x.homeAway === 'away')?.team;
@@ -35,8 +40,7 @@ const pair = (v) => { const m = String(v || '').match(/^(\d+)-(\d+)$/); return m
 export async function espnTeamBox(g) {
   const ev = await eventOf(g);
   if (!ev || !/final/i.test(String(ev.status?.type?.name || ev.status?.type?.description || ''))) return null;
-  if (!summaries.has(ev.id)) summaries.set(ev.id, get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${ev.id}`));
-  const sum = await summaries.get(ev.id);
+  const sum = await once(summaries, ev.id, () => get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${ev.id}`));
   const out = {};
   for (const t of sum?.boxscore?.teams || []) {
     const s = Object.fromEntries((t.statistics || []).map((x) => [x.name, x.displayValue]));
@@ -63,8 +67,7 @@ const keyOf = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').to
 export async function espnPlayerLines(g) {
   const ev = await eventOf(g);
   if (!ev || !/final/i.test(String(ev.status?.type?.name || ev.status?.type?.description || ''))) return null;
-  if (!summaries.has(ev.id)) summaries.set(ev.id, get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${ev.id}`));
-  const sum = await summaries.get(ev.id);
+  const sum = await once(summaries, ev.id, () => get(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${ev.id}`));
   const out = [];
   for (const t of sum?.boxscore?.players || []) {
     const side = nick(t.team?.name || t.team?.displayName) === nick(g.home_team?.name || g.home_team?.full_name) ? 'home' : 'away';

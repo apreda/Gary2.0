@@ -29,15 +29,18 @@ const summarySide = (s, teamId) => (String(s.home.id) === String(teamId) ? 'home
 
 const OPPONENT_GAMES = 10;
 /** A team's wins and losses in these games. */
+// The standings' games only: not the postseason and not the NBA Cup final (Oct 29 2026 hunt, round 7).
+export const inStandingsRow = (r) => !r.summary?.postseason && !/^championship$/i.test(String(r.summary?.cup || ''));
 export function wonLost(rows, teamId) {
-  const w = rows.filter((r) => { const s = r.summary; const us = summarySide(s, teamId); return s[us].score > s[other(us)].score; }).length;
-  return `${w}-${rows.length - w}`;
+  const counted = rows.filter(inStandingsRow);
+  const w = counted.filter((r) => { const s = r.summary; const us = summarySide(s, teamId); return s[us].score > s[other(us)].score; }).length;
+  return `${w}-${counted.length - w}`;
 }
 
 /** One game of a team's season in a line: date, opponent, result, score. */
 export function resultLine(row, teamId) {
   const s = row.summary; const us = summarySide(s, teamId); const them = other(us);
-  return `${etDay(s.date).replace(/^\w+, /, '')} ${s[us].score > s[them].score ? 'W' : 'L'} ${s[us].score}-${s[them].score} ${us === 'home' ? 'vs' : '@'} ${s[them].abbr}${s.ot ? ' (OT)' : ''}`;
+  return `${etDay(s.date).replace(/^\w+, /, '')} ${s[us].score > s[them].score ? 'W' : 'L'} ${s[us].score}-${s[them].score} ${us === 'home' ? 'vs' : '@'} ${s[them].abbr}${s.ot ? ' (OT)' : ''}${inStandingsRow(row) ? '' : (s.postseason ? ' (postseason)' : ' (NBA Cup final, not in the standings)')}`;
 }
 
 function settingText(set, short) {
@@ -108,7 +111,7 @@ export function fullGameText(rec, teamId, byTeam) {
   const won = rec.final[us] > rec.final[them];
   const v = rec.setting.home.venue;
   const where = v ? `at ${v.name}, ${v.city}${rec.setting.home.altitudeFt ? ` (${rec.setting.home.altitudeFt.toLocaleString('en-US')} ft)` : ''}${v.neutral ? ', a neutral site' : ''}` : 'venue not on file';
-  const lines = [`${etDay(rec.date)} · ${us === 'home' ? 'vs' : '@'} ${rec[them].name} ${where} · ${won ? 'W' : 'L'} ${rec.final[us]}-${rec.final[them]}${rec.periods.length > 4 ? ` (${rec.periods.length - 4 === 1 ? 'OT' : `${rec.periods.length - 4} OT`})` : ''}${rec.cup ? ` · NBA Cup (${rec.cup})` : ''}${rec.postseason ? ' · postseason' : ''}`];
+  const lines = [`${etDay(rec.date)} · ${us === 'home' ? 'vs' : '@'} ${rec[them].name} ${where} · ${won ? 'W' : 'L'} ${rec.final[us]}-${rec.final[them]}${rec.periods.length > 4 ? ` (${rec.periods.length - 4 === 1 ? 'OT' : `${rec.periods.length - 4} OT`})` : ''}${rec.cup ? ` · ${/^championship$/i.test(rec.cup) ? 'NBA Cup final, not in the standings' : `NBA Cup (${rec.cup})`}` : ''}${rec.postseason ? ' · postseason' : ''}`];
   lines.push(`  setting: ${settingText(rec.setting[us], rec[us].short)} · ${settingText(rec.setting[them], rec[them].short)}`);
   lines.push(`  how it went: ${flowText(rec, us)}`);
   // Who finished it and who carried the fourth quarter (Oct 27 2026, founder: "who takes up the share of the fourth-quarter

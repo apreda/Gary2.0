@@ -435,7 +435,7 @@ describe('run-all-results wiring', () => {
     expect(runner).toContain('season_type=${seasonType}&per_page=100');
     expect(runner).toContain('normalizeStoredPropType(rawProp)');
     expect(runner).toContain("_game_id: String(gameId)");
-    expect(runner).toContain("} else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {");
+    expect(runner).toContain("} else if (['MLB', 'NFL', 'NCAAF', 'NBA'].includes(dataSport)) {");
   });
 
   it('fails the cloud settlement lane on read/write/readback coverage gaps', () => {

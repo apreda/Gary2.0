@@ -11,8 +11,7 @@
 import { createModelSession, sendToSessionWithRetry } from '../gary/agentic/orchestrator/sessionManager.js';
 import { GAME_PICK_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 import { nbaSystemPrompt, nbaBoardMessage, NBA_BOARD_FORMAT_ONLY } from '../gary/agentic/orchestrator/nbaKnowledge.js';
-import { buildNbaBoardEntry } from '../gary/agentic/orchestrator/nbaRead.js';
-import { leagueRatings } from '../sports/nba/nbaBettorData.js';
+import { buildNbaBoardEntry, ratingsOrMissing } from '../gary/agentic/orchestrator/nbaRead.js';
 import { parseBoardBets, boardDecisions } from './nflBoard.js';
 import { offTheBoard } from './powerRatings.js';
 
@@ -47,7 +46,8 @@ export async function runNbaBoard(client, date, { now = new Date(), log = consol
     const first = Math.min(...games.map((c) => Date.parse(c.commence_time)));
     if (first > now.getTime() + NBA_BOARD_LEAD_MS) return 'waiting';
 
-    const ratings = await leagueRatings().catch(() => ({}));
+    // A failed load says so in each team's head, as the pick's read does (Oct 29 2026 hunt, round 7).
+    const ratings = await ratingsOrMissing(now);
     const entries = [];
     for (const c of games.sort((a, b) => Date.parse(a.commence_time) - Date.parse(b.commence_time))) {
       const { data: ev, error: e3 } = await client.from('winners_candidates').select('desk:evidence_snapshot->>deskText').eq('id', c.id).single();

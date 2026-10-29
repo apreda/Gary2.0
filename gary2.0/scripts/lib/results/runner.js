@@ -5,7 +5,7 @@ import { easternDateOffset as estDate } from '../../../supabase/functions/_share
 import { writeStreaks as defaultWriteStreaks } from '../../../src/services/content/streaksService.js';
 import { writeNflStreaks as defaultWriteNflStreaks } from '../../../src/services/sports/nfl/nflStreaksService.js';
 import { writeNbaStreaks as defaultWriteNbaStreaks } from '../../../src/services/sports/nba/nbaStreaksService.js';
-import { gradeDarts as defaultGradeDarts } from '../../../src/services/gary/darts/dartsGrade.js';
+import { gradeDarts as defaultGradeDarts, regradeNbaDarts as defaultRegradeNbaDarts } from '../../../src/services/gary/darts/dartsGrade.js';
 
 const defaultLoaders = {
   era: () => import('../eraTruth.js'),
@@ -17,7 +17,7 @@ const defaultLoaders = {
 export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS = {},
   processPropBets, processGenericGames, dateAtOffset = estDate,
   writeStreaks = defaultWriteStreaks, writeNflStreaks = defaultWriteNflStreaks, writeNbaStreaks = defaultWriteNbaStreaks,
-  gradeDarts = defaultGradeDarts,
+  gradeDarts = defaultGradeDarts, regradeNbaDarts = defaultRegradeNbaDarts,
   loaders = defaultLoaders, console = globalThis.console }) {
   // Explicit CLI date wins; otherwise use the shared cloud grader's ET-yesterday.
   const getTargetDate = () => {
@@ -118,6 +118,12 @@ export function createResultsRunner({ supabase, apiKey: BDL_API_KEY, runOptions:
       await gradeDarts({ supabase, bdlApiKey: BDL_API_KEY, date: targetDate, console });
     } catch (e) {
       console.warn(`  ⚠️ Darts grading failed (non-fatal): ${e.message}`);
+    }
+    // The last eight days' NBA darts again from the corrected game records (Oct 29 2026 hunt, round 7).
+    try {
+      await regradeNbaDarts({ supabase, date: targetDate, console });
+    } catch (e) {
+      console.warn(`  ⚠️ NBA darts re-grade failed (non-fatal): ${e.message}`);
     }
 
     // ERA-DRIFT GUARD (Aug 12 2026): read back the eras stamped on today's

@@ -225,6 +225,28 @@ export async function firstGameDate(team, season = nbaSeason()) {
   return games[0] || null;
 }
 
+// NBA Cup games (Oct 29 2026 hunt, round 7: all ten Oct 30 games were Cup group play and neither read said so). BDL's
+// ist_stage names the stage ("East Group C", "West Quarterfinal", "East Semifinal", "Championship"). Every Cup game
+// counts in the standings except the final (Knicks 18-7 before the Dec 16 2025 final, 19-7 after their next game).
+export const inStandings = (g) => !g.postseason && !/^championship$/i.test(String(g.ist_stage || ''));
+export function cupWords(stage) {
+  if (!stage) return null;
+  if (/^championship$/i.test(stage)) return 'NBA Cup final; it does not count in the standings';
+  return `NBA Cup ${/group/i.test(stage) ? `group play (${stage})` : stage.replace(/ (Quarterfinal|Semifinal)$/, (m) => m.toLowerCase())}; the game counts in the standings`;
+}
+/** Tonight's NBA Cup line for the read ("NBA Cup group play (East Group C); the game counts in the standings."), or
+ * null when tonight is not a Cup game or the schedule is not on file. */
+export async function tonightCupLine(homeTeam, awayTeam, tip, season = nbaSeason()) {
+  const teams = await ballDontLieService.getTeams('basketball_nba');
+  const h = findTeam(teams, homeTeam), a = findTeam(teams, awayTeam);
+  if (!h || !a || !tip) return null;
+  const etYmd = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const games = await ballDontLieService.getGames('basketball_nba', { team_ids: [h.id], seasons: [season], per_page: 100, paginateAll: true }).catch(() => null);
+  const g = (games || []).find((x) => x.visitor_team?.id === a.id && etYmd(x.datetime || `${x.date}T23:00:00Z`) === etYmd(tip));
+  const words = cupWords(g?.ist_stage);
+  return words ? `${words}.` : null;
+}
+
 // A game counts as finished before `asOf` when its feed says final: for a pick made now, once it has tipped; for a
 // replay, once three hours have passed since its tip (Oct 23 2026: a game in progress at the pick read as a final).
 export const finishedBefore = (g, asOf) => {
@@ -348,7 +370,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const o = league[opp];
     const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : ''})` : '';
     const q = quarterLine(g, home, us, them);
-    const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
+    const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     return i < BOX_GAMES ? `${line}\n${[rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : line;
   });

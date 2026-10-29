@@ -475,8 +475,12 @@ export const propOddsService = {
             const playerIds = [...new Set(bdlProps.map(p => p.player_id).filter(Boolean))];
             const playerMap = await ballDontLieService.getNbaPlayersByIds(playerIds);
 
+            // Each book's own two-sided over/under only (Oct 29 2026 hunt, round 7; the founder's Sep 25 rule for MLB and
+            // the NFL: a standard bet is the book's own over/under). A milestone ladder's "8+ assists" took the over at
+            // 7.5 (Jalen Johnson "Over +102" from BallyBet, which posts no over/under; every book's over at 7.5 was -106
+            // to +100), 38 of 107 board markets on Oct 29 and 19 stored NBA prop picks since Oct 21.
             // Transform BDL format to our standard format
-            const transformedProps = bdlProps.map(prop => {
+            const transformedProps = bdlProps.filter(prop => prop.market?.type === 'over_under').map(prop => {
               const isOverUnder = prop.market?.type === 'over_under';
               const isMilestone = prop.market?.type === 'milestone';
               const playerInfo = playerMap[prop.player_id] || {};

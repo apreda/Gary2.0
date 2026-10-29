@@ -340,7 +340,9 @@ export async function buildNbaGameRecord(gameId) {
     report, players, teams, flow };
   checks.push({ check: 'the venue is on file', ok: Boolean(record.setting.home.venue) });
   const outOf = (side) => (report[side].rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason)).map((r) => r.name);
-  const summary = { date: g.date, home: { ...home, score: final.home }, away: { ...away, score: final.away }, ot: ots.length,
+  // The stage and the postseason ride the summary so a won-lost counts only the standings' games (Oct 29 2026 hunt,
+  // round 7: the NBA Cup final and the playoffs are not in the standings).
+  const summary = { date: g.date, home: { ...home, score: final.home }, away: { ...away, score: final.away }, ot: ots.length, cup: g.ist_stage || null, postseason: Boolean(g.postseason),
     out: { home: outOf('home'), away: outOf('away') },
     listed: { home: report.home.rows || null, away: report.away.rows || null },
     played: { home: players.filter((p) => p.side === 'home' && p.min > 0).map((p) => p.name), away: players.filter((p) => p.side === 'away' && p.min > 0).map((p) => p.name) },

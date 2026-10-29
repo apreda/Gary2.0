@@ -431,6 +431,8 @@ export const nbaPlayerStatsMethods = {
       const status = error?.response?.status;
       const msg = error?.response?.data?.error || error.message;
       console.error(`[Ball Don't Lie] NBA player props error: ${status} - ${msg}`);
+      // A caller that must tell a failed read from an empty board asks for the error (Oct 29 2026 hunt, round 7: darts).
+      if (options.throwOnError) throw error;
       return [];
     }
   },
@@ -440,7 +442,7 @@ export const nbaPlayerStatsMethods = {
    * @param {Array<number>} playerIds - Array of player IDs
    * @returns {Promise<Object>} - Map of player_id to player info
    */
-  async getNbaPlayersByIds(playerIds) {
+  async getNbaPlayersByIds(playerIds, options = {}) {
     try {
       if (!playerIds || playerIds.length === 0) return {};
 
@@ -474,6 +476,7 @@ export const nbaPlayerStatsMethods = {
     } catch (error) {
       recordPickDataFailure('BDL:getNbaPlayersByIds', error);
       console.error(`[Ball Don't Lie] NBA players error:`, error?.response?.data || error.message);
+      if (options.throwOnError) throw error;
       return {};
     }
   },

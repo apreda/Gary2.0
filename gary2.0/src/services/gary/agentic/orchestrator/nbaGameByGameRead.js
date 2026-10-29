@@ -16,6 +16,7 @@ import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../.
 import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { findTeam } from '../scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
+import { cupWords } from '../../../sports/nba/nbaBettorData.js';
 import { saveGameRecord, storedGameIds, teamRecords, seasonSummaries, recordsById } from '../../../gamebygame/gameRecordStore.js';
 import { buildNbaGameRecord, NBA_RECORD_VERSION, settingOf } from '../../../sports/nba/nbaGameRecord.js';
 import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine, wonLost } from '../../../sports/nba/nbaGameRecordText.js';
@@ -47,8 +48,16 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   const beforeCorrections = (s) => Boolean(s.builtAt) && [[1, 12], [1, 18], [2, 12], [7, 12]].some(([d, h]) => Date.parse(s.builtAt) < at(s.date, d, h) && Date.now() >= at(s.date, d, h));
   const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || beforeCorrections(s) || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
+  // A correction rebuild that lost a part the stored record had (an ESPN call that failed this pass) keeps the stored
+  // record and tries again next pass (Oct 29 2026 hunt, round 7).
   for (const g of missing) {
-    try { await saveGameRecord((await buildNbaGameRecord(g.id)).row); } catch (e) { failed.push(`${g.id}: ${e.message}`); }
+    try {
+      const { row } = await buildNbaGameRecord(g.id);
+      const s = stored.get(String(g.id));
+      const lost = s && s.version === NBA_RECORD_VERSION ? row.checks.filter((c) => !c.ok && LATE.includes(c.check) && !s.failed.includes(c.check)).map((c) => c.check) : [];
+      if (lost.length) { failed.push(`${g.id}: kept the stored record (the rebuild lost: ${lost.join(', ')})`); continue; }
+      await saveGameRecord(row);
+    } catch (e) { failed.push(`${g.id}: ${e.message}`); }
   }
   return { built: missing.length - failed.length, failed };
 }
@@ -128,7 +137,9 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
     try { listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), reportDay(tip), homeTeam, awayTeam); } catch { listing = null; }
   }
 
-  const header = [matchupHeader(desk), spreadInWords(nbaLineOf(desk))].filter(Boolean).join('\n');
+  // Tonight's NBA Cup stage (Oct 29 2026 hunt, round 7: all ten Oct 30 games were group play and neither read said so).
+  const cup = cupWords(tonight?.ist_stage);
+  const header = [matchupHeader(desk), cup ? `${cup}.` : null, spreadInWords(nbaLineOf(desk))].filter(Boolean).join('\n');
   const injuries = injuriesAsReported(desk, { homeTeam, awayTeam });
   const available = await availableListed(desk, { homeTeam, awayTeam, tip, asOf });
   const tonightPart = ['TONIGHT',
@@ -152,7 +163,6 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
   const teamPart = (team, recs) => {
     if (!recs.length) return `${team.full_name.toUpperCase()}: no games yet this season`;
     const all = byTeam.get(String(team.id)) || [];
-    const w = all.filter((r) => { const s = r.summary; const us = String(s.home.id) === String(team.id) ? 'home' : 'away'; return s[us].score > s[us === 'home' ? 'away' : 'home'].score; }).length;
     const full = recs.slice(0, NBA_WINDOW).map((r) => {
       const row = all.find((x) => String(x.game_id) === String(r.game_id));
       return meetingSet.has(String(r.game_id)) && row ? `${resultLine(row, team.id)}: in this season's meetings above` : fullGameText(r.record, team.id, byTeam);
@@ -160,7 +170,7 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
     const olderAll = all.filter((r) => !recs.slice(0, NBA_WINDOW).some((x) => String(x.game_id) === String(r.game_id))).reverse();
     const older = olderAll.slice(0, SHORT_LINES);
     const cutOff = olderAll.length - older.length;
-    return [`${team.full_name.toUpperCase()}: ${w}-${all.length - w} this season${all.length > NBA_WINDOW ? `; the last ${NBA_WINDOW} in full, newest first, then ${cutOff ? `the ${older.length} before them in one line each (the ${cutOff} earliest not shown)` : 'one line for each older game'}` : ', every game below, newest first'}`,
+    return [`${team.full_name.toUpperCase()}: ${wonLost(all, team.id)} this season${all.length > NBA_WINDOW ? `; the last ${NBA_WINDOW} in full, newest first, then ${cutOff ? `the ${older.length} before them in one line each (the ${cutOff} earliest not shown)` : 'one line for each older game'}` : ', every game below, newest first'}`,
       full.join('\n\n'),
       older.length ? `Older games, one line each:\n${older.map((r) => shortGameText(r, team.id)).join('\n')}` : null].filter(Boolean).join('\n\n');
   };

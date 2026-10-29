@@ -249,9 +249,13 @@ export function formatRestSituation(homeTeam, awayTeam, homeRest, awayRest, trip
     // that played Tuesday and Thursday).
     const off = rest.daysRest - 1;
     if (trip) {
-      const where = rest.lastGameWasHome === null || !rest.lastGameOpponentCity ? '' : rest.lastGameWasHome ? `, at home vs ${rest.lastGameOpponentCity}` : `, at ${rest.lastGameOpponentCity}`;
+      // trip.where / trip.tonight (Oct 29 2026 hunt, round 7) say where a game away from the home arena was played
+      // (Houston at San Antonio in Austin read "at home vs Houston" and "at San Antonio").
+      const own = trip.where?.[isHomeTeam ? 'home' : 'away'];
+      const where = own ? `, ${own}` : rest.lastGameWasHome === null || !rest.lastGameOpponentCity ? '' : rest.lastGameWasHome ? `, at home vs ${rest.lastGameOpponentCity}` : `, at ${rest.lastGameOpponentCity}`;
       const since = `since its last game (${rest.lastGameDay || rest.lastGameDate}${where})`;
-      parts.push(`${off <= 0 ? `no day off ${since}, the second night of a back-to-back` : `${off} day${off === 1 ? '' : 's'} off ${since}`}; tonight ${isHomeTeam ? 'at home' : `at ${trip.city || homeTeam}`}`);
+      const tonight = trip.tonight?.[isHomeTeam ? 'home' : 'away'] || (isHomeTeam ? 'at home' : `at ${trip.city || homeTeam}`);
+      parts.push(`${off <= 0 ? `no day off ${since}, the second night of a back-to-back` : `${off} day${off === 1 ? '' : 's'} off ${since}`}; tonight ${tonight}`);
     } else {
       parts.push(off <= 0 ? `no day off since its last game (${rest.lastGameDate})` : `${off} day${off === 1 ? '' : 's'} off since its last game (${rest.lastGameDate})`);
     }

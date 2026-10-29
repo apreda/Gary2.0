@@ -17,9 +17,11 @@ import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
+import { espnVenue } from '../../../sports/nba/espnNbaGame.js';
+import { NBA_ARENAS } from '../../../sports/nba/nbaArenas.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -215,10 +217,20 @@ function rotation(desk, teams) {
 }
 
 // The starting fives come from a web search's projection; the read says so above them (Oct 23 2026 audit: the
-// desk's heading never reached Gary).
+// desk's heading never reached Gary). A projected starter the injury report lists Out or Doubtful says so in the five
+// (Oct 29 2026 hunt, round 7: Golden State's projection had Draymond Green at center six lines above "Draymond Green
+// (Out)"; he did not play).
 export function projectedStarters(desk) {
   const five = sectionOf(desk, 'STARTING LINEUPS');
-  return five ? `Projected starters (a web search's projection, not confirmed):\n${five}` : '';
+  if (!five) return '';
+  const listed = new Map();
+  for (const l of sectionOf(desk, 'INJURY REPORT').split('\n')) {
+    const m = l.match(/^\s*•\s*(.+?)(?: \([A-Z]{1,2}(?:-[A-Z]{1,2})?\))? \((Out|Doubtful)\) - /);
+    if (m) listed.set(playerKey(m[1]), m[2]);
+  }
+  const marked = five.split('\n').map((l) => l.replace(/^(\[(?:HOME|AWAY)\] [^:]+: )(.*)$/, (all, head, list) => head + list.split(/, (?=[^,()]+\()/)
+    .map((p) => { const [, name, pos] = p.match(/^(.*?)(?: \(([A-Z]{1,2})\))?$/); const st = listed.get(playerKey(name)); return st ? `${name} (${pos ? `${pos}; ` : ''}${st} on the injury report)` : p; }).join(', '))).join('\n');
+  return `Projected starters (a web search's projection, not confirmed):\n${marked}`;
 }
 
 // Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-1").
@@ -254,6 +266,9 @@ function beforeFirstGame(desk, team) {
 // blends the nights a starter sat with the nights he played, the NBA's version of the Bears' backup-quarterback games;
 // the games themselves are in the log). A team before its first game says so once, here, with this season's roster.
 const RATINGS_MISSING = Symbol('ratings missing');
+/** The league's ratings at `asOf`, or a marker the heads print as "opponents' records: not on file" (Oct 29 2026 hunt,
+ * round 7: the Winners board swallowed a failed load and dropped every opponent's record without a word). */
+export const ratingsOrMissing = (asOf = new Date()) => leagueRatingsAt(asOf).catch((e) => ({ [RATINGS_MISSING]: e.message }));
 const STANDINGS_FROM_GAMES = 10;
 function teamHead(desk, ratings, team, ts) {
   if (!ts) return { text: `${team}: this season's games not on file.` };
@@ -261,7 +276,8 @@ function teamHead(desk, ratings, team, ts) {
     const before = beforeFirstGame(desk, team);
     return { text: `${team}: no games yet; tonight is its first game of the season.${before ? `\n${before}` : ''}` };
   }
-  const regular = ts.games.filter((g) => !g.postseason);
+  // The standings' games: not the postseason and not the NBA Cup final (Oct 29 2026 hunt, round 7).
+  const regular = ts.games.filter(inStandings);
   const w = regular.filter((g) => (g.home_team?.id === ts.id ? g.home_team_score > g.visitor_team_score : g.visitor_team_score > g.home_team_score)).length;
   const s = standingsOf(desk).get(team);
   const more = s && regular.length >= STANDINGS_FROM_GAMES ? `; ${s.place}${s.home ? `; home ${s.home}, road ${s.road}` : ''}` : '';
@@ -280,10 +296,38 @@ async function gameLog(desk, ratings, team, asOf, ts) {
 // SCHEDULE AND TRAVEL (the heading names the data; Oct 24 2026) from the same games as the log: days off since each team's last game, where that game was, tonight's
 // trip and a tip outside the usual evening (Oct 23 2026 data audit). A team before its first game is left out (its
 // log says so).
-function situation(seasons, homeTeam, awayTeam, tip, asOf) {
+// Where each team's last game and tonight's game are played, from ESPN (Oct 29 2026 hunt, round 7: Houston at San
+// Antonio in Austin read "at home vs Houston" for the Spurs and "at San Antonio" for the Rockets, and the Lakers' game
+// at the Clippers "at Los Angeles"). The schedule feed has no venue. Null where ESPN has none: the team's city stays.
+const cityOfTeam = (t) => (t?.city === 'LA' ? 'Los Angeles' : t?.city) || null;
+async function lastGameWhere(ts) {
+  const g = ts?.games?.[0];
+  if (!g) return null;
+  const v = await espnVenue(g).catch(() => null);
+  if (!v?.city) return null;
+  const home = g.home_team?.id === ts.id;
+  const opp = home ? g.visitor_team : g.home_team;
+  const hostCity = NBA_ARENAS[g.home_team?.abbreviation]?.city;
+  const away = v.city !== hostCity;
+  if (v.neutral) return `vs ${cityOfTeam(opp)} at a neutral site in ${v.city}`;
+  if (home) return `at home vs ${cityOfTeam(opp)}${away ? `, played in ${v.city}` : ''}`;
+  return `at ${cityOfTeam(opp) === ts.city ? `the ${opp.name}` : cityOfTeam(opp)}${away || cityOfTeam(opp) === ts.city ? ` in ${v.city}` : ''}`;
+}
+async function tonightWhere(seasons, homeTeam, awayTeam, tip) {
+  const [h, a] = seasons;
+  const abbrOf = (ts) => ts?.games?.[0] && (ts.games[0].home_team?.id === ts.id ? ts.games[0].home_team : ts.games[0].visitor_team)?.abbreviation;
+  const v = tip ? await espnVenue({ date: etDate(tip), home_team: { name: h?.nickname || homeTeam }, visitor_team: { name: a?.nickname || awayTeam } }).catch(() => null) : null;
+  const hostCity = NBA_ARENAS[abbrOf(h)]?.city;
+  if (!v?.city || !hostCity) return null;
+  if (v.neutral) return { home: `at a neutral site in ${v.city}`, away: `at a neutral site in ${v.city}` };
+  if (v.city === hostCity) return null;
+  return { home: `a home game played in ${v.city}`, away: `at ${h?.city || homeTeam}, played in ${v.city}` };
+}
+async function situation(seasons, homeTeam, awayTeam, tip, asOf) {
   const at = tip || new Date(asOf).toISOString();
   const rest = [homeTeam, awayTeam].map((team, i) => (seasons[i]?.games?.length ? calculateRestSituation(seasons[i].games, at, team) : null));
-  return formatRestSituation(homeTeam, awayTeam, rest[0], rest[1], { city: seasons[0]?.city || null, tip })
+  const [homeWhere, awayWhere, tonight] = await Promise.all([lastGameWhere(seasons[0]), lastGameWhere(seasons[1]), tonightWhere(seasons, homeTeam, awayTeam, tip)]);
+  return formatRestSituation(homeTeam, awayTeam, rest[0], rest[1], { city: seasons[0]?.city || null, tip, where: { home: homeWhere, away: awayWhere }, tonight })
     .split('\n').filter((l) => !/: Rest data unavailable$/.test(l)).join('\n').trim();
 }
 
@@ -620,11 +664,17 @@ function withoutOrphans(lines, drop) {
 // cutoff. His uncertainty concerns G League two-way availability."; "The latest official PDF accessible ... contained
 // neither team's individual submission" sat under an injury list from the 1:00 PM report with both teams filed). A
 // bullet or table row left with only its name goes too.
-const NOTHING_FOUND = /^(?:No|Neither)\b[^.]*\b(?:statements?|updates?|reporting|reports?|coverage)\b[^.]*\b(?:was|were|has been|had been)?\s*(?:found|established|located|identified|confirmed)\b/i;
-const FILING = /\b(?:official|league|injury)\b[^.]*\b(?:PDF|submissions?|report|document)\b[^.]*\b(?:timestamped|issued at|not (?:yet )?(?:filed|submitted)|had not filed|individual submission|contained neither)\b/i;
-const TWO_WAY = /\bG League two-way\b|\btwo-way (?:G League )?(?:availability|assignment|duty)\b/i;
-const SEARCH_EMPTY = /^No\b.*\b(?:in the supplied (?:reporting|material)|(?:by|before) the (?:research )?cutoff)\W*$|\bfound no (?:such )?(?:announcement|statement|update|report)s?\b/i;
-const emptyNews = (s) => NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s);
+// The wider forms (Oct 29 2026 hunt, round 7: today's Kings read kept "His uncertainty concerns two-way/G League
+// availability." three times, "No confirmed starting lineup ... was verified by the 3:00:12 p.m. Eastern research
+// cutoff." and "The supplied official reports identify no uncertain Sacramento player."): a "No ..." sentence that ends
+// on what the search could not verify or find, any "No ..." sentence about the cutoff, what the supplied reporting held,
+// and the search answering its own request ("omitted here as requested").
+const NOTHING_FOUND = /^(?:No|Neither)\b[^.]*\b(?:statements?|updates?|reporting|reports?|coverage)\b[^.]*\b(?:was|were|has been|had been)?\s*(?:found|established|located|identified|confirmed)\b|^(?:No|Neither)\b.*\b(?:was|were|could be|has been|had been) (?:independently )?(?:verified|found|located|identified|available)\W*$|^A search result\b/i;
+const FILING = /\b(?:official|league|injury)\b[^.]*\b(?:PDF|submissions?|report|document)\b[^.]*\b(?:timestamped|issued at|not (?:yet )?(?:filed|submitted)|had not filed|individual submission|contained neither)\b|\bsupplied (?:official )?(?:reports?|reporting|material) (?:identif(?:y|ies|ied)|establishe[sd]|contained|contains) no\b/i;
+const TWO_WAY = /\bG League two-way\b|\btwo-way (?:G League )?(?:availability|assignment|duty)\b|\btwo-way\s*\/\s*G League\b|\bG League\s*\/\s*two-way\b/i;
+const SEARCH_EMPTY = /^(?:No|Neither)\b.*\b(?:cutoff|supplied (?:material|reporting))\b|^As of the (?:research )?cutoff\b.*\bno verified\b|^This report (?:reflects|covers)\b|\bfound no (?:such )?(?:announcement|statement|update|report)s?\b/i;
+const ASKED = /\b(?:as requested|in the request|the request(?:ed)? (?:list|format))\b/i;
+const emptyNews = (s) => NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s);
 function withoutEmptyNews(text) {
   return String(text || '').split('\n').map((l) => {
     if (/^\s*\|/.test(l)) {
@@ -663,7 +713,7 @@ function boardGames(ts, league = {}) {
     const opp = home ? g.visitor_team : g.home_team;
     const us = home ? g.home_team_score : g.visitor_team_score, them = home ? g.visitor_team_score : g.home_team_score;
     const o = league[opp?.full_name];
-    return `${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp?.name || opp?.full_name}${o ? ` (${o.w}-${o.l} now)` : ''}${g.postseason ? ' (postseason)' : ''}`;
+    return `${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp?.name || opp?.full_name}${o ? ` (${o.w}-${o.l} now)` : ''}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` (${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')})` : ''}`;
   }).join(', ')}`;
 }
 
@@ -673,12 +723,12 @@ export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip
     injurySection(desk, { homeTeam, awayTeam }),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
-  const back = await outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip: tipAt, asOf });
-  return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`,
+  const [back, cup] = await Promise.all([outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip: tipAt, asOf }), tonightCupLine(homeTeam, awayTeam, tipAt).catch(() => null)]);
+  return [`### ${awayTeam} at ${homeTeam}${tip ? ` · ${tip} ET` : ''}`, ...(cup ? [cup] : []),
     spreadInWords(nbaLineOf(desk)) || 'The spread is not on file.', '',
     'Who is playing:', [projectedStarters(desk), injuries, back].filter(Boolean).join('\n\n'), '',
     'This season:', [[awayTeam, seasons[1]], [homeTeam, seasons[0]]].map(([t, ts]) => [teamHead(desk, ratings, t, ts).text, boardGames(ts, ratings)].filter(Boolean).join('\n')).join('\n\n'), '',
-    'Schedule and travel:', situation(seasons, homeTeam, awayTeam, tipAt, asOf) || 'Nothing unusual.'].join('\n');
+    'Schedule and travel:', (await situation(seasons, homeTeam, awayTeam, tipAt, asOf)) || 'Nothing unusual.'].join('\n');
 }
 
 /** The game as Gary reads it. `asOf` cuts the season at the moment of the pick; `league` (tests only) stands in for the
@@ -692,20 +742,21 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
-  const [homeLog, awayLog, injuries, back, available, nextGames] = await Promise.all([
+  const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
     availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons }),
     Promise.all([awayTeam, homeTeam].map((t) => nextGameLine(t, tip).catch(() => null))),
+    tonightCupLine(homeTeam, awayTeam, tip).catch(() => null),
   ]);
   const parts = [
-    [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
+    [matchupHeader(desk), cup, spreadInWords(line)].filter(Boolean).join('\n'),
     ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
-    ['SCHEDULE AND TRAVEL', [situation(seasons, homeTeam, awayTeam, tip, asOf), ...nextGames.filter(Boolean)].filter(Boolean).join('\n')],
+    ['SCHEDULE AND TRAVEL', [await situation(seasons, homeTeam, awayTeam, tip, asOf), ...nextGames.filter(Boolean)].filter(Boolean).join('\n')],
   ];
   const [starts, teams] = await Promise.all([
     Promise.all([homeTeam, awayTeam].map((t) => firstGameDate(t).catch(() => null))).then((d) => d.filter(Boolean).sort()),

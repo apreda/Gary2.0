@@ -247,10 +247,13 @@ export function createPropSettlement({ supabase, fetchGames, fetchNCAAFGames, fe
 
         if (actual !== null || forcedResult) {
           if (source === 'none') source = 'api';
-        } else if (['MLB', 'NFL', 'NCAAF'].includes(dataSport)) {
+        } else if (['MLB', 'NFL', 'NCAAF', 'NBA'].includes(dataSport)) {
           // Exact final-game BDL stats are the MLB/football grading authority.
           // Missing measurements and ambiguous players stay pending; model
           // grounding cannot undo the validated box's unavailable result.
+          // NBA too (Oct 29 2026 hunt, round 7): the search, asked with no team
+          // or game, settled Jalen Johnson's Oct 24 PRA at 34 (he had 51) and
+          // Wembanyama's rebounds at 13 (he had 7) until a later re-grade.
           console.error(`    [BDL Miss] ${dataSport}: ${name} "${type}" missing from exact game ${gameId}; leaving pending`);
           stats.unresolvedFinal++;
           continue;

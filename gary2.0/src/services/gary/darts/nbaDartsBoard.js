@@ -65,7 +65,10 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const row = hit ? [...side.values()].find((r) => r.name === hit) : null;
     return row && row.status !== 'Available' ? row.status : '';
   };
-  const odds = await bdl.getOddsV2?.({ game_ids: games.map((g) => g.id) }, 'nba').catch(() => []) || [];
+  // A feed that failed says so under each game (Oct 29 2026 hunt, round 7): a failed odds or props read looked the same
+  // as no line and no prices, and the game's spread or its players left the board without a word.
+  let oddsFailed = false;
+  const odds = await bdl.getOddsV2?.({ game_ids: games.map((g) => g.id) }, 'nba').catch(() => { oddsFailed = true; return []; }) || [];
 
   const candidates = new Map();
   const eligible = Object.fromEntries(Object.keys(NBA_MARKET).map((k) => [k, []]));
@@ -81,13 +84,16 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const head = [`GAME ${gi + 1} · ${away.full_name} @ ${home.full_name} · ${etClock(g.datetime)}`];
     if (line?.spread_home_value != null) { const sp = Number(line.spread_home_value); head.push(sp < 0 ? `${home.abbreviation} ${sp}` : sp > 0 ? `${away.abbreviation} ${-sp}` : 'pick em'); }
     if (line?.total_value != null) head.push(`total ${line.total_value}`);
+    if (oddsFailed) head.push('spread and total not on file (the odds feed did not load)');
 
-    const rows = await bdl.getNbaPlayerProps(g.id).catch(() => []);
+    let pricesFailed = false;
+    const rows = await bdl.getNbaPlayerProps(g.id, { throwOnError: true }).catch(() => { pricesFailed = true; return []; });
     const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];
-    const people = ids.length ? await bdl.getNbaPlayersByIds(ids).catch(() => ({})) : {};
+    const people = ids.length ? await bdl.getNbaPlayersByIds(ids, { throwOnError: true }).catch(() => { pricesFailed = true; return {}; }) : {};
     const byPlayer = new Map();
     for (const r of rows) { const k = String(r.player_id); if (!byPlayer.has(k)) byPlayer.set(k, []); byPlayer.get(k).push(r); }
     const lines = [head.join(' · ')];
+    if (pricesFailed) lines.push("  players' prices not on file (the props feed did not load)");
     lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report)}`).join(' · ')}`);
     // The report rides in each game's block, the part of the board Gary's ask carries (Oct 29 2026 hunt: it sat only in
     // board.text, which no ask reads).
@@ -149,7 +155,12 @@ function gameLines(c, records, stat, abbrById) {
   }
   const big = new Set(rows.flatMap((x) => (x.rec.players || []).filter((p) => p.side === x.side && p.min >= 15).map((p) => p.name)));
   return rows.map((x) => {
-    const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}`;
+    // The team's result, with overtime (Oct 29 2026 hunt, round 7: Achiuwa's 14 minutes read without the 130-103 loss at
+    // San Antonio, Murphy's 37 without the overtime at Denver).
+    const us = x.rec.final?.[x.side], them = x.rec.final?.[x.side === 'home' ? 'away' : 'home'];
+    const ot = (x.rec.periods?.length || 0) - 4;
+    const score = us != null && them != null ? ` (${us > them ? 'W' : 'L'} ${us}-${them}${ot > 0 ? `, ${ot === 1 ? 'OT' : `${ot} OT`}` : ''})` : '';
+    const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}${score}`;
     const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || ''));
     const names = (x.rec.players || []).filter((p) => p.side === x.side).map((p) => p.name);
     const mine = outRows.find((r) => samePlayerIn(c.player, [r.name], names));

@@ -62,4 +62,22 @@ describe('the NBA news Gary reads', () => {
     expect(said(5)).not.toContain('fouled out');
     expect(said(6)).toContain('McCain fouled out against San Antonio');
   });
+  it('drops what the search could not verify, two-way duty and its answers to the request (Oct 29 2026 hunt, round 7)', () => {
+    const out = read([
+      'Sabonis is listed probable with a sore left knee and is expected to play.',
+      '- **Malik Dia:** His uncertainty concerns two-way/G League availability.',
+      'No confirmed starting lineup, return from a recent absence or minutes restriction was verified by the **3:00:12 p.m. Eastern research cutoff**.',
+      'No later verified participation decisions were available in the supplied reporting through the cutoff.',
+      'The supplied official reports identify no uncertain Sacramento player.',
+      "Tonight's listed injury statuses are omitted as requested.",
+      'No newly announced minutes limit was found.',
+      'A search result suggesting a waiver during the week was not verified.',
+      'This report reflects the supplied reporting through October 29, 2026, at 2:58 p.m. Eastern.',
+      'No completed Pelicans trade, signing or waiver dated October 22–29 was verified in the supplied material.',
+      'Murray (hamstring) has been ruled out for the next two weeks.',
+    ].join('\n\n'));
+    expect(out).toContain('Sabonis is listed probable');
+    expect(out).toContain('Murray (hamstring) has been ruled out');
+    expect(out).not.toMatch(/two-way|cutoff|supplied|as requested|minutes limit was found|search result/);
+  });
 });

@@ -17,11 +17,14 @@ export async function saveGameRecord(row) {
   if (error) throw new Error(`game records store: save ${row.league} ${row.game_id} failed: ${error.message}`);
 }
 
+// Every paged read orders on a unique key (Oct 29 2026 hunt, round 7): pages sorted only by game date skipped or
+// doubled games that share a date at a page edge (a 20-row test read 4 Oct 28 games twice and 4 not at all).
+
 /** A season's games already in the store: Map(game id -> { version, date, failed: the checks that did not hold }). */
 export async function storedGameIds(league, season) {
   const out = new Map();
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await db().from(TABLE).select('game_id, version, game_date, checks, built_at').eq('league', league).eq('season', season).range(from, from + 999);
+    const { data, error } = await db().from(TABLE).select('game_id, version, game_date, checks, built_at').eq('league', league).eq('season', season).order('game_id').range(from, from + 999);
     if (error) throw new Error(`game records store: list failed: ${error.message}`);
     for (const r of data || []) out.set(String(r.game_id), { version: r.version, date: r.game_date, builtAt: r.built_at, failed: (r.checks || []).filter((c) => !c.ok).map((c) => c.check) });
     if (!data || data.length < 1000) return out;
@@ -43,7 +46,7 @@ export async function seasonSummaries(league, season, beforeDate) {
   const out = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db().from(TABLE).select('game_id, game_date, summary')
-      .eq('league', league).eq('season', season).lt('game_date', beforeDate).order('game_date').range(from, from + 999);
+      .eq('league', league).eq('season', season).lt('game_date', beforeDate).order('game_date').order('game_id').range(from, from + 999);
     if (error) throw new Error(`game records store: summaries failed: ${error.message}`);
     out.push(...(data || []));
     if (!data || data.length < 1000) return out;
