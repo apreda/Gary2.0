@@ -212,6 +212,10 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
     pick._originalToolResponses = [];
     pick._evidenceObservedAt = new Date().toISOString();
     pick._nflRead = true;
+    // His read of the game rides the pick (Oct 29 2026, founder OK on round 8 #23): the Winners bet and big-game stake
+    // asks lead with it; since the read system no pick had carried it, so stakes were set from the fan-facing take
+    // alone. Stored in pick_snapshot.game_read; the app never shows it, and the card ask keeps the rationale.
+    pick.game_read = String(read || '').trim() || null;
     return pick;
   } finally {
     costTracker.logSummary();

@@ -81,9 +81,10 @@ export async function runBigGameStakes(client, date, { ask = askGaryBigGameStake
     const net = Number(row.minutes_to_kickoff) <= NET_MINUTES_BEFORE_KICKOFF || Number(row.attempts) > MAX_ASK_ATTEMPTS;
     let answer = null;
     if (!net) {
-      // The claim returns no weighing; his pick's own (football's private weighing) is read here.
-      const { data: snap } = await client.from('winners_candidates').select('weighing:pick_snapshot->>weighing').eq('id', row.id).maybeSingle();
-      answer = await ask({ ...row, weighing: snap?.weighing || null }, { bankroll: await cashPosition(client, log), log });
+      // The claim returns no weighing; his pick's own is read here: the read he wrote of the game (game_read, the read
+      // systems since Oct 19; founder OK Oct 29 2026, round 8 #23), or football's older private weighing.
+      const { data: snap } = await client.from('winners_candidates').select('weighing:pick_snapshot->>weighing, read:pick_snapshot->>game_read').eq('id', row.id).maybeSingle();
+      answer = await ask({ ...row, weighing: snap?.read || snap?.weighing || null }, { bankroll: await cashPosition(client, log), log });
     }
     if (!answer && !net) { log.warn(`[Big game] ${row.league} ${row.pick_text}: no answer on attempt ${row.attempts}; asking again`); continue; }
     const args = answer

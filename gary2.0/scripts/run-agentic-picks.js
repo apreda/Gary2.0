@@ -1052,7 +1052,8 @@ async function main() {
                 matchup: cleanPick.awayTeam && cleanPick.homeTeam ? `${cleanPick.awayTeam} @ ${cleanPick.homeTeam}` : null,
                 starts: cleanPick.commence_time || null,
                 case_home: cleanPick.path_home || null, case_away: cleanPick.path_away || null,
-                weighing: cleanPick.weighing || null,
+                // His read of the game leads the bet ask (founder OK Oct 29 2026, round 8 #23); football's older weighing otherwise.
+                weighing: cleanPick.game_read || cleanPick.weighing || null,
               }], date: cleanPick.commence_time ? new Date(cleanPick.commence_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null });
               cleanPick.gary_bet = betRecord(bets.get('ticket'), betModel);
               console.log(`\n💵 GARY'S BET (${betModel}): ${cleanPick.gary_bet.play ? `$${cleanPick.gary_bet.stake_dollars} on ${cleanPick.pick}` : `pass on ${cleanPick.pick}`}${cleanPick.gary_bet.why ? ` — ${cleanPick.gary_bet.why}` : ''}${cleanPick.gary_bet.parlay ? `\n🎟️  PARLAY: yes — ${cleanPick.gary_bet.parlay_line}` : ''}\n`);
