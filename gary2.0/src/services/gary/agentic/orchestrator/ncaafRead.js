@@ -152,9 +152,16 @@ export function availabilityReport(desk) {
 // Each team's game log opens with its record (and against FBS teams), its conference and its place in the AP poll, and,
 // when this week's quarterback did not throw the most passes in every game, the record by who did. A separate HOW GOOD
 // THEY ARE section repeated the log's scores and yards under a heading that told him what to conclude (Oct 23 2026).
-function qbSplit(gs, qb) {
+// One quarterback is one group, whether or not a game's lineup marked him "(started)" (Oct 28 2026 sweep: UCF's Keyone
+// Jenkins read as two quarterbacks, "1-0" and "2-2", the BYU game having no starting lineup on file).
+const plainName = (text) => String(text || '').replace(/\s*\([^)]*\)/g, '').trim();
+function byPasser(gs, none) {
   const by = new Map();
-  for (const g of gs) { const k = g.qb || 'passer not on file'; by.set(k, [...(by.get(k) || []), g]); }
+  for (const g of gs) { const k = g.qb ? plainName(g.qb) : none; const same = [...by.keys()].find((x) => x !== none && k !== none && nameKey(x) === nameKey(k)) || k; by.set(same, [...(by.get(same) || []), g]); }
+  return by;
+}
+function qbSplit(gs, qb) {
+  const by = byPasser(gs, 'passer not on file');
   const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
   if (!gs.length || (mine && by.size === 1)) return null;
   const parts = [...by].sort(([a], [b]) => (a === mine ? -1 : b === mine ? 1 : 0))
@@ -252,8 +259,7 @@ export function seasonLines(team, all, qb = null) {
   const out = [fbs.length ? `${team}, against FBS teams, ${games(fbs.length)}, newest first: ${record(fbs)}, ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
   if (fcs.length) out.push(`  against FCS teams: ${fcs.map((g) => `${g.result} ${g.pf}-${g.pa} vs ${g.opponent}`).join('; ')}`);
   if (!fbs.length) return out.join('\n');
-  const by = new Map();
-  for (const g of fbs) { const k = g.qb || NOT_ON_FILE_QB; by.set(k, [...(by.get(k) || []), g]); }
+  const by = byPasser(fbs, NOT_ON_FILE_QB);
   const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
   const who = (k) => (k === NOT_ON_FILE_QB ? 'With the passer not on file' : `With ${k} throwing the most passes`);
   if (mine && by.size === 1) out.push(`  ${qb}, this week's quarterback, threw the most passes in all ${fbs.length}.`);
