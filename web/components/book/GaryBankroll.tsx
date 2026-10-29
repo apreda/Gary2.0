@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/auth/client';
+import { ScrubCorner, type Scrub } from './ScrubDay';
 
 export interface BankrollSnapshot {
   started_at: string;
@@ -25,10 +26,8 @@ export interface BankrollSnapshot {
   max_drawdown_units: number;
   curve: { date: string; net_units: number; flat_units: number }[];
   /** Days taken off the record, each with the note fans read (Oct 29 2026: Oct 17's bug day). */
-  scrubbed?: { date: string; note: string; effective_date?: string; in_effect?: boolean }[];
+  scrubbed?: Scrub[];
 }
-/** "Oct 17" from "2026-10-17". */
-const monthDay = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
 /** Winners is real money (founder, Sep 22 2026): one unit is $100 of Gary's $10,000, so units read as dollars. */
 const dollars = (u: number) => `$${Math.abs(Math.round(u * 100)).toLocaleString('en-US')}`;
 const signed = (u: number) => `${Math.round(u * 100) < 0 ? '-' : '+'}${dollars(u)}`;
@@ -45,17 +44,10 @@ export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
       <div className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2">
         <h2 className="font-display text-5xl text-hi">{dollars(b.bankroll_units)}</h2>
         <p className={b.profit_units < 0 ? 'text-loss' : 'text-win'}>{signed(b.profit_units)} · {b.growth_pct.toFixed(2)}% growth</p>
+        {/* A day off the record rides the number's corner, one click from its card (Oct 29 2026). */}
+        {(b.scrubbed ?? []).map(d => <ScrubCorner key={d.date} scrub={d} standing={b} />)}
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mid">Started with {dollars(b.initial_units)} on {new Date(b.started_at).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}. All sports and Winners markets · Since inception.</p>
-      {/* A day taken off the record says so under the number it changes, one tap from the reason (Oct 29 2026). */}
-      {(b.scrubbed ?? []).map(d => <details key={d.date} className="group mt-4 rounded-card border border-gold/45 bg-gold/5 px-4">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-mono text-xs font-semibold uppercase tracking-widest text-gold [&::-webkit-details-marker]:hidden">
-          <span aria-hidden="true">ⓘ</span>
-          <span className="flex-1">{d.in_effect === false && d.effective_date ? `${monthDay(d.date)} comes off the record ${monthDay(d.effective_date)}` : `Why ${monthDay(d.date)} is off the record`}</span>
-          <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
-        </summary>
-        <p className="pb-4 text-sm leading-relaxed text-mid">{d.note}</p>
-      </details>)}
       <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
         {[
           ['Win rate', b.win_pct === null ? '—' : `${b.win_pct.toFixed(1)}%`],
