@@ -27,6 +27,8 @@
  * (game_date, 'NFL'), win/loss rows untouched.
  */
 
+import { nflSeason } from '../../../utils/dateUtils.js';
+
 export const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
 const REQUEST_TIMEOUT_MS = 60_000;
 
@@ -142,7 +144,8 @@ function nflForm(byPlayer, nextByTeam, season, asOf) {
 
 async function computeNfl({ date, seasons, fetchImpl = globalThis.fetch } = {}) {
   const asOf = String(date);
-  const season = Number(asOf.slice(0, 4));
+  // The season the date falls in, not its calendar year (Week 18 and the playoffs are in January).
+  const season = nflSeason(new Date(`${asOf.slice(0, 10)}T17:00:00Z`));
   const years = seasons || [season - 1, season];
   const games = (await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`, fetchImpl))
     .filter((g) => years.includes(Number(g.season)) && g.game_type === 'REG');
