@@ -65,6 +65,13 @@ function flowText(rec, us) {
   return parts.join('; ');
 }
 
+/** A stored game's flow from one team's side, without the quarters (the live log prints its own): after three, with
+ * 5:00 left, the largest leads, lead changes and ties, and each side's biggest run (Oct 29 2026, founder: "who got
+ * ahead, how ... being close the whole game"; the live system's game lines had the quarters only). */
+export function flowFacts(rec, teamId) {
+  return flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
+}
+
 // A team's listing at tip, its players who had not played in any of the team's games before this one set apart.
 function reportText(rec, side, before) {
   const r = rec.report[side]; const short = rec[side].short;

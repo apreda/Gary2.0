@@ -193,29 +193,6 @@ async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf
   }
 }
 
-// THE ROTATION: each team's top players by minutes with their basic line this season (the desk's advanced and
-// team-share lines stay out), once the team has six games. Before that each game's minutes, points and shooting are in
-// its game log, and a line saying so was all this section held (Oct 23 2026 data audit); it is left out while both
-// teams are under six.
-const ROTATION_FROM_GAMES = 6;
-function rotation(desk, teams) {
-  const out = []; let keep = false;
-  for (const l of sectionOf(desk, 'AVAILABLE ROSTER').split('\n')) {
-    const h = l.match(/^\[(HOME|AWAY)\] /);
-    if (h) {
-      const t = teams[h[1]];
-      keep = Boolean(t?.games) && t.games.length >= ROTATION_FROM_GAMES;
-      if (keep) out.push(`${t.name}:`);
-    } else if (keep && /^ {2}\S.* - .*PPG/.test(l)) {
-      // The basic line only (Oct 29 2026 hunt): the desk's status note ("— QUESTIONABLE [GTD] GP: 3 / GM: 0") is the
-      // injury list's, and a few minutes' usage rate is noise.
-      const m = l.match(/^ {2}(.+?)(?: — .+?)? - ((?:[\d.]+|N\/A) PPG.*)$/);
-      if (m) out.push(`  ${m[1]} - ${m[2].replace(/ \| Limited role.*$/, ' (5 minutes a game or fewer)')}`);
-    }
-  }
-  return out.join('\n').trim();
-}
-
 // The starting fives come from a web search's projection; the read says so above them (Oct 23 2026 audit: the
 // desk's heading never reached Gary). A projected starter the injury report lists Out or Doubtful says so in the five
 // (Oct 29 2026 hunt, round 7: Golden State's projection had Draymond Green at center six lines above "Draymond Green
@@ -233,15 +210,6 @@ export function projectedStarters(desk) {
   return `Projected starters (a web search's projection, not confirmed):\n${marked}`;
 }
 
-// Where each team stands, from the desk's standings ("#7 in West (0-0) | Home: 0-0 | Road: 0-1").
-function standingsOf(desk) {
-  const out = new Map();
-  for (const l of sectionOf(desk, 'NBA LEAGUE CONTEXT').split('\n')) {
-    const m = l.trim().match(/^\[(?:HOME|AWAY)\] (.+?): (#\d+ in \w+) \((\d+)-(\d+)\)(?: \| Home: (\d+-\d+))?(?: \| Road: (\d+-\d+))?/);
-    if (m) out.set(m[1], { w: Number(m[3]), l: Number(m[4]), place: m[2], home: m[5], road: m[6] });
-  }
-  return out;
-}
 
 // A team before its first game: the desk's BEFORE THE FIRST GAME block for it (this season's roster and who left),
 // without last season's finish (founder, Oct 23 2026, every sport: "last season is old news").
@@ -269,7 +237,6 @@ const RATINGS_MISSING = Symbol('ratings missing');
 /** The league's ratings at `asOf`, or a marker the heads print as "opponents' records: not on file" (Oct 29 2026 hunt,
  * round 7: the Winners board swallowed a failed load and dropped every opponent's record without a word). */
 export const ratingsOrMissing = (asOf = new Date()) => leagueRatingsAt(asOf).catch((e) => ({ [RATINGS_MISSING]: e.message }));
-const STANDINGS_FROM_GAMES = 10;
 function teamHead(desk, ratings, team, ts) {
   if (!ts) return { text: `${team}: this season's games not on file.` };
   if (!ts.games.length) {
@@ -279,9 +246,9 @@ function teamHead(desk, ratings, team, ts) {
   // The standings' games: not the postseason and not the NBA Cup final (Oct 29 2026 hunt, round 7).
   const regular = ts.games.filter(inStandings);
   const w = regular.filter((g) => (g.home_team?.id === ts.id ? g.home_team_score > g.visitor_team_score : g.visitor_team_score > g.home_team_score)).length;
-  const s = standingsOf(desk).get(team);
-  const more = s && regular.length >= STANDINGS_FROM_GAMES ? `; ${s.place}${s.home ? `; home ${s.home}, road ${s.road}` : ''}` : '';
-  const head = `${team} (${w}-${regular.length - w}${more})`;
+  // The record only: no conference place and no home and road records (Oct 29 2026, founder: "Gary shouldn't have to be
+  // told that a team is first or last"; every game below says home or away).
+  const head = `${team} (${w}-${regular.length - w})`;
   const missing = ratings[RATINGS_MISSING];
   const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
@@ -755,7 +722,6 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     [matchupHeader(desk), cup, spreadInWords(line)].filter(Boolean).join('\n'),
     ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
-    ['THE ROTATION THIS SEASON', rotation(desk, { HOME: { name: homeTeam, games: seasons[0]?.games }, AWAY: { name: awayTeam, games: seasons[1]?.games } })],
     ['SCHEDULE AND TRAVEL', [await situation(seasons, homeTeam, awayTeam, tip, asOf), ...nextGames.filter(Boolean)].filter(Boolean).join('\n')],
   ];
   const [starts, teams] = await Promise.all([

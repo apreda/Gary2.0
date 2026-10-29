@@ -19,7 +19,8 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
-import { recordsById } from '../../gamebygame/gameRecordStore.js';
+import { teamRecords } from '../../gamebygame/gameRecordStore.js';
+import { nbaGameRows } from '../darts/nbaDartsBoard.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
@@ -89,54 +90,26 @@ async function publishedDesk(game) {
   } catch { return null; }
 }
 
-// THE GAME-BY-GAME SHEET (Oct 26 2026 side-by-side test, test runs only): GARY_PROP_SHEETS=games lists each of the last
-// ten games with its date and opponent and no season average (founder: "all they do is play games"; a guess, to be
-// tested before props change: "71, 44, 92, 58, 66" against a line may tell more than one average).
-export const propSheetsByGame = () => process.env.GARY_PROP_SHEETS === 'games';
-const etDayShort = (d) => new Date(`${String(d).slice(0, 10)}T16:00:00Z`).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' });
-const n1 = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : v.toFixed(1));
-const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
 
-/** One player's sheet: his menu markets, then his games for exactly the stats they settle on. */
-async function playerSheet(player, markets, asOf) {
+/** One player's sheet: his menu markets, then his team's games newest first, each with the stats they settle on.
+ * The game rows are the darts board's (nbaGameRows), from the stored game records in the official box's counts: the
+ * date, the opponent, the score with overtime, started or off the bench, his minutes and stats, the regulars his team was
+ * without, or the game he missed and why (Oct 29 2026, founder: no season averages, "give Gary the numbers behind the
+ * average"; the sheet read "This season, 4 games: 26.8 min, 11.3 pts a game" over bare numbers with no dates). */
+const SHEET_GAMES = 10;
+export async function playerSheet(player, markets, asOf) {
   const season = nbaSeason(asOf);
-  // A failed fetch throws; null is a player with no games yet (Oct 29 2026 hunt: Dybantsa, Out for the Wizards' first
-  // four games, read "the game log did not load").
-  let failed = false;
-  const cur = await ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf, throwOnError: true }).catch(() => { failed = true; return null; });
-  // The stats feed's games carry team ids, not names (Oct 26 2026: every opponent printed "?"); the league's teams
-  // name them.
-  const teamsById = new Map(((await ballDontLieService.getTeams('basketball_nba').catch(() => [])) || []).map((t) => [String(t.id), t.abbreviation]));
-  // Each game's counts as its stored record has them, the official box's where BDL's differed (Oct 27 2026 data loop:
-  // Boozer's 14 points at Sacramento read 16); a game without a record keeps the feed's.
-  const recs = await recordsById('NBA', (cur?.games || []).map((g) => g.gameId)).catch(() => []);
-  const officialOf = new Map(recs.map((r) => [String(r.game_id), (r.record?.players || []).find((p) => String(p.id) === String(player.player_id))]));
-  const games = (cur?.games || []).map((g) => {
-    const o = officialOf.get(String(g.gameId));
-    // Minutes too: the record's are the official box's (Oct 29 2026 hunt: Vassell's 35.5 at Houston was officially 34).
-    const fixed = o ? { pts: o.pts, reb: o.reb, ast: o.ast, fg3m: o.fg3m, pra: o.pts + o.reb + o.ast, ...(Number.isFinite(Number(o.min)) ? { min: Number(o.min) } : {}) } : {};
-    return { ...g, ...fixed, opponent: g.opponent || teamsById.get(String(g.opponentId)) || 'opponent not on file' };
-  });
-  const fields = [...new Set(['min', ...markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)])])];
-  const name = (f) => ({ min: 'min', pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' }[f]);
-  // One game's minutes in whole minutes, as the official box and the reads give them.
-  const one = (g, f) => (f === 'min' && g.min != null && g.min !== '' ? String(Math.round(Number(g.min))) : n1(g[f]));
+  const fields = [...new Set(markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)]).filter(Boolean))];
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];
-  if (failed) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
-  if (!games.length) { lines.push('  Has not played yet this season.'); return lines.join('\n'); }
-  if (games.length < 3) {
-    lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${fields.map((f) => `${one(g, f)} ${name(f)}`).join(', ')}`).join(' | ')}`);
-    return lines.join('\n');
-  }
-  if (propSheetsByGame()) {
-    lines.push(`  This season, ${games.length} games; the last ${Math.min(10, games.length)}, newest first:`);
-    for (const g of games.slice(0, 10)) lines.push(`    ${etDayShort(g.date)} ${g.isHome ? 'vs' : '@'} ${g.opponent}: ${fields.map((f) => `${one(g, f)} ${name(f)}`).join(', ')}`);
-    return lines.join('\n');
-  }
-  lines.push(`  This season, ${games.length} games: ${fields.map((f) => `${n1(avg(games, f))} ${name(f)}`).join(', ')} a game`);
-  lines.push(`  Last ${Math.min(10, games.length)} of them, newest first:`);
-  for (const f of fields.filter((x) => x !== 'min')) lines.push(`    ${name(f)}: ${games.slice(0, 10).map((g) => n1(g[f])).join(', ')}`);
-  lines.push(`    min: ${games.slice(0, 10).map((g) => one(g, 'min')).join(', ')}`);
+  const teams = (await ballDontLieService.getTeams('basketball_nba').catch(() => [])) || [];
+  const team = teams.find((t) => t.full_name === player.team) || teams.find((t) => norm(t.full_name) === norm(player.team));
+  const today = new Date(asOf).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const records = team ? await teamRecords('NBA', season, team.id, today, 100).catch(() => null) : null;
+  if (!records) { lines.push("  This season's games are not on file (the game records did not load)."); return lines.join('\n'); }
+  const rows = nbaGameRows({ teamId: String(team.id), playerId: player.player_id, player: player.player }, records, fields,
+    new Map(teams.map((t) => [String(t.id), t.abbreviation])));
+  if (!rows.length) { lines.push('  His team has not played yet this season.'); return lines.join('\n'); }
+  lines.push(`  His team's games${rows.length > SHEET_GAMES ? `, the last ${SHEET_GAMES} of ${rows.length}` : ''}, newest first:`, ...rows.slice(0, SHEET_GAMES).map((r) => `    ${r}`));
   return lines.join('\n');
 }
 

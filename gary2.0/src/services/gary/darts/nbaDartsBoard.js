@@ -32,7 +32,6 @@ export const NBA_MARKET = {
 };
 const LABEL = { pts: 'POINTS', reb: 'REBOUNDS', ast: 'ASSISTS', threes: 'THREES', pra: 'PTS+REB+AST' };
 const one = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toFixed(1));
-const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v != null); return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null; };
 
 export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) {
   const season = nbaSeason(new Date(`${date}T16:00:00Z`));
@@ -143,6 +142,10 @@ function listedLine(side, report) {
  * the stat, and the regulars his team was without (out on the report at tip, and played 15+ minutes in another of these
  * games). A game he was on the report or did not play reads so. Null when his team has no records on file.
  */
+// The props sheets read the same rows (Oct 29 2026, founder: no season averages; "give Gary the numbers behind the
+// average"): `stat` is one stat or a list of them ('min' leaves the minutes in the row; names as the sheets print them).
+const STAT_WORD = { pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' };
+export function nbaGameRows(c, records, stats, abbrById) { return gameLines(c, records, stats, abbrById); }
 function gameLines(c, records, stat, abbrById) {
   if (!records) return null;
   const rows = [];
@@ -150,7 +153,8 @@ function gameLines(c, records, stat, abbrById) {
     const rec = r.record; const side = String(rec.home?.id) === c.teamId ? 'home' : 'away';
     const opp = side === 'home' ? rec.away : rec.home;
     const me = (rec.players || []).find((p) => String(p.id) === String(c.playerId));
-    const value = me ? (stat === 'pra' ? me.pts + me.reb + me.ast : me[stat]) : null;
+    const valueOf = (f) => (me ? (f === 'pra' ? me.pts + me.reb + me.ast : me[f]) : null);
+    const value = Array.isArray(stat) ? stat.filter((f) => f !== 'min').map((f) => `${one(valueOf(f))} ${STAT_WORD[f] || f}`).join(', ') : valueOf(stat);
     rows.push({ rec, side, opp: opp?.abbr || abbrById?.get(String(opp?.id)) || opp?.name || '?', me, value, date: r.game_date });
   }
   const big = new Set(rows.flatMap((x) => (x.rec.players || []).filter((p) => p.side === x.side && p.min >= 15).map((p) => p.name)));
@@ -166,7 +170,7 @@ function gameLines(c, records, stat, abbrById) {
     const mine = outRows.find((r) => samePlayerIn(c.player, [r.name], names));
     if (!x.me || !(x.me.min > 0)) return `${where}: did not play${mine ? ` (out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')})` : ''}`;
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min, ${one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min, ${typeof x.value === 'string' ? x.value : one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
   });
 }
 
@@ -185,7 +189,6 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     if (!lines) sheet.push("    This season's games are not on file (the game records did not load).");
     else if (!lines.length) sheet.push('    No games yet this season.');
     else {
-      if (played.length >= 3) sheet.push(`    This season: ${one(avg(played.map((p) => ({ ...p, pra: p.pts + p.reb + p.ast })), m.stat))} ${m.word} a game in ${one(avg(played, 'min'))} minutes over ${played.length} games`);
       sheet.push(`    His team's games, newest first:\n      ${lines.slice(0, 10).join('\n      ')}`);
     }
     // The one-line board Gary picks his sheets from carries his last three games, as MLB's and the NFL's lines carry

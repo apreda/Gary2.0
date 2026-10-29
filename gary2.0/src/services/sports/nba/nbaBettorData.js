@@ -11,6 +11,8 @@ import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../.
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
+import { recordsById } from '../../gamebygame/gameRecordStore.js';
+import { flowFacts } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -361,6 +363,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const o = await espnTeamBox(g).catch(() => null);
     return o ? (g.home_team?.id === ts.id ? { us: o.home, them: o.away } : { us: o.away, them: o.home }) : null;
   }));
+  // Each game's flow from its stored record (Oct 29 2026, founder: the game as it went, not only how it ended).
+  const flows = new Map(((await recordsById('NBA', games.slice(0, GAMES_SHOWN).map((g) => g.id)).catch(() => [])) || [])
+    .map((r) => [String(r.game_id), r.record]));
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
@@ -372,7 +377,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
-    return i < BOX_GAMES ? `${line}\n${[rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : line;
+    const stored = flows.get(String(g.id));
+    const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : '      flow: not on file (the game record is not built yet)';
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${flow}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }
