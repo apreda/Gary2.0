@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -197,7 +197,8 @@ function splitLine(team, label, results, describe) {
   // A record is only as good as the games behind it: each one is listed with
   // its date, score and who the opponent was.
   const games = results.map((r) => `${etDay(r.date).replace(/^\w+, /, '')} ${r.won ? 'W' : 'L'} ${r.scored}-${r.allowed} ${r.home || r.neutral ? 'vs' : '@'} ${r.opponent}${describe(r.opponentId) ? ` (${describe(r.opponentId)})` : ''}`).join('; ');
-  return `${team} ${label} this season: ${split.record} in ${plural(split.games_used, 'game')}, ${split.points_per_game} scored and ${split.points_allowed_per_game} allowed per game: ${games}.`;
+  // The record and the games, no points a game (Oct 29 2026, founder: the numbers behind the average).
+  return `${team} ${label} this season: ${split.record} in ${plural(split.games_used, 'game')}: ${games}.`;
 }
 
 /** "vs Opp", "@ Opp" or "vs Opp (neutral site)". */
@@ -368,7 +369,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map(), flow = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -434,9 +435,12 @@ async function playerGames(sides, boxes) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
         const mineD = driveLine(found.teamId), theirsD = driveLine(oppId);
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
+        // The game's flow (ncaafFlowLines; Oct 29 2026, founder: who got ahead, how and when).
+        const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: s.team, [oppId]: r.opponent || 'opponent' });
+        if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, jerseys: roster?.jerseys || {} };
+    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, jerseys: roster?.jerseys || {} };
   }));
 }
 
@@ -856,6 +860,7 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
+        + `\n      ${played[i].flow?.get(String(r.gameId)) || 'scoring and flow: not on file for this game'}`
         + (outLine(i, r) ? `\n      ${outLine(i, r)}` : '')
         + (ownMissing[i].get(String(r.gameId)) ? `\n      usual starting quarterback or linemen who did not start: ${ownMissing[i].get(String(r.gameId))}` : '')
         + (oppMissing.get(`${i}|${r.gameId}`) ? `\n      opponent's usual starting quarterback or linemen who did not start: ${oppMissing.get(`${i}|${r.gameId}`)}` : '')

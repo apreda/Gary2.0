@@ -147,10 +147,12 @@ export async function loadNcaafLeagueContext({ season, cutoff = null, teams = nu
     // win over FCS Murray State while the team's own season line leaves FCS games out.
     const fbsIds = new Set(fbs.map((t) => Number(t.id)));
     const rows = fbs.map((t) => {
-      const results = toTeamResults(games, t.id).filter(before).filter((r) => fbsIds.has(Number(r.opponentId)));
+      const all = toTeamResults(games, t.id).filter(before);
+      const results = all.filter((r) => fbsIds.has(Number(r.opponentId)));
       if (!results.length) return null;
       const mean = (field) => results.reduce((sum, r) => sum + r[field], 0) / results.length;
-      return { id: Number(t.id), name: t.full_name || t.name || null, games: results.length, allowed: mean('allowed'), scored: mean('scored') };
+      return { id: Number(t.id), name: t.full_name || t.name || null, games: results.length, allowed: mean('allowed'), scored: mean('scored'),
+        results: all.map((r) => ({ ...r, fcs: !fbsIds.has(Number(r.opponentId)) })) };
     }).filter(Boolean);
     if (rows.length < 8) return null; // not a league, not worth ranking against
 
@@ -165,6 +167,7 @@ export async function loadNcaafLeagueContext({ season, cutoff = null, teams = nu
       games: r.games,
       pointsAllowed: allowed.get(r.id) || null,
       pointsScored: scored.get(r.id) || null,
+      results: r.results,
       yardsAllowed: null,
       yardsGained: null,
       turnoverDiff: null
@@ -199,12 +202,13 @@ export function opponentQualityLine(context, opponentTeamId) {
  * 134), scores 27.4 (70th)". The opponent's season figures and where they
  * stand in its league; nothing about what that means for this game.
  */
+// Its games as results, newest first, FCS opponents marked (Oct 29 2026, founder: no averages and no places among the
+// teams, "give Gary the numbers behind the average"; it read "allows 16.3 pts/game vs FBS (6 games; 14th of 138),
+// scores 25.5 (70th)").
 export function opponentSeasonClause(context, opponentTeamId) {
   if (!context || opponentTeamId == null) return null;
   const entry = context.byTeamId.get(Number(opponentTeamId));
-  if (!entry?.pointsAllowed || !entry?.pointsScored) return null;
-  const allowed = entry.pointsAllowed;
-  const scored = entry.pointsScored;
-  return `allows ${allowed.value.toFixed(1)} pts/game${context.fbsOnly ? ` vs FBS (${entry.games} game${entry.games === 1 ? '' : 's'}; ` : ' ('}${ordinal(allowed.rank)} of ${allowed.of}), `
-    + `scores ${scored.value.toFixed(1)} (${ordinal(scored.rank)})`;
+  if (!entry?.results?.length) return null;
+  return `its games, newest first: ${[...entry.results].sort((a, b) => new Date(b.date) - new Date(a.date))
+    .map((r) => `${r.scored > r.allowed ? 'W' : r.scored < r.allowed ? 'L' : 'T'} ${r.scored}-${r.allowed} ${r.home ? 'vs' : '@'} ${r.opponent || '?'}${r.fcs ? ' (FCS)' : ''}`).join(', ')}`;
 }

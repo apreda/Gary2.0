@@ -132,7 +132,16 @@ export function gameBoxFromSummary(summary, eventId) {
       for (const m of String(play?.text || '').matchAll(/#(\d{1,2})\s+([A-Z])[A-Za-z'-]*\.\s?([A-Z][A-Za-z'-]+)/g)) named.add(`${Number(m[1])}|${playKey(m[2], m[3])}`);
     }
   }
-  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
+  // Plays of 20 yards or more from scrimmage and who made them (Oct 29 2026, founder: "literally everything that happened
+  // in the game"). Null when the game has no play-by-play.
+  const BIG = /^(Rush|Rushing Touchdown|Pass Reception|Passing Touchdown)$/;
+  const bigPlays = (summary?.drives?.previous || []).length ? (summary.drives.previous || []).flatMap((d) => (d?.plays || [])
+    .filter((p) => BIG.test(String(p?.type?.text || '')) && Number(p?.statYardage) >= 20)
+    .filter((p, i, a) => !p?.id || a.findIndex((x) => x?.id === p.id) === i)
+    .map((p) => { const t = String(p.text || ''); const pass = /Pass/.test(p.type.text);
+      return { teamId: String(p?.start?.team?.id ?? d?.team?.id ?? ''), yards: Number(p.statYardage), kind: pass ? 'catch' : 'run',
+        who: (pass ? t.match(/complete to (.+?) for -?\d+ y/)?.[1] : t.match(/^(.+?) (?:run|rush) for/)?.[1]) || null }; })) : null;
+  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, bigPlays, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
 }
 
 /** A player's play-by-play key: first initial and the first word of the last name, letters only ("r|porter"). */
@@ -145,11 +154,36 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
   return jersey != null && jersey !== '' ? named.includes(`${Number(jersey)}|${key}`) : named.some((k) => k.endsWith(`|${key}`));
 }
 
+/** A game's flow from one team's side, from the box: every score in order with the score after it (that team's first),
+ * the largest lead each way, lead changes, possession, quarterback hurries and plays of 20+ yards for both (Oct 29 2026,
+ * founder: "who got ahead, how, when did the team go up 14 versus being close the whole game"). Null without scoring. */
+export function ncaafFlowLines(box, teamId, names = {}) {
+  const us = (box?.teams || []).find((t) => t.id === String(teamId)), them = (box?.teams || []).find((t) => t.id !== String(teamId));
+  if (!us || !them || !Array.isArray(box?.scoring)) return null;
+  const name = (id) => names[id] || (id === us.id ? 'them' : 'opponent');
+  const score = (p) => (us.homeAway === 'home' ? `${p.home}-${p.away}` : `${p.away}-${p.home}`);
+  const when = (p) => (p.period > 4 ? `${p.period - 4 === 1 ? '' : `${p.period - 4}`}OT` : `Q${p.period}${p.clock ? ` ${p.clock}` : ''}`);
+  const lead = { [us.id]: null, [them.id]: null }; let sign = 0, changes = 0;
+  for (const p of box.scoring) {
+    const mine = us.homeAway === 'home' ? p.home - p.away : p.away - p.home;
+    for (const [id, by] of [[us.id, mine], [them.id, -mine]]) if (by > 0 && (!lead[id] || by > lead[id].by)) lead[id] = { by, at: when(p) };
+    const sg = Math.sign(mine); if (sg) { if (sign && sg !== sign) changes += 1; sign = sg; }
+  }
+  const leadText = (id) => (lead[id] ? `${name(id)} by ${lead[id].by} (${lead[id].at})` : `${name(id)} never led`);
+  const hurries = (id) => (box.players || []).filter((p) => p.teamId === id).reduce((a, p) => a + (Number(p.stats?.defensive?.hurries) || 0), 0);
+  const big = (id) => (box.bigPlays === null ? 'not on file' : (box.bigPlays || []).filter((b) => b.teamId === id).map((b) => `${b.who || '?'} ${b.yards} ${b.kind}`).join(', ') || 'none');
+  return [
+    `scoring: ${box.scoring.length ? box.scoring.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${p.text} (${score(p)})`).join(' · ') : 'none'}`,
+    `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · possession ${us.totals?.possessionTime ?? '?'} to ${them.totals?.possessionTime ?? '?'} · quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`,
+    `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
+  ];
+}
+
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings.
-  return cachedResearch(`espn_cfb_box_v12:${eventId}`, async () => {
+  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+.
+  return cachedResearch(`espn_cfb_box_v14:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

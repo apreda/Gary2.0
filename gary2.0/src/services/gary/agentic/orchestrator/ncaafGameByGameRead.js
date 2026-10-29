@@ -13,7 +13,7 @@ import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quar
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
-import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally } from '../scoutReport/sports/ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
@@ -122,6 +122,8 @@ async function fullGame(g, season, tonight) {
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
     `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,
+    // The largest leads, lead changes, hurries and plays of 20+ (ncaafFlowLines; Oct 29 2026, founder).
+    ...(ncaafFlowLines(box, g.us.id, { [g.us.id]: g.us.short, [g.them.id]: g.them.short }) || []).slice(1).map((l) => `  ${l}`),
     `  drives: ${drives(g.us.id, g.us.short)} · ${drives(g.them.id, g.them.short)}`,
     `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
   const [usInfo, themInfo] = await Promise.all([teamInfo(g.us.id), opp]);
