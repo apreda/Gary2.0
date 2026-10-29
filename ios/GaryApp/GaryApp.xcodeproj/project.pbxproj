@@ -95,7 +95,6 @@
 		846F812EE765FC373DFB1277 /* PickPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC5E17A7F65A413F259B852 /* PickPresentation.swift */; };
 		848433E84732600F7F27F78B /* KeychainStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98E3F91D643EAE8E4199E0A /* KeychainStorage.swift */; };
 		84D36DCC0771C34F5BCB2C27 /* GaryPushNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB45E26DD134BFC068B8302E /* GaryPushNavigation.swift */; };
-		8756B1AB98B93F625E0ABDEB /* HomeWinnersHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FB63615611FE3F1E7236EB3 /* HomeWinnersHero.swift */; };
 		8AE2DE3DD97868C6E3C99751 /* ResultModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1432E1B64516B6A8038B3F /* ResultModels.swift */; };
 		8B47B0D0D084C52747EA7346 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0616A3C8A2F0268B8A05C4D /* Secrets.swift */; };
 		8D5767617569EF3EA45DC781 /* HomeSheetPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A836D05EE2951750872171D4 /* HomeSheetPanel.swift */; };
@@ -217,7 +216,6 @@
 		37E74B1FCC3E8BE60A3CCF53 /* ProfileExperience.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileExperience.swift; sourceTree = "<group>"; };
 		392BB3CB4536197CF29E1FBB /* BookShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookShareSheet.swift; sourceTree = "<group>"; };
 		3A2CA0A2194EA10FB9389DF6 /* HomeScorecard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScorecard.swift; sourceTree = "<group>"; };
-		3FB63615611FE3F1E7236EB3 /* HomeWinnersHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWinnersHero.swift; sourceTree = "<group>"; };
 		423887686C6839DEC44C0DEA /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		446D27F9F1839CF7F49D043D /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		44E924B51A0530631BCA01C4 /* DailyRecapOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyRecapOverlay.swift; sourceTree = "<group>"; };
@@ -482,7 +480,6 @@
 				A836D05EE2951750872171D4 /* HomeSheetPanel.swift */,
 				122335EF5B948F60065E2A59 /* HomeSheetRow.swift */,
 				A4536063BFE66307137544F6 /* HomeSheetRowView.swift */,
-				3FB63615611FE3F1E7236EB3 /* HomeWinnersHero.swift */,
 				A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */,
 				7350DDC8DF76DFF4835A6B82 /* PickInfoSheet.swift */,
 				5B819AF3A5887E60E5F1F8ED /* StatusBarScrim.swift */,
@@ -758,7 +755,6 @@
 				115572DD1FE450DE26665445 /* HomeSheetRow.swift in Sources */,
 				C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */,
 				1D6F6CCF87C3ADD493EA4537 /* HomeView.swift in Sources */,
-				8756B1AB98B93F625E0ABDEB /* HomeWinnersHero.swift in Sources */,
 				5DFBF72A707CF57B3473AF15 /* HubCardIdentity.swift in Sources */,
 				C920D1248BE2F9B6BB1AA083 /* HubJudgment.swift in Sources */,
 				47846AC2738F061D755EAB0B /* HubModules.swift in Sources */,

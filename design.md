@@ -78,9 +78,6 @@ style guide; everything else follows his current request.
   1, 2, 3), the ruler spreads them across the full width, on every sport.
   Adam, Sep 24 2026: "It doesn't have this error where it gets really small
   just because we're using fewer numbers."
-- **Winners leads Home; Winners has no ticker.** The top of Home is the
-  Winners hero (Gary's day: his face, the record and the money, the bets,
-  one gold action to the page), the door free readers convert through. The
-  results ticker on the Winners page is gone. Adam, Oct 29 2026: "the ticker
-  at the top of the winners page is kinda distracting instead maybe in like a
-  hero style or something we can advertise the winners page on the home page".
+- **Winners has no ticker.** The results ticker on the Winners page is gone
+  (Adam, Oct 29 2026: "kinda distracting"). How Home advertises Winners is
+  open: the first hero came off the same day, mocks first.

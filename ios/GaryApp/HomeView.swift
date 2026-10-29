@@ -983,13 +983,8 @@ struct HomeView: View {
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
-        // ── WINNERS leads Home (founder, Oct 29 2026: "in like a hero style ... advertise the winners page on
-        // the home page"): Gary's day on Winners, one tap to the page. It replaced the sealed stub at the foot.
-        HomeWinnersHero(onOpen: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
-        })
-        .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.03), value: animateIn)
+        // (The Winners hero that led Home came off the same day it went on, Oct 29 2026: the founder had not seen
+        // it and asked for free-form mocks first. Home carries no Winners door until one is picked.)
 
         // ── THE HEADLINES lead the page, ALL DAY (founder, Aug 5). They do
         // not move at first pitch and they do not move again at the last out:
