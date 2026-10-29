@@ -47,9 +47,14 @@ export async function espnTeamBox(g) {
     const n = (k) => (s[k] == null || s[k] === '' ? null : Number(s[k]));
     out[side] = { fgm, fga, fg3m, fg3a, ftm, fta, reb: n('totalRebounds'), oreb: n('offensiveRebounds'), dreb: n('defensiveRebounds'), ast: n('assists'),
       stl: n('steals'), blk: n('blocks'), turnover: n('totalTurnovers') ?? n('turnovers'), teamTurnovers: n('teamTurnovers'), pf: n('fouls'),
-      paint: n('pointsInPaint'), fastBreak: n('fastBreakPoints'), offTurnovers: n('turnoverPoints') };
+      paint: n('pointsInPaint'), fastBreak: n('fastBreakPoints'), conceded: n('turnoverPoints') };
   }
-  return out.home && out.away && out.home.fga != null && out.away.fga != null ? out : null;
+  if (!(out.home && out.away && out.home.fga != null && out.away.fga != null)) return null;
+  // ESPN's turnoverPoints is "Points Conceded Off Turnovers": a team's own points off turnovers are what the other
+  // side conceded (Oct 28 2026: the game-by-game box gave each team the other's, Lakers 29 / Clippers 33 for 33 / 29).
+  for (const [side, other] of [['home', 'away'], ['away', 'home']]) out[side].offTurnovers = out[other].conceded;
+  for (const side of ['home', 'away']) delete out[side].conceded;
+  return out;
 }
 
 const keyOf = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
