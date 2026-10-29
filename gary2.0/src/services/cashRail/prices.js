@@ -22,6 +22,7 @@ export function settleableType(propType) {
 }
 
 export const decimalOdds = p => (p > 0 ? 1 + p / 100 : 1 + 100 / -p);
+const FLOOR_DECIMAL = 1.25; // −400
 const finitePrice = p => (Number.isFinite(p) && p !== 0 ? p : null);
 const fmtLine = n => (Number.isInteger(n) ? String(n) : String(n));
 
@@ -39,36 +40,56 @@ export function freezeBoard(propRows = [], gameOdds = []) {
   const markets = new Map();
   const offer = (m) => {
     if (m.price == null) return;
+    // A rung nobody would bet (shorter than −400) is not worth a line on the board.
+    if (m.playerId != null && decimalOdds(m.price) < FLOOR_DECIMAL) return;
     const have = markets.get(m.key);
     if (!have || decimalOdds(m.price) > decimalOdds(have.price)) markets.set(m.key, have ? { ...have, price: m.price } : m);
   };
+  /** Every book hangs its own main line: keep the one most books hang (ties: the lower line). */
+  const mainLine = (rows, lineOf) => {
+    const counts = new Map();
+    for (const r of rows) { const l = lineOf(r); if (Number.isFinite(l)) counts.set(l, (counts.get(l) ?? 0) + 1); }
+    return [...counts.entries()].sort((a, b) => (b[1] - a[1]) || (a[0] - b[0]))[0]?.[0];
+  };
 
+  const overGroups = new Map();
   for (const r of propRows) {
     const propType = r?.prop_type;
     const line = Number(r?.line_value);
     if (!propType || !settleableType(propType) || !Number.isFinite(line)) continue;
     const playerId = r.player_id ?? null;
     if (r.market?.type === 'milestone') {
-      offer({ key: `${playerId}|${propType}|milestone|${fmtLine(line)}`, playerId, propType, kind: 'milestone', line,
-        label: milestoneLabel(propType, line), price: finitePrice(r.market.odds) });
+      // "0.5" means one or more: a half-line milestone is the next whole number.
+      const at = Number.isInteger(line) ? line : Math.ceil(line);
+      offer({ key: `${playerId}|${propType}|milestone|${fmtLine(at)}`, playerId, propType, kind: 'milestone', line: at,
+        label: milestoneLabel(propType, at), price: finitePrice(r.market.odds) });
     } else if (r.market?.type === 'over_under') {
+      const g = `${playerId}|${propType}`;
+      if (!overGroups.has(g)) overGroups.set(g, []);
+      overGroups.get(g).push(r);
+    }
+  }
+  for (const rows of overGroups.values()) {
+    const line = mainLine(rows, r => Number(r.line_value));
+    const { player_id: playerId, prop_type: propType } = rows[0];
+    for (const r of rows.filter(x => Number(x.line_value) === line)) {
       offer({ key: `${playerId}|${propType}|over|${fmtLine(line)}`, playerId, propType, kind: 'over', line,
         label: `O ${fmtLine(line)}`, price: finitePrice(r.market.over_odds) });
     }
   }
 
-  for (const g of gameOdds) {
-    const total = Number(g.total_value);
-    if (Number.isFinite(total)) {
-      offer({ key: `game|total|over|${fmtLine(total)}`, playerId: null, propType: 'game_total', kind: 'over', line: total,
-        label: `O ${fmtLine(total)}`, price: finitePrice(g.total_over_odds) });
+  const total = mainLine(gameOdds, g => Number(g.total_value));
+  for (const g of gameOdds.filter(x => Number(x.total_value) === total)) {
+    offer({ key: `game|total|over|${fmtLine(total)}`, playerId: null, propType: 'game_total', kind: 'over', line: total,
+      label: `O ${fmtLine(total)}`, price: finitePrice(g.total_over_odds) });
+  }
+  for (const side of ['home', 'away']) {
+    const spread = mainLine(gameOdds, g => Number(g[`spread_${side}_value`]));
+    for (const g of gameOdds.filter(x => Number(x[`spread_${side}_value`]) === spread)) {
+      offer({ key: `game|spread|${side}|${fmtLine(spread)}`, playerId: null, propType: `game_spread_${side}`, kind: 'spread', line: spread,
+        label: spread > 0 ? `+${fmtLine(spread)}` : fmtLine(spread), price: finitePrice(g[`spread_${side}_odds`]) });
     }
-    for (const side of ['home', 'away']) {
-      const sv = Number(g[`spread_${side}_value`]);
-      if (Number.isFinite(sv)) {
-        offer({ key: `game|spread|${side}|${fmtLine(sv)}`, playerId: null, propType: `game_spread_${side}`, kind: 'spread', line: sv,
-          label: sv > 0 ? `+${fmtLine(sv)}` : fmtLine(sv), price: finitePrice(g[`spread_${side}_odds`]) });
-      }
+    for (const g of gameOdds) {
       offer({ key: `game|ml|${side}`, playerId: null, propType: `game_ml_${side}`, kind: 'ml', line: null,
         label: 'ML', price: finitePrice(g[`moneyline_${side}_odds`]) });
     }

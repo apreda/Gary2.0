@@ -54,12 +54,46 @@ describe('freezeBoard', () => {
     });
   });
 
+  it('reads a half-line milestone as the next whole number and merges it with that rung', () => {
+    const { markets } = freezeBoard([
+      row('fanduel', 'anytime_td', '0.5', { type: 'milestone', odds: 195 }),
+      row('draftkings', 'anytime_td', '1', { type: 'milestone', odds: 180 }),
+      row('fanduel', 'anytime_td', '1.5', { type: 'milestone', odds: 1450 }),
+    ], []);
+    expect(markets.map(m => [m.key, m.label, m.price])).toEqual([
+      ['7|anytime_td|milestone|1', '1+', 195], ['7|anytime_td|milestone|2', '2+', 1450],
+    ]);
+  });
+
+  it('drops rungs nobody would bet (shorter than −400)', () => {
+    const { markets } = freezeBoard([
+      row('draftkings', 'receiving_yards', '10', { type: 'milestone', odds: -2800 }),
+      row('draftkings', 'receiving_yards', '40', { type: 'milestone', odds: -144 }),
+    ], []);
+    expect(markets.map(m => m.label)).toEqual(['40+']);
+  });
+
+  it('keeps one over line per player prop and per game total: the line most books hang', () => {
+    const { markets } = freezeBoard([
+      row('fanduel', 'receiving_yards', '46.5', { type: 'over_under', over_odds: -112 }),
+      row('draftkings', 'receiving_yards', '45.5', { type: 'over_under', over_odds: -115 }),
+      row('betmgm', 'receiving_yards', '45.5', { type: 'over_under', over_odds: -110 }),
+    ], [
+      { vendor: 'a', total_value: '47', total_over_odds: -110 },
+      { vendor: 'b', total_value: '46.5', total_over_odds: -111 },
+      { vendor: 'c', total_value: '46.5', total_over_odds: -105 },
+    ]);
+    expect(markets.map(m => [m.key, m.price])).toEqual([
+      ['7|receiving_yards|over|45.5', -110], ['game|total|over|46.5', -105],
+    ]);
+  });
+
   it('on tonight\'s real props, every frozen price is the best book\'s price for that rung', () => {
     const props = fixture('car-gb-props.json');
     const { markets } = freezeBoard(props, fixture('car-gb-odds.json'));
     expect(markets.length).toBeGreaterThan(50);
     for (const m of markets.filter(x => x.playerId != null && x.kind === 'milestone')) {
-      const offers = props.filter(r => r.player_id === m.playerId && r.prop_type === m.propType && r.market.type === 'milestone' && Number(r.line_value) === m.line)
+      const offers = props.filter(r => r.player_id === m.playerId && r.prop_type === m.propType && r.market.type === 'milestone' && Math.ceil(Number(r.line_value)) === m.line)
         .map(r => r.market.odds).filter(Number.isFinite);
       expect(dec(m.price)).toBe(Math.max(...offers.map(dec)));
     }
