@@ -1871,7 +1871,14 @@ private struct GaryBankrollPanel: View {
             VStack(alignment: .leading, spacing: 18) {
                 if let b = snapshot {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).fitsOneLine()
+                        HStack(alignment: .center, spacing: 10) {
+                            Text(dollars(b.bankroll_units)).font(.system(size: 48, weight: .semibold, design: .rounded)).fitsOneLine()
+                            Spacer(minLength: 0)
+                            // A day off the record rides the corner of the number it moves, one tap from its card
+                            // (founder, Oct 29 2026: "make it small and move it to the corner ... just enough so
+                            // someone can see why we made the decision we made when they see a jump").
+                            ForEach(b.scrubbed ?? []) { scrub in scrubCorner(scrub) }
+                        }
                         HStack(spacing: 4) {
                             Text("\(signedDollars(b.profit_units)) · \(String(format: "%+.2f%%", b.growth_pct))")
                                 .font(.system(size: 16, weight: .semibold)).foregroundStyle(b.profit_units < 0 ? Color.red : gold)
@@ -1887,10 +1894,6 @@ private struct GaryBankrollPanel: View {
                         }
                         if showAbout { aboutStrip(b).padding(.top, 6).transition(.opacity) }
                     }
-                    // A day taken off the record says so right under the number it changes; the card behind it shows
-                    // the day and the numbers before and after (founder, Oct 29 2026: "at the top, not at the very
-                    // bottom, hidden" and "design things ... not just words on a page").
-                    ForEach(b.scrubbed ?? []) { scrub in scrubBanner(scrub) }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
                         metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
@@ -1963,28 +1966,25 @@ private struct GaryBankrollPanel: View {
     }()
     private static func chartDay(_ raw: String) -> Date? { chartDayFormat.date(from: "\(raw.prefix(10)) 12:00") }
 
-    /// The notice for a day off the record: the day as a date tile, when it comes off, one tap to its card.
-    private func scrubBanner(_ scrub: GaryBankrollSnapshot.Scrub) -> some View {
+    /// The notice for a day off the record: the day as a small calendar leaf with a gold info mark, one tap to its card.
+    private func scrubCorner(_ scrub: GaryBankrollSnapshot.Scrub) -> some View {
         let day = LabFormat.monthDay(scrub.date)
         return Button { openScrub = scrub } label: {
-            HStack(spacing: 12) {
-                ScrubDateTile(ymd: scrub.date)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(scrub.pending ? "OFF THE RECORD \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())" : "OFF THE RECORD")
-                        .font(.system(size: 10.5, weight: .bold)).tracking(1).foregroundStyle(gold)
-                    Text(scrub.pending ? "\(day) comes off Gary's record" : "\(day) is off Gary's record")
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                        .fitsOneLine()
+            ScrubDateTile(ymd: scrub.date, compact: true)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(gold)
+                        .background(Circle().fill(Color.black).padding(1))
+                        .offset(x: 6, y: -6)
                 }
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(gold)
-            }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(gold.opacity(0.08)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(gold.opacity(0.45), lineWidth: 1))
-            .contentShape(Rectangle())
+                .padding(8)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(scrub.pending
+            ? "\(day) comes off Gary's record \(LabFormat.monthDay(scrub.effective_date ?? ""))"
+            : "Why \(day) is off Gary's record")
         .accessibilityHint("Shows the day and what changes")
     }
 
@@ -2055,15 +2055,17 @@ private struct GaryBankrollPanel: View {
 /// A day as a calendar leaf: the month over the day's number.
 struct ScrubDateTile: View {
     let ymd: String
+    /// The corner size, by the bankroll number.
+    var compact = false
     var body: some View {
         let parts = LabFormat.monthDay(ymd).split(separator: " ").map(String.init)
         VStack(spacing: 0) {
             Text((parts.first ?? "").uppercased())
-                .font(.system(size: 9.5, weight: .bold)).tracking(1).foregroundStyle(GaryColors.gold)
+                .font(.system(size: compact ? 8 : 9.5, weight: .bold)).tracking(1).foregroundStyle(GaryColors.gold)
             Text(parts.count > 1 ? parts[1] : "")
-                .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                .font(.system(size: compact ? 16 : 20, weight: .bold, design: .rounded)).foregroundStyle(.white)
         }
-        .frame(width: 44, height: 46)
+        .frame(width: compact ? 36 : 44, height: compact ? 38 : 46)
         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.black))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.5), lineWidth: 1))
         .accessibilityHidden(true)
