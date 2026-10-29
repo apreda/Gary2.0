@@ -23,14 +23,32 @@ export function newsWithoutRecaps(news, finals) {
   for (const l of lines) {
     if (items.length && (/^\s+\S/.test(l) || !l.trim())) items[items.length - 1].push(l); else items.push([l]);
   }
-  const out = []; let skip = false;
+  // A last game's box as a table of players' minutes and points, with the line that introduces it (Oct 29 2026 hunt: two
+  // tables, 21 rows, under MEM@POR's news; the log has those boxes, official).
+  const boxTable = (l) => /^\s*\|/.test(l) && /\|\s*players?\s*\|/i.test(l)
+    && (l.match(/\|\s*(?:min(?:utes)?|p(?:oin)?ts|reb(?:ounds)?|ast|assists)\s*(?=\|)/gi) || []).length >= 2;
+  const out = []; let skip = false; let table = false;
   for (const item of items) {
     if (heading(item[0])) { skip = recapHeading(item[0]); if (skip) continue; }
+    if (boxTable(item[0])) {
+      table = true;
+      while (out.length && !out[out.length - 1].trim()) out.pop();
+      if (out.length && /:\s*$/.test(out[out.length - 1])) out.pop();
+      continue;
+    }
+    if (table && /^\s*\|/.test(item[0])) continue;
+    table = false;
     if (skip || item.some((l) => isFinal(l) || inGame(l))) continue;
     out.push(...item);
   }
-  // Headings left with nothing under them.
-  const kept = out.filter((l, i) => { if (!heading(l)) return true; const nextLine = out.slice(i + 1).find((x) => x.trim()); return Boolean(nextLine) && !heading(nextLine); });
+  // Headings left with nothing under them, down to the next heading of the same or a higher level (Oct 29 2026 hunt:
+  // "## Atlanta Hawks" went with its "### Last game" subsection, and two unnamed "### Current storylines" were left).
+  const level = (l) => (l.match(/^\s*(#{1,6})\s/)?.[1].length ?? 7);
+  const kept = out.filter((l, i) => {
+    if (!heading(l)) return true;
+    for (const x of out.slice(i + 1)) { if (!x.trim()) continue; if (heading(x)) { if (level(x) <= level(l)) return false; continue; } return true; }
+    return false;
+  });
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 

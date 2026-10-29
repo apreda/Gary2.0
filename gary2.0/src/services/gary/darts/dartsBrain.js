@@ -82,7 +82,8 @@ export function sheetsByGame(entries, blocks = new Map(), starts = new Map()) {
     const list = games.get(k);
     const body = list.map((e) => `  [${e.id}] ${e.sheet}`).join('\n\n');
     if (list.every((e) => e.standalone) || !blocks.get(k)) return body;
-    return `GAME · ${blocks.get(k)}\n\n${body}`;
+    const block = blocks.get(k);
+    return `${/^GAME\b/.test(block) ? block : `GAME · ${block}`}\n\n${body}`;
   }).join('\n\n\n');
 }
 

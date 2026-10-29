@@ -14,7 +14,7 @@ import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { homedir } from 'node:os';
 import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
-import { withoutBettingLines } from './ncaafRead.js';
+import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine } from '../../../sports/nba/nbaBettorData.js';
@@ -86,7 +86,9 @@ export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = 
     const l = raw
       .replace(/ ?\[SEASON OPENER — no regular-season games played yet\]/, '')
       .replace(/\[SEASON-LONG\]/, '[has not played in any of the team\'s recent games]')
-      .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[since ${since.trim()}, ${days} days${missed ? `, ${missed}` : ''}]`)
+      // The desk's "Since" date is the last game he played (Oct 29 2026 hunt: "[since Oct 28, 1 days, 0 games missed]" for
+      // Meleek Thomas, 20 minutes on Oct 28).
+      .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[last played ${since.trim()}, ${days} day${days === '1' ? '' : 's'} ago${missed ? `; ${missed.replace(/missed$/, 'missed since')}` : ''}]`)
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) \(([^)]+)\)\]/, '[$1]')
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM)\]/, '').replace(/\s+$/, '');
     if (side && teams.get(side)) teams.get(side).rows.push(l);
@@ -149,18 +151,21 @@ function injurySection(desk, { homeTeam, awayTeam }) {
 /** The players the league lists Available for tonight, with what they are listed for (Oct 27 2026 data check: Miami read
  * "nobody listed" with Pelle Larsson, 36 minutes in its last game, listed Available with a left finger sprain), from the
  * report the injury list came from. '' when nobody is. */
-export async function availableListed(desk, { homeTeam, awayTeam, tip, asOf }) {
+export async function availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons = null }) {
   const gameDate = reportDay(tip || asOf);
   const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf }).catch(() => null);
   if (!anchor) return '';
   try {
     const listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), gameDate, homeTeam, awayTeam);
     const lines = [];
-    for (const [tag, team] of [['AWAY', awayTeam], ['HOME', homeTeam]]) {
+    for (const [tag, team, ts] of [['AWAY', awayTeam, seasons?.[1]], ['HOME', homeTeam, seasons?.[0]]]) {
       const side = listing[team];
       if (!side || side === 'unfiled') continue;
-      const rows = [...side.values()].filter((r) => r.status === 'Available' && !/g league - two-way/i.test(r.reason));
-      if (rows.length) lines.push(`[${tag}] ${team}: ${rows.map((r) => `${r.name} (${String(r.reason || '').replace(/^Injury\/Illness - /, '')})`).join('; ')}`);
+      // A player Out for the team's last game is listed once, under that (Oct 29 2026 hunt: Dybantsa read twice).
+      const back = new Set((ts ? await outLastGame(ts, side).catch(() => []) : []).filter((r) => r.available).map((r) => playerKey(r.name)));
+      const rows = [...side.values()].filter((r) => r.status === 'Available' && !/g league - two-way/i.test(r.reason) && !back.has(playerKey(r.name)));
+      const why = (r) => String(r.reason || '').replace(/^Injury\/Illness - /, '').trim();
+      if (rows.length) lines.push(`[${tag}] ${team}: ${rows.map((r) => `${r.name}${why(r) && why(r) !== '-' ? ` (${why(r)})` : ''}`).join('; ')}`);
     }
     return lines.length ? `Listed Available on the same report:\n${lines.join('\n')}` : '';
   } catch { return ''; }
@@ -178,7 +183,7 @@ async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf
     const lines = [];
     for (const [tag, team, ts] of [['AWAY', awayTeam, seasons[1]], ['HOME', homeTeam, seasons[0]]]) {
       const back = await outLastGame(ts, listing[team]);
-      if (back.length) lines.push(`[${tag}] ${team}: ${back.map((r) => `${r.name} (Out for ${span(r)}: ${r.reason}${r.available ? '; listed Available tonight' : ''})`).join('; ')}`);
+      if (back.length) lines.push(`[${tag}] ${team}: ${back.map((r) => `${r.name} (Out for ${span(r)}${r.reason && r.reason !== '-' ? `: ${r.reason}` : ''}${r.available ? '; listed Available tonight' : ''})`).join('; ')}`);
     }
     return lines.length ? `Out for the team's last game, and not listed Out, Doubtful, Questionable or Probable tonight:\n${lines.join('\n')}` : '';
   } catch (e) {
@@ -199,7 +204,12 @@ function rotation(desk, teams) {
       const t = teams[h[1]];
       keep = Boolean(t?.games) && t.games.length >= ROTATION_FROM_GAMES;
       if (keep) out.push(`${t.name}:`);
-    } else if (keep && /^ {2}\S.* - .*PPG/.test(l)) out.push(l);
+    } else if (keep && /^ {2}\S.* - .*PPG/.test(l)) {
+      // The basic line only (Oct 29 2026 hunt): the desk's status note ("— QUESTIONABLE [GTD] GP: 3 / GM: 0") is the
+      // injury list's, and a few minutes' usage rate is noise.
+      const m = l.match(/^ {2}(.+?)(?: — .+?)? - ((?:[\d.]+|N\/A) PPG.*)$/);
+      if (m) out.push(`  ${m[1]} - ${m[2].replace(/ \| Limited role.*$/, ' (5 minutes a game or fewer)')}`);
+    }
   }
   return out.join('\n').trim();
 }
@@ -289,7 +299,7 @@ const plain = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g
 // it isn't this one. Departures from last season's roster, last season's awards and "last spring" are last season too
 // (Oct 23 2026 data audit: Gary's Spurs and Nuggets reads leaned on "with Lu Dort and Isaiah Joe having departed"); a
 // player who leaves a game is this season.
-const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious[- ]seasons?\b|\bprior[- ]seasons?\b|\ba year ago\b|\bpreseasons?\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star (?:selections?|appearances?)\b|\bAll-Defensive\b|\bAll-Rookie\b|\bof the Year\b|\bsummer league\b|\bscrimmages?\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b|\bdepart(?:ed|s|ure|ures)\b(?! (?:from )?(?:the |that |\w+'s )?(?:game|contest)\b| (?:in|during|early in|late in) the (?:first|second|third|fourth) (?:quarter|half)\b| with (?:an? )?(?:\w+ ){0,2}(?:injury|soreness|sprain|strain|cramps?)\b)|\bleft (?:\S+ ){0,3}in free agency\b|\b(?:traded|dealt) away\b|\blast (?:spring|summer)\b|\breturns (?:its|their|all of its|all of their) (?:top|entire|core|starting)\b/i;
+const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious[- ]seasons?\b|\bprior[- ]seasons?\b|\ba year ago\b|\bpreseasons?\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star (?:selections?|appearances?)\b|\bAll-Defensive\b|\bAll-Rookie\b|\bof the Year\b|\bsummer league\b|\bscrimmages?\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b|\bdepart(?:ed|s|ure|ures)\b(?! (?:from )?(?:the |that |\w+'s )?(?:game|contest)\b| (?:in|during|early in|late in) the (?:first|second|third|fourth) (?:quarter|half)\b| with (?:an? )?(?:\w+ ){0,2}(?:injury|soreness|sprain|strain|cramps?)\b)(?<!\b(?:injury|soreness|sprain|strain|cramps?|game|quarter|half) and depart(?:ed|s|ure|ures))|\bleft (?:\S+ ){0,3}in free agency\b|\b(?:traded|dealt) away\b|\blast (?:spring|summer)\b|\breturns (?:its|their|all of its|all of their) (?:top|entire|core|starting)\b/i;
 const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)[-–](\d\d)\b/g)].some((m) => Number(m[1]) < season);
 // A rate from a game or two (Oct 23 2026 audit: "84.7 points per 100 possessions during Embiid's 33 minutes").
 const SHORT_RATE = /per 100 possessions|offensive rating|defensive rating|net rating|true shooting|effective field goal/i;
@@ -469,7 +479,14 @@ function uncheckedNumbers(line, facts) {
     // "He", "his" and "him" are the player named last before them in the paragraph ("Bailey's strongest recent storyline
     // is defensive development. Against San Antonio, he produced six points").
     const he = /\b(?:he|his|him)\b/i.test(sentence) ? carry : null;
-    const ownerAt = (i) => { const g = [...groups].reverse().find((x) => x.end <= i); return he && (!g || g.team) ? he : g || null; };
+    // A team named as where or whom a game was against ("26 points and six assists at Sacramento") is not the stat's
+    // owner when a player is named before it (Oct 29 2026 hunt: Avdija's correct line left the news).
+    const place = (g) => g.team && /\b(?:at|against|vs\.?|versus|in|over|to|from|beat|beating)\s+(?:the\s+)?$/i.test(sentence.slice(0, g.at));
+    const ownerAt = (i) => {
+      const before = [...groups].reverse().filter((x) => x.end <= i);
+      const g = before.find((x) => !place(x) || !before.some((y) => !y.team && y.end <= x.at)) || null;
+      return he && (!g || g.team) ? he : g;
+    };
     const isFinal = (a, b) => facts.finals.some(([h, v]) => (h === a && v === b) || (h === b && v === a));
     for (const re of [SCORE, NAMED_SCORE]) {
       for (const m of sentence.matchAll(re)) {
@@ -486,7 +503,10 @@ function uncheckedNumbers(line, facts) {
       const made = numOf(m[1]), att = numOf(m[2]);
       const pairs = (r) => [[r.fgm, r.fga], [r.fg3m, r.fg3a], [r.ftm, r.fta]].some(([x, y]) => x === made && y === att);
       const owner = ownerAt(m.index);
-      const ok = owner && !owner.team ? owner.members.every((names) => claimOk(facts, names, pairs)) : facts.teamRows.some(pairs) || !facts.allComplete;
+      // A sentence naming no one can be about the paragraph's player ("Wednesday's scoring line was 12 points on 4-for-12
+      // shooting", under Jalen Johnson's lines).
+      const ok = owner && !owner.team ? owner.members.every((names) => claimOk(facts, names, pairs))
+        : facts.teamRows.some(pairs) || !facts.allComplete || (!owner && carry && carry.members.every((names) => claimOk(facts, names, pairs)));
       if (!ok) bad.push(m[0]);
     }
     for (const m of sentence.matchAll(STAT)) {
@@ -498,8 +518,9 @@ function uncheckedNumbers(line, facts) {
       const owner = ownerAt(m.index);
       if (!owner || owner.team) {
         // A team's own count: its final score or its box (a points number under 60 is part of a game). A count with no
-        // one named before it stands, unless it is a points total no final has.
-        const fits = key === 'pts' ? value < 60 || facts.finals.some(([h, v]) => h === value || v === value) : facts.teamRows.some((r) => r[key] === value) || !facts.allComplete;
+        // one named before it stands, unless it is a points total no final has; or it is the paragraph's player's.
+        const fits = (key === 'pts' ? value < 60 || facts.finals.some(([h, v]) => h === value || v === value) : facts.teamRows.some((r) => r[key] === value) || !facts.allComplete)
+          || (!owner && carry && !perGame && groupOk(facts, carry.members, key, value, false));
         if (!fits && (owner || key === 'pts')) bad.push(m[0]);
         continue;
       }
@@ -594,13 +615,37 @@ function withoutOrphans(lines, drop) {
   return drop;
 }
 
+// What the search did not find, the report's filing as the search saw it, and two-way players' G League duty are not
+// news (Oct 29 2026 hunt: rows for three two-way players read "No accessible, dated coach statement ... was found by the
+// cutoff. His uncertainty concerns G League two-way availability."; "The latest official PDF accessible ... contained
+// neither team's individual submission" sat under an injury list from the 1:00 PM report with both teams filed). A
+// bullet or table row left with only its name goes too.
+const NOTHING_FOUND = /^(?:No|Neither)\b[^.]*\b(?:statements?|updates?|reporting|reports?|coverage)\b[^.]*\b(?:was|were|has been|had been)?\s*(?:found|established|located|identified|confirmed)\b/i;
+const FILING = /\b(?:official|league|injury)\b[^.]*\b(?:PDF|submissions?|report|document)\b[^.]*\b(?:timestamped|issued at|not (?:yet )?(?:filed|submitted)|had not filed|individual submission|contained neither)\b/i;
+const TWO_WAY = /\bG League two-way\b|\btwo-way (?:G League )?(?:availability|assignment|duty)\b/i;
+const SEARCH_EMPTY = /^No\b.*\b(?:in the supplied (?:reporting|material)|(?:by|before) the (?:research )?cutoff)\W*$|\bfound no (?:such )?(?:announcement|statement|update|report)s?\b/i;
+const emptyNews = (s) => NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s);
+function withoutEmptyNews(text) {
+  return String(text || '').split('\n').map((l) => {
+    if (/^\s*\|/.test(l)) {
+      const cells = l.split('|');
+      if (cells.length < 4 || /^\s*:?-{2,}/.test(cells[1] || '')) return l;
+      const rest = cells.slice(2, -1).map((c) => withoutSentences(c.trim(), emptyNews));
+      return rest.every((c) => !c.trim()) ? null : [cells[0], cells[1], ...rest.map((c) => ` ${c} `), cells[cells.length - 1]].join('|');
+    }
+    const lead = l.match(/^(\s*(?:[-*•]\s+)?(?:\*\*[^*]+\*\*[:.]?\s*)?)/)[1];
+    const body = withoutSentences(l.slice(lead.length), emptyNews);
+    return body.trim() || !l.slice(lead.length).trim() ? lead + body : null;
+  }).filter((l) => l !== null).join('\n');
+}
+
 /** The news Gary reads (see above). `facts` is newsFacts' check list; `start` the first game date of the two teams. */
 export function newsForGary(desk, { facts = null, start = null, asOf = new Date(), season = nbaSeason() } = {}) {
   const state = sectionOf(desk, 'CURRENT STATE & CONTEXT');
   const i = state.indexOf(NEWS_MARK);
   const text = i >= 0 ? state.slice(i + NEWS_MARK.length) : '';
   // The search's own opening line ("I'll use the latest roster news ...") is its note to itself, not news.
-  const lines = withoutBettingLines(text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, '')).split('\n');
+  const lines = withoutEmptyNews(withoutBettingLines(text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, ''))).split('\n');
   const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || Boolean(facts && uncheckedNumbers(l, facts).length)));
   for (const k of startersTables(lines, desk)) drop[k] = true;
   withoutOrphans(lines, drop);
@@ -652,7 +697,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
-    availableListed(desk, { homeTeam, awayTeam, tip, asOf }),
+    availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons }),
     Promise.all([awayTeam, homeTeam].map((t) => nextGameLine(t, tip).catch(() => null))),
   ]);
   const parts = [

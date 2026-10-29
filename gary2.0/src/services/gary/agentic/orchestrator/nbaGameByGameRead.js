@@ -41,8 +41,10 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   // 11 and Camara's 3 became 2 after the record was built on Oct 27): a game is built again the morning after (8 AM ET;
   // Oct 29 2026 hunt: ESPN moved Washington's fast-break points at Cleveland from 10 to 12 overnight), two days and seven
   // days after its date, once each.
-  const at = (ymd, days) => Date.parse(`${String(ymd).slice(0, 10)}T12:00:00Z`) + days * 86_400_000;
-  const beforeCorrections = (s) => Boolean(s.builtAt) && [1, 2, 7].some((d) => Date.parse(s.builtAt) < at(s.date, d) && Date.now() >= at(s.date, d));
+  // Again at 2 PM ET the day after: ESPN's box can still be settling in the morning (Oct 29 2026 hunt: Jalen Johnson's
+  // blocks went 1 to 2 at 10:55 AM and back to 1 by noon, and the record kept the 2).
+  const at = (ymd, days, hourUtc = 12) => Date.parse(`${String(ymd).slice(0, 10)}T00:00:00Z`) + days * 86_400_000 + hourUtc * 3_600_000;
+  const beforeCorrections = (s) => Boolean(s.builtAt) && [[1, 12], [1, 18], [2, 12], [7, 12]].some(([d, h]) => Date.parse(s.builtAt) < at(s.date, d, h) && Date.now() >= at(s.date, d, h));
   const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || beforeCorrections(s) || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
   for (const g of missing) {
@@ -89,9 +91,11 @@ function whatsDifferent(team, records, listing) {
     const listed = listing === 'unfiled' || !listing ? null : samePlayerIn(e.name, [...listing.values()].map((r) => r.name), [...regulars.keys()]);
     const tonight = listed ? listing.get(playerKey(listed)) : null;
     const status = tonight?.status && tonight.status !== 'Available' ? tonight.status : null;
+    const available = tonight?.status === 'Available';
     const playedLast = last.players.some((p) => p.side === sideOf(last, team.id) && p.name === e.name && p.min > 0);
     const games = `played ${e.played.length} of the ${shown.length} games below${e.missed.length ? `, not in ${e.missed.join(', ')}` : ''}`;
     if (status) lines.push(`  ${e.name}: ${status} tonight; ${games}`);
+    else if (!playedLast && available) lines.push(`  ${e.name}: listed Available tonight${tonight.reason ? ` (${String(tonight.reason).replace(/^Injury\/Illness - /, '')})` : ''}; did not play the last game; ${games}`);
     else if (!playedLast && listing && listing !== 'unfiled') lines.push(`  ${e.name}: not on tonight's injury report; did not play the last game; ${games}`);
   }
   const none = listing === 'unfiled' ? " tonight's injury report not filed yet" : !listing ? " tonight's injury report not on file"
@@ -153,8 +157,10 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
       const row = all.find((x) => String(x.game_id) === String(r.game_id));
       return meetingSet.has(String(r.game_id)) && row ? `${resultLine(row, team.id)}: in this season's meetings above` : fullGameText(r.record, team.id, byTeam);
     });
-    const older = all.filter((r) => !recs.slice(0, NBA_WINDOW).some((x) => String(x.game_id) === String(r.game_id))).reverse().slice(0, SHORT_LINES);
-    return [`${team.full_name.toUpperCase()}: ${w}-${all.length - w} in the games below${all.length > NBA_WINDOW ? `; the last ${NBA_WINDOW} in full, newest first, then one line for each older game` : ', newest first'}`,
+    const olderAll = all.filter((r) => !recs.slice(0, NBA_WINDOW).some((x) => String(x.game_id) === String(r.game_id))).reverse();
+    const older = olderAll.slice(0, SHORT_LINES);
+    const cutOff = olderAll.length - older.length;
+    return [`${team.full_name.toUpperCase()}: ${w}-${all.length - w} this season${all.length > NBA_WINDOW ? `; the last ${NBA_WINDOW} in full, newest first, then ${cutOff ? `the ${older.length} before them in one line each (the ${cutOff} earliest not shown)` : 'one line for each older game'}` : ', every game below, newest first'}`,
       full.join('\n\n'),
       older.length ? `Older games, one line each:\n${older.map((r) => shortGameText(r, team.id)).join('\n')}` : null].filter(Boolean).join('\n\n');
   };

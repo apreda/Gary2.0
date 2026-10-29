@@ -100,7 +100,10 @@ const avg = (games, f) => { const xs = games.map((g) => g[f]).filter((v) => v !=
 /** One player's sheet: his menu markets, then his games for exactly the stats they settle on. */
 async function playerSheet(player, markets, asOf) {
   const season = nbaSeason(asOf);
-  const cur = await ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf }).catch(() => null);
+  // A failed fetch throws; null is a player with no games yet (Oct 29 2026 hunt: Dybantsa, Out for the Wizards' first
+  // four games, read "the game log did not load").
+  let failed = false;
+  const cur = await ballDontLieService.getNbaPlayerGameLogs(player.player_id, 100, {}, { season, asOf, throwOnError: true }).catch(() => { failed = true; return null; });
   // The stats feed's games carry team ids, not names (Oct 26 2026: every opponent printed "?"); the league's teams
   // name them.
   const teamsById = new Map(((await ballDontLieService.getTeams('basketball_nba').catch(() => [])) || []).map((t) => [String(t.id), t.abbreviation]));
@@ -119,8 +122,8 @@ async function playerSheet(player, markets, asOf) {
   // One game's minutes in whole minutes, as the official box and the reads give them.
   const one = (g, f) => (f === 'min' && g.min != null && g.min !== '' ? String(Math.round(Number(g.min))) : n1(g[f]));
   const lines = [`${player.player} (${player.team}) — ${markets.map((m) => `${MARKET_WORDS[norm(m.prop_type)]} ${m.line}`).join(' · ')}`];
-  if (!cur) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
-  if (!games.length) { lines.push('  No games yet this season.'); return lines.join('\n'); }
+  if (failed) { lines.push("  This season's games are not on file (the game log did not load)."); return lines.join('\n'); }
+  if (!games.length) { lines.push('  Has not played yet this season.'); return lines.join('\n'); }
   if (games.length < 3) {
     lines.push(`  This season so far (${games.length} game${games.length === 1 ? '' : 's'}): ${games.map((g) => `${g.isHome ? 'vs' : '@'} ${g.opponent} ${fields.map((f) => `${one(g, f)} ${name(f)}`).join(', ')}`).join(' | ')}`);
     return lines.join('\n');

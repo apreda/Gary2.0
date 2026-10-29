@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 16;
+export const NBA_RECORD_VERSION = 17;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -63,16 +63,27 @@ export async function settingOf(g, team, teamGames) {
 const INCIDENT = /^(?:Technical Foul|Double Technical Foul|Flagrant Foul Type [12]|Flopping Technical|Ejection|Taunting Technical)$/i;
 // The feed now and then carries a play twice (one double technical read as two at Atlanta on Oct 24), cuts a name off
 // ("Double technical foul: Kenrich Williams and", in ESPN's feed too), or has a flagrant reviewed and called only as its
-// free throws (Dallas at Miami, Oct 26); each said as such (Oct 29 2026 hunt).
-export function incidentsOf(plays) {
-  const ordered = [...(plays || [])].sort((a, b) => a.order - b.order);
+// free throws (Dallas at Miami, Oct 26); each said as such (Oct 29 2026 hunt). Only the double technical is a feed
+// duplicate: one player's two technicals at one clock are two (Gordon's ejection at Denver, Oct 26), listed before the
+// ejection. A technical with no name (a bench or coach technical) is put on the team the other side's technical free
+// throw was shot against.
+export function incidentsOf(plays, teamNames = {}) {
+  const ordered = [...(plays || [])].sort((a, b) => a.period - b.period || clockSeconds(b.clock) - clockSeconds(a.clock)
+    || (/^Ejection$/i.test(String(a.type || '')) - /^Ejection$/i.test(String(b.type || ''))) || a.order - b.order);
   const seen = new Set(), out = [];
   for (const p of ordered) {
     const at = `${p.period}|${p.clock}`;
     if (INCIDENT.test(String(p.type || ''))) {
-      const text = String(p.text || p.type).trim();
-      if (seen.has(`${at}|${text}`)) continue;
-      seen.add(`${at}|${text}`);
+      let text = String(p.text || p.type).trim();
+      if (/^Double Technical/i.test(String(p.type || ''))) {
+        if (seen.has(`${at}|${text}`)) continue;
+        seen.add(`${at}|${text}`);
+      }
+      if (/^technical foul$/i.test(text)) {
+        const ft = ordered.find((q) => `${q.period}|${q.clock}` === at && /^Free Throw - Technical/i.test(String(q.type || '')) && q.team?.id != null);
+        const on = ft ? Object.entries(teamNames).find(([id]) => String(id) !== String(ft.team.id))?.[1] : null;
+        text = on ? `Technical foul on the ${on} (player or coach not named)` : 'Technical foul (player and team not on file)';
+      }
       out.push({ period: p.period, text: / and$/.test(text) ? `${text} (the second name not on file)` : text });
     } else if (/^Free Throw - Flagrant 1 of/i.test(String(p.type || '')) && !ordered.some((q) => `${q.period}|${q.clock}` === at && /^Flagrant Foul/i.test(String(q.type || '')))) {
       const fouled = String(p.text || '').replace(/\s+(?:makes|misses)\b.*$/i, '').trim();
@@ -86,7 +97,10 @@ export function incidentsOf(plays) {
  * (6 of the first 52 games: the feed's running score drifts, "130-105" in a 127-105 game), so a drifted play-by-play
  * never stands in for the game. The score after three comes from the official quarters instead. */
 export function flowOf(plays, final) {
-  const ordered = [...(plays || [])].sort((a, b) => a.order - b.order).filter((p) => p.home_score != null && p.away_score != null);
+  // In clock order, and at one clock by the running score: the feed logs an and-one free throw before its layup, a
+  // substitution carrying the score from before or after the basket, and a review from the 1st after the final horn.
+  const ordered = [...(plays || [])].filter((p) => p.home_score != null && p.away_score != null)
+    .sort((a, b) => a.period - b.period || clockSeconds(b.clock) - clockSeconds(a.clock) || (a.home_score + a.away_score) - (b.home_score + b.away_score) || a.order - b.order);
   const last = ordered[ordered.length - 1];
   if (!last || last.home_score !== final.home || last.away_score !== final.away) return null;
   const lead = { home: 0, away: 0 }; let changes = 0, ties = 0, leader = 0, prevDiff = 0, ph = 0, pa = 0, run = null;
@@ -227,6 +241,11 @@ export async function buildNbaGameRecord(gameId) {
   const followed = plays ? periods.map((q) => followQuarter(plays, players, q)) : periods.map(() => null);
   const closing = followed[followed.length - 1] ? closingOf(plays, players, periods) : null;
   for (const [i, t] of followed.entries()) if (t) for (const p of players) if (p.quarters) p.quarters[i].min = Math.round((t.secs.get(p.id) || 0) / 6) / 10;
+  // The 4th and overtime to the second when those quarters were followed, kept apart from the whole-game check below
+  // (Oct 29 2026 hunt: three of the Spurs' closing five fell off "minutes in the 4th" at Houston on Oct 23 because their
+  // minutes in another quarter were off).
+  const late = periods.map((q, i) => [q, i]).filter(([q]) => q >= 4);
+  if (late.every(([, i]) => followed[i])) for (const p of players.filter((x) => x.min > 0)) p.lateMin = Math.round(late.reduce((a, [, i]) => a + (followed[i].secs.get(p.id) || 0), 0) / 6) / 10;
   const cutQuarters = followed.filter((t) => !t).length;
   const wholeMinuteQuarters = periods.filter((q, i) => !followed[i]);
   // Some boxes give whole minutes only (the Oct 20 games: "30" for 30:52).
@@ -250,6 +269,7 @@ export async function buildNbaGameRecord(gameId) {
       matched.add(o);
       const fixed = [];
       for (const f of STATS) if (o[f] != null && o[f] !== p[f]) { fixed.push(`${f} ${p[f]} to ${o[f]}`); p[f] = o[f]; }
+      if (o.pm != null && o.pm !== p.pm) { fixed.push(`plus-minus ${p.pm} to ${o.pm}`); p.pm = o.pm; }
       // Minutes where the box's whole minutes are not the official's (Oct 27 2026: BDL had Vassell 35:31 for 33:33).
       if (Number.isFinite(o.min) && Math.round(p.min) !== o.min) {
         fixed.push(`min ${Math.round(p.min)} to ${o.min}`); p.min = o.min;
@@ -313,7 +333,7 @@ export async function buildNbaGameRecord(gameId) {
     home, away, final, periods, quarters,
     afterThree: quarters.home.slice(0, 3).every((v) => v != null) ? { home: quarters.home[0] + quarters.home[1] + quarters.home[2], away: quarters.away[0] + quarters.away[1] + quarters.away[2] } : null,
     setting: { home: await settingOf(g, g.home_team, homeGames || []), away: await settingOf(g, g.visitor_team, awayGames || []) },
-    incidents: plays ? incidentsOf(plays) : null,
+    incidents: plays ? incidentsOf(plays, { [g.home_team.id]: g.home_team.name, [g.visitor_team.id]: g.visitor_team.name }) : null,
     closing,
     lastOff,
     wholeMinuteQuarters,

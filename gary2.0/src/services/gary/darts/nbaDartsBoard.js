@@ -81,7 +81,6 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const head = [`GAME ${gi + 1} · ${away.full_name} @ ${home.full_name} · ${etClock(g.datetime)}`];
     if (line?.spread_home_value != null) { const sp = Number(line.spread_home_value); head.push(sp < 0 ? `${home.abbreviation} ${sp}` : sp > 0 ? `${away.abbreviation} ${-sp}` : 'pick em'); }
     if (line?.total_value != null) head.push(`total ${line.total_value}`);
-    frames.push({ gameId: String(g.id), matchup, homeFull: home.full_name, awayFull: away.full_name, commence: g.datetime, block: head.join(' · ') });
 
     const rows = await bdl.getNbaPlayerProps(g.id).catch(() => []);
     const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];
@@ -90,6 +89,9 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     for (const r of rows) { const k = String(r.player_id); if (!byPlayer.has(k)) byPlayer.set(k, []); byPlayer.get(k).push(r); }
     const lines = [head.join(' · ')];
     lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report)}`).join(' · ')}`);
+    // The report rides in each game's block, the part of the board Gary's ask carries (Oct 29 2026 hunt: it sat only in
+    // board.text, which no ask reads).
+    frames.push({ gameId: String(g.id), matchup, homeFull: home.full_name, awayFull: away.full_name, commence: g.datetime, block: lines.join('\n') });
     for (const team of [away, home]) {
       const roster = [...byPlayer.keys()].map((pid) => ({ pid, info: people[pid] || people[Number(pid)] })).filter((p) => p.info?.team === team.full_name);
       const priced = [];
@@ -126,7 +128,7 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
 function listedLine(side, report) {
   if (!report) return 'not on file (the report did not load)';
   if (!side || side === 'unfiled') return 'not filed yet';
-  const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league/i.test(r.reason)).map((r) => r.name)]).filter(([, names]) => names.length);
+  const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league - two-way/i.test(r.reason)).map((r) => r.name)]).filter(([, names]) => names.length);
   return by.length ? by.map(([st, names]) => `${st.toLowerCase()} ${names.join(', ')}`).join('; ') : 'nobody listed';
 }
 
@@ -148,7 +150,7 @@ function gameLines(c, records, stat, abbrById) {
   const big = new Set(rows.flatMap((x) => (x.rec.players || []).filter((p) => p.side === x.side && p.min >= 15).map((p) => p.name)));
   return rows.map((x) => {
     const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}`;
-    const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league/i.test(r.reason || ''));
+    const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || ''));
     const names = (x.rec.players || []).filter((p) => p.side === x.side).map((p) => p.name);
     const mine = outRows.find((r) => samePlayerIn(c.player, [r.name], names));
     if (!x.me || !(x.me.min > 0)) return `${where}: did not play${mine ? ` (out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')})` : ''}`;

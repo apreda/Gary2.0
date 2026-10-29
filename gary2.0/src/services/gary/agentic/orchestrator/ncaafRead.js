@@ -31,8 +31,20 @@ const NEWS_NOT_ON_FILE = "The news search did not return a report for this game;
 // A sentence that carries a betting line (a spread, an opening number, a book's odds) never reaches him from an
 // article: the market appears once, as THE LINE AND HOW IT GOT HERE.
 const BETTING = /\b\d+(?:\.\d)?-point (?:favou?rites?|underdogs?|dogs?)\b|^[A-Z][A-Za-z&.]{1,11} [+-]\d+(?:\.5)?$|\bfavou?red by \d|\b(?:DraftKings|FanDuel|BetMGM|Caesars Sportsbook|ESPN ?BET|bet365|BetRivers|Fanatics Sportsbook|sportsbooks?|oddsmakers?)\b|\bpoint spread\b|\bthe spread\b|\bbetting (?:line|odds|market)\b|\bover\/under\b|\bmoneyline\b|\bagainst the spread\b|\bline (?:moved|has moved|opened)\b|\bopened as\b|\bodds\b/i;
+// A news outlet a sportsbook owns is a source, not a line (Oct 29 2026 hunt: "DraftKings Network's October 28 report
+// reproduced the team's announcement that Poole would not return" was cut). A sentence that points back at a cut one
+// ("That announcement applied to Wednesday's game") goes with it.
+const OUTLET = /\b(?:DraftKings Network|FanDuel (?:Research|Sports Network|TV))\b/g;
+export function withoutSentences(text, cut) {
+  return String(text || '').split('\n').map((p) => {
+    let gone = false;
+    // A sentence starts at a capital or at bold ("found. **RotoWire Staff reported ..."), not at the time zone after
+    // "12:45 p.m." (Oct 29 2026 hunt).
+    return p.split(/(?<=[.!?](?:\*\*)?)\s+(?=[A-Z"“]|\*\*[A-Z"“])(?!(?:\*\*)?(?:Eastern|ET|EDT|EST|Central|Mountain|Pacific)\b)/).filter((s) => { gone = cut(s) || (gone && /^(?:That|This|These|Those|It)\b/.test(s)); return !gone; }).join(' ');
+  }).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+}
 export function withoutBettingLines(text) {
-  return String(text || '').split('\n').map((p) => p.split(/(?<=[.!?])\s+(?=[A-Z"“])/).filter((s) => !BETTING.test(s)).join(' ')).filter((p, i, a) => p.trim() || (i > 0 && a[i - 1].trim())).join('\n');
+  return withoutSentences(text, (s) => BETTING.test(s.replace(OUTLET, 'the outlet')));
 }
 
 // The halves and the turnovers stay in each game's line (Oct 23 2026): a 42-3 halftime lead explains the yards after

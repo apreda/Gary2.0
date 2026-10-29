@@ -113,8 +113,13 @@ export function fullGameText(rec, teamId, byTeam) {
   lines.push(`  how it went: ${flowText(rec, us)}`);
   // Who finished it and who carried the fourth quarter (Oct 27 2026, founder: "who takes up the share of the fourth-quarter
   // minutes"; the closing five from the last quarter's substitutions, checked against its minutes).
-  const q4 = (side) => rec.players.filter((p) => p.side === side && p.quarters).map((p) => ({ name: p.name, min: p.quarters.filter((x) => x.q >= 4).reduce((a, x) => a + x.min, 0) }))
-    .filter((x) => x.min >= 1).sort((a, b) => b.min - a.min).map((x) => `${x.name} ${Math.round(x.min)}`).join(', ');
+  const lateOf = (p) => (p.lateMin != null ? p.lateMin : p.quarters ? p.quarters.filter((x) => x.q >= 4).reduce((a, x) => a + x.min, 0) : null);
+  const q4 = (side) => {
+    const mine = rec.players.filter((p) => p.side === side && p.min > 0);
+    const known = mine.filter((p) => lateOf(p) != null).map((p) => ({ name: p.name, min: lateOf(p) })).filter((x) => x.min >= 1).sort((a, b) => b.min - a.min).map((x) => `${x.name} ${Math.round(x.min)}`);
+    const unknown = mine.filter((p) => lateOf(p) == null).map((p) => p.name);
+    return [...known, ...(unknown.length ? [`not on file for ${unknown.join(', ')}`] : [])].join(', ');
+  };
   lines.push(`  on the floor at the end: ${rec.closing ? `${rec[us].short} ${rec.closing[us].join(', ')} · ${rec[them].short} ${rec.closing[them].join(', ')}` : 'not on file (the play-by-play does not account for the last quarter\'s minutes)'}`);
   const cut = (rec.wholeMinuteQuarters || []).filter((q) => q >= 4).length ? ' (whole minutes, cut down)' : '';
   lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}${cut}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
@@ -123,9 +128,15 @@ export function fullGameText(rec, teamId, byTeam) {
   for (const side of [us, them]) {
     const mine = rec.players.filter((p) => p.side === side);
     const played = mine.filter((p) => p.min > 0).sort((a, b) => (b.starter - a.starter) || (b.min - a.min));
-    const listed = (rec.report[side].rows || []).filter((x) => x.status !== 'Available').map((x) => x.name);
-    const sat = mine.filter((p) => p.min <= 0 && !samePlayerIn(p.name, listed, mine.map((q) => q.name))).map((p) => p.name);
+    // Who sat: listed Available and did not play apart from those not on the report at all (Oct 29 2026 hunt: Zuby
+    // Ejiofor, Available at Atlanta, read "not on the injury report" a few lines under the report).
+    const rowsHere = rec.report[side].rows || [];
+    const onReport = (p, rows) => samePlayerIn(p.name, rows.map((x) => x.name), mine.map((q) => q.name));
+    const benched = mine.filter((p) => p.min <= 0);
+    const availableSat = benched.filter((p) => onReport(p, rowsHere.filter((x) => x.status === 'Available'))).map((p) => p.name);
+    const sat = benched.filter((p) => !onReport(p, rowsHere)).map((p) => p.name);
     lines.push(`  ${rec[side].short} (* started):`, ...played.map(playerRow));
+    if (availableSat.length) lines.push(`    listed Available, did not play: ${availableSat.join(', ')}`);
     if (sat.length) lines.push(`    did not play, not on the injury report: ${sat.join(', ')}`);
     // Who was on the team's next listing that wasn't on this one, among those who played here.
     const n = next(rec[side].id);
