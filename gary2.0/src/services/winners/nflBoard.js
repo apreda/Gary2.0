@@ -22,13 +22,18 @@ const offLogged = new Set();   // each game left off is logged once a day
 
 const nick = (team) => String(team || '').trim().split(/\s+/).pop().toLowerCase();
 const city = (team) => String(team || '').trim().split(/\s+/).slice(0, -1).join(' ').toLowerCase();
-// Which of a game's two teams a phrase names: the nickname, or the city when the two teams don't share one.
+// Which of a game's two teams a phrase names: the full name when it names one of them; else the nickname, or the city
+// when the two teams don't share one, as whole words, and never a city of two letters (Oct 29 2026 hunt, round 7: the
+// Clippers' "LA" is inside "Lakers", "Oklahoma", "Dallas", "Portland" and "Atlanta", so a bet on the Lakers, the Thunder
+// or the Mavericks against the Clippers named both teams and was saved as a pass).
+const word = (t, w) => Boolean(w) && new RegExp(`(?:^|[^a-z0-9])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^a-z0-9])`).test(t);
 const named = (text, g) => {
   const t = String(text || '').toLowerCase();
+  const full = { home: t.includes(String(g.home || '').toLowerCase()), away: t.includes(String(g.away || '').toLowerCase()) };
+  if (full.home !== full.away) return full;
   const sameCity = city(g.home) === city(g.away);
-  const home = t.includes(nick(g.home)) || (!sameCity && city(g.home) && t.includes(city(g.home)));
-  const away = t.includes(nick(g.away)) || (!sameCity && city(g.away) && t.includes(city(g.away)));
-  return { home, away };
+  const byCity = (team) => !sameCity && city(team).length > 2 && word(t, city(team));
+  return { home: word(t, nick(g.home)) || byCity(g.home), away: word(t, nick(g.away)) || byCity(g.away) };
 };
 /** The bets in his answer's JSON block, or null when there is no readable block. */
 export function parseBoardBets(text) {
@@ -50,7 +55,7 @@ export function boardDecisions(games, bets) {
     if (!g) continue;
     const pick = named(b?.side, g);
     const side = pick.home && !pick.away ? g.home : pick.away && !pick.home ? g.away : null;
-    if (!side) continue;
+    if (!side) { console.warn(`[Winners board] a bet named no single side of ${g.away} at ${g.home}: "${b?.side}"; left as a pass`); continue; }
     out.set(g.id, { ...g, decision: 'bet', side, why: String(b?.why || '').trim() || null, rank: ++rank });
   }
   return [...out.values()];

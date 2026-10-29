@@ -351,17 +351,28 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         networksById.set(String(row.bdl_game_id ?? row.id), networks);
       }
     }
-    for (const big of bigs) {
+    // A big game is decided before it starts, and a choice made once stays (Oct 29 2026 hunt, round 7: Monday's rerun of
+    // the NFL week stored Bengals @ Ravens as a second "best game of the 1 PM window" for Oct 25, by FPI that already held
+    // Sunday's results, beside 49ers @ Falcons). A started game is left as stored; a window keeps the game it was first
+    // given; a night keeps its first two national-TV games.
+    const upcoming = bigs.filter((big) => !(big.commence_time && Date.parse(big.commence_time) <= Date.now()));
+    const stored = upcoming.length ? await picksService.getWinnersBigGames(etDateStr, sport.league) : [];
+    for (const big of upcoming) {
       const playoff = String(big.season_type || '').toLowerCase() === 'postseason';
+      const gameId = String(big.bdl_game_id ?? big.id);
+      const reason = reasonById.get(idOf(big)) || (namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
+        : sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
+        : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
+        : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball');
+      const known = stored.some((r) => String(r.game_id) === gameId);
+      if (!known && /by ESPN's FPI$/.test(reason) && stored.some((r) => r.reason === reason)) continue;
+      if (!known && sport.league === 'NBA' && stored.filter((r) => /^national TV/.test(r.reason || '')).length >= 2) continue;
       await picksService.storeWinnersBigGame({
         game_date: etDateStr,
         league: sport.league,
-        game_id: String(big.bdl_game_id ?? big.id),
+        game_id: gameId,
         matchup: `${big.away_team} @ ${big.home_team}`,
-        reason: reasonById.get(idOf(big)) || (namedBigGame(overrides, etDateStr, sport.league, big) ? 'founder-designated main game'
-          : sport.league === 'NCAAF' ? `ranked matchup: #${big.awayRanking ?? '—'} ${big.away_team} at #${big.homeRanking ?? '—'} ${big.home_team}`
-          : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
-          : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball'),
+        reason,
       });
       console.log(`[Daily Slate] 🏆 ${sport.league} big game today: ${big.away_team} @ ${big.home_team}`);
     }

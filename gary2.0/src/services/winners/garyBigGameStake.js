@@ -28,7 +28,9 @@ export function buildBigGameAsk({ league, ticket, bankroll }) {
     '',
     `THE TICKET: ${ticket.pick} (${price(ticket.price)})${ticket.matchup ? ` — ${ticket.matchup}` : ''}${ticket.starts && clock(ticket.starts) ? `, ${clock(ticket.starts)}` : ''}`,
     'YOUR CASE:',
-    String(ticket.rationale || '').trim(),
+    // Football's private weighing leads, as in the bet ask (Oct 29 2026 hunt, round 7: the big-game ask carried only the
+    // rationale, so a passed TNF or college top game was sized without his weighing).
+    [ticket.weighing, ticket.rationale].map((x) => String(x || '').trim()).filter(Boolean).join('\n\n'),
     ticket.case_away ? `THE AWAY SIDE'S CASE:\n${String(ticket.case_away).trim()}` : null,
     ticket.case_home ? `THE HOME SIDE'S CASE:\n${String(ticket.case_home).trim()}` : null,
     '',
@@ -53,7 +55,7 @@ export function parseBigGameStake(raw) {
 
 export async function askGaryBigGameStake(row, { bankroll = null, log = console, generate = generateSolText } = {}) {
   const ask = buildBigGameAsk({ league: row.league, bankroll,
-    ticket: { pick: row.pick_text, price: row.odds, matchup: row.matchup, starts: row.commence_time, rationale: row.rationale, case_home: row.case_home, case_away: row.case_away } });
+    ticket: { pick: row.pick_text, price: row.odds, matchup: row.matchup, starts: row.commence_time, weighing: row.weighing, rationale: row.rationale, case_home: row.case_home, case_away: row.case_away } });
   for (const writer of [...new Set([GARY_MODEL, APP_WRITING_MODEL].filter(Boolean))]) {
     try {
       const text = await generate(ask, { model: writer, effort: 'medium', maxTokens: 800 });
@@ -78,7 +80,11 @@ export async function runBigGameStakes(client, date, { ask = askGaryBigGameStake
   for (const row of rows || []) {
     const net = Number(row.minutes_to_kickoff) <= NET_MINUTES_BEFORE_KICKOFF || Number(row.attempts) > MAX_ASK_ATTEMPTS;
     let answer = null;
-    if (!net) answer = await ask(row, { bankroll: await cashPosition(client, log), log });
+    if (!net) {
+      // The claim returns no weighing; his pick's own (football's private weighing) is read here.
+      const { data: snap } = await client.from('winners_candidates').select('weighing:pick_snapshot->>weighing').eq('id', row.id).maybeSingle();
+      answer = await ask({ ...row, weighing: snap?.weighing || null }, { bankroll: await cashPosition(client, log), log });
+    }
     if (!answer && !net) { log.warn(`[Big game] ${row.league} ${row.pick_text}: no answer on attempt ${row.attempts}; asking again`); continue; }
     const args = answer
       ? { p_id: row.id, p_stake: answer.stake_dollars, p_why: answer.why, p_model: answer.model, p_net: false }

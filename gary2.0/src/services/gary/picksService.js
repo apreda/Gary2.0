@@ -754,6 +754,20 @@ async function getWinnersBigGame(gameDate, league) {
   }
 }
 
+/** Every big game stored for a date and league: [{ game_id, reason }]. Read-only; [] on any failure. */
+async function getWinnersBigGames(gameDate, league) {
+  try {
+    const { data, error } = await (supabaseAdmin || supabase)
+      .from('winners_big_games')
+      .select('game_id, reason')
+      .eq('game_date', String(gameDate))
+      .eq('league', String(league || '').toUpperCase());
+    return error ? [] : data || [];
+  } catch {
+    return [];
+  }
+}
+
 // Export both styles!
 const picksService = {
   storeDailyPicksInDatabase,
@@ -762,6 +776,7 @@ const picksService = {
   storeDeskSnapshot,
   storeWinnersBigGame,
   getWinnersBigGame,
+  getWinnersBigGames,
   nflGameAlreadyHasPick,
   getNFLWeekStart,
   getNFLWeekNumber,

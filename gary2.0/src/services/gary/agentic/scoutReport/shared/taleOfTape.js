@@ -7,6 +7,7 @@
 import { eligibleNflRegularGames } from '../../../../sports/nfl/nflTeamBaseline.js';
 import { footballSeasonForDate } from '../sports/footballSeason.js';
 import { numericStat } from '../../../playerGameLogFacts.js';
+import { namesRefer } from './dataFetchers/teamProfile.js';
 
 /** Current NFL regular-season form, separate from the prior statistical baseline. */
 export function buildNflRecentFormRow({homeTeam,awayTeam,homeTeamId,awayTeamId,recentHome=[],recentAway=[],before=Date.now(),season=footballSeasonForDate('NFL',before)}) {
@@ -54,20 +55,22 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     const completed = recentGames.filter(g => (g.home_team_score ?? g.home_score ?? 0) > 0 || (g.visitor_team_score ?? g.away_team_score ?? g.away_score ?? 0) > 0);
     if (completed.length === 0) return 'N/A';
 
-    let wins = 0, losses = 0;
+    let wins = 0, losses = 0, ties = 0;
     const lastN = completed.slice(0, count);
 
     for (const game of lastN) {
-      const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
-      const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
-                     teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
+      // The whole name (Oct 29 2026 hunt, round 7): a last-word match took "Hornets" for the "Nets" and "Boise State
+      // Broncos" for the "Western Michigan Broncos", so a road win read as a home loss (Charlotte "Record 3-1, L5 2-2").
+      const homeTeamName = game.home_team?.full_name || game.home_team?.name || '';
+      const isHome = namesRefer(homeTeamName, teamName);
       const teamScore = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0);
       const oppScore = isHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
       if (teamScore > oppScore) wins++;
-      else losses++;
+      else if (teamScore < oppScore) losses++;
+      else ties++;
     }
 
-    return `${wins}-${losses}`;
+    return `${wins}-${losses}${ties ? `-${ties}` : ''}`;
   };
 
   const homeL5 = calcRecentRecord(homeTeam, recentHome, 5);
@@ -136,23 +139,28 @@ export function buildVerifiedTaleOfTape(homeTeam, awayTeam, homeProfile, awayPro
     // Advanced stats (from getTeamSeasonAdvanced: off_rating, def_rating, pace, efg_pct, ts_pct)
     const offRtg = formatStat(fmtNum(homeStats.off_rating), fmtNum(awayStats.off_rating));
     const defRtg = formatStat(fmtNum(homeStats.def_rating), fmtNum(awayStats.def_rating));
-    const homeNetRtg = (parseFloat(homeStats.off_rating) || 0) - (parseFloat(homeStats.def_rating) || 0);
-    const awayNetRtg = (parseFloat(awayStats.off_rating) || 0) - (parseFloat(awayStats.def_rating) || 0);
-    const netRtg = formatStat(
-      homeNetRtg ? (homeNetRtg > 0 ? '+' : '') + homeNetRtg.toFixed(1) : 'N/A',
-      awayNetRtg ? (awayNetRtg > 0 ? '+' : '') + awayNetRtg.toFixed(1) : 'N/A'
-    );
+    // Net only when both ratings are on file; an even team reads 0.0 (Oct 29 2026 hunt, round 7: Washington's 111.2 and
+    // 111.2 read "Net Rating N/A", and a missing Off would have read Net = -Def).
+    const net = (st) => {
+      const off = parseFloat(st.off_rating), def = parseFloat(st.def_rating);
+      if (!Number.isFinite(off) || !Number.isFinite(def)) return 'N/A';
+      const n = Math.round((off - def) * 10) / 10;
+      return `${n > 0 ? '+' : ''}${n.toFixed(1)}`;
+    };
+    const netRtg = formatStat(net(homeStats), net(awayStats));
+    // BDL sends shooting as a fraction, 0.42 (Oct 29 2026 hunt, round 7: every NBA card read "FG Pct 0.4%").
+    const share = (v) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) && n >= 0 && n <= 1 ? fmtPct(n * 100) : fmtPct(v); };
     const pace = formatStat(fmtNum(homeStats.pace), fmtNum(awayStats.pace));
-    const efgPct = formatStat(fmtPct(homeStats.efg_pct), fmtPct(awayStats.efg_pct));
-    const tsPct = formatStat(fmtPct(homeStats.ts_pct), fmtPct(awayStats.ts_pct));
+    const efgPct = formatStat(share(homeStats.efg_pct), share(awayStats.efg_pct));
+    const tsPct = formatStat(share(homeStats.ts_pct), share(awayStats.ts_pct));
 
     // Base stats (from getTeamBaseStats: pts, reb, ast, fg_pct, fg3_pct, ft_pct, tov, oreb, dreb)
     const ppg = formatStat(fmtNum(homeStats.pts), fmtNum(awayStats.pts));
     const rpg = formatStat(fmtNum(homeStats.reb), fmtNum(awayStats.reb));
     const apg = formatStat(fmtNum(homeStats.ast), fmtNum(awayStats.ast));
-    const fgPct = formatStat(fmtPct(homeStats.fg_pct), fmtPct(awayStats.fg_pct));
-    const threePct = formatStat(fmtPct(homeStats.fg3_pct), fmtPct(awayStats.fg3_pct));
-    const ftPct = formatStat(fmtPct(homeStats.ft_pct), fmtPct(awayStats.ft_pct));
+    const fgPct = formatStat(share(homeStats.fg_pct), share(awayStats.fg_pct));
+    const threePct = formatStat(share(homeStats.fg3_pct), share(awayStats.fg3_pct));
+    const ftPct = formatStat(share(homeStats.ft_pct), share(awayStats.ft_pct));
     const tovGm = formatStat(fmtNum(homeStats.tov), fmtNum(awayStats.tov));
     const orebGm = formatStat(fmtNum(homeStats.oreb), fmtNum(awayStats.oreb));
     const drebGm = formatStat(fmtNum(homeStats.dreb), fmtNum(awayStats.dreb));

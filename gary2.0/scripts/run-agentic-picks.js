@@ -989,7 +989,12 @@ async function main() {
             // string in this field breaks the phone's whole-array decode
             // (Aug 18 incident). Objects only; anything else stores null.
             injuries: (result.injuries && typeof result.injuries === 'object') ? result.injuries : null,
-            sportsbook_odds: sportsbookOdds, // Multi-book odds comparison (ML + Spread)
+            // The quoted book's row first (Oct 29 2026 hunt, round 7): the app's ticket names sportsbook_odds[0].book
+            // beside the price, and the rows came in the feed's vendor order; 34 of 58 non-MLB Winners tickets Oct 15-28
+            // named a book other than the one quoted (Seahawks -2.5 -110 at FanDuel read "DraftKings | -110").
+            sportsbook_odds: Array.isArray(sportsbookOdds) && bestLineBook
+              ? [...sportsbookOdds.filter((row) => row.book === bestLineBook), ...sportsbookOdds.filter((row) => row.book !== bestLineBook)]
+              : sportsbookOdds, // Multi-book odds comparison (ML + Spread)
           };
 
           // HARD FAIL: a pick whose Tale of the Tape carries no real values means the

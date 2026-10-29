@@ -35,6 +35,11 @@ describe('the NFL board', () => {
     expect(boardDecisions(ny, [{ game: 'Jets at Giants', side: 'Giants' }])[0]).toMatchObject({ decision: 'bet', side: 'New York Giants' });
   });
 
+  it("a two-letter city is no side: a bet against the Clippers is a bet (Oct 29 2026 hunt, round 7)", () => {
+    const la = [{ id: 1, gameId: '20', home: 'LA Clippers', away: 'Los Angeles Lakers' }, { id: 2, gameId: '21', home: 'Oklahoma City Thunder', away: 'LA Clippers' }];
+    const out = boardDecisions(la, [{ game: 'Los Angeles Lakers at LA Clippers', side: 'Los Angeles Lakers +1.5' }, { game: 'LA Clippers at Oklahoma City Thunder', side: 'Oklahoma City Thunder -16.5' }]);
+    expect(out.map((d) => d.side)).toEqual(['Los Angeles Lakers', 'Oklahoma City Thunder']);
+  });
   it('takes a nickname as the side and ignores a bet on a game not on the board', () => {
     const out = boardDecisions(games, [{ game: 'Bills at Raiders', side: 'Bills' }, { game: 'Cardinals at Rams', side: 'Rams', why: 'c' }]);
     expect(out.filter((d) => d.decision === 'bet')).toEqual([expect.objectContaining({ gameId: '12', side: 'Los Angeles Rams', rank: 1 })]);
