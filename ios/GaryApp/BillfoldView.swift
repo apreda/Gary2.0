@@ -1845,6 +1845,8 @@ private struct GaryBankrollPanel: View {
     @State private var missed = 0
     private let gold = Color(red: 0.79, green: 0.64, blue: 0.15)
     @State private var calendarAnchor: String = BookDates.today()
+    /// The scrubbed day whose reason is open.
+    @State private var openScrub: String?
     /// Whole dollars from the server's units: "$10,309".
     private func dollars(_ units: Double) -> String {
         "$" + Int((units * garyUnitDollars).rounded()).formatted(.number.grouping(.automatic))
@@ -1869,6 +1871,10 @@ private struct GaryBankrollPanel: View {
                         Text("Started at \(dollars(b.initial_units)) · \(LabFormat.monthDay(b.started_date))\nAll sports and Winners markets · Since inception")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
+                    // A day taken off the record says so right under the number it changes, one tap from the
+                    // reason (founder, Oct 29 2026: "a little disclaimer button ... that then unveils the reason
+                    // ... at the top, not at the very bottom, hidden").
+                    ForEach(b.scrubbed ?? [], id: \.date) { scrub in scrubNotice(scrub) }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
                         metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
@@ -1911,16 +1917,6 @@ private struct GaryBankrollPanel: View {
                             .font(.system(size: 14)).foregroundStyle(.secondary)
                     }
                     calendar(b)
-                    ForEach(b.scrubbed ?? [], id: \.date) { scrub in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("\(LabFormat.monthDay(scrub.date).uppercased()) · " + (scrub.in_effect == false
-                                ? "COMES OFF \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())" : "SCRUBBED"))
-                                .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
-                            Text(scrub.note)
-                                .font(.system(size: 14)).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
                 } else if !failed { ProgressView("Loading bankroll") }
                 if failed {
                     Button("Bankroll unavailable · Tap to retry") { Task { await refresh() } }
@@ -1948,6 +1944,44 @@ private struct GaryBankrollPanel: View {
         return f
     }()
     private static func chartDay(_ raw: String) -> Date? { chartDayFormat.date(from: "\(raw.prefix(10)) 12:00") }
+
+    /// The notice for a day off the record: its title, tap for the reason.
+    private func scrubNotice(_ scrub: GaryBankrollSnapshot.Scrub) -> some View {
+        let open = openScrub == scrub.date
+        let day = LabFormat.monthDay(scrub.date).uppercased()
+        let title = scrub.in_effect == false
+            ? "\(day) COMES OFF THE RECORD \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())"
+            : "WHY \(day) IS OFF THE RECORD"
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { openScrub = open ? nil : scrub.date }
+            } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: "info.circle").font(.system(size: 15, weight: .semibold))
+                    Text(title).font(.system(size: 12, weight: .bold)).tracking(0.8).fitsOneLine()
+                    Spacer(minLength: 6)
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                }
+                .foregroundStyle(gold)
+                .frame(minHeight: 46)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(open ? "Hides the reason" : "Shows the reason")
+            if open {
+                Text(scrub.note)
+                    .font(.system(size: 14)).foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 14)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 14)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(gold.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(gold.opacity(0.45), lineWidth: 1))
+        .onGaryTour { verb, _ in if verb == "scrubnote" { openScrub = scrub.date } }
+    }
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {

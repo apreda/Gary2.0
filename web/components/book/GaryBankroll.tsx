@@ -47,6 +47,15 @@ export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
         <p className={b.profit_units < 0 ? 'text-loss' : 'text-win'}>{signed(b.profit_units)} · {b.growth_pct.toFixed(2)}% growth</p>
       </div>
       <p className="mt-2 text-xs leading-relaxed text-mid">Started with {dollars(b.initial_units)} on {new Date(b.started_at).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })}. All sports and Winners markets · Since inception.</p>
+      {/* A day taken off the record says so under the number it changes, one tap from the reason (Oct 29 2026). */}
+      {(b.scrubbed ?? []).map(d => <details key={d.date} className="group mt-4 rounded-card border border-gold/45 bg-gold/5 px-4">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-mono text-xs font-semibold uppercase tracking-widest text-gold [&::-webkit-details-marker]:hidden">
+          <span aria-hidden="true">ⓘ</span>
+          <span className="flex-1">{d.in_effect === false && d.effective_date ? `${monthDay(d.date)} comes off the record ${monthDay(d.effective_date)}` : `Why ${monthDay(d.date)} is off the record`}</span>
+          <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <p className="pb-4 text-sm leading-relaxed text-mid">{d.note}</p>
+      </details>)}
       <dl className="mt-6 grid grid-cols-2 gap-5 sm:grid-cols-4">
         {[
           ['Win rate', b.win_pct === null ? '—' : `${b.win_pct.toFixed(1)}%`],
@@ -67,7 +76,6 @@ export function BankrollReport({ data: b }: { data: BankrollSnapshot }) {
         <figcaption className="flex justify-between text-xs text-low"><span>{points[1].date}</span><span>Gold: Gary · Dashed: $100 a bet</span><span>{points.at(-1)?.date}</span></figcaption>
         <details className="mt-3 text-xs text-mid"><summary className="cursor-pointer">Daily results</summary><table className="mt-2 w-full text-left"><thead><tr><th>Date</th><th>Gary net</th><th>Flat net</th></tr></thead><tbody>{b.curve.map(p => <tr key={p.date}><td>{p.date}</td><td>{signed(p.net_units)}</td><td>{signed(p.flat_units)}</td></tr>)}</tbody></table></details>
       </figure> : <p className="mt-6 text-sm text-mid">{b.bets ? 'The curve begins when the first bets settle.' : 'The bankroll is ready for the next published Winners bets.'}</p>}
-      {(b.scrubbed ?? []).map(d => <p key={d.date} className="mt-5 text-sm leading-relaxed text-mid"><span className="font-mono text-xs uppercase tracking-widest text-gold">{monthDay(d.date)} · {d.in_effect === false && d.effective_date ? `Comes off ${monthDay(d.effective_date)}` : 'Scrubbed'}</span><br />{d.note}</p>)}
       <p className="mt-5 text-xs leading-relaxed text-low">Stakes are the dollars risked, locked before play. ROI is net profit / settled stakes, excluding voids. The $100 comparison uses these exact bets and odds. Earlier flat-stake history remains below.</p>
     </section>
   );
