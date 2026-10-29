@@ -201,8 +201,8 @@ const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /,
 
 /**
  * Who played quarterback in one game (founder, Oct 3 2026: "QB starter for
- * prior games this season"): whoever threw the most passes, plus anyone else
- * with five or more, as a season's passing numbers are sometimes two
+ * prior games this season"): whoever threw the most passes, plus every other
+ * quarterback who threw and anyone else with five or more, as a season's passing numbers are sometimes two
  * quarterbacks' work (Baylor 2026: two games each). ESPN's box does not say who
  * started; the official box's lineup does, where a school posts it (Oct 27
  * 2026), and marks him.
@@ -218,7 +218,10 @@ function quarterbackOfGame(rows, result, onFile, starters = null) {
   const qbs = (starters || []).filter((x) => /^QB$/i.test(x.position || ''));
   const nameOf = (row) => `${row.player.first_name} ${row.player.last_name}`;
   const started = (row) => qbs.length > 0 && startedIn(qbs, nameOf(row));
-  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5 || started(row));
+  // Every quarterback who threw, whatever the count (Oct 28 2026 sweep: Ohio State's line at Indiana showed Sayin alone;
+  // Fahey's two passes after Sayin's shoulder injury were the only sign of the change); another position's pass only at five.
+  const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5 || started(row)
+    || /^QB$/i.test(row.player.position_abbreviation || row.player.position || ''));
   // A starter who threw no pass (hurt on the first series) is named too.
   const unseen = qbs.filter((x) => !passers.some((row) => startedIn([x], nameOf(row)))).map((x) => `${x.name} started, no pass`);
   // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine

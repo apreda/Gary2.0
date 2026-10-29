@@ -49,10 +49,7 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
     const recentGames = await ballDontLieService.getGames(bdlSport, params);
 
     // /games?seasons[] returns regular-season rows only; NFL preseason games
-    // never reach recent form. When the current football season still has
-    // fewer finished games than requested (Week 0/1), backfill from the prior
-    // season — each line carries its date, so the season stays self-evident.
-    const isFootball = bdlSport === 'americanfootball_nfl' || bdlSport === 'americanfootball_ncaaf';
+    // never reach recent form.
     const pooledGames = recentGames || [];
 
     // Sort by date descending and return the requested count
@@ -87,15 +84,9 @@ export async function fetchRecentGames(teamName, sport, count = 5) {
         .slice(0, count);
     };
 
-    let sorted = finishedSorted(pooledGames);
-    if (isFootball && sorted.length < count) {
-      try {
-        const prior = await ballDontLieService.getGames(bdlSport, { ...params, seasons: [seasonForSport(sport) - 1] });
-        if (Array.isArray(prior) && prior.length) sorted = finishedSorted([...pooledGames, ...prior]);
-      } catch { /* prior-season backfill is additive only */ }
-    }
-
-    return sorted;
+    // This season's games only: a team with fewer than `count` played has fewer (Oct 28 2026 sweep: Ohio State's 7 were
+    // topped up with last season's games, which reached the desk's head-to-head and tale of the tape).
+    return finishedSorted(pooledGames);
   } catch (error) {
     console.warn(`[Scout Report] Error fetching recent games for ${teamName}:`, error.message);
     return [];
