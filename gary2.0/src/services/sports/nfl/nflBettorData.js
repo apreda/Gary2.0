@@ -574,6 +574,39 @@ function pressureLine(d, x, code) {
   return `pressure: ${nickname(code)} ${ours || 'not on file'}${rush(x.opp) ? ` (${nickname(x.opp)} rushers: ${rush(x.opp)})` : ''} · ${nickname(x.opp)} ${theirs || 'not on file'}${rush(code) ? ` (${nickname(code)} rushers: ${rush(code)})` : ''}`;
 }
 
+// THE GAME'S FLOW AND ITS DOWNS (founder GO, Oct 29 2026: "who got ahead, how, when did the team go up 14 versus
+// being close the whole game", "how the team did on third downs and fourth downs, coupled with down and distance").
+// From the play ledger: every score in order with the score after it, the largest lead each way and when, lead
+// changes; each team's third downs with the distance of each, every fourth-down try with where and the score, time of
+// possession and penalties. Null when the ledger has no such game.
+const whenIn = (e) => `${e.q > 4 ? 'OT' : `Q${e.q}`}${e.clock ? ` ${e.clock}` : ''}`;
+function flowLine(x, code) {
+  const f = x.ledger?.flow;
+  if (!f?.events) return null;
+  if (!f.events.length) return 'scoring: none';
+  const ours = (e) => (f.home === code ? `${e.home}-${e.away}` : `${e.away}-${e.home}`);
+  const lead = (c) => { const l = f.lead?.[f.home === c ? 'home' : 'away']; return l ? `${nickname(c)} by ${l.by} (${whenIn(l)})` : `${nickname(c)} never led`; };
+  return `scoring: ${f.events.map((e) => `${whenIn(e)} ${nickname(e.team)} ${e.how} (${ours(e)})`).join(' · ')}
+      largest lead: ${lead(code)}, ${lead(x.opp)}; the lead changed hands ${f.lead_changes} time${f.lead_changes === 1 ? '' : 's'}`;
+}
+function downsLine(x, code) {
+  const L = x.ledger?.lines;
+  if (!L?.[code]?.third_downs || !L?.[x.opp]?.third_downs) return null;
+  const spot = (yl, c, o) => (yl == null ? '' : yl === 50 ? ' at midfield' : yl < 50 ? ` at the ${nickname(o)} ${yl}` : ` at their own ${100 - yl}`);
+  const score = (d) => (d == null ? '' : d > 0 ? `, up ${d}` : d < 0 ? `, down ${-d}` : ', tied');
+  const one = (c, o) => {
+    const l = L[c];
+    const t = l.third_downs, fo = l.fourth_downs || [];
+    const togo = (xs) => xs.map((d) => d.togo).sort((a, b) => a - b).join(', ') || 'none';
+    const third = t.length ? `3rd down ${t.filter((d) => d.made).length} of ${t.length} (made on 3rd & ${togo(t.filter((d) => d.made))}; not on 3rd & ${togo(t.filter((d) => !d.made))})` : 'no 3rd downs';
+    const fourth = fo.length ? `4th down ${fo.filter((d) => d.made).length} of ${fo.length} (${fo.map((d) => `4th & ${d.togo}${spot(d.yardline, c, o)}, ${whenIn(d)}${score(d.diff)}: ${d.made ? 'made' : 'not made'}`).join('; ')})` : 'no 4th-down tries';
+    const top = l.top_seconds ? `; possession ${Math.floor(l.top_seconds / 60)}:${String(l.top_seconds % 60).padStart(2, '0')}` : '';
+    const pens = l.penalties != null ? `; penalties ${l.penalties} for ${l.penalty_yards} yds` : '';
+    return `${nickname(c)} ${third}, ${fourth}${top}${pens}`.replace(/not on 3rd & none\)/, 'missed none)').replace(/made on 3rd & none;/, 'made none;');
+  };
+  return `downs: ${one(code, x.opp)} · ${one(x.opp, code)}`;
+}
+
 // The box score both ways, as counts.
 const boxLine = (x, code) => (!x.off || !x.def ? 'box score not on file'
   : `${Math.round(x.off.yards)} yards (${rushing(x, code)}), allowed ${Math.round(x.def.yards)} (${x.def.rushing} rushing) · ${giveaways(x.off)}, ${count(x.def.giveaways, 'takeaway')} · ${count(x.off.sacked, 'sack')} allowed, ${x.def.sacked} made · QB hits (sacks included): ${x.def.hitsMade} taken, ${x.off.hitsMade} made`);
@@ -658,7 +691,7 @@ export function gameByGame(d, team, before) {
     const kicking = x.off && x.def ? `kicking: ${nickname(c)} ${kicks(x.off.kicking)}; ${nickname(x.opp)} ${kicks(x.def.kicking)}` : null;
     const scoring = !d.ledgerGames ? null : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, c);
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
-    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null,
+    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null, flowLine(x, c), downsLine(x, c),
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
@@ -883,6 +916,8 @@ export function nflGameFull(d, x, code, before) {
     `  quarterbacks: ${nickname(code)} ${qb(code)} · ${nickname(o)} ${qb(o)}`,
     `  ${boxLine(x, code)}`,
     `  ${pressureLine(d, x, code)}`,
+    flowLine(x, code) ? `  ${flowLine(x, code)}` : null,
+    downsLine(x, code) ? `  ${downsLine(x, code)}` : null,
     `  without that day: ${nickname(code)} ${absent(code, ourGames)} · ${nickname(o)} ${absent(o, oppGames)}`,
     // The missing regulars are on the "without that day" line; the lineup line keeps the rest, and goes when nothing is
     // left (Oct 29 2026 hunt, round 7: a team with absences only read its missing regulars twice).

@@ -30,7 +30,8 @@ const HEADER = [
   'return_team', 'return_yards', 'penalty_team', 'penalty_yards',
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
-  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id'
+  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -287,6 +288,27 @@ describe('a parsed season', () => {
     const g = led.games[0];
     expect(g.quarters).toEqual({ AAA: [7, 0, 0, 0], BBB: [0, 3, 0, 0] });
     expect(g.lines.AAA.kneels).toEqual({ '00-1': 1 });
+  });
+
+  it('keeps the scoring in order with the score after each try, the largest leads, and the third and fourth downs (Oct 29 2026)', async () => {
+    const body = [HEADER.join(','),
+      row({ down: '3', ydstogo: '4', third_down_converted: '1', time: '12:01' }),
+      row({ down: '3', ydstogo: '9', time: '11:30', success: '0' }),
+      // AAA (away) scores a touchdown, then its extra point; then BBB a field goal; then AAA goes for it on 4th & 2.
+      row({ touchdown: '1', td_team: 'AAA', td_player_name: 'B.Catcher', yards_gained: '25', total_away_score: '6', time: '09:10' }),
+      row({ play_type: 'extra_point', extra_point_result: 'good', total_away_score: '7', time: '09:06' }),
+      row({ play_type: 'kickoff', total_away_score: '7', time: '09:06' }),
+      row({ posteam: 'BBB', defteam: 'AAA', play_type: 'field_goal', field_goal_result: 'made', kick_distance: '44', kicker_player_name: 'C.Kicker', total_away_score: '7', total_home_score: '3', qtr: '2', time: '01:00' }),
+      row({ down: '4', ydstogo: '2', yardline_100: '35', fourth_down_converted: '1', score_differential: '4', total_away_score: '7', total_home_score: '3', qtr: '3', time: '05:00' }),
+    ].join('\n');
+    const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl });
+    const g = led.games[0];
+    expect(g.flow.events.map((e) => [e.team, e.how, e.away, e.home])).toEqual([['AAA', 'TD, B.Catcher 25-yd pass from A.Passer', 7, 0], ['BBB', 'C.Kicker 44-yd FG', 7, 3]]);
+    expect(g.flow.lead.away.by).toBe(7);
+    expect(g.flow.lead.home).toBe(null);
+    expect(g.lines.AAA.third_downs).toEqual([{ togo: 4, made: true }, { togo: 9, made: false }]);
+    expect(g.lines.AAA.fourth_downs).toMatchObject([{ togo: 2, made: true, yardline: 35, diff: 4, q: 3 }]);
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {

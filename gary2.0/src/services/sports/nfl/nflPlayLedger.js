@@ -51,7 +51,10 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 8 (Oct 27 2026 data loop): a kickoff the receiving team fumbled away is its drive, ending in a turnover; a blocked
 // punt returned for a touchdown ends the drive as a punt, and a fourth-down kneel-down as the half running out; a
 // drive that reached the 20 and ran out the half is a red-zone trip.
-const LEDGER_SCHEMA = 8;
+// 9-10 (Oct 29 2026, founder GO: "everything that happened in the game"): each team's third and fourth downs with the
+// distance (and the field position and score of each fourth-down try), each game's scoring in order with the score
+// after it, the largest lead each way and when, lead changes, and time of possession.
+const LEDGER_SCHEMA = 10;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -71,7 +74,9 @@ const WANTED = [
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
   // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
-  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id'
+  'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
+  // Oct 29 2026: the game clock, who scored and who kicked, and each drive's time of possession.
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession'
 ];
 
 const num = (v) => {
@@ -226,7 +231,8 @@ function extraUnit() {
     fgMade: 0, fgAtt: 0, fgMissed: [], fgBlocked: [], xpMade: 0, xpAtt: 0, xpBlocked: 0,
     puntsBlocked: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
     penalties: 0, penaltyYards: 0,
-    contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0
+    contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0,
+    thirdDowns: [], fourthDowns: []
   };
 }
 
@@ -282,6 +288,14 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
     const e = E(g('penalty_team'));
     if (e) { e.penalties += 1; e.penaltyYards += num(g('penalty_yards')) ?? 0; }
   }
+  // Each third and fourth down run from scrimmage, with the distance; a fourth-down try with where and the score
+  // (Oct 29 2026, founder: "how the team did on third downs and fourth downs, coupled with down and distance").
+  if (SCRIMMAGE.has(playType) && E(posteam)) {
+    const down = num(g('down')), togo = num(g('ydstogo'));
+    if (down === 3 && togo != null) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam });
+    if (down === 4 && togo != null) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
+      yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')) });
+  }
   if (SCRIMMAGE.has(playType) && E(posteam)) {
     const wp = num(g('wp'));
     if (wp != null && wp > 0.05 && wp < 0.95) {
@@ -319,7 +333,8 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   const scoreEnd = num(g('posteam_score_post'));
   const fresh = () => ({ gameId, team: posteam, result: g('fixed_drive_result') || '', firstDowns: num(g('drive_first_downs')),
     inside20: flag(g('drive_inside20')), start: drivePlace(g('drive_start_yard_line'), posteam),
-    scoreStart, scoreEnd, fromKickoff: playType === 'kickoff', lostOnKick: playType === 'kickoff' && flag(g('fumble_lost')) });
+    scoreStart, scoreEnd, fromKickoff: playType === 'kickoff', lostOnKick: playType === 'kickoff' && flag(g('fumble_lost')),
+    top: g('drive_time_of_possession') || null });
   let d = drives.get(key);
   if (!d) {
     drives.set(key, fresh());
@@ -338,6 +353,7 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   }
   if (playType !== 'kickoff') d.fromKickoff = false;
   if (posteam !== d.team) return;
+  if (!d.top && g('drive_time_of_possession')) d.top = g('drive_time_of_possession');
   if (playType && playType !== 'no_play' && playType !== 'kickoff') d.lastType = playType;
   if (d.scoreStart == null) d.scoreStart = scoreStart;
   if (scoreEnd != null && (d.scoreEnd == null || scoreEnd > d.scoreEnd)) d.scoreEnd = scoreEnd;
@@ -351,7 +367,9 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
 function driveTotals(list) {
   const t = { drives: 0, drive_points: 0, drive_tds: 0, drive_fgs: 0, drive_punts: 0, drive_turnovers: 0, drive_downs: 0,
     drive_missed_fgs: 0, drive_safeties: 0, drive_end_of_half: 0, three_and_outs: 0, red_zone_trips: 0, red_zone_tds: 0,
-    opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0 };
+    opp_territory_drives: 0, opp_territory_points: 0, start_sum: 0, start_n: 0, top_seconds: 0 };
+  // Time of possession: every drive's clock, the ones that ran out a half included.
+  for (const d of list) { const m = String(d.top || '').match(/^(\d+):(\d{2})$/); if (m) t.top_seconds += Number(m[1]) * 60 + Number(m[2]); }
   // The feed's drive result, except where the drive's own last play says otherwise (Oct 27 2026 data loop, against
   // ESPN's drive log): a punt blocked and run back for a touchdown read "Opp touchdown" and counted as the offense's
   // turnover, and a kneel-down on fourth down as a turnover on downs.
@@ -400,6 +418,7 @@ function finishGameDetail(e) {
     special_teams_fumbles: e.stFumbles, special_teams_fumbles_lost: e.stFumblesLost,
     onside_recoveries: e.onside,
     penalties: e.penalties, penalty_yards: e.penaltyYards,
+    third_downs: e.thirdDowns, fourth_downs: e.fourthDowns,
     contest_plays: e.contestPlays,
     contest_epa_per_play: e.contestEpaN ? Number((e.contestEpa / e.contestEpaN).toFixed(3)) : null,
     contest_success_rate: e.contestSuccN ? Number((e.contestSucc / e.contestSuccN).toFixed(4)) : null
@@ -491,6 +510,37 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
       });
     }
     const game = games.get(gameId);
+    // THE GAME'S FLOW (Oct 29 2026, founder: "who got ahead, how, when did the team go up 14 versus being close the
+    // whole game"): each score in order with the score after it (an extra point or two-point try joins its
+    // touchdown), the largest lead each way and when, and how often the lead changed hands.
+    if (homeNow != null && awayNow != null && g('home_team') && g('away_team')) {
+      const f = game.flow || (game.flow = { home: g('home_team'), away: g('away_team'), last: [0, 0], events: [], tryOpen: false, sign: 0, changes: 0, lead: { home: null, away: null } });
+      const dh = homeNow - f.last[0], da = awayNow - f.last[1];
+      if (dh > 0 || da > 0) {
+        const scorer = dh > 0 ? f.home : f.away, pts = dh > 0 ? dh : da;
+        const ev = f.events.at(-1);
+        if (f.tryOpen && ev && ev.team === scorer && pts <= 2) { ev.home = homeNow; ev.away = awayNow; ev.try = pts; }
+        else {
+          const yards = num(g('yards_gained'));
+          const td = g('td_player_name');
+          const how = pts >= 6 ? (playType === 'pass' && scorer === posteam ? `${td || g('receiver_player_name') || '?'} ${yards ?? '?'}-yd pass from ${g('passer_player_name') || '?'}`
+            : playType === 'run' && scorer === posteam ? `${td || g('rusher_player_name') || '?'} ${yards ?? '?'}-yd run`
+              : KICKS.has(playType) ? `${td || '?'} ${playType} return` : `${td || '?'} ${flag(g('interception')) ? 'interception' : flag(g('fumble')) ? 'fumble' : ''} return`.replace('  ', ' ') + ' TD')
+            : pts === 3 ? `${g('kicker_player_name') || '?'} ${num(g('kick_distance')) ?? '?'}-yd FG`
+              : pts === 2 && flag(g('safety')) ? 'safety' : pts === 2 && f.tryOpen ? 'two points on the other team\'s try (returned)' : `${pts} points`;
+          f.events.push({ q: qtr, clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, team: scorer, pts, how: pts >= 6 && !/ TD$/.test(how) ? `TD, ${how}` : how, home: homeNow, away: awayNow });
+          f.tryOpen = pts >= 6;
+        }
+      }
+      if (playType === 'kickoff') f.tryOpen = false;
+      f.last = [homeNow, awayNow];
+      const diff = homeNow - awayNow;
+      for (const [side, by] of [['home', diff], ['away', -diff]]) {
+        if (by > 0 && (!f.lead[side] || by > f.lead[side].by)) f.lead[side] = { by, q: qtr, clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, home: homeNow, away: awayNow };
+      }
+      const sign = Math.sign(diff);
+      if (sign !== 0) { if (f.sign !== 0 && sign !== f.sign) f.changes += 1; f.sign = sign; }
+    }
     const passer = g('passer_player_name');
     if (passer) {
       const key = `${posteam}|${passer}`;
@@ -665,7 +715,9 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
       const qs = [...p.at.keys()].sort((a, b) => a - b); quarters = { [p.home]: [], [p.away]: [] }; let prev = [0, 0];
       for (const q of qs) { const [h, a] = p.at.get(q); quarters[p.home].push(h - prev[0]); quarters[p.away].push(a - prev[1]); prev = [h, a]; }
     }
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters };
+    const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
+      lead: g.flow.lead, lead_changes: g.flow.changes } : null;
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };
