@@ -62,7 +62,7 @@ One system, taken from the September 24 App Store screenshots, used everywhere:
 
 | Channel | Job | What goes there | Cadence |
 |---|---|---|---|
-| **X** @BetwithGary | The sports research desk (Oct 29): numbers fans want to read, StatMuse/Opta style | The stat desk (automatic, below); the daily free pick (automatic); reels; release notes | 3-4 stat posts a day + the free pick; rankings card weekly |
+| **X** @BetwithGary | The sports research desk (Oct 29): what Gary's research finds that fans don't know | The research desk (automatic, below); the daily free pick (automatic); reels; release notes | 3-4 research posts a day + the free pick; rankings card weekly |
 | **Instagram** @betwithgary.ai | The product showcase | Feed: feature posts and reels from the app. Stories: the free pick, big-game posts, release news | 3 feed posts a week (at least 1 reel), stories on game days |
 | **Threads** (via the Instagram account) | Mirror of X news, zero extra work | Product and release posts only | When X posts news |
 | **TikTok** (new, @garyaiapp suggested) | Awareness through sports, not betting | 20-30 s vertical: tonight's biggest game, three real facts from Gary's research, who Gary expects to win, app end card. No odds, lines, spreads, money, sportsbooks or "bet" | 3-5 a week once live |
@@ -78,23 +78,21 @@ posting or that the pick was free. Text pick posts drew the most views (574-757 
 image posts drew the fewest (stake image 212, brand pin 147, Winners recap image 138). X posts stay text
 unless they are video.
 
-### The stat desk on X (Oct 29)
+### The research desk on X (Oct 29)
 
-Why: pick posts get single-digit likes even on accounts with 100k+ followers (Action Network 17, Covers 7, Dimers,
-the closest AI-picks comp, 1 like on 1,028 views), while StatMuse (882k, 551 likes a post) and Opta Analyst grew on
-facts. Adam: "the expert authority on the subject."
+Why: pick posts get single-digit likes even on accounts with 100k+ followers; Dimers, the closest AI-picks comp,
+gets 1 like on 1,028 views. A box score or a per-game average looks like a stat bot (Adam: "we just turned into
+ESPN"). What only Gary has is his research: he reads every game, so he finds the injury that changes a matchup or
+the pattern hiding behind a record.
 
-- **Last night's best line** (weekdays 10:30 ET, weekends 9:30): a template over the BDL box score, NFL the morning
-  after an NFL day, otherwise NBA. Posts only when the line is big (30+ points, a triple-double, 24+ fantasy points).
-- **Facts about today's games** (weekdays 1:30, 4:30 and 7:00 PM ET; weekends from 11:00): one of the app's insights
-  (`insight_connections`), phrased by the writer and dropped unless every number is in that insight. No pick, no
-  betting words, no link, this season only. Big games and the NFL first; never the same game twice in a day.
-- **Rankings card**: every team by point differential per game from final scores, Tuesdays 11:00 (NFL) and Mondays
-  11:00 (NBA, once every team has played 10 games). `GaryMarketing/stat-desk/rankings.mjs`, launchd
-  `com.gary.stat-rankings`.
-- **Reels** go to X and Instagram with one command: `node GaryMarketing/stat-desk/post-reel.mjs <mp4> --caption ...`.
-- Code: `gary2.0/supabase/functions/social-auto-post/statDesk.ts` (runs inside the 5-minute poster). Log:
-  `social_post_log` thread_format `stat` (a slot with nothing worth posting is logged with no tweet id).
+- Three posts on weekdays (1:30, 4:30, 7:00 PM ET), four on weekends (from 11:00): the sharpest thing in Gary's
+  published research on one of the day's biggest games, under 140 characters, then the matchup and start.
+- It can say what the observation means for the game. It never says who Gary picked or who will win, and every
+  number in it has to be in Gary's research or it doesn't post.
+- Rankings card: every team by point differential per game, Tuesdays 11:00 (NFL) and Mondays 11:00 (NBA, once
+  every team has played 10 games). `GaryMarketing/stat-desk/rankings.mjs`, launchd `com.gary.stat-rankings`.
+- Reels go to X and Instagram with one command: `node GaryMarketing/stat-desk/post-reel.mjs <mp4> --caption ...`.
+- Code: `gary2.0/supabase/functions/social-auto-post/statDesk.ts`. Log: `social_post_log` thread_format `stat`.
 - Instagram's daily auto image posts are off since Oct 29 (reach 1-9 a post); Instagram is reels only.
 
 ### Leaderboards (Oct 1)
