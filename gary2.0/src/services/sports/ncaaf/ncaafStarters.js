@@ -179,12 +179,25 @@ export async function teamStarters(team, games, season, { fetchImpl = fetch } = 
 }
 
 const words = (n) => String(n || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z\s-]/g, '').split(/[\s-]+/).filter((w) => w && !/^(jr|sr|ii|iii|iv|v)$/.test(w));
-/** Whether a game's starters include this player: the same name, else the same last name and first initial. */
-export function startedIn(starters, name) {
+// Position groups, from a lineup's code or a report's word ("Wide receiver").
+const GROUPS = [['QB', /^(?:qb|quarterback)/i], ['RB', /^(?:rb|fb|tb|running ?back|fullback|tailback)/i], ['WR', /^(?:wr|wide ?receiver|receiver)/i],
+  ['TE', /^(?:te|tight ?end)/i], ['OL', /^(?:ol|ot|og|oc|c|g|t|iol|lt|rt|lg|rg|offensive ?line|tackle|guard|center)$|^offensive/i],
+  ['DL', /^(?:dl|de|dt|nt|edge|defensive ?(?:line|end|tackle)|nose)/i], ['LB', /^(?:lb|ilb|olb|mlb|linebacker)/i],
+  ['DB', /^(?:db|cb|s|fs|ss|nb|nickel|cornerback|safety|defensive ?back)/i], ['K', /^(?:pk|k|p|ls|kicker|punter|long ?snapper)/i]];
+const groupOf = (p) => GROUPS.find(([, re]) => re.test(String(p || '').trim()))?.[0] || null;
+/** Whether a game's starters include this player: the same name; else the one starter with his last name and first
+ * initial, when the first names are one short for the other (Sam, Samuel) or the positions agree (Oct 29 2026 hunt:
+ * Oregon's Dante Moore, QB, out three straight game days, read "started 7 of 7" on Dakorien Moore's starts at receiver). */
+export function startedIn(starters, name, position = null) {
   if (!starters) return null;
   const key = nameKey(name), w = words(name);
   if (starters.some((s) => s.key === key)) return true;
-  return starters.some((s) => { const v = words(s.name); return v.length && w.length && v[v.length - 1] === w[w.length - 1] && v[0][0] === w[0][0]; });
+  const near = starters.filter((s) => { const v = words(s.name); return v.length && w.length && v[v.length - 1] === w[w.length - 1] && v[0][0] === w[0][0]; });
+  if (near.length !== 1) return false;
+  const v = words(near[0].name);
+  const short = v[0].startsWith(w[0]) || w[0].startsWith(v[0]);
+  const same = position && near[0].position && groupOf(position) && groupOf(position) === groupOf(near[0].position);
+  return Boolean(short || same);
 }
 
 /**

@@ -90,10 +90,18 @@ export function gameBoxFromSummary(summary, eventId) {
   }
   // How each drive ended and where it began (Oct 24 2026 read check: Indiana's first touchdown against Ohio State came
   // from the Ohio State 7 after an interception, and nothing showed it). Counts only.
-  const drives = (summary?.drives?.previous || []).map((d) => {
+  // A drive ESPN gives no result takes its last play's (Oct 29 2026 hunt: Michigan's fifth punt read "1 ,"); one whose
+  // only plays were penalties with no snap is not a possession.
+  const LAST_PLAY = [[/blocked punt/i, 'BLOCKED PUNT'], [/punt/i, 'PUNT'], [/blocked field goal/i, 'BLOCKED FG'], [/field goal (?:good|made)/i, 'FG'],
+    [/field goal|missed/i, 'MISSED FG'], [/interception/i, 'INT'], [/fumble/i, 'FUMBLE'], [/safety/i, 'SAFETY'], [/touchdown/i, 'TD'], [/end of (?:half|period|2nd)/i, 'END OF HALF'], [/end of game/i, 'END OF GAME']];
+  const drives = (summary?.drives?.previous || []).filter((d) => {
+    const plays = d?.plays || [];
+    return d?.result || d?.displayResult || !plays.length || !plays.every((p) => /penalty/i.test(String(p?.type?.text || '')));
+  }).map((d) => {
     const at = String(d?.start?.text || '').match(/^([A-Za-z&]+)\s+(\d+)$/);
-    return { teamId: String(d?.team?.id ?? ''), result: String(d?.result || d?.displayResult || '').toUpperCase(),
-      oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
+    const lastType = String((d?.plays || []).at(-1)?.type?.text || '');
+    const result = String(d?.result || d?.displayResult || LAST_PLAY.find(([re]) => re.test(lastType))?.[1] || '').toUpperCase();
+    return { teamId: String(d?.team?.id ?? ''), result, oppHalf: Boolean(at && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50) };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
   // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
@@ -136,7 +144,7 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  return cachedResearch(`espn_cfb_box_v10:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v11:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

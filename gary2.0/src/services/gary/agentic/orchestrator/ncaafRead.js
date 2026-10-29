@@ -66,7 +66,9 @@ const teamsOf = (desk) => (String(desk || '').match(/^MATCHUP: (.+)$/m)?.[1] || 
 const AVAILABILITY_NOTE = /availability|\bruled out\b|\beligib|\binjur|\bquestionable\b|\bdoubtful\b|\bprobable\b|\bout for\b|\breturns?\b|\breturning\b|\bsuspen|\bexpected to play\b|\bsurgery\b|\bconcussion\b|\bremoved from\b|\bresumed\b/i;
 function aboutAvailability(note, coaches = []) {
   if (AVAILABILITY_NOTE.test(note)) return true;
-  const staff = /\bcoach|coordinator|play[- ]?call|\bstaff\b/i.test(note) || coaches.some((last) => new RegExp(`\\b${last}\\b`).test(note));
+  // A coach who is only quoted is not the replacement (Oct 29 2026 hunt: "Smart said ... Rasean Dinkins replaced Kyron
+  // Jones" stayed under the coaches).
+  const staff = /\bcoach|coordinator|play[- ]?call|\bstaff\b/i.test(note) || coaches.some((last) => new RegExp(`\\b${last}\\b(?!\\s+(?:said|says|told|noted|explained|announced|confirmed|added))`).test(note));
   return /\breplace/i.test(note) && !staff;
 }
 // Each team's coaches' last names, from the role lines.
@@ -145,7 +147,8 @@ export function availabilityReport(desk) {
   const teams = teamsOf(desk), source = availabilitySources(desk);
   const lines = quarterbackSectionLines(desk);
   // The researcher's own working ("after the requested 9:07 a.m. research cutoff") is not news (Oct 24 2026).
-  const withoutProcess = (text) => text.split(/(?<=[.!?])\s+/).filter((x) => !/\bcutoff\b|\bresearch\b|\brequested\b/i.test(x)).join(' ').trim();
+  // Its notes on its own sources too ("as transcribed by Kickoff Status; they do not establish ...", Oct 29 2026 hunt).
+  const withoutProcess = (text) => text.split(/(?<=[.!?])\s+/).filter((x) => !/\bcutoff\b|\bresearch\b|\brequested\b|\btranscribed\b|\breproduced by\b|\bdo(?:es)? not establish\b|\btimestamp\b|\breflects the\b[^.]*\breport\b|\bportal\b|\bdid not expose\b|\bunlisted players?\b/i.test(x)).join(' ').trim();
   const notes = new Map(teams.map((t) => [t, lines.filter((l) => l.team === t && l.kind === 'note' && aboutAvailability(l.text, coachesOf(lines, t)))
     .map((l) => withoutProcess(l.text)).filter(Boolean).map((text) => `  reporting: ${text}`)]));
   const rows = afterIntro(sectionOf(desk, 'WHO PRODUCED IT'));
@@ -244,10 +247,11 @@ export function seasonGames(desk) {
     const o = l.match(/— opponent: ([^,—]+?), now (\d+-\d+(?:-\d+)?)/);
     if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? `${o[1].trim()}, ${o[2]} now` : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
-    const q = l.match(/^\s+quarterback: ([^;]+?) \d+-of-\d+/);
-    if (q) {
-      game.qb = q[1].trim();
+    // The first passer, past a starter who threw none ("Dylan Lonergan started, no pass; AJ Surace 7-of-18"; Oct 29
+    // 2026 hunt: Rutgers' game read "passer not on file").
+    if (/^\s+quarterback: /.test(l)) {
       game.passers = [...l.matchAll(/(?:quarterback: |; )([A-Z][^;:]*?) \d+-of-\d+/g)].map((m) => m[1].trim());
+      game.qb = game.passers[0] || null;
     }
     else if (/^\s+offense: /.test(l)) game.off = yards(l);
     else if (/^\s+defense: /.test(l)) game.def = yards(l);

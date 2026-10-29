@@ -70,7 +70,7 @@ function playerLines(box, teamId, positions = {}, starters = null) {
   const off = ps.filter((p) => s(p, 'passing', 'passingAttempts') || s(p, 'rushing', 'rushingAttempts') || s(p, 'receiving', 'receptions'))
     .sort((a, b) => (s(b, 'passing', 'passingAttempts') || 0) - (s(a, 'passing', 'passingAttempts') || 0) || ((s(b, 'rushing', 'rushingAttempts') || 0) + (s(b, 'receiving', 'receptions') || 0)) - ((s(a, 'rushing', 'rushingAttempts') || 0) + (s(a, 'receiving', 'receptions') || 0)))
     .map((p) => `    ${who(p)} ${[s(p, 'passing', 'passingAttempts') ? `${s(p, 'passing', 'completions')}-of-${s(p, 'passing', 'passingAttempts')}, ${s(p, 'passing', 'passingYards')} yds, ${s(p, 'passing', 'passingTouchdowns') || 0} TD, ${s(p, 'passing', 'interceptions') || 0} INT` : null,
-      s(p, 'rushing', 'rushingAttempts') ? `${plural(s(p, 'rushing', 'rushingAttempts'), 'carry', 'carries')} ${s(p, 'rushing', 'rushingYards')} yds${s(p, 'rushing', 'rushingTouchdowns') ? ` ${s(p, 'rushing', 'rushingTouchdowns')} TD` : ''}` : null,
+      s(p, 'rushing', 'rushingAttempts') ? `${plural(s(p, 'rushing', 'rushingAttempts'), 'carry', 'carries')} ${s(p, 'rushing', 'rushingYards')} yds${s(p, 'rushing', 'rushingTouchdowns') ? ` ${s(p, 'rushing', 'rushingTouchdowns')} TD` : ''}${s(p, 'passing', 'passingAttempts') && box.sacks?.[String(teamId)]?.n ? ' (sacks included)' : ''}` : null,
       s(p, 'receiving', 'receptions') ? `${plural(s(p, 'receiving', 'receptions'), 'catch', 'catches')} ${s(p, 'receiving', 'receivingYards')} yds${s(p, 'receiving', 'receivingTouchdowns') ? ` ${s(p, 'receiving', 'receivingTouchdowns')} TD` : ''}` : null,
       s(p, 'fumbles', 'fumblesLost') ? `${plural(s(p, 'fumbles', 'fumblesLost'), 'fumble')} lost` : null].filter(Boolean).join(', ')}`);
   // Under defense only defenders: an offensive player's or a specialist's tackle (after a turnover, on a return) is listed
@@ -112,9 +112,13 @@ async function fullGame(g, season, tonight) {
   if (!box || box.unavailable) return `${head}\n  the box score is not on file (${box?.reason || 'ESPN did not answer'})`;
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
-  const scores = (box.scoring || []).map((p) => `${p.period ? `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}` : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
+  // Overtime has no clock (Oct 29 2026 hunt: "5th 0:00").
+  const scores = (box.scoring || []).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
   const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})`; };
-  const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
+  // College counts sacks as runs: the sacks and the yards they lost are said inside the rushing (Oct 29 2026 hunt: Baylor's
+  // "122 rushing on 35" held two sacks for -19; the live read already separates them).
+  const sackNote = (id) => { const k = box.sacks === null ? null : box.sacks?.[String(id)]; return box.sacks === null ? ', sacks in it not on file' : k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'} for ${k.yards} yards` : ''; };
+  const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}${sackNote(t.id)}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
     `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,

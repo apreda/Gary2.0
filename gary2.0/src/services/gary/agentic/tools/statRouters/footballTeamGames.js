@@ -95,6 +95,9 @@ export function toTeamResults(games, teamId) {
       const scored = sideScore(g, side);
       const allowed = sideScore(g, opponentSide);
       if (scored === null || allowed === null) return null;
+      // A 0-0 "final" is a postponed game the feed closed out (Oct 29 2026 hunt: Campbell's Sep 5 game, replayed the next
+      // day, read as a loss and made it 7-2 for 7-1).
+      if (scored === 0 && allowed === 0) return null;
 
       // The half-by-half shape is what turns a score into a story: a 27-10
       // win that was 24-0 at half is a different game from one that was 3-10

@@ -68,7 +68,7 @@ async function resolveSite({ homeTeam, awayTeam, season, game, seasonGames }) {
   const venue = row ? venueById(venues, row.venueId) : null;
   if (venue) {
     return { confirmed: true, neutral: row.neutralSite === true, conferenceGame: row.conferenceGame === true,
-      name: venue.name || row.venue, city: venue.city || null, state: venue.state || null,
+      name: RENAMED_VENUES[venue.name || row.venue] || venue.name || row.venue, city: venue.city || null, state: venue.state || null,
       capacity: Number(venue.capacity) || null, surface: venue.grass === true ? 'grass' : venue.grass === false ? 'turf' : null,
       dome: venue.dome === true, elevationFt: Number.isFinite(Number(venue.elevation)) ? Math.round(Number(venue.elevation) * 3.281 / 10) * 10 : null,
       tz: venue.timezone || null, lat: Number(venue.latitude), lon: Number(venue.longitude), homeStadium, awayStadium };
@@ -97,9 +97,15 @@ export function playedInWeather(row) {
     temp != null ? `${Math.round(temp)}°F` : null, wind != null ? `wind ${Math.round(wind)} mph` : null].filter(Boolean).join(', ')}`;
 }
 
+// Venues the data still lists under an old name (Oct 29 2026 hunt: UCF's stadium is Acrisure Bounce House since July
+// 2025; the game-by-game read, from ESPN, named it so).
+const RENAMED_VENUES = { 'FBC Mortgage Stadium': 'Acrisure Bounce House' };
+
 /** The kickoff-hour forecast at the site, as one line of facts. */
 async function weatherLine(site, game) {
   if (!site || site.missing || !game?.commence_time) return null;
+  // The data's dome flag covers retractable roofs too (Oct 29 2026 hunt: Mercedes-Benz Stadium read "fixed roof").
+  if (site.dome && /Mercedes-Benz Stadium|AT&T Stadium|NRG Stadium|Lucas Oil Stadium|State Farm Stadium/i.test(String(site.name || site.venue || ''))) return 'Kickoff weather: retractable roof (open or closed not on file).';
   if (site.dome) return 'Kickoff weather: indoors, fixed roof.';
   const weather = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(() => null);
   if (!weather) return 'Kickoff weather: the forecast lookup failed for this kickoff.';
@@ -265,7 +271,7 @@ function quarterbackLines(team, quarterback, rows, results, onFile, starts = new
   if (!games.length) return [`${head}: no passing rows in this team's games this season.`];
   // Whether he started each of them, where the game's lineup is on file (Oct 27 2026 data loop: Dylan Raiola's 19-of-25
   // at USC came in relief of Dante Moore, and read like a start).
-  const tag = (g) => { const lineup = starts.get(String(g.result.gameId)); return !lineup ? '' : startedIn(lineup, quarterback.name) ? ' (started)' : ' (came in; did not start)'; };
+  const tag = (g) => { const lineup = starts.get(String(g.result.gameId)); return !lineup ? '' : startedIn(lineup, quarterback.name, 'QB') ? ' (started)' : ' (came in; did not start)'; };
   const site = (label) => {
     const list = games.filter((g) => siteOf(g.result) === label);
     return `  ${label}, ${plural(list.length, 'game')}: ${list.length ? list.map((g) => `${passingLine(g)}${tag(g)}`).join('; ') : 'none'}`;
@@ -524,7 +530,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   // A lineup is the 11 on offense and 11 on defense: kickers, punters and snappers are never in it.
   const started = (name, position) => {
     if (!lineups.length || /^(PK|K|P|LS)$/i.test(position || '')) return '';
-    const mine = lineups.filter((r) => startedIn(starts.get(String(r.gameId)), name));
+    const mine = lineups.filter((r) => startedIn(starts.get(String(r.gameId)), name, position));
     return `started ${mine.length} of ${lineups.length < results.length ? `the ${lineups.length} games with a starting lineup on file` : `${lineups.length} games`}${mine.length ? `, the last ${day(mine.at(-1))}` : ''}`;
   };
   const byPlayer = playersOf(rows, games);
@@ -594,10 +600,15 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   // Back, or coming back (Oct 24 2026 read check: Indiana's starting corner A.J. Harris had returned two games earlier,
   // and the story only said his replacement was missing): out on an earlier game day, not on this week's report, and
   // the games he has played since.
-  const back = backFromReports(history, (reported || []).map(reportName)).slice(0, 8).map((b) => {
+  const back = backFromReports(history, (reported || []).map(reportName)).map((b) => {
     const entry = [...byPlayer].find(([player]) => nameKey(player) === nameKey(b.name));
-    const since = entry ? games.filter((r) => entry[1].games.has(String(r.gameId)) && (!b.lastOutDate || String(r.date).slice(0, 10) > b.lastOutDate)) : [];
-    return `${b.name}${entry?.[1].position ? ` ${entry[1].position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${since.length ? `stat rows since: ${since.map(day).join(', ')}` : 'no stat row since'})`;
+    const after = (r) => !b.lastOutDate || new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) > b.lastOutDate;
+    const since = entry ? games.filter((r) => entry[1].games.has(String(r.gameId)) && after(r)) : [];
+    // The games he started since, from the starting lineups: the box never credits a lineman with a stat (Oct 29 2026
+    // hunt: Ohio State's Phillip Daniels, starting at tackle again, read "no stat row since").
+    const startedSince = lineups.filter((r) => after(r) && startedIn(starts.get(String(r.gameId)), b.name));
+    const parts = [startedSince.length ? `started since: ${startedSince.map(day).join(', ')}` : null, since.length ? `stat rows since: ${since.map(day).join(', ')}` : null].filter(Boolean);
+    return `${b.name}${entry?.[1].position ? ` ${entry[1].position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${parts.length ? parts.join('; ') : `no stat row since${lineups.some(after) ? ' and no start in a lineup on file' : ''}`})`;
   });
   if (back.length) lines.push(`  out on an earlier report, not on this week's: ${back.join('; ')}`);
   return [`${team}${lines.length ? notOnFile(results, onFile) : ''}`, ...(lines.length ? lines : [empty])];
@@ -685,7 +696,7 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
       e.games.push(r); byStarter.set(x.key, e);
     }
     const listed = kept.map((p) => ({ name: p.name, key: starterKey(p.name) }));
-    for (const e of [...byStarter.values()].filter((x) => x.games.length >= 2 && x.games.length * 2 > earlierLineups.length && !startedIn(lastLineup, x.name) && !startedIn(listed, x.name))
+    for (const e of [...byStarter.values()].filter((x) => x.games.length >= 2 && x.games.length * 2 > earlierLineups.length && !startedIn(lastLineup, x.name, x.position) && !startedIn(listed, x.name))
       .sort((a, b) => b.games.length - a.games.length || a.name.localeCompare(b.name))) {
       const report = onReport(e.name, reported);
       lineup.push(`  ${e.name}${e.position ? ` (${e.position})` : ''}: started ${e.games.length} of the ${earlierLineups.length} earlier games with a starting lineup on file, the last ${day(e.games.at(-1))} ${versus(e.games.at(-1))}; `
@@ -760,7 +771,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     const count = new Map();
     for (const id of earlier) for (const p of map.get(String(id))) count.set(p.key, { p, n: (count.get(p.key)?.n || 0) + 1 });
     const missing = [...count.values()].filter(({ n }) => n >= Math.ceil(earlier.length * 0.6)).map(({ p }) => p)
-      .filter((p) => STEADY.test(String(p.position || '')) && !startedIn(that, p.name));
+      .filter((p) => STEADY.test(String(p.position || '')) && !startedIn(that, p.name, p.position));
     return missing.length ? `${missing.map((p) => `${p.name} (${p.position})`).join(', ')} (each started most of their ${earlier.length} earlier games with a lineup on file)` : null;
   };
   const ownMissing = sides.map((s, i) => new Map(s.results.map((r) => {
@@ -794,7 +805,9 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   // A report exists only for a game against a team of the same conference (the Big Ten and Big 12 report conference games
   // only), so outside one there is no list, not an empty one.
   const outLine = (i, r) => {
-    const day = String(r.date || '').slice(0, 10);
+    // The game's Eastern date, the date the reports carry (Oct 29 2026 hunt: a kickoff at 8 PM ET or later is the next day
+    // in UTC, and 21 conference games read "nobody · opponent: nobody").
+    const day = r.date ? new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : '';
     const sameConference = ncaafTeamConferenceId(sides[i].atHome ? home : away) === ncaafTeamConferenceId(teamsById.get(Number(r.opponentId)));
     if (!sameConference) return null;
     const mine = histories[i]?.found ? outOnGameDay(histories[i], day) : null;

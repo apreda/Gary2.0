@@ -14,7 +14,8 @@ export function newsWithoutRecaps(news, finals) {
   const lines = String(news || '').split('\n');
   const heading = (l) => /^\s*#{1,6}\s|^\s*\*\*[^*]+\*\*\s*$/.test(l);
   const recapHeading = (l) => /\b(?:recent (?:regular-season )?games|last game|recent results|game recaps?)\b/i.test(l);
-  const isFinal = (l) => [...l.matchAll(/\b(\d{2,3})\s?[–-]\s?(\d{2,3})\b|\b[A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? (\d{2,3}), [A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? (\d{2,3})\b/g)]
+  // A football final can have a one-digit side ("lost 24-7"; Oct 29 2026 hunt).
+  const isFinal = (l) => [...l.matchAll(/\b(\d{1,3})\s?[–-]\s?(\d{1,3})\b|\b[A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? (\d{2,3}), [A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? (\d{2,3})\b/g)]
     .some((m) => { const a = m[1] || m[3], b = m[2] || m[4]; return finals.has(`${a}-${b}`) || finals.has(`${b}-${a}`); });
   const inGame = (l) => /\b(\d{2,3})\s?[–-]\s?(\d{2,3})\b/.test(l)
     && /\b(?:led|lead|leading|trail(?:ed|ing)?|halftime|at the half|quarter|half\b|run\b|won|lost|beat|outscored|finished|ahead|behind|deficit|overtime)\b/i.test(l);
