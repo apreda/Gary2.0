@@ -1821,9 +1821,13 @@ struct GaryBankrollSnapshot: Decodable {
     }
     var days: [Day]? = nil
     /// Days taken off the record, each with the note fans read (founder, Oct 29 2026: Oct 17's bug day).
+    /// Before its effective date the note is the notice of what will happen (founder, Oct 29 2026: "we cant
+    /// scrub until people understand and it should go into effect nov 1").
     struct Scrub: Decodable {
         let date: String
         let note: String
+        var effective_date: String? = nil
+        var in_effect: Bool? = nil
     }
     var scrubbed: [Scrub]? = nil
 }
@@ -1909,7 +1913,8 @@ private struct GaryBankrollPanel: View {
                     calendar(b)
                     ForEach(b.scrubbed ?? [], id: \.date) { scrub in
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("\(LabFormat.monthDay(scrub.date).uppercased()) · SCRUBBED")
+                            Text("\(LabFormat.monthDay(scrub.date).uppercased()) · " + (scrub.in_effect == false
+                                ? "COMES OFF \(LabFormat.monthDay(scrub.effective_date ?? "").uppercased())" : "SCRUBBED"))
                                 .font(.system(size: 11, weight: .semibold)).tracking(1).foregroundStyle(gold)
                             Text(scrub.note)
                                 .font(.system(size: 14)).foregroundStyle(.secondary)
