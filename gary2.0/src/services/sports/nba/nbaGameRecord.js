@@ -20,7 +20,7 @@ import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialIn
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
 
-export const NBA_RECORD_VERSION = 17;
+export const NBA_RECORD_VERSION = 18;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
