@@ -508,7 +508,10 @@ struct DartsView: View {
     private var sports: [String] {
         var s: [String] = []
         for d in board?.today ?? [] where !s.contains(d.league) { s.append(d.league) }
-        for r in board?.streaks ?? [] { if let lg = r.league, !s.contains(lg) { s.append(lg) } }
+        // Runs alone keep a league's tab, except baseball's: out of season
+        // (founder, Oct 30 2026: "MLB is out of season") it shows only on a
+        // day it has darts.
+        for r in board?.streaks ?? [] { if let lg = r.league, lg != "MLB", !s.contains(lg) { s.append(lg) } }
         if nflDay, let i = s.firstIndex(of: "NFL") { s.remove(at: i); s.insert("NFL", at: 0) }
         return s
     }
