@@ -13,7 +13,6 @@
 		DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */; };
 		9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF06182E7B8C9740E22A012 /* CashRailModel.swift */; };
 		10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4E8CD23C526CD205E10607 /* CashRailCard.swift */; };
-		78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FE63AC8845ADF41948E75E /* CashRailRailView.swift */; };
 		BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */; };
 		777E3671E910DCC68EC80983 /* LabModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958086BBEEB1C76916D435F9 /* LabModels.swift */; };
 		94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */; };
@@ -179,7 +178,6 @@
 		6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailDemo.swift; sourceTree = "<group>"; };
 		4AF06182E7B8C9740E22A012 /* CashRailModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailModel.swift; sourceTree = "<group>"; };
 		EF4E8CD23C526CD205E10607 /* CashRailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCard.swift; sourceTree = "<group>"; };
-		52FE63AC8845ADF41948E75E /* CashRailRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailRailView.swift; sourceTree = "<group>"; };
 		D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailSheet.swift; sourceTree = "<group>"; };
 		958086BBEEB1C76916D435F9 /* LabModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabModels.swift; sourceTree = "<group>"; };
 		C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabDesign.swift; sourceTree = "<group>"; };
@@ -361,7 +359,6 @@
 				6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */,
 				4AF06182E7B8C9740E22A012 /* CashRailModel.swift */,
 				EF4E8CD23C526CD205E10607 /* CashRailCard.swift */,
-				52FE63AC8845ADF41948E75E /* CashRailRailView.swift */,
 				D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */,
 			);
 			path = CashRail;
@@ -791,7 +788,6 @@
 				DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */,
 				9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */,
 				10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */,
-				78A79A7E4BFAF37D5537676A /* CashRailRailView.swift in Sources */,
 				BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */,
 				3292358B12933B1F8DD2A4D2 /* HomePersonalScorecard.swift in Sources */,
 				9F2CE5FFECBC920827D175D6 /* HomePresentation.swift in Sources */,

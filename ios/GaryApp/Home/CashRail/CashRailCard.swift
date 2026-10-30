@@ -16,7 +16,7 @@ enum CR {
 }
 
 /// CASH RAIL — the live NFL marquee card (founder-picked, Oct 29 2026).
-/// Scoreboard on top, the rail of the night's landings, the latest cash big,
+/// Scoreboard on top (no rail: founder, Oct 30 2026), the latest cash big,
 /// the next three by price, and every hit behind ALL HITS ›.
 struct CashRailCard: View {
     let awayName: String
@@ -45,11 +45,6 @@ struct CashRailCard: View {
         VStack(spacing: 0) {
             Button(action: onOpenGame) { scoreboard }
                 .buttonStyle(.plain)
-            CashRailRailView(elapsed: board?.elapsed_s ?? 0,
-                             hits: board?.hits ?? [],
-                             live: board?.status != "final",
-                             pile: board?.pile ?? [])
-                .padding(.horizontal, 14).padding(.bottom, 12)
             if let hero, let board {
                 hits(hero: hero, board: board)
             }

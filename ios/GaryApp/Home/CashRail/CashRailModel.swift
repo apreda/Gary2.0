@@ -53,28 +53,7 @@ struct CashRailBoard: Codable, Equatable {
     var spread: String? = nil
 }
 
-/// One step of the rail's pile: a hit landing and what $10 on every hit has won so far.
-struct CashRailPileStep: Equatable {
-    let key: String
-    let elapsed: Int
-    let price: Int
-    /// This hit's own $10 winnings.
-    let jump: Double
-    /// Everything won so far, this hit included.
-    let total: Double
-}
-
 extension CashRailBoard {
-    /// What $10 on every hit has won, in the order they landed (the rail).
-    var pile: [CashRailPileStep] {
-        var total = 0.0
-        return hits.sorted { ($0.elapsed, $0.key) < ($1.elapsed, $1.key) }.map { h in
-            let jump = CashRailFormat.profit10(h.price)
-            total += jump
-            return CashRailPileStep(key: h.key, elapsed: h.elapsed, price: h.price, jump: jump, total: total)
-        }
-    }
-
     /// The latest landing owns the hero (a tie goes to the longer price); once
     /// the game is final the night's biggest hit takes it back.
     var hero: CashRailHit? {
@@ -136,12 +115,6 @@ enum CashRailFormat {
         guard !out.isEmpty else { return nil }
         return out.joined(separator: " · ").uppercased().replacingOccurrences(of: "-", with: "\u{2212}")
     }
-
-    /// What $10 won on top of the stake at an American price.
-    static func profit10(_ p: Int) -> Double { 10 * (decimal(p) - 1) }
-
-    /// The rail's running total: "+$264".
-    static func pileTotal(_ v: Double) -> String { "+$" + Int(v.rounded()).formatted(.number.grouping(.automatic)) }
 
     /// What $10 returned: whole dollars from $100 up, else cents with ".00" dropped.
     static func payout10(_ p: Int) -> String {

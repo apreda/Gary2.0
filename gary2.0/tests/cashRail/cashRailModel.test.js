@@ -97,13 +97,6 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
     expect(r).toEqual(['GB −3.5 · GARY PACKERS −3.5', 'GB −2.5']);
   });
 
-  it('the rail piles up what $10 on every hit has won, hit by hit', () => {
-    const r = swiftJSON(`${board}
-let p = b.pile
-out([p.map { $0.key }, p.map { (($0.total * 100).rounded()) / 100 }, p.map { (($0.jump * 100).rounded()) / 100 }, CashRailFormat.profit10(-115) > 8.69, CashRailFormat.pileTotal(263.5)] as [Any])`);
-    expect(r).toEqual([['sanders|first_td', 'kraft|anytime_td', 'reed|receiving_yards'], [220, 245, 263.5], [220, 25, 18.5], true, '+$264']);
-  });
-
   it('an empty board has no hero and counts nothing', () => {
     const r = swiftJSON(`let e = CashRailBoard(league: "NFL", game_id: "1", status: "live", possession: nil, situation: nil, elapsed_s: 0, clock: nil, hits: [])
 out([e.hero == nil, e.ranked.isEmpty, e.cashedCount == 0])`);
