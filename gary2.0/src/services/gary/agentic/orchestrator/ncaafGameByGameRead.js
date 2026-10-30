@@ -128,7 +128,10 @@ async function fullGame(g, season, tonight) {
     if (box.sacks === null) return ', sacks in it not on file';
     if ((box.players || []).some((p) => p.stats?.defensive) && (k?.n || 0) !== credited) return credited ? `, including ${credited} sack${credited === 1 ? '' : 's'} (their yards not on file)` : '';
     return k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'} for ${k.yards} yards` : ''; };
-  const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}${sackNote(t.id)}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
+  // Possession only when the two times add up to 60 minutes in a regulation game (round 12).
+  const secs = (v) => { const m = String(v || '').match(/^(\d+):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  const possOk = (() => { const a = secs(us?.totals?.possessionTime), b = secs(them?.totals?.possessionTime); return a != null && b != null && ((us?.quarters?.length || 0) > 4 || Math.abs(a + b - 3600) <= 30); })();
+  const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}${sackNote(t.id)}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${possOk ? x.possessionTime : "not on file (the source's two times do not add up to 60 minutes)"}`; };
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
     `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,

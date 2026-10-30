@@ -156,14 +156,15 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
  * gives the short form for the one-line schedule behind the season totals.
  */
-function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, full = true }) {
+function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, full = true }) {
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
   // Its record now and its games; no AP poll place (round 9, Oct 29 2026: ranks and places are out of what Gary reads).
   const record = records.get(Number(opponentId));
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
     record ? `now ${record}` : null,
-    full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null) }) : null].filter(Boolean).join(', ');
+    full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
+      units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null) }) : null].filter(Boolean).join(', ');
 }
 
 /**
@@ -177,7 +178,7 @@ function opponentLabel(opponentId, { teamsById, records, league = null, leagueGa
  * against the 120th). Shared by the desk and by the stat tools, so both say
  * the same thing about the same opponent.
  */
-export async function opponentContext({ teams, resultLists, season, cutoff = null, leagueGames = null, known = new Map() }) {
+export async function opponentContext({ teams, resultLists, season, cutoff = null, leagueGames = null, unitsOf = null, known = new Map() }) {
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const counted = (results) => results.filter((r) => !cutoff || new Date(r.date) < new Date(cutoff));
   const records = new Map(known);
@@ -189,7 +190,7 @@ export async function opponentContext({ teams, resultLists, season, cutoff = nul
       if (results.length) records.set(id, record(results));
     }),
   ]);
-  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, full });
+  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, full });
 }
 
 function splitLine(team, label, results, describe) {
@@ -779,12 +780,17 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     { team: awayTeam, id: away.id, results: before(awayTeam, awayResults), atHome: false }];
 
   // Each opponent's current record, from its own game list.
-  const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, leagueGames,
+  // Each opponent's own unit numbers in its other games, once the week's boxes are read (round 12: a run defense's
+  // numbers could not be read against what those opponents usually run for).
+  const unitsOf = { fn: null };
+  const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, leagueGames, unitsOf,
     known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
   const weeks = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.week))).filter((w) => Number.isFinite(w) && w > 0 && w < 900))];
   const noBoxes = { find: () => null, lines: () => ['      units: the per-game unit lines are not available for this game'] };
   const [weather, boxes] = await Promise.all([weatherLine(site, game), teamBoxBuilder(season, weeks).catch(() => noBoxes)]);
+  unitsOf.fn = (teamName, r) => { const f = boxes.find(teamName, r); if (!f?.own?.size || !f?.opp?.size) return null;
+    return `ran ${f.own.get('rushingYards') ?? '?'} on ${f.own.get('rushingAttempts') ?? '?'}, passed for ${f.own.get('netPassingYards') ?? '?'}; allowed ${f.opp.get('rushingYards') ?? '?'} rushing, ${f.opp.get('netPassingYards') ?? '?'} passing`; };
   // The player lines and the scoring plays, from ESPN's box of each game the team box found.
   const played = await playerGames(sides, boxes).catch((e) => {
     console.warn(`[Scout Report] College player lines unavailable: ${e.message}`);
@@ -816,6 +822,19 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     const earlierIds = s.results.filter((x) => new Date(x.date) < new Date(r.date)).map((x) => x.gameId);
     return [String(r.gameId), usualMissing(starts[i], [...earlierIds, r.gameId], r.gameId)];
   })));
+  // Who started at quarterback for each opponent, from that school's official box of the game (round 12: the opponent
+  // line listed a reliever first and dropped a starter with under five passes).
+  const oppStarter = new Map();
+  await Promise.all(sides.map(async (s, i) => {
+    const us = teamsById.get(Number(s.id));
+    for (const r of s.results) {
+      const opp = teamsById.get(Number(r.opponentId));
+      if (!opp || !us) continue;
+      const map = await teamStarters(school(opp), [{ gameId: r.gameId, date: r.date, opponent: school(us) }], season).catch(() => null);
+      const qb = (map?.get(String(r.gameId)) || []).find((x) => /^QB$/i.test(String(x.position || '')));
+      if (qb) oppStarter.set(`${i}|${r.gameId}`, qb.name);
+    }
+  }));
   const oppMissing = new Map();
   await Promise.all(sides.map(async (s, i) => {
     for (const r of [...s.results].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3)) {
@@ -873,7 +892,13 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
       const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)), played[i].unitTotals?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
-      const theirQb = played[i].oppQb?.get(String(r.gameId));
+      const listedQb = played[i].oppQb?.get(String(r.gameId)), starter = oppStarter.get(`${i}|${r.gameId}`);
+      const lastName = (nm) => String(nm || '').trim().split(/\s+/).filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop()?.toLowerCase();
+      const starterListed = starter && listedQb && listedQb.toLowerCase().includes(lastName(starter));
+      const theirQb = starter
+        ? (starterListed ? listedQb.split('; ').map((x) => (x.toLowerCase().includes(lastName(starter)) ? x.replace(/^([^0-9]+?) (\d+-of-)/, '$1 (started) $2') : x)).sort((a, b) => /\(started\)/.test(b) - /\(started\)/.test(a)).join('; ')
+          : `${starter} started (under five passes)${listedQb ? `; ${listedQb}` : ''}`)
+        : listedQb;
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
         + `\n      ${points || 'points from: not on file for this game'}`
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`

@@ -40,16 +40,19 @@ export function gameBoxFromSummary(summary, eventId) {
   const teams = (competition?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), homeAway: c?.homeAway, score: num(c?.score),
     quarters: Array.isArray(c?.linescores) ? c.linescores.map((l) => num(l?.displayValue ?? l?.value)) : null }));
   const players = [];
+  // Each team's own defensive totals row (round 12: the athletes' sack credits ran one over it, a sack wiped out by a foul).
+  const defTotals = {};
   for (const side of summary?.boxscore?.players || []) {
     const teamId = String(side?.team?.id ?? '');
     const byId = new Map();
     for (const group of side?.statistics || []) {
       const keys = (group?.keys || []).flatMap((k) => String(k).split('/'));
+      if (group?.name === 'defensive' && Array.isArray(group?.totals)) { const tv = group.totals.flatMap((v) => String(v).split('/')); defTotals[teamId] = Object.fromEntries(keys.map((k, i) => [k, num(tv[i])])); }
       for (const entry of group?.athletes || []) {
         const id = String(entry?.athlete?.id ?? '');
         if (!id || !group?.name) continue;
         const values = (entry?.stats || []).flatMap((v) => String(v).split('/'));
-        const player = byId.get(id) || { id, teamId, first: entry.athlete.firstName || '', last: entry.athlete.lastName || '', name: entry.athlete.displayName || '', stats: {} };
+        const player = byId.get(id) || { id, teamId, first: entry.athlete.firstName || '', last: entry.athlete.lastName || '', name: entry.athlete.displayName || '', jersey: entry.athlete.jersey ?? null, stats: {} };
         player.stats[group.name] = Object.fromEntries(keys.map((k, i) => [k, num(values[i])]));
         byId.set(id, player);
       }
@@ -138,7 +141,11 @@ export function gameBoxFromSummary(summary, eventId) {
     const oppHalf = Number.isFinite(first) && first > 0 && first < 100 ? first < 50
       : own != null ? own > 50 : Boolean(at && Number(at[2]) > 0 && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50);
     // Inside the other team's 20 on any of its snaps (round 9: the college reads had no red-zone trips; the NFL's do).
-    const inside20 = snaps.some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20; });
+    // A foul inside the 20 counts too: the ball was there (round 12: San Diego State's drive to the Fresno 16, pushed back
+    // by a false start, was a trip in the official box).
+    const fouls = (d?.plays || []).filter((p) => /penalty/i.test(String(p?.type?.text || '')) && !/kickoff|extra point|two.?point|2pt/i.test(String(p?.text || ''))
+      && String(p?.start?.team?.id ?? d?.team?.id ?? '') === String(d?.team?.id ?? ''));
+    const inside20 = [...snaps, ...fouls].some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20; });
     // An overtime possession starts at the 25 by rule (round 10: Miami's two overtime TDs read as short fields).
     const ot = Number(d?.start?.period?.number ?? d?.plays?.[0]?.period?.number) > 4;
     return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20, ot };
@@ -187,15 +194,22 @@ export function gameBoxFromSummary(summary, eventId) {
   const allPlays = (summary?.drives?.previous || []).flatMap((d) => d?.plays || []);
   const hurt = [];
   allPlays.forEach((p, i) => {
-    for (const m of String(p?.text || '').matchAll(/#(\d{1,2})\s+([A-Z][\w'-]*\.\s?[A-Z][\w'-]+(?:\s(?:Jr\.|Sr\.|II|III|IV))?)\s+injured\b/g)) {
-      const jersey = m[1], who = m[2].replace(/\.\s?/, '.');
-      const later = allPlays.slice(i + 1).some((q) => new RegExp(`#${jersey}\\s+${who.replace('.', '\\.\\s?')}\\b`).test(String(q?.text || '')));
-      const [init, last] = who.split('.');
-      const owner = players.find((x) => x.first?.[0] === init[0] && String(x.last || '').toLowerCase().startsWith(String(last || '').split(' ')[0].toLowerCase()));
-      hurt.push({ who, jersey, teamId: owner?.teamId || null, period: Number(p?.period?.number) || null, clock: p?.clock?.displayValue || null, later });
+    // Every "#N X.Name" in the list before "injured" ("#71 R.Fullwood and #55 J.Doe injured"), matched to a side by jersey
+    // and name, else the play's own team when he is the ball carrier or passer; else said not on file (round 12).
+    const NAME_RE = "#(\\d{1,2})\\s+([A-Z][\\w'-]*\\.\\s?[A-Z][\\w'-]+(?:\\s(?:Jr\\.?|Sr\\.?|II|III|IV))?)";
+    for (const seg of String(p?.text || '').matchAll(new RegExp(`((?:${NAME_RE}(?:,\\s*|\\s+and\\s+)?)+)\\s+injured\\b`, 'g'))) {
+      for (const m of seg[1].matchAll(new RegExp(NAME_RE, 'g'))) {
+        const jersey = m[1], who = m[2].replace(/\.\s?/, '.');
+        const later = allPlays.slice(i + 1).some((q) => new RegExp(`#${jersey}\\s+${who.replace('.', '\\.\\s?')}\\b`).test(String(q?.text || '')));
+        const [init, last] = who.split('.');
+        const byName = (x) => x.first?.[0] === init[0] && String(x.last || '').toLowerCase().startsWith(String(last || '').split(' ')[0].toLowerCase());
+        const owner = players.find((x) => String(x.jersey ?? '') === jersey && byName(x)) || players.find(byName);
+        const carrier = new RegExp(`^(?:\\(\\d{1,2}:\\d{2}\\)\\s*)?(?:[\\w-]+\\s+)*#${jersey}\\s+${who.replace('.', '\\.\\s?')}\\s+(?:rush|pass|run|scramble)`, 'i').test(String(p?.text || ''));
+        hurt.push({ who, jersey, teamId: owner?.teamId || (carrier ? String(p?.start?.team?.id ?? '') || null : null), period: Number(p?.period?.number) || null, clock: p?.clock?.displayValue || null, later });
+      }
     }
   });
-  return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, bigPlays, hurt, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
 }
 
 // Who made a 20+ yard play, from ESPN's words in either form (round 9: 798 of 812 read "?"): "#12 A.Philo pass complete
@@ -230,6 +244,8 @@ export function espnUnitTotals(box, teamId) {
   const m = new Map(Object.entries(t).map(([k, v]) => [k, k === 'completionAttempts' ? String(v).replace('/', '-') : v]));
   // Sacks and tackles for loss from ESPN's defensive credits, which match the school's stat crew (round 11: CFBD's team
   // box had Arizona's six sacks at Washington State as three).
+  const tot = box?.defTotals?.[String(teamId)];
+  if (tot && Number.isFinite(Number(tot.sacks))) { m.set('sacks', Number(tot.sacks)); if (Number.isFinite(Number(tot.tacklesForLoss))) m.set('tacklesForLoss', Number(tot.tacklesForLoss)); return m; }
   const mine = (box?.players || []).filter((p) => p.teamId === String(teamId) && p.stats?.defensive);
   if (mine.length) {
     const sum = (k) => Math.round(mine.reduce((a, p) => a + (Number(p.stats.defensive[k]) || 0), 0) * 2) / 2;
@@ -254,6 +270,11 @@ export function ncaafFlowLines(box, teamId, names = {}) {
     const sg = Math.sign(mine); if (sg) { if (sign && sg !== sign) changes += 1; sign = sg; }
   }
   const leadText = (id) => (lead[id] ? `${name(id)} by ${lead[id].by} (${lead[id].at})` : `${name(id)} never led`);
+  // Possession only when the two times add up to the game's 60 minutes (round 12: ESPN's 29:06 and 33:10 in a regulation game).
+  const secs = (t) => { const m = String(t || '').match(/^(\d+):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  const pa = secs(us.totals?.possessionTime), pb = secs(them.totals?.possessionTime);
+  const ot = (box.scoring || []).some((p) => p.period > 4) || (us.quarters?.length || 0) > 4;
+  const possession = pa == null || pb == null ? 'possession not on file' : !ot && Math.abs(pa + pb - 3600) > 30 ? "possession not on file (the source's two times do not add up to 60 minutes)" : `possession ${us.totals.possessionTime} to ${them.totals.possessionTime}`;
   const hurries = (id) => (box.players || []).filter((p) => p.teamId === id).reduce((a, p) => a + (Number(p.stats?.defensive?.hurries) || 0), 0);
   // None credited to either side is a stat crew that does not chart hurries, not zero pressure (round 9: Georgia's and
   // Maryland's home boxes show "-" in every QH column, and ESPN writes 0).
@@ -261,9 +282,9 @@ export function ncaafFlowLines(box, teamId, names = {}) {
   const big = (id) => (box.bigPlays === null ? 'not on file' : (box.bigPlays || []).filter((b) => b.teamId === id).map((b) => `${b.who || '?'} ${b.yards} ${b.kind}`).join(', ') || 'none');
   return [
     `scoring: ${box.scoring.length ? box.scoring.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${p.text} (${score(p)})`).join(' · ') : 'none'}`,
-    `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · possession ${us.totals?.possessionTime ?? '?'} to ${them.totals?.possessionTime ?? '?'} · ${hurryText}`,
+    `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · ${possession} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
-    ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : ''}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`] : []),
+    ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`] : []),
   ];
 }
 
@@ -271,7 +292,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
-  return cachedResearch(`espn_cfb_box_v18:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v20:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

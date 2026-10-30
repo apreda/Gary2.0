@@ -55,10 +55,17 @@ export function withoutBettingLines(text) {
 // stays with what is left of it.
 const SEARCH_NOTE = /^(?:No|Nothing)\b[^.]*\b(?:found|verified|located|identified)\b|\bsearch (?:tool|results?)\b|\bcould not be (?:opened|dated)\b|\bso (?:they|it|none) (?:was|were|could be) (?:left out|listed)\b|\b(?:article|preview|page|post|piece)s? (?:has|have) no date\b|\bGary already has\b|^This is not new\b|\bas requested\b|\bin the request\b|\bresearch cutoff\b/i;
 const LAST_SEASON = /\blast (?:season|year)\b|\b(?:previous|prior) seasons?\b|\ba year ago\b|\bpreseason\b|\btraining camp\b|\bspring (?:game|practice)\b/i;
+// The search in the first person ("The search limit cut off my last search"), poll places, and a season before this one by
+// its year ("since 2015", "his 2023 rookie season") (round 12). A rank in front of a team's name is taken off the name.
+const FIRST_PERSON = /\b(?:I|my|we|our)\b[^.]*\b(?:search(?:es|ed)?|found no|didn't find|did not find|couldn't (?:open|find)|could not (?:open|find))\b|\bsearch (?:limit|summary)\b|\bcouldn't be (?:opened|dated)\b/i;
+const POLL = /\b(?:AP|coaches|CFP|College Football Playoff) (?:poll|Top 25|rankings?)\b|\bin the (?:AP|coaches) poll\b/i;
+const seasonYear = () => { const d = new Date(); return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear(); };
+const pastYear = (x) => [...String(x).matchAll(/\b((?:19|20)\d\d)\b/g)].some((m) => Number(m[1]) < seasonYear());
 export function footballNews(text) {
   return String(text || '').split('\n').map((l) => {
     const label = l.match(/^((?:[A-Z][A-Z0-9 .'&()-]*[A-Z)]|BOTH)\s*[:–-]\s+)/)?.[1] || '';
-    const body = withoutSentences(l.slice(label.length), (x) => SEARCH_NOTE.test(x.trim()) || LAST_SEASON.test(x));
+    const body = withoutSentences(l.slice(label.length).replace(/\bNo\. \d{1,2} (?=[A-Z])/g, ''),
+      (x) => SEARCH_NOTE.test(x.trim()) || LAST_SEASON.test(x) || FIRST_PERSON.test(x) || POLL.test(x) || pastYear(x));
     return body.trim() ? label + body : (l.trim() ? null : l);
   }).filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
