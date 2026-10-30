@@ -636,7 +636,10 @@ function withoutOrphans(lines, drop) {
       // such parent heading, its own subheadings included (round 12: the Kings' storylines read under the Pelicans' name
       // when the team heading went for having no line before its first subheading).
       if (heading(i)) {
-        const parentAt = (k) => heading(k) && nextIdx(k) >= 0 && heading(nextIdx(k));
+        // Over the next line still kept, a dropped intro paragraph skipped (round 15: the Kings' heading, over a dropped
+        // first paragraph, went and its storylines read under the Pelicans').
+        const nextLive = (k) => { let j = k + 1; while (j < lines.length && (blank(j) || drop[j])) j += 1; return j < lines.length ? j : -1; };
+        const parentAt = (k) => heading(k) && nextLive(k) >= 0 && heading(nextLive(k));
         const parent = parentAt(i);
         let k = i + 1, kept = false;
         while (k < lines.length && !(parent ? parentAt(k) : heading(k))) { if (!blank(k) && !drop[k] && !heading(k)) { kept = true; break; } k += 1; }

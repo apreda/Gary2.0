@@ -18,7 +18,7 @@ import { BALLDONTLIE_API_BASE_URL, bdlHttp, API_KEY } from '../../providers/bdl/
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
-import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor } from './espnNbaGame.js';
+import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor, espnNameKey } from './espnNbaGame.js';
 
 export const NBA_RECORD_VERSION = 18;
 
@@ -246,8 +246,11 @@ export async function buildNbaGameRecord(gameId) {
   if (official) {
     // Every player the box lists, a zero-minute one too: a box read before the game ended has players who played later at
     // 0 (round 14: ten Blazers and Grizzlies who played read "did not play" from a first-quarter box).
-    for (const p of players) {
-      const o = officialLineFor(p.name, official.filter((x) => x.side === p.side));
+    // Players with minutes first; one the box has at zero takes an official line only by his exact name, and never one
+    // already taken (round 15: a DNP teammate could inherit the line of a teammate with his last name).
+    for (const p of [...players].sort((a, b) => (b.min > 0) - (a.min > 0))) {
+      const mine = official.filter((x) => x.side === p.side && !matched.has(x));
+      const o = p.min > 0 ? officialLineFor(p.name, mine) : mine.find((x) => x.key === espnNameKey(p.name)) || null;
       if (!o) { if (p.min > 0) unmatched.push(p.name); continue; }
       if (!(p.min > 0) && !(o.min > 0)) continue;
       matched.add(o);

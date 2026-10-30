@@ -73,9 +73,13 @@ function flowText(rec, us) {
 const incidentsText = (rec) => (rec.incidents?.length ? `technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}` : null);
 // Players with 15+ minutes who last left the floor before the 4th quarter and never came back (round 12: Cooper Flagg's
 // 17 minutes, out for good before half, read as an ordinary night).
+// One on the floor to the end of a quarter and never back counts too when every later quarter was followed to the
+// second (round 15: Durant sat the whole 4th of a 6-point game and was not named). A clock under a minute is seconds.
+const clockWord = (c) => (/:/.test(String(c)) ? c : `${c} seconds`);
 const goneEarly = (rec) => {
-  const list = (rec.players || []).filter((p) => p.min >= 15 && rec.lastOff?.[p.name] && rec.lastOff[p.name].clock !== 'end' && rec.lastOff[p.name].period <= 3);
-  return list.length ? `played 15+ minutes and did not return after the 3rd quarter: ${list.map((p) => `${rec[p.side].short} ${p.name} (${Math.round(p.min)} min; last left in the ${periodName(rec.lastOff[p.name].period)} with ${rec.lastOff[p.name].clock} left)`).join(', ')}` : null;
+  const followedAfter = (q) => !(rec.wholeMinuteQuarters || []).some((x) => x > q);
+  const list = (rec.players || []).filter((p) => { const o = rec.lastOff?.[p.name]; return p.min >= 15 && o && o.period <= 3 && (o.clock !== 'end' || followedAfter(o.period)); });
+  return list.length ? `played 15+ minutes and did not return after the 3rd quarter: ${list.map((p) => `${rec[p.side].short} ${p.name} (${Math.round(p.min)} min; ${rec.lastOff[p.name].clock === 'end' ? `on the floor to the end of the ${periodName(rec.lastOff[p.name].period)}` : `last left in the ${periodName(rec.lastOff[p.name].period)} with ${clockWord(rec.lastOff[p.name].clock)} left`})`).join(', ')}` : null;
 };
 export function flowFacts(rec, teamId) {
   const flow = flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
@@ -178,7 +182,7 @@ export function fullGameText(rec, teamId, byTeam) {
       const nextRows = (n.summary.listed?.[summarySide(n.summary, rec[side].id)] || []);
       const box = (x) => played.find((p) => p.name === samePlayerIn(x.name, played.map((q) => q.name), nextRows.map((y) => y.name)));
       const after = nextRows.filter((x) => x.status !== 'Available' && !samePlayerIn(x.name, listedHere, nextRows.map((y) => y.name)) && box(x) && !/g league - two-way/i.test(x.reason));
-      const left = (name) => { const o = rec.lastOff?.[name]; return !o ? '' : o.clock === 'end' ? `, on the floor to the end of the ${periodName(o.period)}` : `, last left the floor in the ${periodName(o.period)} with ${o.clock} left`; };
+      const left = (name) => { const o = rec.lastOff?.[name]; return !o ? '' : o.clock === 'end' ? `, on the floor to the end of the ${periodName(o.period)}` : `, last left the floor in the ${periodName(o.period)} with ${clockWord(o.clock)} left`; };
       if (after.length) lines.push(`    listed for their next game (${etDay(n.game_date)}), not listed for this one: ${after.map((x) => `${x.name} (${x.status}, ${String(x.reason || '').replace(/^Injury\/Illness - /, '')}; ${Math.round(box(x).min)} min here${left(box(x).name)})`).join(', ')}`);
     }
   }
