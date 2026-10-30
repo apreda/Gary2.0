@@ -104,7 +104,8 @@ const boxLine = (side, official) => {
   const more = [t.reb != null ? `${t.reb} rebounds (${t.oreb} offensive)` : `${t.oreb} offensive rebounds`, t.ast != null ? `${t.ast} assists` : null, t.stl != null ? `${t.stl} steals` : null, t.blk != null ? `${t.blk} blocks` : null].filter(Boolean).join(', ');
   return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${more}, ${t.turnover} turnovers${official?.teamTurnovers ? ` (${official.teamTurnovers} team)` : ''}, ${t.pf} fouls${src}`;
 };
-const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null].filter(Boolean).join(', ');
+// Free throws too (round 14: Lillard's 7-of-11 at the line was nowhere in the live log).
+const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null, p.fta ? `${p.ftm}-${p.fta} FT` : null].filter(Boolean).join(', ');
 // Where each team's points came from, its players' rows in BDL's advanced box summed (Oct 27 2026, founder GO: the reads
 // quoted "60 points in the paint", "26 second-chance points" and "38 points off 26 turnovers" from the news, unchecked;
 // summed, the feed gives the same numbers). The official team box's paint, fast-break and off-turnover points where ESPN
@@ -136,7 +137,7 @@ function whoPlayed(box, others, out, starters, scoring, official) {
   // read as a managed workload and a weak frontcourt).
   const fouls = (p) => (p.pf >= 6 ? 'fouled out' : p.pf === 5 ? '5 fouls' : null);
   const rest = played.slice(8).map((p) => `${p.name} ${p.min}${fouls(p) ? ` (${fouls(p)})` : ''}`);
-  const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, fouls(p)].filter(Boolean).join(', ')})`);
+  const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, shooting(p), fouls(p)].filter(Boolean).join(', ')})`);
   return [`      box: ${boxLine(box, official?.us)} · ${boxLine(box.opponent, official?.them)}`,
     scoring,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).

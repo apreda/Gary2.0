@@ -234,10 +234,39 @@ export async function buildNbaGameRecord(gameId) {
     for (const p of t.players || []) {
       const row = { side, id: p.player.id, name: `${p.player.first_name} ${p.player.last_name}`, starter: starters.has(p.player.id), min: minutesOf(p.min), pm: p.plus_minus ?? null,
         ...Object.fromEntries(STATS.map((k) => [k, Number(p[k]) || 0])) };
-      if (row.min > 0) row.quarters = periods.map((q, i) => { const r = byPeriod[i].get(p.player.id); return { q, min: r ? minutesOf(r.min) : 0, pts: r ? Number(r.pts) || 0 : 0 }; });
       players.push(row);
     }
   }
+  // Each player's line against the official box (ESPN), before the quarters are laid out (round 14: a box read early in
+  // the game had the minutes of the first quarter and every player's quarters were dropped): where a count differs, the official one stands (Oct 27 2026
+  // loop: 13 differences in 1,180 lines, among them Boozer's 16 points, officially 14, and Marshall's missing shot). A
+  // player is matched as officialLineFor (espnNbaGame.js) says.
+  const official = await espnPlayerLines(g).catch(() => null);
+  const corrected = [], unmatched = [], matched = new Set();
+  if (official) {
+    // Every player the box lists, a zero-minute one too: a box read before the game ended has players who played later at
+    // 0 (round 14: ten Blazers and Grizzlies who played read "did not play" from a first-quarter box).
+    for (const p of players) {
+      const o = officialLineFor(p.name, official.filter((x) => x.side === p.side));
+      if (!o) { if (p.min > 0) unmatched.push(p.name); continue; }
+      if (!(p.min > 0) && !(o.min > 0)) continue;
+      matched.add(o);
+      const fixed = [];
+      for (const f of STATS) if (o[f] != null && o[f] !== p[f]) { fixed.push(`${f} ${p[f]} to ${o[f]}`); p[f] = o[f]; }
+      if (o.pm != null && o.pm !== p.pm) { fixed.push(`plus-minus ${p.pm} to ${o.pm}`); p.pm = o.pm; }
+      // Minutes where the box's whole minutes are not the official's (Oct 27 2026: BDL had Vassell 35:31 for 33:33).
+      if (Number.isFinite(o.min) && Math.round(p.min) !== o.min) {
+        fixed.push(`min ${Math.round(p.min)} to ${o.min}`); p.min = o.min;
+      }
+      if (fixed.length) corrected.push(`${p.name} (${fixed.join(', ')})`);
+    }
+  }
+  // A player the official box has with minutes and this box never listed is added from it, with no quarters.
+  if (official) for (const o of official.filter((x) => (x.min || 0) > 0 && !matched.has(x))) {
+    players.push({ side: o.side, id: null, name: o.name, starter: false, min: o.min, pm: o.pm ?? null, ...Object.fromEntries(STATS.map((k) => [k, Number(o[k]) || 0])) });
+    corrected.push(`${o.name} (added from the official box)`);
+  }
+  for (const row of players) if (row.min > 0 && row.id != null) row.quarters = periods.map((q, i) => { const r = byPeriod[i].get(row.id); return { q, min: r ? minutesOf(r.min) : 0, pts: r ? Number(r.pts) || 0 : 0 }; });
   // Minutes by quarter to the second from each quarter's substitutions; a quarter that can't be followed keeps the box's
   // whole minutes. The closing five is the last quarter's five at the horn.
   const followed = plays ? periods.map((q) => followQuarter(plays, players, q)) : periods.map(() => null);
@@ -256,32 +285,8 @@ export async function buildNbaGameRecord(gameId) {
   // his minutes don't add up (to half a minute, one more when the box has whole minutes only, and one more for each
   // quarter not followed).
   for (const row of players.filter((p) => p.quarters)) {
-    if (Math.abs(sum(row.quarters, 'min') - row.min) > (boxWhole ? 1 : 0.5) + cutQuarters) { quarterMismatch.push(`${row.name} (${Math.round(row.min)} min in the box, ${Math.round(sum(row.quarters, 'min'))} by quarter)`); row.quarters = null; }
+    if (Math.abs(sum(row.quarters, 'min') - row.min) > (boxWhole || official ? 1 : 0.5) + cutQuarters) { quarterMismatch.push(`${row.name} (${Math.round(row.min)} min in the box, ${Math.round(sum(row.quarters, 'min'))} by quarter)`); row.quarters = null; }
     else if (sum(row.quarters, 'pts') !== row.pts) { row.quarterPts = false; quarterMismatch.push(`${row.name} (${row.pts} in the box, ${sum(row.quarters, 'pts')} by quarter)`); }
-  }
-  // Each player's line against the official box (ESPN): where a count differs, the official one stands (Oct 27 2026
-  // loop: 13 differences in 1,180 lines, among them Boozer's 16 points, officially 14, and Marshall's missing shot). A
-  // player is matched as officialLineFor (espnNbaGame.js) says.
-  const official = await espnPlayerLines(g).catch(() => null);
-  const corrected = [], unmatched = [], matched = new Set();
-  if (official) {
-    for (const p of players.filter((x) => x.min > 0)) {
-      const o = officialLineFor(p.name, official.filter((x) => x.side === p.side));
-      if (!o) { unmatched.push(p.name); continue; }
-      matched.add(o);
-      const fixed = [];
-      for (const f of STATS) if (o[f] != null && o[f] !== p[f]) { fixed.push(`${f} ${p[f]} to ${o[f]}`); p[f] = o[f]; }
-      if (o.pm != null && o.pm !== p.pm) { fixed.push(`plus-minus ${p.pm} to ${o.pm}`); p.pm = o.pm; }
-      // Minutes where the box's whole minutes are not the official's (Oct 27 2026: BDL had Vassell 35:31 for 33:33).
-      if (Number.isFinite(o.min) && Math.round(p.min) !== o.min) {
-        fixed.push(`min ${Math.round(p.min)} to ${o.min}`); p.min = o.min;
-        if (p.quarters && Math.abs(sum(p.quarters, 'min') - p.min) > 1 + cutQuarters) { quarterMismatch.push(`${p.name} (${p.min} official minutes, ${Math.round(sum(p.quarters, 'min'))} by quarter)`); p.quarters = null; }
-      }
-      if (fixed.length) {
-        corrected.push(`${p.name} (${fixed.join(', ')})`);
-        if (p.quarters && p.quarterPts !== false && p.quarters.reduce((a, x) => a + x.pts, 0) !== p.pts) { p.quarterPts = false; quarterMismatch.push(`${p.name} (corrected to the official box; points by quarter no longer add up)`); }
-      }
-    }
   }
   const teams = {};
   for (const side of ['home', 'away']) {

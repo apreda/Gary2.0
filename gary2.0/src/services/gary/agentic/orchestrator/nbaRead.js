@@ -583,6 +583,13 @@ function startersTables(lines, desk) {
     const cells = body.flatMap((l) => l.split('|').map((c) => plain(c).trim()).filter(Boolean));
     if (starters.size && cells.length && cells.every((c) => POSITION_CELL.test(c) || starters.has(last(c)))) for (let k = i; k <= e; k += 1) out.push(k);
   }
+  // The same projected fives as bullets ("- **Memphis:** Ty Jerome, Cedric Coward, ...", round 14): a bullet whose names
+  // are all one side's projected starters repeats WHO IS PLAYING.
+  if (starters.size) for (let i = 0; i < lines.length; i += 1) {
+    const m = lines[i].match(/^\s*[-*]\s+(?:\*\*[^*]+:\*\*|[A-Z][\w .'-]+:)\s*(.+)$/);
+    const names = m ? m[1].split(/,\s*/).map((x) => x.trim()).filter(Boolean) : [];
+    if (names.length >= 4 && names.every((x) => starters.has(last(x)))) out.push(i);
+  }
   return out;
 }
 
@@ -599,7 +606,8 @@ function withoutOrphans(lines, drop) {
   const nextIdx = (i) => { let k = i + 1; while (k < lines.length && blank(k)) k += 1; return k < lines.length ? k : -1; };
   const prevIdx = (i) => { let k = i - 1; while (k >= 0 && blank(k)) k -= 1; return k; };
   const listy = (i) => /^\s*(?:[-•*]\s|\|)/.test(lines[i]);
-  const heading = (i) => /^\s*\*\*[^*]+\*\*\s*$/.test(lines[i]);
+  // A bold line or a markdown heading (round 14: "### Breaking news" stayed over nothing).
+  const heading = (i) => /^\s*(?:\*\*[^*]+\*\*|#{1,6}\s+\S.*?)\s*$/.test(lines[i]);
   for (let pass = 0, changed = true; changed && pass < 4; pass += 1) {
     changed = false;
     const set = (i) => { if (!drop[i]) { drop[i] = true; changed = true; } };
@@ -664,7 +672,11 @@ const AVERAGE = /\baverag(?:e|es|ed|ing)\b[^.]*\d|\d+(?:\.\d+)?\s+(?:points|rebo
 const MINUTES_PLAN = /\b(?:restrict\w*|limit\w*|cap(?:ped|s)?|minutes (?:restriction|limit)|managed|ramp\w*)\b/i;
 // Month abbreviations do not end a sentence for these tests ("No Oct. 29 update was found").
 const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g, '$1');
-const emptyNews = (raw) => { const s = unAbbrev(raw); return NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
+// More of the search's own notes (round 14): "Nothing has been reported specifically about ...", "No ... has been
+// reported", "This is the latest item found", "None. The official pregame report remains the final word", "... at the
+// cutoff".
+const SEARCH_NOTE_2 = /^(?:Nothing (?:has been|was|is) reported|No\b[^.]*\b(?:was|were|has been|have been|is|are) reported\b|This (?:is|was) the latest item found|None\.?\s*$|None\.? (?:The official|Nothing)|The official (?:pregame )?(?:injury )?report remains the final word|.*\bat the cutoff\b)/i;
+const emptyNews = (raw) => { const s = unAbbrev(raw); return SEARCH_NOTE_2.test(s.replace(/^\W*\*\*[^*]+:\*\*\s*/, '').replace(/^\W+/, '')) || NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
   || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)); };
 function withoutEmptyNews(text) {
   // A bullet that leaves takes its deeper-indented sub-bullets with it (round 11: "He had a 14-point, 10-rebound game"
