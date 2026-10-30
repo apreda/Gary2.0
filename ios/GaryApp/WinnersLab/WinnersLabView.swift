@@ -612,9 +612,8 @@ struct WinnersLabView: View {
                 if showsRecap {
                     // Until 10 AM ET, before today's first play (founder, Sep 24
                     // 2026): the top is yesterday's day, then its plays.
-                    yesterdayRecap
+                    yesterdayCard { yesterdayRecap.padding(.bottom, 8) }
                     if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
-                    resultRows(yesterdayPlays.map(\.lead), section: "yesterday")
                     // The morning page stays full too (founder, Oct 15 2026): today's
                     // three COMING SOON packs sit under yesterday's plays.
                     VStack(alignment: .leading, spacing: 12) { packsToCome }.padding(.top, 18)
@@ -671,8 +670,15 @@ struct WinnersLabView: View {
                     }
 
                     if !yesterdayPlays.isEmpty && !todayHasResult {
-                        sectionHead("YESTERDAY", note: LabFormat.shortDateWords(LabFormat.yesterday(of: today))).padding(.top, 18)
-                        resultRows(yesterdayPlays.map(\.lead), section: "yesterday")
+                        yesterdayCard {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("YESTERDAY").font(GaryFonts.display(21)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                                Spacer()
+                                Text(LabFormat.shortDateWords(LabFormat.yesterday(of: today))).font(GaryFonts.ui(13)).foregroundStyle(LabInk.dim)
+                            }
+                            .frame(height: 34)
+                        }
+                        .padding(.top, 14)
                     }
                 }
             }
@@ -796,14 +802,31 @@ struct WinnersLabView: View {
     /// "they kinda all run together"): the result, the pick and the money.
     /// A tap opens the play. The section names the row, so a play that moves
     /// from the open list never keeps its old live card.
-    private func resultRows(_ tickets: [LabBoardTicket], section: String) -> some View {
+    private func resultRows(_ tickets: [LabBoardTicket], section: String, inCard: Bool = false) -> some View {
         VStack(spacing: 0) {
             ForEach(tickets, id: \.candidateID) { t in
-                resultRow(t).id("\(section)-\(t.candidateID)")
+                resultRow(t, inCard: inCard).id("\(section)-\(t.candidateID)")
             }
         }
     }
-    private func resultRow(_ t: LabBoardTicket) -> some View {
+
+    /// Yesterday on one plate (founder, Oct 30 2026, Winners facelift mock 1):
+    /// its heading, then its plays, a gold edge round both.
+    private func yesterdayCard<Head: View>(@ViewBuilder head: () -> Head) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            head()
+            resultRows(yesterdayPlays.map(\.lead), section: "yesterday", inCard: true)
+        }
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: "#1C1914"), Color(hex: "#131110")], startPoint: .top, endPoint: .bottom))
+                .shadow(color: .black.opacity(0.4), radius: 11, y: 10)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
+    }
+
+    private func resultRow(_ t: LabBoardTicket, inCard: Bool = false) -> some View {
         let word = resultWord(t)
         let label: String, tint: Color, money: String
         let stake = t.stakeUnits ?? 0
@@ -818,19 +841,21 @@ struct WinnersLabView: View {
         let title = LabPlayModule.shortTitle(LabFormat.ticketBody(t.pickText).uppercased(), player: t.prop?.player, matchup: t.matchup)
         return Button { path.append(LabRoute.play(t.candidateID)) } label: {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(label).font(GaryFonts.display(15)).tracking(0.8).foregroundStyle(tint)
-                    .frame(width: 58, alignment: .leading)
+                Text(label).font(GaryFonts.display(15)).tracking(inCard ? 1.2 : 0.8).foregroundStyle(tint)
+                    .frame(width: inCard && label.count <= 4 ? 38 : 58, alignment: .leading)
                 Text(title).font(GaryFonts.display(18)).foregroundStyle(word == "scratched" ? LabInk.dim : GaryColors.warmWhite)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Text(money).font(GaryFonts.display(18)).monospacedDigit()
+                Text(money).font(GaryFonts.display(inCard ? 20 : 18)).monospacedDigit()
                     .foregroundStyle(word == "won" ? GaryColors.win : word == "lost" ? GaryColors.loss : GaryColors.silver)
                     .fixedSize()
             }
             .padding(.vertical, 13)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .bottom) { LabHairline() }
+            // In the card the rule sits above each row, under the heading,
+            // and the plate's edge closes the last one.
+            .overlay(alignment: inCard ? .top : .bottom) { LabHairline() }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -838,10 +863,9 @@ struct WinnersLabView: View {
         .accessibilityHint("Opens the play")
     }
 
-    /// YESTERDAY in the space under the header, plain (founder, Sep 24 2026:
-    /// "very subtle, straightforward, simple... take it all out of
-    /// containers"): the date, the record and the money, and word that
-    /// today's plays are on the way.
+    /// YESTERDAY at the top of its card (founder, Sep 24 2026: "very subtle,
+    /// straightforward, simple"; in a container since Oct 30 2026): the date,
+    /// the record and the money, and word that today's plays are on the way.
     private var yesterdayRecap: some View {
         let line = dayLine(yesterdayBoard)
         let decided = line.won + line.lost + line.push > 0
