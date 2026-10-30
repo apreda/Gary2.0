@@ -142,7 +142,7 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
   const summaries = await seasonSummaries('NBA', season, date).catch(() => null);
   const byTeam = summaries ? summariesByTeam(summaries) : null;
   const oppRecord = byTeam ? (teamId) => wonLost(byTeam.get(String(teamId)) || [], teamId) : null;
-  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf, oppRecord };
+  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf, oppRecord, byTeam };
 }
 
 // A team's side of tonight's report in a few words: who is out, doubtful or questionable.
@@ -163,8 +163,19 @@ function listedLine(side, report) {
 // The props sheets read the same rows (Oct 29 2026, founder: no season averages; "give Gary the numbers behind the
 // average"): `stat` is one stat or a list of them ('min' leaves the minutes in the row; names as the sheets print them).
 const STAT_WORD = { pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' };
-export function nbaGameRows(c, records, stats, abbrById, oppRecord = null) { return gameLines(c, records, stats, abbrById, oppRecord); }
-function gameLines(c, records, stat, abbrById, oppRecord = null) {
+export function nbaGameRows(c, records, stats, abbrById, oppRecord = null, byTeam = null) { return gameLines(c, records, stats, abbrById, oppRecord, byTeam); }
+// The opponent's regulars Out that night: on its side of the report at tip and in at least half of its games before, from
+// the stored summaries (round 16: Booker's 43 against a Warriors team without Curry, Green and Podziemski read as a
+// normal night; only his own team's absences were said).
+function oppWithout(rec, oppSide, byTeam) {
+  const id = rec[oppSide]?.id; const before = (byTeam?.get(String(id)) || []).filter((r) => r.game_date < rec.date);
+  if (!byTeam || before.length < 2) return [];
+  const counts = new Map();
+  for (const r of before) for (const nm of r.summary.played?.[String(r.summary.home.id) === String(id) ? 'home' : 'away'] || []) counts.set(nm, (counts.get(nm) || 0) + 1);
+  const regulars = [...counts].filter(([, k]) => k * 2 >= before.length).map(([nm]) => nm);
+  return (rec.report?.[oppSide]?.rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || '') && samePlayerIn(r.name, regulars, (rec.report[oppSide].rows || []).map((x) => x.name))).map((r) => r.name);
+}
+function gameLines(c, records, stat, abbrById, oppRecord = null, byTeam = null) {
   if (!records) return null;
   const rows = [];
   for (const r of records) {
@@ -215,7 +226,8 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     const m = x.me, shots = m.fga == null ? null
       : fields.some((f) => f === 'pts' || f === 'pra') ? `${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
         : fields.includes('fg3m') ? `${m.fg3m}-${m.fg3a} 3PT` : null;
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
+    const theirs = oppWithout(x.rec, x.side === 'home' ? 'away' : 'home', byTeam);
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${theirs.length ? ` · ${x.opp} without ${theirs.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
   });
 }
 
@@ -229,7 +241,7 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     if (!mk) continue;
     const head = `${c.player} (${c.team})${c.status ? ` · ${c.status}` : ''} · ${LABEL[kind]} ${mk.line} · over ${fmtOdds(mk.over)} / under ${fmtOdds(mk.under)}`;
     const sheet = [head];
-    const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById, board.oppRecord);
+    const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById, board.oppRecord, board.byTeam);
     // His team's last three games, a game he missed said so (round 9: Naji Marshall's "last 3 games" reached back past the
     // two he had just missed).
     const teamRecs = board.recordsOf?.get(c.teamId);

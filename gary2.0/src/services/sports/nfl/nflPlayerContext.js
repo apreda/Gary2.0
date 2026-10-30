@@ -7,6 +7,14 @@
 import { RELEASE_BASE, fetchCsv, TEAM_NAMES } from './nflStreaksService.js';
 import { normName } from '../../gary/darts/dartsCommon.js';
 import { withOfficialBox } from './espnNflBox.js';
+import { loadNflverseFile } from '../../providers/nflverseService.js';
+
+// PFR's charting files through the desk's disk-cached loader, asked twice (round 16: a fresh download failed in one of
+// two identical darts builds, and every drop note vanished as if no receiver had dropped a ball). Null when both fail.
+const pfrRows = async (asset, season) => {
+  for (let k = 0; k < 2; k += 1) { const r = await loadNflverseFile(asset, season).catch(() => null); if (r?.rows) return r.rows; }
+  return null;
+};
 
 const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -59,7 +67,7 @@ export const gameDays = () => once('days', async () => {
 export const qbPressure = (season) => once(`pressure|${season}`, async () => {
   const out = new Map();
   // A failed download is null, so it is asked for again (round 14: it was kept as an empty map, and pressure dropped).
-  const rows = await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_pass_${season}.csv`).catch(() => null);
+  const rows = await pfrRows('advstats_week_pass', season);
   if (!rows) return null;
   for (const r of rows) {
     if (r.times_pressured === '' || r.times_pressured == null) continue;
@@ -73,7 +81,7 @@ export const qbPressure = (season) => once(`pressure|${season}`, async () => {
 // Also by GSIS id through the weekly roster's PFR ids (`roster`), for players the two files spell apart (round 15: PFR's
 // "Zonovan Knight" is the weekly stats' Bam Knight).
 export const receiverDrops = (season, roster = null) => once(`drops|${season}|${roster ? 'r' : ''}`, async () => {
-  const rows = await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_rec_${season}.csv`).catch(() => null);
+  const rows = await pfrRows('advstats_week_rec', season);
   if (!rows) return null;
   const gsisOfPfr = new Map((roster || []).filter((r) => r.pfr_id && r.gsis_id).map((r) => [r.pfr_id, r.gsis_id]));
   const out = new Map();
@@ -300,6 +308,24 @@ export function weekPassers(rows) {
 // why a game he missed was missed.
 // `hurt`: the play ledger's in-game injuries, "week|team" -> [{ who: "A.Jones", q, clock, later }] (round 13: a game he
 // left hurt read like a dud game).
+/** One club's games, once, for the side heading of a prop sheet (round 16: every teammate's rows repeated the opponent's
+ * record and points allowed, the result, the quarterbacks and who was out, 15-25% of a sheet block): week, date, site,
+ * opponent with its record and points allowed, result, quarterbacks and regulars out, newest first. */
+export function clubWeeks(team, { season, days, defenses = null, passers = null, without = null, today = null, limit = 17 } = {}) {
+  if (!days || !team) return [];
+  const end = today || new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const rows = [];
+  for (const [key, date] of days) {
+    const [s, w, t] = key.split('|');
+    if (Number(s) !== Number(season) || t !== team || !date || date >= end) continue;
+    const opp = days.opp?.get(key), site = days.site?.get(key), result = days.result?.get(key);
+    const qbs = passers?.get(`${season}|${Number(w)}|${team}`);
+    const gone = without?.get(`${Number(w)}|${team}`) || [];
+    rows.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)} ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}${result ? `, ${result}` : ''}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}${gone.length ? `; without ${gone.map((x) => `${x.name} (${x.pos}, ${x.why})`).join(', ')}` : ''}` });
+  }
+  return rows.sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
+}
+
 export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null, plays = null, drops = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
@@ -375,7 +401,11 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     }
   }
   const log = [...played, ...missed].sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
-  return days ? log : [...log, 'dates, sites, results and missed games: not on file (the schedule did not load)'];
+  // A charting file that did not load is said once, so a missing count never reads as none (round 16).
+  const notes = [!days ? 'dates, sites, results and missed games: not on file (the schedule did not load)' : null,
+    drops === null && (rows || []).some((r) => n(r.targets)) ? "drops: not on file (PFR's receiving charting did not load)" : null,
+    pressure === null && (rows || []).some((r) => n(r.attempts) >= 5) ? "times pressured: not on file (PFR's passing charting did not load)" : null].filter(Boolean);
+  return [...log, ...notes];
 }
 
 // A game he played without a catch, carry or pass has no stat row in either feed, so it read "did not play" and dropped

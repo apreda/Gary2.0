@@ -352,8 +352,9 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // a story that fails fails the props run.
   let deskText = scoutText;
   if (league === 'NFL') {
+    // Without CARRIES AND TARGETS: every board player's games are on his sheet below (round 16: the same weeks twice).
     const { story } = await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
-      gameDate: game.commence_time ? etDate(game.commence_time) : null });
+      gameDate: game.commence_time ? etDate(game.commence_time) : null, forProps: true });
     const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time }).catch(() => null);
     deskText = `${story}\n\nTODAY'S NEWS\n${news || NFL_NEWS_NOT_ON_FILE}`;
   }
@@ -417,6 +418,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     const sheetContext = await loadNflSheetContext({ season: Number(context.dataWindow?.season), game, players: [...new Set(sheetMarkets.map((m) => m.player))] })
       .catch((e) => { console.warn(`   [Football Props] sheet context unavailable: ${e.message}`); return {}; });
     const sheets = buildFootballPropSheets({
+      storyHasReport: true,
       context: sheetContext,
       markets: sheetMarkets,
       gamesByName,

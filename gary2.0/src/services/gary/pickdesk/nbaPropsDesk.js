@@ -19,8 +19,9 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
-import { teamRecords } from '../../gamebygame/gameRecordStore.js';
+import { teamRecords, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
 import { nbaGameRows } from '../darts/nbaDartsBoard.js';
+import { summariesByTeam } from '../../sports/nba/nbaGameRecordText.js';
 import {
   buildGaryPropsSystemPrompt,
   buildPropBoardV2,
@@ -97,6 +98,9 @@ async function publishedDesk(game) {
  * without, or the game he missed and why (Oct 29 2026, founder: no season averages, "give Gary the numbers behind the
  * average"; the sheet read "This season, 4 games: 26.8 min, 11.3 pts a game" over bare numbers with no dates). */
 const SHEET_GAMES = 10;
+// The season's stored summaries once a day, for each row's opponent who was out (round 16).
+const summariesOnce = new Map();
+const byTeamOn = (season, day) => { const k = `${season}|${day}`; if (!summariesOnce.has(k)) summariesOnce.set(k, seasonSummaries('NBA', season, day).then(summariesByTeam).catch(() => { summariesOnce.delete(k); return null; })); return summariesOnce.get(k); };
 export async function playerSheet(player, markets, asOf) {
   const season = nbaSeason(asOf);
   const fields = [...new Set(markets.map((m) => NBA_PROP_STAT[norm(m.prop_type)]).filter(Boolean))];
@@ -107,7 +111,7 @@ export async function playerSheet(player, markets, asOf) {
   const records = team ? await teamRecords('NBA', season, team.id, today, 100).catch(() => null) : null;
   if (!records) { lines.push("  This season's games are not on file (the game records did not load)."); return lines.join('\n'); }
   const rows = nbaGameRows({ teamId: String(team.id), playerId: player.player_id, player: player.player }, records, fields,
-    new Map(teams.map((t) => [String(t.id), t.abbreviation])));
+    new Map(teams.map((t) => [String(t.id), t.abbreviation])), null, await byTeamOn(season, today));
   if (!rows.length) { lines.push('  His team has not played yet this season.'); return lines.join('\n'); }
   lines.push(`  His team's games${rows.length > SHEET_GAMES ? `, the last ${SHEET_GAMES} of ${rows.length}` : ''}, newest first:`, ...rows.slice(0, SHEET_GAMES).map((r) => `    ${r}`));
   return lines.join('\n');

@@ -17,7 +17,7 @@
  * Gary's.
  */
 import { nflStatForProp } from '../agentic/nflPropsAgenticContext.js';
-import { nflGameLog, targetShareLine, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
+import { nflGameLog, clubWeeks, targetShareLine, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
 import { redZoneLine } from '../../sports/nfl/nflRedZone.js';
 import { priceHistoryLine } from './priceHistory.js';
 import { normName } from '../darts/dartsCommon.js';
@@ -150,6 +150,7 @@ export function usageLine(games, label) {
  * @returns {{ text: string, players: number }}
  */
 export function buildFootballPropSheets({
+  storyHasReport = false,
   markets,
   gamesByName,
   priorGamesByName = null,
@@ -216,7 +217,9 @@ export function buildFootballPropSheets({
     // A side's club report and the defense it faces by position are printed once under the side's heading (round 13:
     // every sheet repeated them, a fifth of the block); a player no side claimed keeps his own.
     if (!tag) { const out = outAroundLine(context.injuries, entry.team, entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out); }
-    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure, hurt: context.hurt, without: context.without, plays: context.plays, drops: context.drops,
+    // Under a side's heading the club's games are printed once (clubWeeks); his rows keep his own numbers (round 16).
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [],
+      defenses: tag ? null : context.defenses, passers: tag ? null : context.passers, rosterWords: context.rosterWords, pressure: context.pressure, hurt: context.hurt, without: tag ? null : context.without, plays: context.plays, drops: context.drops,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     else if (context.weeksMissing) facts.push("by game: not on file (this season's weekly stats did not load)");
@@ -239,7 +242,12 @@ export function buildFootballPropSheets({
     if (!lines.length) continue;
     const opp = side.tag === 'home' ? context.awayAbbr : context.homeAbbr;
     const heading = [];
-    const out = outAroundLine(context.injuries, side.label, null, { weeksByName: context.weeksByName, snaps: context.snaps, label: 'club report' }); if (out) heading.push(` ${out}`);
+    // The club report only when the message carries no injury report of its own (round 16: the NFL props message has the
+    // game's whole report above the sheets, and the two said it twice in two formats).
+    const out = storyHasReport ? null : outAroundLine(context.injuries, side.label, null, { weeksByName: context.weeksByName, snaps: context.snaps, label: 'club report' }); if (out) heading.push(` ${out}`);
+    const own = side.tag === 'home' ? context.homeAbbr : context.awayAbbr;
+    const club = clubWeeks(own, { season, days: context.days, defenses: context.defenses, passers: context.passers, without: context.without });
+    if (club.length) heading.push(` its games, newest first (each player's rows below are his own numbers in these games):\n${club.map((l) => `   ${l}`).join('\n')}`);
     for (const pos of ['QB', 'RB', 'WR', 'TE']) if (positions.has(pos)) { const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) heading.push(` ${def}`); }
     blocks.push([`${String(side.label).toUpperCase()} (${side.tag})`, ...heading, ...lines].join('\n'));
   }

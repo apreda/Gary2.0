@@ -349,7 +349,9 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const out = ctx.frameReports ? null : outAroundLine(ctx.injuries, c.team, c.player, { weeksByName: ctx.weeksByName, snaps: ctx.snaps });
   if (out) lines.push(out);
   const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords, pressure: ctx.pressure, hurt: ctx.hurt, without: ctx.without, plays: ctx.plays, drops: ctx.drops,
-    defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
+    // Each opponent's record and points allowed once, in the ask's note (round 16: every QB sheet that faced a club
+    // repeated them, about 9,000 characters of a whole-board ask).
+    defenses: null, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
 }
@@ -424,7 +426,8 @@ export function screenNflCategory({ kind, board, gamesByName: logged, priorByNam
   const blind = read.filter((r) => r.edge == null);
   const menu = [...priced, ...blind];
   log.log(`   [Darts] ${kind}: ${markets.length} priced${kind === 'td' ? ' past the floor' : ''}, ${priced.length} read by the model, all ${menu.length} on the board`);
-  return { kind, menu, note: FLOOR_NOTE[kind] || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };
+  const table = ctx.defenses?.size ? `Each club's record now and the points it allowed in its games, newest first (the sheets' opponents): ${[...ctx.defenses].sort(([a], [b]) => a.localeCompare(b)).map(([code, text]) => `${code} ${text.replace(/ now; allowed /, ', allowed ').replace(/ in its games, newest first$/, '')}`).join('; ')}.` : null;
+  return { kind, menu, note: [FLOOR_NOTE[kind], table].filter(Boolean).join('\n\n') || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };
 }
 
 /** Team context per game for the volume model; a failed read leaves that game's players unpriced. */
