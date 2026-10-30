@@ -92,10 +92,14 @@ export function playedInWeather(row) {
   const condition = String(row.weatherCondition || '').trim();
   const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
   const precip = n(row.precipitation), snow = n(row.snowfall), wind = n(row.windSpeed), temp = n(row.temperature);
-  const wet = /rain|drizzle|snow|sleet|thunder|storm|shower|freez|hail/i.test(condition) || (precip ?? 0) >= 0.05 || (snow ?? 0) > 0;
+  // A row whose condition says clear or fair and whose precipitation says otherwise contradicts itself: its precipitation is
+  // left out (round 11: Tucson's dry 8 PM kickoff read "clear, 0.09 in. of precipitation").
+  const dryWord = /^(clear|fair|sunny|mostly clear|mostly sunny|partly cloudy|cloudy|overcast)$/i.test(condition);
+  const precipOk = dryWord ? null : precip;
+  const wet = /rain|drizzle|snow|sleet|thunder|storm|shower|freez|hail/i.test(condition) || (precipOk ?? 0) >= 0.05 || (snow ?? 0) > 0;
   if (!wet && !((wind ?? 0) >= 15) && !(temp != null && temp <= 32)) return null;
-  return `weather at kickoff: ${[condition ? condition.toLowerCase() : (precip ?? 0) >= 0.05 ? 'precipitation' : null,
-    (precip ?? 0) >= 0.01 ? `${precip.toFixed(2)} in. of precipitation that hour` : null,
+  return `weather at kickoff: ${[condition ? condition.toLowerCase() : (precipOk ?? 0) >= 0.05 ? 'precipitation' : null,
+    (precipOk ?? 0) >= 0.01 ? `${precipOk.toFixed(2)} in. of precipitation that hour` : null,
     temp != null ? `${Math.round(temp)}°F` : null, wind != null ? `wind ${Math.round(wind)} mph` : null].filter(Boolean).join(', ')}`;
 }
 
@@ -733,8 +737,12 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
         + `not in the last game's starting lineup · ${report ? `${report.status} on this week's availability report` : offReport}`);
     }
   }
+  // A regular with no stat row who is in the last game's official starting lineup played it (round 11: Brandon Finney
+  // Jr., an Oregon starter at Illinois, read as a regular with no row).
+  const startedLast = (p) => Boolean(lastLineup && startedIn(lastLineup, p.name, p.entry.position));
   const missing = kept.map((p) => {
     const report = onReport(p.name, reported, exempt);
+    if (startedLast(p)) return `  ${p.name}${p.entry.position ? ` (${p.entry.position})` : ''}: no stat row, but in the last game's official starting lineup${report ? ` · ${report.status} on this week's availability report` : ''}`;
     const who = `  ${p.name}${p.entry.position || report?.position ? ` (${p.entry.position || report.position})` : ''}`;
     if (report) return `${who}: ${report.status} on this week's availability report`;
     return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}; `
