@@ -549,11 +549,8 @@ struct GaryIdleFigure: View {
 /// `live()` runs inside the figure's task, so leaving Home ends it.
 @MainActor
 final class GaryLife: ObservableObject {
-    /// Each clip and its odds after a good night and after a bad one.
-    static let clips: [(name: String, good: Double, bad: Double)] = [
-        ("gary-cigar", 3, 1),
-        ("gary-paper", 1, 3),
-    ]
+    /// The plan's clips that shipped in this build.
+    private let clips = GaryLifePlan.clips.filter { Bundle.main.url(forResource: $0.name, withExtension: "mp4") != nil }
 
     let player = AVPlayer()
     var mood: String?
@@ -561,7 +558,7 @@ final class GaryLife: ObservableObject {
     @Published private(set) var clipEnd: Date?
     private var standEnd: Date?
     private var lastClipEnd: Date?
-    private var last: String?
+    private var recent: [String] = []
 
     private static let fadeIn = 0.25, fadeOut = 0.3
 
@@ -598,11 +595,11 @@ final class GaryLife: ObservableObject {
         }
         var first = true
         while !Task.isCancelled {
-            let name = pick()
-            guard let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
+            guard let name = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1)),
+                  let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
             let item = AVPlayerItem(url: url)
             player.replaceCurrentItem(with: item)
-            let stand = first ? Double.random(in: 1.5...3) : Double.random(in: 3...9)
+            let stand = GaryLifePlan.stand(first: first, roll: Double.random(in: 0..<1))
             first = false
             standEnd = Date().addingTimeInterval(stand)
             try? await Task.sleep(nanoseconds: UInt64(stand * 1e9))
@@ -622,22 +619,8 @@ final class GaryLife: ObservableObject {
             lastClipEnd = Date()
             clipStart = nil
             clipEnd = nil
-            last = name
+            recent = Array((recent + [name]).suffix(2))
         }
-    }
-
-    /// The next clip: never the last one, weighted by last night.
-    private func pick() -> String {
-        let good = mood == "GaryFire" || mood == "GaryCooking"
-        let bad = mood == "GaryIceCold" || mood == "GaryDoomsday"
-        let pool = Self.clips.filter { $0.name != last }
-        let weights = pool.map { good ? $0.good : bad ? $0.bad : 1 }
-        var roll = Double.random(in: 0..<weights.reduce(0, +))
-        for (c, w) in zip(pool, weights) {
-            if roll < w { return c.name }
-            roll -= w
-        }
-        return pool.last?.name ?? Self.clips[0].name
     }
 
     private static func smooth(_ x: Double) -> Double {

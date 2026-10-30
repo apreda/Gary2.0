@@ -509,82 +509,13 @@ struct HomeMarqueeTracker: View {
             .monospacedDigit()
     }
 
-    // The up-next face — C1 (founder-picked Jul 26): the matchup as two Bebas
-    // wire lines with the market inline, and the clock ALONE in its own
-    // right-hand column — a simple timer to first pitch, nothing else.
-    // Falls back to the single-line title when the market line can't split.
+    /// Before the start: the same compact countdown card as tomorrow's game (founder, Oct 30 2026: the card
+    /// "just became a different size" when tonight's game took over from tomorrow's), so it never changes size.
     @ViewBuilder private func upNextHeroView(_ e: Entry) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // No header label at all (founder, Jul 27): the "PICK ~x:xx" row is
-            // gone — the card opens straight onto the wire and sits shorter
-            // until the pick lands.
-            let sides = wireSides(e)
-            let headed = false
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let s = sides {
-                        wireLine(name: s.away.name, price: s.away.price, home: false)
-                        wireLine(name: s.home.name, price: s.home.price, home: true)
-                    } else {
-                        Text(e.title)
-                            .font(GaryFonts.display(40))
-                            .foregroundStyle(GaryColors.warmWhite)
-                            .fitsOneLine()
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        // NO pick on the hero (founder, Aug 19: "it's just a
-                        // countdown") — the card reads identically before and
-                        // after the pick lands, so the spacing never shifts.
-                        // The pick lives on the board rows and the Picks tab.
-                        // The rest of the board — total and run line — rides
-                        // as one dim market row whether or not a pick posted.
-                        let market = [sides?.total, sides?.runLine].compactMap { $0 }.joined(separator: " · ")
-                        if !market.isEmpty {
-                            Text(market.uppercased())
-                                .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                                .foregroundStyle(.white.opacity(0.38))
-                                .fitsOneLine()
-                        }
-                    }
-                    .padding(.top, 7)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 14).padding(.trailing, 12)
-
-                if let interruption = e.interruptionLabel {
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
-                        .padding(.vertical, 2)
-                    Text(interruption)
-                        .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
-                        .foregroundStyle(GaryColors.gold)
-                        .fitsLines(2)
-                        .frame(width: 88)
-                        .padding(.horizontal, 8)
-                } else if let ct = e.commence, let d = parseISO8601(ct) {
-                    Rectangle().fill(Color.white.opacity(0.07)).frame(width: 1)
-                        .padding(.vertical, 2)
-                    // The timer, and under it the hour it's counting to
-                    // (founder, Aug 5) — the clock alone says how long, not
-                    // when. Same dim register as the market row, so the gold
-                    // digits keep the emphasis. Inset so nothing kisses the
-                    // card edge.
-                    VStack(spacing: 3) {
-                        HomeCountdownText(target: d, size: 17)
-                            .fitsOneLine()
-                        Text(Self.etClock(d).uppercased())
-                            .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
-                            .foregroundStyle(.white.opacity(0.38))
-                            .fitsOneLine()
-                    }
-                    .frame(width: 88)
-                    .padding(.horizontal, 8)
-                }
-            }
-            // The wire carries the card's own top air when no header ran.
-            .padding(.top, headed ? 0 : 13)
-            .padding(.bottom, 14)
-        }
-        .contentShape(Rectangle())
+        let start = e.commence.flatMap(parseISO8601)
+        countdownHero(kicker: start.map(Self.dayWord) ?? "TODAY", matchup: e.title,
+                      time: start.map(Self.etClock) ?? "", start: start, league: e.league,
+                      interruption: e.interruptionLabel)
     }
 
     /// First pitch in ET — the marquee's own copy (Home's is private to its
@@ -596,51 +527,28 @@ struct HomeMarqueeTracker: View {
         return f.string(from: d)
     }
 
-    /// "ROCKIES @ BREWERS" + "COL +270 · MIL -335 · O/U 8 · RL MIL -1.5" →
-    /// the two wire sides with their prices, the total, and the run line.
-    /// Nil when either half doesn't parse — the caller falls back to the
-    /// plain title.
-    private func wireSides(_ e: Entry)
-        -> (away: (name: String, price: String?), home: (name: String, price: String?),
-            total: String?, runLine: String?)? {
-        let names = e.title.components(separatedBy: " @ ")
-        guard names.count == 2 else { return nil }
-        var away: String? = nil, home: String? = nil, total: String? = nil, runLine: String? = nil
-        for (i, part) in (e.oddsLine ?? "").components(separatedBy: " · ").enumerated() {
-            let p = part.trimmingCharacters(in: .whitespaces)
-            if p.uppercased().hasPrefix("O/U") { total = p }
-            else if p.uppercased().hasPrefix("RL ") { runLine = p }
-            else if i == 0 { away = p.components(separatedBy: " ").last }
-            else if i == 1 { home = p.components(separatedBy: " ").last }
-        }
-        return (away: (names[0], away), home: (names[1], home), total: total, runLine: runLine)
-    }
-
-    /// One wire line: the club in Bebas, its price inline. Home side carries
-    /// the gold; the away price stays dim so the pair reads as a hierarchy.
-    @ViewBuilder private func wireLine(name: String, price: String?, home: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(name)
-                .font(GaryFonts.display(30))
-                .foregroundStyle(home ? GaryColors.gold : GaryColors.warmWhite)
-                .fitsOneLine()
-            if let price {
-                Text(price)
-                    .font(GaryFonts.display(21))
-                    .foregroundStyle(home ? GaryColors.warmWhite.opacity(0.9) : .white.opacity(0.5))
-                    .fitsOneLine()
-            }
-        }
-    }
-
     /// The all-live / all-done state still keeps an UP NEXT on the wall —
     /// tomorrow's marquee steps in as the hero.
     private func tomorrowHeroView(_ tease: (matchup: String, time: String, start: Date?, league: String?)) -> some View {
+        countdownHero(kicker: "TOMORROW", matchup: tease.matchup, time: tease.time, start: tease.start,
+                      league: tease.league, interruption: nil)
+    }
+
+    /// "TONIGHT" for a start at 5 PM ET or later, else "TODAY".
+    private static func dayWord(_ d: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        return cal.component(.hour, from: d) >= 17 ? "TONIGHT" : "TODAY"
+    }
+
+    /// The countdown card, one size for every game: when, the matchup, and the clock to the start.
+    private func countdownHero(kicker: String, matchup: String, time: String, start: Date?, league: String?,
+                               interruption: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("TOMORROW")
+            Text(kicker)
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
                 .foregroundStyle(GaryColors.gold)
-            Text(tease.matchup)
+            Text(matchup)
                 .font(GaryFonts.display(36))
                 .foregroundStyle(GaryColors.warmWhite)
                 .fitsOneLine()
@@ -650,16 +558,20 @@ struct HomeMarqueeTracker: View {
             // reason to look. Start time rides beside it so the clock has a
             // referent. Falls back to the plain time if the board's row
             // carried no parseable commence_time.
-            if let start = tease.start, start > Date() {
+            if let interruption {
+                Text(interruption.uppercased())
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(GaryColors.gold)
+            } else if let start, start > Date() {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     HomeCountdownText(target: start, size: 15)
                     // The sport's own start word: an NFL game kicks off (founder, Oct 29 2026: "it says First Pitch").
-                    Text("· \(startWord(tease.league)) \(tease.time.uppercased())")
+                    Text("· \(startWord(league)) \(time.uppercased())")
                         .font(GaryFonts.mono(11.5, bold: true))
                         .foregroundStyle(.white.opacity(0.72))
                 }
             } else {
-                Text(tease.time.uppercased())
+                Text(time.uppercased())
                     .font(GaryFonts.mono(11.5, bold: true))
                     .foregroundStyle(.white.opacity(0.72))
             }

@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */; };
+		7C62D7D8209CC4D7C6DB0926 /* gary-cash.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 068D0E196F90F07B75676E34 /* gary-cash.mp4 */; };
+		DF023D29CCF6BCC9FE44B5AE /* gary-pencil.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */; };
+		ED235C010BCE99FA694FE5FF /* gary-watch.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 89646049EF7099203A1C5BD5 /* gary-watch.mp4 */; };
+		1224CF0EC8179FD36B08EF7B /* GaryLifePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39F84E835F687E0567BC8692 /* GaryLifePlan.swift */; };
 		B21E4991D802F92893342666 /* gary-paper.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */; };
 		FCF41CF5A734C6425F3FA5BE /* gary-cigar.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */; };
 		7A7ACB3DFD4010D420391209 /* CashRailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C46537AC6CB82E614FC026 /* CashRailStore.swift */; };
@@ -175,6 +180,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-chuckle.mp4"; sourceTree = "<group>"; };
+		068D0E196F90F07B75676E34 /* gary-cash.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-cash.mp4"; sourceTree = "<group>"; };
+		C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-pencil.mp4"; sourceTree = "<group>"; };
+		89646049EF7099203A1C5BD5 /* gary-watch.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-watch.mp4"; sourceTree = "<group>"; };
+		39F84E835F687E0567BC8692 /* GaryLifePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryLifePlan.swift; sourceTree = "<group>"; };
 		82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-paper.mp4"; sourceTree = "<group>"; };
 		2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-cigar.mp4"; sourceTree = "<group>"; };
 		B2C46537AC6CB82E614FC026 /* CashRailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailStore.swift; sourceTree = "<group>"; };
@@ -495,6 +505,11 @@
 		A9B7A0DCD1996F4BF6D28171 /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */,
+				068D0E196F90F07B75676E34 /* gary-cash.mp4 */,
+				C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */,
+				89646049EF7099203A1C5BD5 /* gary-watch.mp4 */,
+				39F84E835F687E0567BC8692 /* GaryLifePlan.swift */,
 				82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */,
 				2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */,
 				C568940569BDA7093C695587 /* CashRail */,
@@ -687,6 +702,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
+				EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */,
+				7C62D7D8209CC4D7C6DB0926 /* gary-cash.mp4 in Resources */,
+				DF023D29CCF6BCC9FE44B5AE /* gary-pencil.mp4 in Resources */,
+				ED235C010BCE99FA694FE5FF /* gary-watch.mp4 in Resources */,
 				B21E4991D802F92893342666 /* gary-paper.mp4 in Resources */,
 				FCF41CF5A734C6425F3FA5BE /* gary-cigar.mp4 in Resources */,
 				0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */,
@@ -812,6 +831,7 @@
 				C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */,
 				33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */,
 				D4FC45AD5F44665F7C6DB30C /* HomeGaryOpening.swift in Sources */,
+				1224CF0EC8179FD36B08EF7B /* GaryLifePlan.swift in Sources */,
 				8E2DC3D63C058F789710B126 /* HomeGaryPrompts.swift in Sources */,
 				4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */,
 				1D6F6CCF87C3ADD493EA4537 /* HomeView.swift in Sources */,
@@ -922,7 +942,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 997;
+				CURRENT_PROJECT_VERSION = 998;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1009,7 +1029,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 997;
+				CURRENT_PROJECT_VERSION = 998;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;
