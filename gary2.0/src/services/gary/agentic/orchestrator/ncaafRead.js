@@ -103,6 +103,15 @@ function aboutAvailability(note, coaches = []) {
 const coachesOf = (lines, team) => lines.filter((l) => l.team === team && l.kind === 'role' && !/^Quarterback:/.test(l.text))
   .map((l) => l.text.replace(/^[^:]+: /, '').trim().split(/\s+/).pop()).filter((n) => /^[A-Za-z'-]{2,}$/.test(n || ''));
 
+// The research's notes on its own search in the quarterback and coach lines (round 17: "I opened no Baylor source ...",
+// "The official 2026 staff page loaded only partly", "returned a 404 error"), a coach's record over earlier seasons ("He
+// went 40-40 over seven seasons") and a quarterback's season totals, the sum of the game rows the read prints ("1,352
+// passing yards, 9 TDs and 4 INTs this season"). A "That ..." or "It ..." sentence after one goes with it.
+const QB_NOTE = /\bI (?:opened|could not|couldn't|did not open|found no)\b|\bloaded only partly\b|\breturned a 404\b|\bno opened\b|\bcould not be confirmed\b|\bover (?:\w+|\d+) seasons\b|\b(?:career|all-time) record\b|\b\d+-\d+ (?:in|over) (?:\w+ )?seasons\b|\b\d{1,3}(?:,\d{3})* (?:passing|rushing|receiving|total) yards\b[^.]*\bthis season\b/i;
+const withoutQbNotes = (text) => {
+  let gone = false;
+  return String(text || '').split(/(?<=[.!?])\s+(?=[A-Z"“'])/).filter((x) => { gone = QB_NOTE.test(x) || SEARCH_NOTE.test(x.trim()) || FIRST_PERSON.test(x) || (gone && /^(?:That|This|These|Those|It)\b/.test(x)); return !gone; }).join(' ').trim();
+};
 // The quarterbacks section's lines by team: { team, kind: 'team' | 'role' | 'note' | 'official' | 'source', text }.
 function quarterbackSectionLines(desk) {
   const lines = String(desk || '').split('\n');
@@ -128,7 +137,7 @@ function quarterbackSectionLines(desk) {
       // Without the researcher's notes on its own retrieval (Oct 29 2026 hunt: Ohio State's quarterback line said the
       // availability report "could not be successfully retrieved; injuries [] means unavailable information" over the
       // report the read prints in full).
-      const text = l.split(/(?<=[.!?])\s+/).filter((x) => !/could not be (?:successfully )?(?:retrieved|accessed|loaded)|\binjuries \[\]|\[\] means/i.test(x)).join(' ').trim();
+      const text = withoutQbNotes(l.split(/(?<=[.!?])\s+/).filter((x) => !/could not be (?:successfully )?(?:retrieved|accessed|loaded)|\binjuries \[\]|\[\] means/i.test(x)).join(' ').trim());
       out.push({ team, kind: 'role', text }); continue;
     }
     // A context note about another season, a former player, a scheme or game plan, or someone's assessment leaves (Oct 23
@@ -136,7 +145,8 @@ function quarterbackSectionLines(desk) {
     // live read; "describes Houston's defense as a 4-2-5", "an emphasis on running through Sanford and Hughes"). A
     // team's name is one of the matchup's two names (a note with no comma passed for a team name the same day).
     if (/last season|\b20(?:1\d|2[0-5])\b|\bformer\b|\bprevious\b|\bdescribed\b|\bcredited\b|\bscheme|\bformation|\bpersonnel group|similar to|\bpraised\b|\bemphasi[sz]ed\b|\bemphasis\b|\bgame plan|\b\d-\d-\d\b/i.test(l)) continue;
-    if (l.trim()) out.push({ team, kind: 'note', text: l });
+    const note = withoutQbNotes(l);
+    if (note && !/^[^:]+:\s*$/.test(note)) out.push({ team, kind: 'note', text: note });
   }
   return out;
 }
