@@ -183,18 +183,10 @@ struct DartsView: View {
             GaryStageBackground()
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    // What Gary hit runs across the very top, above the header.
-                    let hits = hitsOnTape
-                    if !hits.isEmpty {
-                        HitsTape(title: league == "NFL" ? "LAST WEEK GARY HIT" : "YESTERDAY GARY HIT", hits: hits) { hit in
-                            if hit.kind == "parlay" { if let pastParlay { pastSlip = PastSlip(slip: pastParlay) }; return }
-                            guard hit.kind != "first_inning" else { return }
-                            streakCard = StreakCardSel(name: hit.player, league: hit.league)
-                        }
-                        .id(league)
-                        .padding(.bottom, 6)
-                    }
-                    GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), trailing: { EmptyView() })
+                    // No hits tape above the header (founder, Oct 30 2026: the app
+                    // was "starting to feel like a dopamine overload"). The header
+                    // matches Winners' size.
+                    GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), markSize: 52, trailing: { EmptyView() })
                     if sports.count > 1 {
                         LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab)
                             .padding(.top, 10).pageGutter()
@@ -552,18 +544,6 @@ struct DartsView: View {
             return list.isEmpty ? nil : (cat.kind, cat.title, list)
         }
     }
-    /// MLB: yesterday's darts that hit. The NFL plays weekly: last week's props that won.
-    private var hitsOnTape: [DartHit] {
-        let lg = league
-        // Yesterday's parlay leads the tape when every leg landed.
-        let parlayHit: [DartHit] = pastParlay.flatMap { p in
-            LabTicketState(result: p.result) == .won
-                ? [DartHit(id: -1, league: lg, kind: "parlay", player: "PARLAY · \(p.legs.count) LEGS", matchup: nil, bet: nil, odds: p.american_odds, actual: nil, line: nil)]
-                : nil
-        } ?? []
-        return parlayHit + (board?.yesterday ?? []).filter { $0.league == lg } + (lg == "NFL" ? (board?.last_week ?? []) : [])
-    }
-
     private var streaks: [StreakRow] {
         let lg = league
         return (board?.streaks ?? []).filter { ($0.league ?? "") == lg }

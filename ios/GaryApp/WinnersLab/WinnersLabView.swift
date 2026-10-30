@@ -13,6 +13,8 @@ struct WinnersLabView: View {
     @State private var streak: StreakState?
     /// Gary's run and his last ten results, for the header.
     @State private var run: WinnersRun?
+    /// Gary's face for last night (Home's LAST NIGHT ladder), the header logo.
+    @State private var lastNightFace: String?
     @State private var loading = true
     @State private var error: String?
     @State private var yesterdayError: String?
@@ -264,9 +266,15 @@ struct WinnersLabView: View {
 
     /// The run never holds the board: a failed read keeps the last one.
     @MainActor private func loadRun(date want: String, generation: UUID, account: String?) async {
-        guard let fresh = try? await SupabaseAPI.fetchWinnersRun(),
-              accepts(generation, date: want, account: account) else { return }
-        if fresh != run { run = fresh }
+        async let money: GaryBankrollSnapshot? = {
+            guard let data = try? await WinnersAccessStore.request("rest/v1/rpc/get_gary_bankroll", body: [:]) else { return nil }
+            return try? JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
+        }()
+        let fresh = try? await SupabaseAPI.fetchWinnersRun()
+        let bankroll = await money
+        guard accepts(generation, date: want, account: account) else { return }
+        if let fresh, fresh != run { run = fresh }
+        if let face = bankroll?.lastNight(before: want)?.face, face != lastNightFace { lastNightFace = face }
     }
 
     @MainActor private func loadDetails(date want: String, since: String, generation: UUID, account: String?) async {
@@ -506,10 +514,10 @@ struct WinnersLabView: View {
             })
     }
 
-    private var runMark: String {
-        guard let run, run.run_count >= 2 else { return GaryBrand.mark }
-        return run.won ? "GaryFire" : "GaryIceCold"
-    }
+    /// The logo is how Gary did the night before (founder, Oct 30 2026: it
+    /// "hasn't been changing based on how gary did the day before" — it had
+    /// followed his run of plays, which can stay hot through a losing night).
+    private var runMark: String { lastNightFace ?? GaryBrand.mark }
 
     /// Today's first play has started (founder, Oct 9 2026: "as soon as our first game starts this
     /// should flip to showing today 0-0"), or one already has a result.

@@ -7,8 +7,20 @@ import Foundation
 enum CashRailDance {
     /// When the routine starts: the backdrop slams in first.
     static let lead = 0.28
-    /// A new frame fades in (and the old one out) over 70ms.
-    static let fade = 0.07
+    /// A new frame fades in (and the old one out) over 90ms.
+    static let fade = 0.09
+    /// A new frame starts from where the last one stood and eases into its
+    /// own move over this long, so a swap never jumps (the smoother pass,
+    /// founder Oct 30 2026).
+    static let handoff = 0.1
+    /// The last pose keeps breathing instead of freezing.
+    static let breath = (period: 1.1, depth: 0.012)
+
+    /// 0→1 with no corners at either end.
+    static func smooth(_ x: Double) -> Double {
+        let t = min(1, max(0, x))
+        return t * t * (3 - 2 * t)
+    }
     /// A move never runs longer than this, however long the frame holds.
     static let maxMove = 0.52
 
@@ -123,18 +135,30 @@ enum CashRailDance {
         func opacity(_ slug: String, at t: Double) -> Double {
             guard let i = step(at: t) else { return 0 }
             let prev = i > 0 ? seq[i - 1].slug : nil
-            let f = local(i, t) / CashRailDance.fade
-            if seq[i].slug == slug { return prev == slug ? 1 : min(1, f) }
-            if prev == slug { return max(0, 1 - f) }
+            let f = CashRailDance.smooth(local(i, t) / CashRailDance.fade)
+            if seq[i].slug == slug { return prev == slug ? 1 : f }
+            if prev == slug { return 1 - f }
             return 0
         }
 
         /// A frame holds the end of its own latest move until it is shown again.
+        /// Each showing hands off from the pose on screen just before it, and
+        /// the last one breathes once its move is done.
         func pose(_ slug: String, at t: Double) -> Pose {
             guard let i = step(at: t), let j = (0...i).last(where: { seq[$0].slug == slug }) else { return .rest }
             let dur = min(Double(seq[j].hold) / 1000, CashRailDance.maxMove)
-            let p = min(1, max(0, local(j, t) / dur))
-            return CashRailDance.pose(move: seq[j].move, progress: Ease.move(p))
+            let since = local(j, t)
+            var pose = CashRailDance.pose(move: seq[j].move, progress: Ease.move(min(1, max(0, since / dur))))
+            if j == seq.count - 1, since > dur {
+                let b = sin(2 * .pi * (since - dur) / CashRailDance.breath.period) * CashRailDance.breath.depth
+                pose.sy *= 1 + b
+                pose.sx *= 1 - b / 2
+            }
+            if j > 0, since < CashRailDance.handoff {
+                let before = self.pose(seq[j - 1].slug, at: start(j) - 0.0001)
+                pose = Pose.mix(before, pose, CashRailDance.smooth(since / CashRailDance.handoff))
+            }
+            return pose
         }
 
         /// Seconds since the latest impact move began, if one has.

@@ -40,17 +40,32 @@ out([r(e(0)), r(e(1)), (0..<100).map { e(Double($0) / 100) }.max()! > 1])`);
     expect(r).toEqual([0, 1, true]);
   });
 
-  it('cross-fades each new frame in over 70ms while the old one fades out, and holds a repeated frame', () => {
+  it('cross-fades each new frame in over 90ms while the old one fades out, and holds a repeated frame', () => {
     const r = swiftJSON(`${bird}
-out([r(t.opacity("db1", at: 0.70)), r(t.opacity("db2", at: 0.70)), r(t.opacity("db2", at: 0.735)), r(t.opacity("db1", at: 0.80)), r(t.opacity("db5", at: 0.5))])`);
+out([r(t.opacity("db1", at: 0.70)), r(t.opacity("db2", at: 0.70)), r(t.opacity("db2", at: 0.745)), r(t.opacity("db1", at: 0.80)), r(t.opacity("db5", at: 0.5))])`);
     expect(r).toEqual([1, 0, 0.5, 0, 0]);
   });
 
-  it('keeps each frame\'s last move: a frame shown again restarts its own move', () => {
+  it('takes each new frame over from where the last one stood, so a swap never jumps', () => {
     const r = swiftJSON(`${bird}
-let a = t.pose("db2", at: 0.70), b = t.pose("db2", at: 1.16)
-out([r(a.ty), r(b.ty)])`);
-    expect(r).toEqual([0.02, 0.02]);
+let before = t.pose("db1", at: 0.6999), swap = t.pose("db2", at: 0.70)
+let raw = CashRailDance.pose(move: "rise", progress: CashRailDance.Ease.move(0.1 / 0.23))
+let settled = t.pose("db2", at: 0.80)
+out([r(swap.ty - before.ty), r(settled.ty - raw.ty)])`);
+    expect(r).toEqual([0, 0]);
+  });
+
+  it('a frame shown again restarts its own move', () => {
+    const r = swiftJSON(`${bird}
+out([r(t.pose("db2", at: 0.80).ty), r(t.pose("db2", at: 1.26).ty)])`);
+    expect(r[0]).toBe(r[1]);
+  });
+
+  it('keeps breathing on the last pose instead of freezing', () => {
+    const r = swiftJSON(`${bird}
+let a = t.pose("db5", at: 2.2), b = t.pose("db5", at: 2.5)
+out([a.sy == b.sy, abs(a.sy - 1) < 0.03])`);
+    expect(r).toEqual([false, true]);
   });
 });
 

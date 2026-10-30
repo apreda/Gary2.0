@@ -14,7 +14,8 @@ struct CashRailReel: Identifiable {
     }
     let celebration: CashRailCelebration
     let backdrop: UIImage
-    /// The backdrop's average color, darkened: the card behind the stat box.
+    /// The backdrop's top edge color: the card behind the stat box, so the
+    /// box sits on the same color as the scene (founder, Oct 30 2026).
     let tint: Color
     let frames: [String: Frame]
     let timeline: CashRailDance.Timeline
@@ -97,7 +98,7 @@ final class CashRailCelebrations: ObservableObject {
             for await (slug, frame) in group { if let frame { frames[slug] = frame } }
         }
         guard frames.count == slugs.count, let backdrop = await bg else { return nil }
-        let tint = await Task.detached { averageColor(backdrop) }.value
+        let tint = await Task.detached { topColor(backdrop) }.value
         return CashRailReel(celebration: c, backdrop: backdrop.preparingForDisplay() ?? backdrop, tint: tint,
                             frames: frames, timeline: CashRailDance.Timeline(seq: c.assets.seq))
     }
@@ -125,8 +126,11 @@ final class CashRailCelebrations: ObservableObject {
                                   height: Double(f.maxY - f.minY + 1) / Double(h), cx: f.cx)
     }
 
-    nonisolated private static func averageColor(_ img: UIImage) -> Color {
-        guard let cg = img.cgImage else { return Color(hex: "#0F3D25") }
+    /// The average of the backdrop's top 6%, where it is plain team color.
+    nonisolated private static func topColor(_ img: UIImage) -> Color {
+        guard let full = img.cgImage,
+              let cg = full.cropping(to: CGRect(x: 0, y: 0, width: full.width, height: max(1, full.height * 6 / 100)))
+        else { return Color(hex: "#0F3D25") }
         var px = [UInt8](repeating: 0, count: 4)
         let ok: Bool = px.withUnsafeMutableBytes { buf in
             guard let ctx = CGContext(data: buf.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
@@ -137,7 +141,7 @@ final class CashRailCelebrations: ObservableObject {
             return true
         }
         guard ok else { return Color(hex: "#0F3D25") }
-        return Color(red: Double(px[0]) / 255 * 0.45, green: Double(px[1]) / 255 * 0.45, blue: Double(px[2]) / 255 * 0.45)
+        return Color(red: Double(px[0]) / 255, green: Double(px[1]) / 255, blue: Double(px[2]) / 255)
     }
 }
 
@@ -295,9 +299,13 @@ struct CashRailCelebrationView: View {
                 .scaleEffect(bgScale, anchor: UnitPoint(x: 0.5, y: 0.35))
                 .opacity(introOpacity)
                 .clipped()
+            // The floor shadow shrinks and fades as Gary leaves the ground.
+            let lift = tl.step(at: t).map { max(0, -tl.pose(tl.seq[$0].slug, at: t).ty) } ?? 0
             Ellipse()
                 .fill(RadialGradient(colors: [.black.opacity(0.45), .clear], center: .center, startRadius: 0, endRadius: width * 0.28))
                 .frame(width: width * 0.56, height: height * 0.04)
+                .scaleEffect(1 - min(0.5, lift * 2.5))
+                .opacity(1 - min(0.6, lift * 3))
                 .position(x: width / 2, y: height * (1 - 0.016) - height * 0.02)
             ForEach(Array(Set(tl.seq.map(\.slug))).sorted(), id: \.self) { slug in
                 let o = tl.opacity(slug, at: t)

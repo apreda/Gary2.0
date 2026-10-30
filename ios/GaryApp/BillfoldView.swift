@@ -1818,8 +1818,23 @@ struct GaryBankrollSnapshot: Decodable {
         let settled: Int
         let wins: Int
         let losses: Int
+
+        /// Gary's face for the night by its win rate (the daily recap's ladder):
+        /// Home's LAST NIGHT tile and the Winners header both wear it.
+        var face: String {
+            let decided = wins + losses
+            guard decided > 0 else { return "GaryBeer" }
+            let pct = Double(wins) / Double(decided)
+            return pct >= 0.80 ? "GaryFire" : pct >= 0.70 ? "GaryCooking" : pct >= 0.50 ? "GaryBeer"
+                : pct >= 0.40 ? "GaryIceCold" : "GaryDoomsday"
+        }
     }
     var days: [Day]? = nil
+
+    /// The last day with a settled Winners bet before `slate` (yyyy-MM-dd).
+    func lastNight(before slate: String) -> Day? {
+        (days ?? []).filter { $0.settled > 0 && $0.date < slate }.max { $0.date < $1.date }
+    }
     /// Days taken off the record, each with the note fans read (founder, Oct 29 2026: Oct 17's bug day).
     /// Before its effective date the note is the notice of what will happen (founder, Oct 29 2026: "we cant
     /// scrub until people understand and it should go into effect nov 1").

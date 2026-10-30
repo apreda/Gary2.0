@@ -123,11 +123,8 @@ struct HomeWinnersBento: View {
 
     private var lastNightTile: some View {
         let d = lastNight
-        let decided = (d?.wins ?? 0) + (d?.losses ?? 0)
-        let pct = decided > 0 ? Double(d?.wins ?? 0) / Double(decided) : nil
         // Gary's face by the night's win rate, the daily recap's ladder.
-        let face = pct.map { $0 >= 0.80 ? "GaryFire" : $0 >= 0.70 ? "GaryCooking" : $0 >= 0.50 ? "GaryBeer"
-            : $0 >= 0.40 ? "GaryIceCold" : "GaryDoomsday" } ?? "GaryBeer"
+        let face = d?.face ?? "GaryBeer"
         return tileButton(label: d.map { "\(dayWord($0.date)), \($0.wins) and \($0.losses), \(LabFormat.unitsNet($0.net_units))" } ?? "Winners") {
             VStack(alignment: .leading, spacing: 0) {
                 Text("WINNERS")
