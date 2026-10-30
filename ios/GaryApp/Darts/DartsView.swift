@@ -51,6 +51,8 @@ struct DartRow: Decodable, Identifiable {
     let form: DartForm?
     /// hit | miss once graded; nil while it rides.
     let result: String?
+    /// Gary's order in the category, 1 his best (the wheel lays the darts out by it).
+    let rank: Int?
 
     var isGame: Bool { kind == "first_inning" }
     /// The two clubs of a first-inning dart ("Blue Jays @ Orioles").
@@ -637,24 +639,42 @@ struct DartsView: View {
                     // A swipe on the board keeps its tab in view.
                     .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
                 }
-                Dartboard(darts: current.rows,
-                          throwOnce: league == "MLB" && index == 0 ? "darts.thrown.\(today).\(league)" : nil,
-                          activePage: selectedTab == 2 && scenePhase == .active,
-                          onPlayer: { cardFor = $0 },
-                          onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
-                    // Nothing thrown yet today: glass over the board.
-                    .overlay { if thrown.isEmpty { DartboardGlass() } }
-                    .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
-                    .id("\(current.kind)-\(throwTake)")
-                    .transition(.opacity)
-                    .pageGutter()
-                    .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
-                        // A clear sideways swipe, not a scroll.
-                        guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
-                        let next = v.translation.width < 0 ? index + 1 : index - 1
-                        guard cats.indices.contains(next) else { return }
-                        withAnimation(.easeOut(duration: 0.2)) { kind = cats[next].kind }
-                    })
+                if thrown.isEmpty {
+                    Dartboard(darts: current.rows,
+                              throwOnce: league == "MLB" && index == 0 ? "darts.thrown.\(today).\(league)" : nil,
+                              activePage: selectedTab == 2 && scenePhase == .active,
+                              onPlayer: { cardFor = $0 },
+                              onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
+                        // Nothing thrown yet today: glass over the board.
+                        .overlay { if thrown.isEmpty { DartboardGlass() } }
+                        .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
+                        .id("\(current.kind)-\(throwTake)")
+                        .transition(.opacity)
+                        .pageGutter()
+                        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
+                            // A clear sideways swipe, not a scroll.
+                            guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
+                            let next = v.translation.width < 0 ? index + 1 : index - 1
+                            guard cats.indices.contains(next) else { return }
+                            withAnimation(.easeOut(duration: 0.2)) { kind = cats[next].kind }
+                        })
+                } else {
+                    // The wheel (founder, Oct 30 2026: mock 4.1, "make it
+                    // scrollable"): every category's darts in Gary's order,
+                    // one after another round an endless wheel.
+                    let items = cats.flatMap { c in
+                        c.rows.sorted { ($0.rank ?? 99, $0.id) < ($1.rank ?? 99, $1.id) }.enumerated()
+                            .map { DartWheel.Item(kind: c.kind, rank: $0.offset + 1, dart: $0.element) }
+                    }
+                    DartWheel(items: items,
+                              kind: $kind,
+                              throwOnce: league == "MLB" ? "darts.thrown.\(today).\(league)" : nil,
+                              activePage: selectedTab == 2 && scenePhase == .active,
+                              onPlayer: { cardFor = $0 },
+                              onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
+                        .id("\(league)-\(throwTake)-\(items.map { String($0.dart.id) }.joined(separator: ","))")
+                        .transition(.opacity)
+                }
             }
         }
     }

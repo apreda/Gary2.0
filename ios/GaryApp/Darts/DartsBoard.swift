@@ -797,3 +797,458 @@ extension View {
         if #available(iOS 16.4, *) { self.scrollBounceBehavior(.basedOnSize) } else { self }
     }
 }
+
+// MARK: - The dart wheel
+
+/// The darts on a wheel (founder, Oct 30 2026, mock 4.1 and "make it
+/// scrollable"): the board hangs on the left wall with Gary's darts in it by
+/// his order, his #1 in the bull; the darts' rows turn on a wheel at its
+/// right. The row in the middle is the one picked: its dart lights on the
+/// board and its row sits in the glass. Every category follows the last in
+/// one endless loop, so a hard flick spins through all of them and the tab
+/// above follows the wheel; a slow drag moves it a row at a time.
+struct DartWheel: View {
+    struct Item {
+        let kind: String
+        let rank: Int
+        let dart: DartRow
+    }
+
+    let items: [Item]
+    @Binding var kind: String
+    let throwOnce: String?
+    let activePage: Bool
+    let onPlayer: (DartRow) -> Void
+    let onTeam: (_ name: String, _ league: String) -> Void
+
+    /// The wheel's place, read by the rows every frame (held in @State so the
+    /// rest of the page does not redraw while it turns).
+    @State private var wheel = WheelPosition()
+    /// The row in the middle: an index on the endless wheel, not into `items`.
+    @State private var selected: Int
+    @State private var jump = WheelJump(index: 0, nonce: 0, animated: false)
+    @State private var teamPick: DartRow?
+    @State private var flying: Set<Int>
+    @State private var thrown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let tick = UISelectionFeedbackGenerator()
+
+    static let rowHeight: CGFloat = 72
+
+    init(items: [Item], kind: Binding<String>, throwOnce: String? = nil, activePage: Bool = true,
+         onPlayer: @escaping (DartRow) -> Void, onTeam: @escaping (_ name: String, _ league: String) -> Void) {
+        self.items = items
+        _kind = kind
+        self.throwOnce = throwOnce
+        self.activePage = activePage
+        self.onPlayer = onPlayer
+        self.onTeam = onTeam
+        let start = items.firstIndex { $0.kind == kind.wrappedValue && $0.rank == 1 } ?? items.firstIndex { $0.kind == kind.wrappedValue } ?? 0
+        let w = WheelPosition(); w.pos = Double(start)
+        _wheel = State(initialValue: w)
+        _selected = State(initialValue: start)
+        _jump = State(initialValue: WheelJump(index: start, nonce: 0, animated: false))
+        let due = throwOnce.map { !UserDefaults.standard.bool(forKey: $0) } ?? false
+        let first = items.first { $0.kind == kind.wrappedValue }?.kind
+        _flying = State(initialValue: due && !UIAccessibility.isReduceMotionEnabled
+                        ? Set(items.filter { $0.kind == first && !$0.dart.isScratched }.map(\.dart.id)) : [])
+    }
+
+    private var count: Int { items.count }
+    private func item(_ i: Int) -> Item { items[((i % count) + count) % count] }
+    private var current: Item { item(selected) }
+
+    var body: some View {
+        GeometryReader { g in
+            let k = g.size.width / 402
+            let h = g.size.height
+            let cx = 14 * k, cy = h / 2, r = 150 * k
+            let colX = 172 * k
+            let colW = g.size.width - colX - GaryLayout.gutter
+            ZStack(alignment: .topLeading) {
+                // The board, the shipping board's own drawing, half off the left wall.
+                let side = r * 358 / 172
+                Canvas { ctx, _ in DartboardPlan(darts: [], side: side).draw(&ctx) }
+                    .frame(width: side, height: side)
+                    .opacity(0.85)
+                    .position(x: cx, y: cy)
+                    .accessibilityHidden(true)
+                // The lamp hangs a little right of the bull.
+                Color.clear.frame(width: 2 * r, height: 2 * r)
+                    .position(x: cx + 60 * k, y: cy)
+                    .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
+                    .allowsHitTesting(false)
+
+                // The glass the picked row sits in.
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), Color(hex: "#18150F")], startPoint: .top, endPoint: .bottom))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
+                    .frame(width: colW, height: Self.rowHeight + 12)
+                    .position(x: colX + colW / 2, y: cy)
+                    .accessibilityHidden(true)
+
+                darts(cx: cx, cy: cy, r: r, k: k, plateX: colX)
+                    .accessibilityHidden(true)
+
+                WheelRows(wheel: wheel, items: items, rowHeight: Self.rowHeight, height: h, width: colW, reduceMotion: reduceMotion)
+                    .frame(width: colW, height: h)
+                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.14),
+                                                 .init(color: .black, location: 0.86), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .offset(x: colX)
+                    .allowsHitTesting(false)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(words(current))
+                    .accessibilityHint(DartCategory.title(current.dart.league, current.kind))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAdjustableAction { dir in
+                        switch dir {
+                        case .increment: go(to: selected + 1)
+                        case .decrement: go(to: selected - 1)
+                        default: break
+                        }
+                    }
+                    .accessibilityAction { open(current.dart) }
+
+                // The wheel's hand: a scroll view with nothing in it, so a flick
+                // carries on and slows the way every list on the phone does.
+                DartWheelInput(rowHeight: Self.rowHeight, jump: jump,
+                               onPos: { p in turned(to: p) },
+                               onTap: { y in tapped(y: y, height: h) })
+                    .frame(width: colW + GaryLayout.gutter, height: h)
+                    .offset(x: colX)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(height: 406)
+        .clipped()
+        .onChange(of: kind) { newKind in
+            // A tab tap turns the wheel to that category's #1.
+            guard current.kind != newKind, let start = items.firstIndex(where: { $0.kind == newKind }) else { return }
+            let cycle = selected - (((selected % count) + count) % count)
+            let target = [cycle - count + start, cycle + start, cycle + count + start].min { abs($0 - selected) < abs($1 - selected) } ?? start
+            go(to: target)
+        }
+        .task(id: activePage) { throwIfDue() }
+        .onAppear {
+            tick.prepare()
+            if current.kind != kind { kind = current.kind }
+        }
+        .confirmationDialog("", isPresented: Binding(get: { teamPick != nil }, set: { if !$0 { teamPick = nil } })) {
+            if let d = teamPick, let teams = d.gameTeams {
+                Button(teams.away) { onTeam(teams.away, d.league) }
+                Button(teams.home) { onTeam(teams.home, d.league) }
+            }
+        }
+    }
+
+    // MARK: Turning
+
+    private func turned(to p: Double) {
+        wheel.pos = p
+        let r = Int(p.rounded())
+        guard r != selected else { return }
+        selected = r
+        tick.selectionChanged()
+        let k = item(r).kind
+        if k != kind { kind = k }
+    }
+
+    private func go(to index: Int) {
+        jump = WheelJump(index: index, nonce: jump.nonce + 1, animated: !reduceMotion)
+    }
+
+    /// A tap on the picked row opens the player's card (either club's on a
+    /// first-inning dart); a tap on any other row turns it to the middle.
+    private func tapped(y: CGFloat, height: CGFloat) {
+        let off = Int(((y - height / 2) / Self.rowHeight).rounded())
+        if off == 0 { open(current.dart) } else { go(to: selected + off) }
+    }
+
+    private func open(_ d: DartRow) {
+        if d.isGame { teamPick = d } else { onPlayer(d) }
+    }
+
+    // MARK: The darts on the board
+
+    /// Where Gary's darts land by his order: #1 in the bull, then out ring
+    /// by ring to the double (mock 4). A sixth or more spread round the
+    /// right of the board.
+    static func spot(_ n: Int) -> (frac: CGFloat, deg: Double) {
+        let spots: [(CGFloat, Double)] = [(0.03, 45), (0.36, 40), (0.6, 120), (0.8, 62), (0.965, 150)]
+        if n < spots.count { return spots[n] }
+        let j = n - spots.count
+        return (0.48 + 0.12 * CGFloat(j % 4), 95 + 23 * Double(j % 6))
+    }
+
+    @ViewBuilder private func darts(cx: CGFloat, cy: CGFloat, r: CGFloat, k: CGFloat, plateX: CGFloat) -> some View {
+        let cat = items.filter { $0.kind == current.kind }
+        let lit = current.dart.id
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(cat.enumerated()), id: \.element.dart.id) { n, it in
+                let s = Self.spot(n)
+                let a = s.deg * .pi / 180
+                let tip = CGPoint(x: cx + s.frac * r * CGFloat(sin(a)), y: cy - s.frac * r * CGFloat(cos(a)))
+                let on = it.dart.id == lit
+                let g = (on ? 29 : 25) * k
+                let inAir = flying.contains(it.dart.id)
+                if on {
+                    Circle().fill(Color(hex: "#E8D48B").opacity(0.1)).frame(width: 36 * k, height: 36 * k).position(tip)
+                    Circle().stroke(Color(hex: "#E8D48B").opacity(0.75), lineWidth: 1.2).frame(width: 22 * k, height: 22 * k).position(tip)
+                    // A line from the lit dart to the glass.
+                    Path { p in
+                        p.move(to: CGPoint(x: tip.x + g + 10 * k, y: tip.y - g))
+                        p.addLine(to: CGPoint(x: plateX - 22 * k, y: cy))
+                        p.addLine(to: CGPoint(x: plateX, y: cy))
+                    }
+                    .stroke(Color(hex: "#E8D48B").opacity(0.7), lineWidth: 1)
+                }
+                DartGlyph()
+                    .frame(width: g, height: g)
+                    .scaleEffect(inAir ? 2.8 : 1, anchor: DartGlyph.tipAnchor)
+                    .rotationEffect(.degrees(inAir ? 16 : 0), anchor: DartGlyph.tipAnchor)
+                    .offset(x: inAir ? 150 : 0, y: inAir ? 260 : 0)
+                    .opacity(inAir ? 0 : (on ? 1 : 0.42))
+                    .position(x: tip.x + 0.45 * g, y: tip.y - 0.45 * g)
+                WheelBadge(rank: it.rank, lit: on, k: k)
+                    .opacity(inAir ? 0 : (on ? 1 : 0.55))
+                    .position(x: tip.x + g, y: tip.y - g)
+            }
+        }
+        .id(current.kind)
+        .transition(.opacity)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: lit)
+    }
+
+    /// The first time today's first board is on screen its darts fly in one
+    /// at a time, as on the old board (Sep 23 2026).
+    private func throwIfDue() {
+        guard let key = throwOnce, !thrown, activePage, !flying.isEmpty else { return }
+        thrown = true
+        UserDefaults.standard.set(true, forKey: key)
+        let order = items.filter { flying.contains($0.dart.id) }.map(\.dart)
+        for (n, dart) in order.enumerated() {
+            let start = 0.5 + Double(n) * 0.36
+            DispatchQueue.main.asyncAfter(deadline: .now() + start) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.58)) { _ = flying.remove(dart.id) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + start + 0.2) {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
+    }
+
+    private func words(_ it: Item) -> String {
+        let d = it.dart
+        let side = d.isGame ? ((d.bet ?? "over") == "under" ? "NRFI" : "YRFI") : d.lineWords
+        let price = d.isScratched ? d.scratchWord.lowercased() : [side, LabFormat.price(d.odds)].compactMap { $0 }.joined(separator: " ")
+        return ["\(it.rank)", d.player, price, d.gameLine].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+extension DartCategory {
+    /// A category's tab name.
+    static func title(_ league: String, _ kind: String) -> String {
+        order[league]?.first { $0.kind == kind }?.title ?? ""
+    }
+}
+
+/// The wheel's place: the row at the middle, with the fraction it has turned past it.
+final class WheelPosition: ObservableObject {
+    @Published var pos: Double = 0
+}
+
+/// A turn asked of the wheel from outside it (a tab, a tap, VoiceOver).
+struct WheelJump: Equatable {
+    let index: Int
+    let nonce: Int
+    let animated: Bool
+}
+
+/// The dart's number on its flights.
+private struct WheelBadge: View {
+    let rank: Int
+    let lit: Bool
+    let k: CGFloat
+    var body: some View {
+        let d = (lit ? 21 : 19) * k
+        Text("\(rank)")
+            .font(GaryFonts.display(lit ? 14.5 : 13.5))
+            .foregroundStyle(lit ? Color(hex: "#12100D") : (rank == 1 ? GaryColors.gold : GaryColors.warmWhite))
+            .frame(width: d, height: d)
+            .background(Circle().fill(lit ? GaryColors.gold : Color(hex: "#12100D")))
+            .overlay(Circle().stroke(GaryColors.gold.opacity(lit || rank == 1 ? 1 : 0.6), lineWidth: 1))
+    }
+}
+
+/// The rows on the wheel, redrawn as it turns. Rows away from the middle
+/// tip back and fade like the far side of a drum.
+private struct WheelRows: View {
+    /// A row's top rule hides while it crosses the glass.
+    static func hairShows(_ d: Double, _ rowHeight: CGFloat) -> Double {
+        let y = abs(d * Double(rowHeight) - Double(rowHeight) / 2)
+        return min(1, max(0, (y - Double(rowHeight) / 2 - 4) / 8))
+    }
+
+    @ObservedObject var wheel: WheelPosition
+    let items: [DartWheel.Item]
+    let rowHeight: CGFloat
+    let height: CGFloat
+    let width: CGFloat
+    let reduceMotion: Bool
+
+    var body: some View {
+        let p = wheel.pos
+        let reach = Double(height / 2 / rowHeight) + 1
+        let lo = Int((p - reach).rounded(.down)), hi = Int((p + reach).rounded(.up))
+        let n = items.count
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(lo...hi), id: \.self) { i in
+                let d = Double(i) - p
+                let a = abs(d)
+                WheelRow(item: items[((i % n) + n) % n], near: max(0, 1 - a))
+                    .frame(width: width, height: rowHeight)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10).opacity(Self.hairShows(d, rowHeight))
+                    }
+                    .rotation3DEffect(.degrees(reduceMotion ? 0 : -d * 15), axis: (x: 1, y: 0, z: 0), anchor: .center, perspective: 0.45)
+                    .opacity(a <= 1 ? 1 - 0.38 * a : max(0, 0.62 - 0.22 * (a - 1)))
+                    .position(x: width / 2, y: height / 2 + CGFloat(d) * rowHeight)
+            }
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+    }
+}
+
+/// One dart's row: Gary's number, the player, the line and the price; the
+/// game and the time show as the row comes into the glass.
+private struct WheelRow: View {
+    let item: DartWheel.Item
+    /// 1 in the middle, 0 a row or more away.
+    let near: Double
+
+    private var d: DartRow { item.dart }
+    private var side: String? {
+        if d.isGame { return (d.bet ?? "over") == "under" ? "NRFI" : "YRFI" }
+        return d.lineWords
+    }
+    private var direction: LabDirection? {
+        guard !d.isGame, d.lineWords != nil else { return nil }
+        return (d.bet ?? "over").lowercased() == "under" ? .under : .over
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("\(item.rank)")
+                .font(GaryFonts.display(25))
+                .foregroundStyle(item.rank == 1 || near > 0.5 ? GaryColors.gold : GaryColors.warmWhite.opacity(0.4))
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(d.player)
+                    .font(GaryFonts.ui(14.5, .semibold))
+                    .foregroundStyle(d.isScratched ? LabInk.dim : GaryColors.warmWhite)
+                    .fitsOneLine()
+                HStack(alignment: .center, spacing: 6) {
+                    if d.isScratched {
+                        Text(d.scratchWord).font(GaryFonts.display(15)).tracking(0.5).foregroundStyle(LabInk.dimmer)
+                    } else {
+                        if let direction {
+                            Image(systemName: direction == .over ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
+                        }
+                        if let side { Text(side).font(GaryFonts.display(16.5)).tracking(0.4).foregroundStyle(GaryColors.silver).fitsOneLine() }
+                        Spacer(minLength: 6)
+                        Text(LabFormat.price(d.odds)).font(GaryFonts.display(20.5)).foregroundStyle(GaryColors.gold).monospacedDigit()
+                    }
+                }
+                Text(d.isGame ? LabFormat.timeET(d.commence_time) : d.gameLine)
+                    .font(GaryFonts.ui(11.5))
+                    .foregroundStyle(LabInk.dim)
+                    .fitsOneLine()
+                    .opacity(near)
+            }
+            // Two lines sit in the middle of the row; the third comes in with the glass.
+            .offset(y: (1 - near) * 9.5)
+        }
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+/// The wheel's hand: an empty UIKit scroll view over the rows. It brings the
+/// phone's own flick and slow-down, stops a turn on a row, and hands the
+/// place back as rows from the start.
+private struct DartWheelInput: UIViewRepresentable {
+    let rowHeight: CGFloat
+    let jump: WheelJump
+    let onPos: (Double) -> Void
+    let onTap: (CGFloat) -> Void
+
+    /// Far enough each way that no hand reaches the end.
+    static let base: CGFloat = 2_000_000
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let v = WheelScrollView()
+        v.backgroundColor = .clear
+        v.contentInsetAdjustmentBehavior = .never
+        v.showsVerticalScrollIndicator = false
+        v.showsHorizontalScrollIndicator = false
+        v.scrollsToTop = false
+        v.decelerationRate = .normal
+        v.delaysContentTouches = false
+        v.contentSize = CGSize(width: 0, height: Self.base * 2)
+        v.delegate = context.coordinator
+        // The first row is set once the wheel has its size; a place set
+        // before that was moved by UIKit (it opened on Points #5, Oct 30).
+        let start = Self.base + CGFloat(jump.index) * rowHeight
+        v.onFirstLayout = { [weak v] in v?.setContentOffset(CGPoint(x: 0, y: start), animated: false) }
+        context.coordinator.lastNonce = jump.nonce
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
+        v.addGestureRecognizer(tap)
+        return v
+    }
+
+    func updateUIView(_ v: UIScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard jump.nonce != context.coordinator.lastNonce else { return }
+        context.coordinator.lastNonce = jump.nonce
+        v.setContentOffset(CGPoint(x: 0, y: Self.base + CGFloat(jump.index) * rowHeight), animated: jump.animated)
+    }
+
+    final class WheelScrollView: UIScrollView {
+        var onFirstLayout: (() -> Void)?
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.height > 0, let first = onFirstLayout else { return }
+            onFirstLayout = nil
+            first()
+        }
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var parent: DartWheelInput
+        var lastNonce = 0
+        init(_ parent: DartWheelInput) { self.parent = parent }
+
+        func scrollViewDidScroll(_ v: UIScrollView) {
+            parent.onPos(Double((v.contentOffset.y - DartWheelInput.base) / parent.rowHeight))
+        }
+
+        /// However hard the flick, the wheel comes to rest on a row.
+        func scrollViewWillEndDragging(_ v: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+            let h = parent.rowHeight
+            let rows = ((targetContentOffset.pointee.y - DartWheelInput.base) / h).rounded()
+            targetContentOffset.pointee.y = DartWheelInput.base + rows * h
+        }
+
+        @objc func tapped(_ g: UITapGestureRecognizer) {
+            guard let v = g.view as? UIScrollView else { return }
+            parent.onTap(g.location(in: v).y - v.contentOffset.y)
+        }
+    }
+}
