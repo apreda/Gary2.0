@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 14;
+const LEDGER_SCHEMA = 16;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -80,6 +80,8 @@ const WANTED = [
   'desc',
   // Round 10: punting per game (founder: special teams game by game).
   'punt_inside_twenty',
+  // Round 12: whether a third or fourth down was settled on the play (a down replayed after a foul is neither).
+  'third_down_failed', 'fourth_down_failed',
   // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
   // Oct 29 2026: the game clock, who scored and who kicked, and each drive's time of possession.
@@ -307,8 +309,11 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
   // (Oct 29 2026, founder: "how the team did on third downs and fourth downs, coupled with down and distance").
   if (SCRIMMAGE.has(playType) && E(posteam)) {
     const down = num(g('down')), togo = num(g('ydstogo'));
-    if (down === 3 && togo != null) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam });
-    if (down === 4 && togo != null) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
+    // Only a down the play settled: one replayed after an accepted foul is neither made nor failed (round 12: the Bears'
+    // 3rd & 1, run for 8 and called back for holding, read as a failed try).
+    const settled = (k) => flag(g(`${k}_converted`)) || flag(g(`${k}_failed`)) || (flag(g('touchdown')) && g('td_team') === posteam);
+    if (down === 3 && togo != null && settled('third_down')) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam });
+    if (down === 4 && togo != null && settled('fourth_down')) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
       yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')) });
   }
   // Plays of 20 yards or more and who made them, and the runs and passes by the score at the snap (Oct 29 2026,
@@ -539,6 +544,17 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
       });
     }
     const game = games.get(gameId);
+    // Who got hurt during the game, from the play text ("MIN-A.Jones was injured during the play"), and whether a later
+    // play names him (round 12: a starter hurt in the fourth quarter read as a normal game; college has had this since
+    // round 11).
+    {
+      const text = String(g('desc') || '');
+      for (const h of game.hurt || []) if (!h.later && text.includes(h.who)) h.later = true;
+      // "LAC-99-J.Caldwell was injured during the play": club, jersey, name.
+      for (const m of text.matchAll(/\b([A-Z]{2,3})-(?:\d{1,2}-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:Jr\.|Sr\.|II|III|IV))?) was injured during the play/g)) {
+        (game.hurt ||= []).push({ team: m[1], who: m[2], q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, later: false });
+      }
+    }
     // THE GAME'S FLOW (Oct 29 2026, founder: "who got ahead, how, when did the team go up 14 versus being close the
     // whole game"): each score in order with the score after it (an extra point or two-point try joins its
     // touchdown), the largest lead each way and when, and how often the lead changed hands.
@@ -746,7 +762,8 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     }
     const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
       lead: g.flow.lead, lead_changes: g.flow.changes } : null;
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow };
+    const hurt = (g.hurt || []).map(({ team, who, q, clock, later }) => ({ team, who, q, clock, later }));
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

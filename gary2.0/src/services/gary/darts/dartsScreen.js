@@ -304,12 +304,12 @@ const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB
 /** The frame of one NFL game, printed once above its players' sheets. */
 // Both clubs' reports in the frame, so every sheet under the game shows the defense he faces (round 11; the NBA frame has
 // carried both since the start).
-export function nflGameBlock(frame, injuries = null, weeksByName = null) {
+export function nflGameBlock(frame, injuries = null, weeksByName = null, snaps = null) {
   const sp = frame.spreadHome;
   const spread = sp == null ? null : sp < 0 ? `${frame.homeFull?.replace(/^.* /, '')} ${sp}` : sp > 0 ? `${frame.awayFull?.replace(/^.* /, '')} ${-sp}` : 'pick em';
   const lines = [[`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ')];
   for (const extra of frame.extra || []) lines.push(extra);
-  if (injuries) for (const team of [frame.awayFull, frame.homeFull].filter(Boolean)) lines.push(outAroundLine(injuries, team, '', { weeksByName, label: `${team} report` }) || `${team} report: nobody listed`);
+  if (injuries) for (const team of [frame.awayFull, frame.homeFull].filter(Boolean)) lines.push(outAroundLine(injuries, team, '', { weeksByName, snaps, label: `${team} report` }) || `${team} report: nobody listed`);
   return lines.join('\n    ');
 }
 
@@ -344,7 +344,9 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const opp = frame ? (c.team === frame.homeFull ? frame.awayAbbr : frame.homeAbbr) : null;
   const def = defenseLine(ctx.defCur, ctx.defPrev, opp, c.position, season);
   if (def) lines.push(def);
-  const out = outAroundLine(ctx.injuries, c.team, c.player, { weeksByName: ctx.weeksByName });
+  // The frame carries both clubs' reports in the darts run; a sheet read alone keeps its club's (round 12: every sheet
+  // repeated the frame's report).
+  const out = ctx.frameReports ? null : outAroundLine(ctx.injuries, c.team, c.player, { weeksByName: ctx.weeksByName, snaps: ctx.snaps });
   if (out) lines.push(out);
   const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords, pressure: ctx.pressure,
     defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });

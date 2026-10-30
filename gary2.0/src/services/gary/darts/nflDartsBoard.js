@@ -68,12 +68,8 @@ async function seasonLines(season) {
   const snaps = snapFile ? aliasByRoster(snapFile, rows, roster && !roster.unavailable ? roster.rows : null) : null;
   for (const [nk, list] of snaps || []) {
     // Special-teams-only weeks apart (round 11).
-    for (const [w, st] of list?.stOnly || []) {
-      for (const [key, cur] of byKey) if (key.startsWith(`${nk}|`)) (cur.stWeeks ||= new Map()).set(w, st);
-    }
-    for (const [w, def] of list?.defOnly || []) {
-      for (const [key, cur] of byKey) if (key.startsWith(`${nk}|`)) (cur.defWeeks ||= new Map()).set(w, def);
-    }
+    for (const [wt, st] of list?.stOnly || []) { const [w, t] = wt.split('|'); const cur = byKey.get(`${nk}|${t}`); if (cur) (cur.stWeeks ||= new Map()).set(Number(w), st); }
+    for (const [wt, def] of list?.defOnly || []) { const [w, t] = wt.split('|'); const cur = byKey.get(`${nk}|${t}`); if (cur) (cur.defWeeks ||= new Map()).set(Number(w), def); }
     for (const s of list || []) {
       if (!(s.snaps > 0)) continue;
       const key = `${nk}|${s.team}`;

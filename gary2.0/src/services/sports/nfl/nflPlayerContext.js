@@ -4,7 +4,7 @@
 // against his season, what tonight's defense has allowed to his position, and
 // who is out around him. From nflverse (weekly player stats, snap counts,
 // schedules), which Ball Don't Lie does not carry. Facts only, one per line.
-import { RELEASE_BASE, fetchCsv } from './nflStreaksService.js';
+import { RELEASE_BASE, fetchCsv, TEAM_NAMES } from './nflStreaksService.js';
 import { normName } from '../../gary/darts/dartsCommon.js';
 import { withOfficialBox } from './espnNflBox.js';
 
@@ -32,13 +32,18 @@ export const weeklyRows = (season) => once(`week|${season}`, async () => {
 /** "season|week|TEAM" → game date, from the nflverse schedule; `.site` has where the team played it ("vs", "@" or
  * "vs ... (neutral site)"). Oct 26 2026: every prop log line read "vs" the opponent, road games included. */
 export const gameDays = () => once('days', async () => {
-  const out = new Map(); out.site = new Map(); out.opp = new Map();
+  // `.result`: how each team's game ended, "W 27-24" or "L 13-35, OT" (round 12: the dart and prop rows never said).
+  const out = new Map(); out.site = new Map(); out.opp = new Map(); out.result = new Map();
   for (const g of await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`)) {
     for (const t of [g.home_team, g.away_team]) {
       const key = `${g.season}|${Number(g.week)}|${t}`;
       out.set(key, g.gameday);
       out.site.set(key, g.location === 'Neutral' ? 'neutral' : t === g.home_team ? 'home' : 'away');
       out.opp.set(key, t === g.home_team ? g.away_team : g.home_team);
+      if (g.home_score !== '' && g.away_score !== '' && g.home_score != null) {
+        const us = Number(t === g.home_team ? g.home_score : g.away_score), them = Number(t === g.home_team ? g.away_score : g.home_score);
+        out.result.set(key, `${us > them ? 'W' : us < them ? 'L' : 'T'} ${us}-${them}${String(g.overtime) === '1' ? ', OT' : ''}`);
+      }
     }
   }
   return out;
@@ -70,8 +75,10 @@ export const snapCounts = (season) => once(`snaps|${season}`, async () => {
       if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k0));
       // A two-way player's all-defense game is kept as `.defOnly` (round 11: Travis Hunter's Week 4, every defensive snap,
       // read "did not play").
-      if (n(r.defense_snaps) > 0) (out.get(k0).defOnly ||= new Map()).set(n(r.week), n(r.defense_snaps));
-      else (out.get(k0).stOnly ||= new Map()).set(n(r.week), n(r.st_snaps));
+      // With the club, so a same-name player on another team is never read as his (round 12: the Titans' Michael Carter
+      // read the Eagles' Michael Carter II's defensive snaps).
+      if (n(r.defense_snaps) > 0) (out.get(k0).defOnly ||= new Map()).set(`${n(r.week)}|${r.team}`, n(r.defense_snaps));
+      else (out.get(k0).stOnly ||= new Map()).set(`${n(r.week)}|${r.team}`, n(r.st_snaps));
       continue;
     }
     const k = normName(r.player);
@@ -110,7 +117,9 @@ const GROUP = (pos) => (pos === 'WR' ? 'WR' : pos === 'TE' ? 'TE' : pos === 'RB'
 export const defenseByPosition = (season) => once(`def|${season}`, async () => {
   const out = new Map();
   for (const r of (await weeklyRows(season)) || []) {
-    const g = GROUP(r.position);
+    // A two-way player's catches count with the receivers, his carries with the backs (round 12: Travis Hunter, listed
+    // at corner, left his catches out of the defenses' rows).
+    const g = GROUP(r.position) || (n(r.targets) ? 'WR' : n(r.carries) ? 'RB' : null);
     const d = r.opponent_team;
     if (!g || !d) continue;
     if (!out.has(d)) out.set(d, { weeks: new Set(), WR: {}, TE: {}, RB: {}, QB: {}, games: new Map() });
@@ -219,7 +228,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     if (qbs?.length) bits.push(`QB ${qbs.join(', ')}`);
     const faced = defenses?.get(r.opponent_team);
     const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
-    return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}: ${bits.join('; ') || 'no touches'}`;
+    const result = days?.result?.get(`${season}|${wk}|${r.team}`);
+    return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}${result ? `, ${result}` : ''}: ${bits.join('; ') || 'no touches'}`;
   };
   const played = (rows || []).map((r) => ({ wk: n(r.week), text: line(r) }));
   const team = rows?.[0]?.team, gsis = rows?.[0]?.player_id;
@@ -234,9 +244,10 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
         // The game as a played line has it: where, against whom, that defense and his team's quarterback (round 8: "Wk 6
         // Oct 18: no touches; 33 of 46 snaps" lost the opponent, the site, the defense and the passer).
         const opp = days.opp?.get(key), site = days.site?.get(key);
-        const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}` : '';
+        const result = days.result?.get(key);
+        const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}${result ? `, ${result}` : ''}` : '';
         const qbs = passers?.get(`${season}|${Number(w)}|${team}`);
-        const st = snaps?.stOnly?.get(Number(w)), def = snaps?.defOnly?.get(Number(w));
+        const st = snaps?.stOnly?.get(`${Number(w)}|${team}`), def = snaps?.defOnly?.get(`${Number(w)}|${team}`);
         missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}${where}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : def ? `no offensive snaps (${def} on defense)` : st ? `special teams only (${st} snaps), no offensive snaps` : `did not play${why ? ` (${why})` : ''}`}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}` });
       }
     }
@@ -306,15 +317,24 @@ export function targetShareLine(rows, totals = null, snapList = null, season = n
 // `weeksByName` (normName -> his weekly rows) adds the last week each listed player played (round 11: "WR Terry McLaurin
 // (ir)" did not say he had played through Week 6, so the rows he was in and out of read the same). `label` names whose
 // report it is.
-export function outAroundLine(injuries, teamFull, name, { weeksByName = null, label = "his club's report" } = {}) {
+export function outAroundLine(injuries, teamFull, name, { weeksByName = null, snaps = null, label = "his club's report" } = {}) {
+  const club = Object.entries(TEAM_NAMES).find(([, full]) => full === teamFull)?.[0] || null;
   const mine = normName(name);
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
     && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup)/i.test(String(i?.status || '')));
   if (!list.length) return null;
   const rank = (s) => ['out', 'doubtful', 'questionable', 'no game status yet'].findIndex((w) => String(s).toLowerCase().startsWith(w));
-  const lastWeek = (i) => { if (!weeksByName) return null; const rows = weeksByName.get(normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`)) || [];
-    const ws = rows.filter((r) => Number(r.targets) > 0 || Number(r.carries) > 0 || Number(r.attempts) > 0 || Number(r.receptions) > 0).map((r) => Number(r.week)); return ws.length ? Math.max(...ws) : null; };
+  // His last game with this club: any stat row or any snap, offense, defense or special teams (round 12: a blocker hurt
+  // before his first catch read his game before, and a same-name player on another club supplied weeks).
+  const lastWeek = (i) => {
+    if (!weeksByName && !snaps) return null;
+    const nm = normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`);
+    const ws = [...(weeksByName?.get(nm) || []).filter((r) => !club || r.team === club).map((r) => Number(r.week)),
+      ...(snaps?.get(nm) || []).filter((x) => !club || x.team === club).map((x) => Number(x.week)),
+      ...[...(snaps?.get(nm)?.stOnly?.keys() || []), ...(snaps?.get(nm)?.defOnly?.keys() || [])].filter((k) => !club || k.endsWith(`|${club}`)).map((k) => Number(k.split('|')[0]))];
+    return ws.length ? Math.max(...ws) : null;
+  };
   const word = (i) => { const w = lastWeek(i); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()}${w ? `; last played Wk ${w}` : ''})`.trim(); };
   const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
   const reserve = list.filter((i) => rank(i.status) < 0);

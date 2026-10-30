@@ -183,7 +183,7 @@ const NFL_FIELD_ALIASES = {
   longest_reception: ['long_reception', 'receiving_long'],
 };
 const NFL_YARD_FIELDS = new Set(['pass_yds', 'rush_yds', 'rec_yds', 'longest_completion', 'longest_rush', 'longest_reception']);
-const NFL_ANYTIME_FIELDS = ['rush_tds', 'rec_tds', 'fumbles_touchdowns', 'interception_touchdowns', 'kick_return_touchdowns', 'punt_return_touchdowns'];
+const NFL_ANYTIME_FIELDS = ['rush_tds', 'rec_tds', 'fumbles_touchdowns', 'interception_touchdowns', 'kick_return_touchdowns', 'punt_return_touchdowns', 'ret_tds'];   // ret_tds: the darts rows' return and fumble-recovery TDs (round 12)
 
 function nflMeasuredField(row, field) {
   for (const key of [field, ...(NFL_FIELD_ALIASES[field] || [])]) {

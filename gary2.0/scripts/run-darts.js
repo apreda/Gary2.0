@@ -201,7 +201,8 @@ async function throwLeague(league) {
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
       // Each game's stadium and kickoff forecast in its frame, as the reads have it (round 11).
       for (const f of board.frames) f.extra = [...(f.extra || []), ...(await stadiumWeatherLines({ homeTeam: f.homeFull, awayTeam: f.awayFull, commence: f.commence, season: board.season }).catch(() => ['Stadium and kickoff weather: not on file.']))];
-      for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f, injuries, weeksByName)); starts.set(String(f.gameId), f.commence); }
+      ctx.frameReports = true;
+      for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f, injuries, weeksByName, snaps)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, ctx, log: { log } }));
     }
     if (!dry) await storeBoardPrices(board, league, date);

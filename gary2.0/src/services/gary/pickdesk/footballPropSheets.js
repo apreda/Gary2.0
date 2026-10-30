@@ -66,6 +66,8 @@ export function seasonClause(games, propType, label, line = null) {
     // ... scored in 5" on the 1.5, cleared in 2).
     const need = Number(line) >= 1 ? Math.floor(Number(line)) + 1 : 1;
     const scored = values.filter((v) => Number(v) >= need).length;
+    // Game by game only, no running count (round 12), outside the averages test.
+    if (propSheetsByGame()) return `${label}: ${printed} (${values.length} g)`;
     return `${label}: ${printed} (${values.length} g, ${need > 1 ? `${need}+ TDs in` : 'scored in'} ${scored})`;
   }
   if (propSheetsByGame()) return `${label}: ${printed} (${values.length} g)`;
@@ -213,7 +215,7 @@ export function buildFootballPropSheets({
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
-    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name, { weeksByName: context.weeksByName }); if (out) facts.push(out);
+    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out);
     const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);

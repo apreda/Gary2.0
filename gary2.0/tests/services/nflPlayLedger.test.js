@@ -31,7 +31,7 @@ const HEADER = [
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
-  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession', 'desc', 'punt_inside_twenty'
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession', 'desc', 'punt_inside_twenty', 'third_down_failed', 'fourth_down_failed'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -293,7 +293,7 @@ describe('a parsed season', () => {
   it('keeps the scoring in order with the score after each try, the largest leads, and the third and fourth downs (Oct 29 2026)', async () => {
     const body = [HEADER.join(','),
       row({ down: '3', ydstogo: '4', third_down_converted: '1', time: '12:01' }),
-      row({ down: '3', ydstogo: '9', time: '11:30', success: '0' }),
+      row({ down: '3', ydstogo: '9', time: '11:30', success: '0', third_down_failed: '1' }),
       // AAA (away) scores a touchdown, then its extra point; then BBB a field goal; then AAA goes for it on 4th & 2.
       row({ touchdown: '1', td_team: 'AAA', td_player_name: 'B.Catcher', yards_gained: '25', total_away_score: '6', time: '09:10' }),
       row({ play_type: 'extra_point', extra_point_result: 'good', total_away_score: '7', time: '09:06' }),
