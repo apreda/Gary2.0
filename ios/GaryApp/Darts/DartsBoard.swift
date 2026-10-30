@@ -888,7 +888,7 @@ struct DartWheel: View {
                     .position(x: colX + colW / 2, y: cy)
                     .accessibilityHidden(true)
 
-                darts(cx: cx, cy: cy, r: r, k: k, plateX: colX)
+                darts(cx: cx, cy: cy, r: r, k: k)
                     .accessibilityHidden(true)
 
                 WheelRows(wheel: wheel, items: items, rowHeight: Self.rowHeight, height: h, width: colW)
@@ -982,7 +982,7 @@ struct DartWheel: View {
         return (0.48 + 0.12 * CGFloat(j % 4), 95 + 23 * Double(j % 6))
     }
 
-    @ViewBuilder private func darts(cx: CGFloat, cy: CGFloat, r: CGFloat, k: CGFloat, plateX: CGFloat) -> some View {
+    @ViewBuilder private func darts(cx: CGFloat, cy: CGFloat, r: CGFloat, k: CGFloat) -> some View {
         let cat = items.filter { $0.kind == current.kind }
         let lit = current.dart.id
         ZStack(alignment: .topLeading) {
@@ -996,13 +996,6 @@ struct DartWheel: View {
                 if on {
                     Circle().fill(Color(hex: "#E8D48B").opacity(0.1)).frame(width: 36 * k, height: 36 * k).position(tip)
                     Circle().stroke(Color(hex: "#E8D48B").opacity(0.75), lineWidth: 1.2).frame(width: 22 * k, height: 22 * k).position(tip)
-                    // A line from the lit dart to the glass.
-                    Path { p in
-                        p.move(to: CGPoint(x: tip.x + g + 10 * k, y: tip.y - g))
-                        p.addLine(to: CGPoint(x: plateX - 22 * k, y: cy))
-                        p.addLine(to: CGPoint(x: plateX, y: cy))
-                    }
-                    .stroke(Color(hex: "#E8D48B").opacity(0.7), lineWidth: 1)
                 }
                 DartGlyph()
                     .frame(width: g, height: g)
