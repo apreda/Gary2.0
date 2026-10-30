@@ -250,6 +250,8 @@ export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) 
     const ranked = twoSided.slice().sort((a, b) => {
       const at = tier(a), bt = tier(b);
       if (at !== bt) return at - bt;
+      // The line most books post first; the balance of merged best prices only breaks ties (round 10).
+      if ((b.book_count || 1) !== (a.book_count || 1)) return (b.book_count || 1) - (a.book_count || 1);
       const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
       const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
       if (aBal !== bBal) return aBal - bBal;

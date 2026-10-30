@@ -281,8 +281,13 @@ export const propOddsService = {
             
             // Group by player and prop type to consolidate odds from different vendors
             const grouped = {};
+            // How many books post each line, so the main line is the market's and not one book's outlier (round 10:
+            // Kincaid's 47.5 at BetRivers alone beat 46.5 at BetMGM, DraftKings and FanDuel).
+            const booksAt = new Map();
             for (const prop of transformedProps) {
               const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!booksAt.has(key)) booksAt.set(key, new Set());
+              if (prop.vendor) booksAt.get(key).add(prop.vendor);
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
@@ -300,6 +305,7 @@ export const propOddsService = {
               }
             }
             
+            for (const [key, row] of Object.entries(grouped)) row.book_count = booksAt.get(key)?.size || 1;
             const result = Object.values(grouped);
             
             // Log prop type breakdown
@@ -392,8 +398,13 @@ export const propOddsService = {
 
             // Group by player and prop type
             const grouped = {};
+            // How many books post each line, so the main line is the market's and not one book's outlier (round 10:
+            // Kincaid's 47.5 at BetRivers alone beat 46.5 at BetMGM, DraftKings and FanDuel).
+            const booksAt = new Map();
             for (const prop of transformedProps) {
               const key = `${prop.player_id}_${prop.prop_type}_${prop.line}`;
+              if (!booksAt.has(key)) booksAt.set(key, new Set());
+              if (prop.vendor) booksAt.get(key).add(prop.vendor);
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
@@ -410,6 +421,7 @@ export const propOddsService = {
               }
             }
 
+            for (const [key, row] of Object.entries(grouped)) row.book_count = booksAt.get(key)?.size || 1;
             const result = Object.values(grouped);
 
             // Filter to FULL GAME props only (no quarter/half props)
@@ -504,8 +516,13 @@ export const propOddsService = {
 
             // Group by player and prop type
             const grouped = {};
+            // How many books post each line, so the main line is the market's and not one book's outlier (round 10:
+            // Kincaid's 47.5 at BetRivers alone beat 46.5 at BetMGM, DraftKings and FanDuel).
+            const booksAt = new Map();
             for (const prop of transformedProps) {
               const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
+              if (!booksAt.has(key)) booksAt.set(key, new Set());
+              if (prop.vendor) booksAt.get(key).add(prop.vendor);
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
@@ -522,6 +539,7 @@ export const propOddsService = {
               }
             }
 
+            for (const [key, row] of Object.entries(grouped)) row.book_count = booksAt.get(key)?.size || 1;
             const result = Object.values(grouped);
 
             // Filter to FULL GAME props only (no quarter/half props)
