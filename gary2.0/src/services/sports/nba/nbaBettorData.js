@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, olderGameFacts, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { flowFacts, nextListed, olderGameFacts, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -347,10 +347,16 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const box = boxes[i];
     if (!box) return null;
     const oppId = g.home_team?.id === ts.id ? g.visitor_team?.id : g.home_team?.id;
-    const short = (rows, names, team) => (rows || []).filter((p) => names.includes(p.name) && p.min > 0 && p.min < 15).map((p) => `${p.name} (${team}, ${p.min} min)`);
-    const list = [...short(box, starters[i], box.team), ...short(box.opponent, startersOf(lineups[i], oppId), box.opponent.team)];
-    return list.length ? `      started and played under 15 minutes: ${list.join(', ')}` : null;
+    const short = (rows, names, team, teamId) => (rows || []).filter((p) => names.includes(p.name) && p.min > 0 && p.min < 15).map((p) => ({ p, team, teamId }));
+    return [...short(box, starters[i], box.team, ts.id), ...short(box.opponent, startersOf(lineups[i], oppId), box.opponent.team, oppId)];
   });
+  // With how each was listed for his team's next game, once the stored summaries are loaded (round 15).
+  const earlyLine = (i, g) => {
+    const list = early[i];
+    if (!list?.length) return null;
+    const day = new Date(g.datetime || `${g.date}T16:00:00Z`).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    return `      started and played under 15 minutes: ${list.map(({ p, team: t, teamId }) => { const w = nextListed(byTeamSummaries, teamId, day, p.name); return `${p.name} (${t}, ${p.min} min${w ? `; ${w}` : ''})`; }).join(', ')}`;
+  };
   // Each team's rest that night (Oct 28 2026 data check: Detroit's win at Philadelphia read without the 76ers on the
   // second night of a back-to-back). Days off since each one's previous game this season.
   const dayOf = (g) => Math.round(Date.parse(`${new Date(g.datetime || `${g.date}T16:00:00Z`).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}T12:00:00Z`) / 86_400_000);
@@ -413,9 +419,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     const stored = flows.get(String(g.id));
-    const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
+    const flow = stored ? `      flow: ${flowFacts(stored, ts.id, byTeamSummaries)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), earlyLine(i, g)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

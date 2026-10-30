@@ -606,7 +606,11 @@ export async function buildNbaScoutReport(game, options = {}) {
 
           const lastGameRaw = playerEntries[0].game?.date || gameDateMap.get(playerEntries[0].game?.id);
           const lastGameDate = providerGameInstant(lastGameRaw);
-          const daysSince = Math.floor((Date.now() - lastGameDate) / (1000 * 60 * 60 * 24));
+          // Calendar days in Eastern time from his last game to tonight's (round 15: a night game counted one day short at
+          // any build before its tip hour, "last played Oct 27, 2 days ago" for a Friday game).
+          const etYmd = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : new Date(v).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }));
+          const tonight = etYmd(game.commence_time || Date.now());
+          const daysSince = Math.round((Date.parse(`${tonight}T12:00:00Z`) - Date.parse(`${etYmd(lastGameRaw)}T12:00:00Z`)) / 86400000);
 
           // Count games the TEAM played after this player's last game
           const gamesMissed = gameOrder.filter(gId => {

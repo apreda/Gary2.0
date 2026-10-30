@@ -76,14 +76,24 @@ const incidentsText = (rec) => (rec.incidents?.length ? `technicals, flagrants a
 // One on the floor to the end of a quarter and never back counts too when every later quarter was followed to the
 // second (round 15: Durant sat the whole 4th of a 6-point game and was not named). A clock under a minute is seconds.
 const clockWord = (c) => (/:/.test(String(c)) ? c : `${c} seconds`);
-const goneEarly = (rec) => {
+/** How a player who played on `date` was listed for his team's next stored game, status and reason; null when that game
+ * is not stored or he was not listed (round 15: the live log said early exits in minutes only, and Gary guessed at
+ * Markkanen's and Jackson's injuries the second system named). */
+export function nextListed(byTeam, teamId, date, name) {
+  const n = byTeam ? (byTeam.get(String(teamId)) || []).find((r) => r.game_date > String(date).slice(0, 10)) : null;
+  const rows = n ? (n.summary.listed?.[summarySide(n.summary, teamId)] || []) : [];
+  const hit = rows.find((x) => x.status !== 'Available' && !/g league - two-way/i.test(x.reason || '') && samePlayerIn(name, [x.name]) === x.name);
+  return hit ? `${hit.status} for the next game, ${etDay(n.game_date)}: ${String(hit.reason || 'reason not on file').replace(/^Injury\/Illness - /, '')}` : null;
+}
+const goneEarly = (rec, byTeam = null) => {
   const followedAfter = (q) => !(rec.wholeMinuteQuarters || []).some((x) => x > q);
   const list = (rec.players || []).filter((p) => { const o = rec.lastOff?.[p.name]; return p.min >= 15 && o && o.period <= 3 && (o.clock !== 'end' || followedAfter(o.period)); });
-  return list.length ? `played 15+ minutes and did not return after the 3rd quarter: ${list.map((p) => `${rec[p.side].short} ${p.name} (${Math.round(p.min)} min; ${rec.lastOff[p.name].clock === 'end' ? `on the floor to the end of the ${periodName(rec.lastOff[p.name].period)}` : `last left in the ${periodName(rec.lastOff[p.name].period)} with ${clockWord(rec.lastOff[p.name].clock)} left`})`).join(', ')}` : null;
+  const listed = (p) => { const w = nextListed(byTeam, rec[p.side]?.id, rec.date, p.name); return w ? `; ${w}` : ''; };
+  return list.length ? `played 15+ minutes and did not return after the 3rd quarter: ${list.map((p) => `${rec[p.side].short} ${p.name} (${Math.round(p.min)} min; ${rec.lastOff[p.name].clock === 'end' ? `on the floor to the end of the ${periodName(rec.lastOff[p.name].period)}` : `last left in the ${periodName(rec.lastOff[p.name].period)} with ${clockWord(rec.lastOff[p.name].clock)} left`}${listed(p)})`).join(', ')}` : null;
 };
-export function flowFacts(rec, teamId) {
+export function flowFacts(rec, teamId, byTeam = null) {
   const flow = flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
-  return [flow, incidentsText(rec), goneEarly(rec)].filter(Boolean).join('; ');
+  return [flow, incidentsText(rec), goneEarly(rec, byTeam)].filter(Boolean).join('; ');
 }
 
 /** An older game's people and boxes from one team's side, for the live log (loop 3, Oct 29 2026: its ten older games
