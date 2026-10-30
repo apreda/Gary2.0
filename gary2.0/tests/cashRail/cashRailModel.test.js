@@ -97,17 +97,11 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
     expect(r).toEqual(['GB −3.5 · GARY PACKERS −3.5', 'GB −2.5']);
   });
 
-  it('reads Gary\'s own bets on the game for the strip', () => {
-    const json = JSON.stringify({ league: 'NFL', game_id: '1', status: 'final', possession: null, situation: null, elapsed_s: 3600, clock: 'FINAL', hits: [],
-      gary_bets: [{ kind: 'pick', title: 'GAME PICK', label: 'PACKERS −3.5', note: 'UP 8 · NEEDS 4+', status: 'won', ok: true, progress: null },
-        { kind: 'props', title: 'PROPS', dots: ['won', 'live'], focus: { label: 'LOVE O 259.5 PASS YDS', note: '212 OF 259.5', progress: 0.82, status: 'live', ok: false } },
-        { kind: 'darts', title: 'DARTS', label: '4 OF 8 HIT', dots: ['won', 'lost'] }] });
-    const r = swiftJSON(`let j = #"${json}"#
-let b = try! JSONDecoder().decode(CashRailBoard.self, from: Data(j.utf8))
-let g = b.gary_bets!
-let old = try! JSONDecoder().decode(CashRailBoard.self, from: Data(#"{"league":"NFL","game_id":"1","status":"live","elapsed_s":0,"hits":[]}"#.utf8))
-out([g.count, g[0].label!, g[1].focus!.label, g[1].focus!.progress!, g[2].dots!.count, old.gary_bets == nil] as [Any])`);
-    expect(r).toEqual([3, 'PACKERS −3.5', 'LOVE O 259.5 PASS YDS', 0.82, 2, true]);
+  it('the rail piles up what $10 on every hit has won, hit by hit', () => {
+    const r = swiftJSON(`${board}
+let p = b.pile
+out([p.map { $0.key }, p.map { (($0.total * 100).rounded()) / 100 }, p.map { (($0.jump * 100).rounded()) / 100 }, CashRailFormat.profit10(-115) > 8.69, CashRailFormat.pileTotal(263.5)] as [Any])`);
+    expect(r).toEqual([['sanders|first_td', 'kraft|anytime_td', 'reed|receiving_yards'], [220, 245, 263.5], [220, 25, 18.5], true, '+$264']);
   });
 
   it('an empty board has no hero and counts nothing', () => {

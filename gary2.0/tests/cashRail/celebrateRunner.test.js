@@ -53,6 +53,14 @@ describe('runCelebrations', () => {
     expect(f.writes.claims[0].market).toBe('Receptions 7+');
   });
 
+  it('only draws plays from the last five minutes of game clock, so a celebration is never old news', async () => {
+    const f = fakes();
+    f.db.boards = async () => [{ ...board, elapsed_s: 592 + 301 }];
+    expect(await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 })).toBe(0);
+    f.db.boards = async () => [{ ...board, elapsed_s: 592 + 300 }];
+    expect(await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 })).toBe(1);
+  });
+
   it('reuses a team backdrop that already exists', async () => {
     const f = fakes({ bgExists: true });
     await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 });

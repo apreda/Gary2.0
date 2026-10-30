@@ -546,7 +546,7 @@ enum SupabaseAPI {
     /// every 15 seconds). nil on any failure, so the card keeps its last board.
     static func fetchLiveBoard(league: String, gameID: String) async -> CashRailBoard? {
         let url = buildURL(table: "live_boards", query: [
-            URLQueryItem(name: "select", value: "league,game_id,status,possession,situation,elapsed_s,clock,hits,spread,gary_bets"),
+            URLQueryItem(name: "select", value: "league,game_id,status,possession,situation,elapsed_s,clock,hits,spread"),
             URLQueryItem(name: "league", value: "eq.\(league)"),
             URLQueryItem(name: "game_id", value: "eq.\(gameID)"),
             URLQueryItem(name: "limit", value: "1")

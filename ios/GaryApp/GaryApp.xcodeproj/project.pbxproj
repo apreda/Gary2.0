@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		7A7ACB3DFD4010D420391209 /* CashRailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C46537AC6CB82E614FC026 /* CashRailStore.swift */; };
-		48CCDFCBB858A963245CDD2B /* CashRailGaryStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ABA1998E0D572AFB545307E /* CashRailGaryStrip.swift */; };
 		A5C938444B5970D02C7F1DC6 /* CashRailCelebrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9EA5E4EC7623E02A7DC7AD /* CashRailCelebrationView.swift */; };
 		C92965982993C73700A09D18 /* CashRailDance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3099280355E7F2AB0949EC03 /* CashRailDance.swift */; };
 		DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */; };
@@ -136,7 +135,7 @@
 		C436839CACCB30E27770C425 /* MLBBallparks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */; };
 		C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4536063BFE66307137544F6 /* HomeSheetRowView.swift */; };
 		33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */; };
-		D4FC45AD5F44665F7C6DB30C /* HomeWinnersBento.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11361AC8006F914161B6944F /* HomeWinnersBento.swift */; };
+		D4FC45AD5F44665F7C6DB30C /* HomeGaryOpening.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11361AC8006F914161B6944F /* HomeGaryOpening.swift */; };
 		4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */; };
 		C920D1248BE2F9B6BB1AA083 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8646793345451E9ACFBEC6 /* HubJudgment.swift */; };
 		CA682CB250F6A7F4462A70B2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C76D962853397848F9631A85 /* ContentView.swift */; };
@@ -175,7 +174,6 @@
 
 /* Begin PBXFileReference section */
 		B2C46537AC6CB82E614FC026 /* CashRailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailStore.swift; sourceTree = "<group>"; };
-		6ABA1998E0D572AFB545307E /* CashRailGaryStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailGaryStrip.swift; sourceTree = "<group>"; };
 		FE9EA5E4EC7623E02A7DC7AD /* CashRailCelebrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCelebrationView.swift; sourceTree = "<group>"; };
 		3099280355E7F2AB0949EC03 /* CashRailDance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailDance.swift; sourceTree = "<group>"; };
 		6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailDemo.swift; sourceTree = "<group>"; };
@@ -286,7 +284,7 @@
 		A42B2DF8115CF072B0BA9C0E /* MLBBallparks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLBBallparks.swift; sourceTree = "<group>"; };
 		A4536063BFE66307137544F6 /* HomeSheetRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSheetRowView.swift; sourceTree = "<group>"; };
 		B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeXWire.swift; sourceTree = "<group>"; };
-		11361AC8006F914161B6944F /* HomeWinnersBento.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWinnersBento.swift; sourceTree = "<group>"; };
+		11361AC8006F914161B6944F /* HomeGaryOpening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGaryOpening.swift; sourceTree = "<group>"; };
 		F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeBoardStory.swift; sourceTree = "<group>"; };
 		A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueWordsOverlay.swift; sourceTree = "<group>"; };
 		A5910CBBEB0EFC49969DC2A0 /* ScoutTrio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoutTrio.swift; sourceTree = "<group>"; };
@@ -358,7 +356,6 @@
 			isa = PBXGroup;
 			children = (
 				B2C46537AC6CB82E614FC026 /* CashRailStore.swift */,
-				6ABA1998E0D572AFB545307E /* CashRailGaryStrip.swift */,
 				FE9EA5E4EC7623E02A7DC7AD /* CashRailCelebrationView.swift */,
 				3099280355E7F2AB0949EC03 /* CashRailDance.swift */,
 				6E8E014526A8AE7D9D7C3A7F /* CashRailDemo.swift */,
@@ -522,7 +519,7 @@
 				122335EF5B948F60065E2A59 /* HomeSheetRow.swift */,
 				A4536063BFE66307137544F6 /* HomeSheetRowView.swift */,
 				B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */,
-				11361AC8006F914161B6944F /* HomeWinnersBento.swift */,
+				11361AC8006F914161B6944F /* HomeGaryOpening.swift */,
 				F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */,
 				A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */,
 				7350DDC8DF76DFF4835A6B82 /* PickInfoSheet.swift */,
@@ -789,7 +786,6 @@
 				EB862D1F777BDFF490F421A4 /* HomeMarqueeHero.swift in Sources */,
 				66A58BD776985470ED7F5842 /* HomeMarqueeTracker.swift in Sources */,
 				7A7ACB3DFD4010D420391209 /* CashRailStore.swift in Sources */,
-				48CCDFCBB858A963245CDD2B /* CashRailGaryStrip.swift in Sources */,
 				A5C938444B5970D02C7F1DC6 /* CashRailCelebrationView.swift in Sources */,
 				C92965982993C73700A09D18 /* CashRailDance.swift in Sources */,
 				DD17CA563034CF65CEC3FA7E /* CashRailDemo.swift in Sources */,
@@ -808,7 +804,7 @@
 				115572DD1FE450DE26665445 /* HomeSheetRow.swift in Sources */,
 				C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */,
 				33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */,
-				D4FC45AD5F44665F7C6DB30C /* HomeWinnersBento.swift in Sources */,
+				D4FC45AD5F44665F7C6DB30C /* HomeGaryOpening.swift in Sources */,
 				4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */,
 				1D6F6CCF87C3ADD493EA4537 /* HomeView.swift in Sources */,
 				5DFBF72A707CF57B3473AF15 /* HubCardIdentity.swift in Sources */,

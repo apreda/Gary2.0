@@ -45,17 +45,11 @@ struct CashRailCard: View {
         VStack(spacing: 0) {
             Button(action: onOpenGame) { scoreboard }
                 .buttonStyle(.plain)
-            // Gary's own bets on the game where the rail was (founder pick,
-            // Oct 30 2026); the rail stays for a game Gary has nothing on.
-            if let bets = board?.gary_bets, !bets.isEmpty {
-                CashRailGaryStrip(bets: bets)
-                    .padding(.horizontal, 14).padding(.bottom, 12)
-            } else {
-                CashRailRailView(elapsed: board?.elapsed_s ?? 0,
-                                 hits: board?.hits ?? [],
-                                 live: board?.status != "final")
-                    .padding(.horizontal, 14).padding(.bottom, 10)
-            }
+            CashRailRailView(elapsed: board?.elapsed_s ?? 0,
+                             hits: board?.hits ?? [],
+                             live: board?.status != "final",
+                             pile: board?.pile ?? [])
+                .padding(.horizontal, 14).padding(.bottom, 12)
             if let hero, let board {
                 hits(hero: hero, board: board)
             }
@@ -158,22 +152,27 @@ struct CashRailCard: View {
                 .onTapGesture {
                     if let key = hero.playKey, let c = celebrations.known[key] { celebrations.play(c) }
                 }
-            HStack {
-                Text("CASHED")
-                Spacer()
-                Text("$10 PAID")
-            }
-            .font(CR.sys(9.5, .bold)).tracking(1.52)
-            .foregroundStyle(CR.mute2)
-            .padding(.top, 12).padding(.bottom, 3)
-            .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
-            let rows = Array(board.ranked.prefix(3))
-            ForEach(Array(rows.enumerated()), id: \.element.key) { i, hit in
-                CashRailRow(hit: hit, space: priceSpace)
-                    .overlay(alignment: .top) {
-                        if i > 0 { Rectangle().fill(CR.line2).frame(height: 1) }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+            // After the final the card keeps the night's biggest hit and the
+            // door to every hit; the next three wait behind ALL HITS (Home was
+            // carrying a recap longer than the screen).
+            if board.status != "final" {
+                HStack {
+                    Text("CASHED")
+                    Spacer()
+                    Text("$10 PAID")
+                }
+                .font(CR.sys(9.5, .bold)).tracking(1.52)
+                .foregroundStyle(CR.mute2)
+                .padding(.top, 12).padding(.bottom, 3)
+                .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
+                let rows = Array(board.ranked.prefix(3))
+                ForEach(Array(rows.enumerated()), id: \.element.key) { i, hit in
+                    CashRailRow(hit: hit, space: priceSpace)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(CR.line2).frame(height: 1) }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             HStack {
                 Text("\(board.cashedCount) \(board.cashedCount == 1 ? "BET" : "BETS") CASHED")

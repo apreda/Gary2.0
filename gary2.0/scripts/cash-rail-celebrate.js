@@ -29,10 +29,10 @@ const etDate = d => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_Yo
 
 const db = {
   boards: async () => {
-    let q = supabase.from('live_boards').select('league,game_id,status,hits,updated_at').eq('league', 'NFL');
+    let q = supabase.from('live_boards').select('league,game_id,status,hits,elapsed_s,updated_at').eq('league', 'NFL');
     if (GAME) q = q.eq('game_id', GAME);
     else q = q.in('date', [etDate(new Date()), etDate(new Date(Date.now() - 86_400_000))])
-      .gte('updated_at', new Date(Date.now() - 3 * 3600_000).toISOString());
+      .gte('updated_at', new Date(Date.now() - 20 * 60_000).toISOString());
     return must(await q);
   },
   existingPlayKeys: async (league, gameId) => must(await supabase.from('celebrations').select('play_key').eq('league', league).eq('game_id', gameId)).map(r => r.play_key),

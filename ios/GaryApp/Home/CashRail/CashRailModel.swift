@@ -51,34 +51,30 @@ struct CashRailBoard: Codable, Equatable {
     let hits: [CashRailHit]
     /// The favorite and its frozen line ("GB -3.5").
     var spread: String? = nil
-    /// Gary's own pick, props and darts on this game (the strip under the scoreboard).
-    var gary_bets: [CashRailGaryBet]? = nil
 }
 
-/// One box of the strip: GAME PICK, PROPS or DARTS (cash-rail garyBets.js).
-struct CashRailGaryBet: Codable, Equatable, Identifiable {
-    /// One bet's progress: "LOVE O 259.5 PASS YDS", "212 OF 259.5", 0.82.
-    struct Focus: Codable, Equatable {
-        let label: String
-        let note: String?
-        let progress: Double?
-        let status: String?
-        let ok: Bool?
-    }
-    let kind: String
-    let title: String
-    var label: String? = nil
-    var note: String? = nil
-    var progress: Double? = nil
-    var status: String? = nil
-    var ok: Bool? = nil
-    /// One per prop or dart: "won", "lost" or "live".
-    var dots: [String]? = nil
-    var focus: Focus? = nil
-    var id: String { kind }
+/// One step of the rail's pile: a hit landing and what $10 on every hit has won so far.
+struct CashRailPileStep: Equatable {
+    let key: String
+    let elapsed: Int
+    let price: Int
+    /// This hit's own $10 winnings.
+    let jump: Double
+    /// Everything won so far, this hit included.
+    let total: Double
 }
 
 extension CashRailBoard {
+    /// What $10 on every hit has won, in the order they landed (the rail).
+    var pile: [CashRailPileStep] {
+        var total = 0.0
+        return hits.sorted { ($0.elapsed, $0.key) < ($1.elapsed, $1.key) }.map { h in
+            let jump = CashRailFormat.profit10(h.price)
+            total += jump
+            return CashRailPileStep(key: h.key, elapsed: h.elapsed, price: h.price, jump: jump, total: total)
+        }
+    }
+
     /// The latest landing owns the hero (a tie goes to the longer price); once
     /// the game is final the night's biggest hit takes it back.
     var hero: CashRailHit? {
@@ -140,6 +136,12 @@ enum CashRailFormat {
         guard !out.isEmpty else { return nil }
         return out.joined(separator: " · ").uppercased().replacingOccurrences(of: "-", with: "\u{2212}")
     }
+
+    /// What $10 won on top of the stake at an American price.
+    static func profit10(_ p: Int) -> Double { 10 * (decimal(p) - 1) }
+
+    /// The rail's running total: "+$264".
+    static func pileTotal(_ v: Double) -> String { "+$" + Int(v.rounded()).formatted(.number.grouping(.automatic)) }
 
     /// What $10 returned: whole dollars from $100 up, else cents with ".00" dropped.
     static func payout10(_ p: Int) -> String {

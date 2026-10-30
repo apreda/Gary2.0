@@ -9,6 +9,8 @@
  */
 import { celebrationPlays, pickDance, DANCES, danceUniqueFrames, posePrompt, bgSpec, TEAM_LOOKS } from './celebrations.js';
 
+const FRESH_GAME_SECONDS = 300;
+
 /** A ladder is named by its top cashed rung, as the card names it ("Receptions 7+"). */
 function ladderMarket(hit) {
   const top = hit.rungs?.at(-1)?.label;
@@ -23,7 +25,10 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
     const done = new Set(await db.existingPlayKeys(board.league, board.game_id));
     // Biggest first: when a pass can't draw every play, the one the app
     // will show first is the one that gets drawn first.
-    const plays = celebrationPlays(board.hits).sort((a, b) => b.hit.price - a.hit.price);
+    // Only plays from the last five minutes of game clock: a celebration that
+    // lands a quarter late is old news (and a finished game's backlog never draws).
+    const fresh = p => board.elapsed_s == null || board.elapsed_s - p.hit.elapsed <= FRESH_GAME_SECONDS;
+    const plays = celebrationPlays(board.hits).filter(fresh).sort((a, b) => b.hit.price - a.hit.price);
     for (const p of plays) {
       if (drawn >= limit) return drawn;
       if (done.has(p.playKey)) continue;

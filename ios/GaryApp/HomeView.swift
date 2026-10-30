@@ -998,10 +998,10 @@ struct HomeView: View {
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
-        // ── WINNERS leads Home: the Bento (founder pick, Oct 29 2026, after the first hero came off the same day
-        // unseen). The headline rail that led the page since Aug 5 came off with it: each finished game's story
-        // now opens from its own row on the board (HomeBoardStory), so the night's stories are told once.
-        HomeWinnersBento {
+        // ── GARY opens Home (founder, Oct 30 2026): Gary in his suit, labelled like a diagram with last night,
+        // tonight's Winners and his run of nights, in place of the Bento ("it's not an analytics dashboard").
+        // Each finished game's story opens from its own row on the board (HomeBoardStory).
+        HomeGaryOpening {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
         }
         .allowsHitTesting(!boardLifted)
