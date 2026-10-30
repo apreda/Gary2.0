@@ -326,9 +326,12 @@ export function clubWeeks(team, { season, days, defenses = null, passers = null,
   return rows.sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
 }
 
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null, plays = null, drops = null } = {}) {
+// `clubOnly`: the club whose games a side heading already prints (clubWeeks); its rows leave out the opponent's record,
+// the QBs and who was out, and a game with another club keeps them (round 16).
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null, plays = null, drops = null, clubOnly = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
+    const said = clubOnly && r.team === clubOnly;
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
     const bits = [];
     if (n(r.special_teams_tds) || n(r.fumble_recovery_tds)) bits.push(`${n(r.special_teams_tds) + n(r.fumble_recovery_tds)} return TD`);
@@ -344,10 +347,10 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
     // The week's quarterbacks unless he is one of them (round 9: a receiver's trick-play pass hid the week's QB).
-    const listed = passers?.get(`${r.season}|${wk}|${r.team}`);
+    const listed = said ? null : passers?.get(`${r.season}|${wk}|${r.team}`);
     const qbs = listed && !listed.some((q) => normName(q) === normName(r.player_display_name)) ? listed : null;
     if (qbs?.length) bits.push(`QB ${qbs.join(', ')}`);
-    const faced = defenses?.get(r.opponent_team);
+    const faced = said ? null : defenses?.get(r.opponent_team);
     // No schedule, no site: "against", and the log says what is missing (round 15: a failed download read every road
     // game as a home game and dropped the results and missed weeks without a word).
     const where = !days ? `against ${r.opponent_team}` : site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
@@ -367,7 +370,7 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       const usual = others.length ? others[Math.floor(others.length / 2)] : null, today = shareOf(snaps.find((x) => x.week === wk));
       if (mine && mine.q < 4 && (lp.teamLastQ?.[r.team] || 0) >= 4 && usual != null && today != null && today < 0.6 * usual) bits.push(`last on a play in Q${mine.q}${mine.clock ? ` (${mine.clock})` : ''}`);
     }
-    const gone = (without?.get(`${wk}|${r.team}`) || []).filter((x) => normName(x.name) !== normName(r.player_display_name)).slice(0, 3);
+    const gone = (said ? [] : without?.get(`${wk}|${r.team}`) || []).filter((x) => normName(x.name) !== normName(r.player_display_name)).slice(0, 3);
     if (gone.length) bits.push(`without ${gone.map((x) => `${x.name} (${x.pos}, ${x.why})`).join(', ')}`);
     return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}${result ? `, ${result}` : ''}: ${bits.join('; ') || 'no touches'}`;
   };
@@ -393,8 +396,9 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
         // Oct 18: no touches; 33 of 46 snaps" lost the opponent, the site, the defense and the passer).
         const opp = days.opp?.get(key), site = days.site?.get(key);
         const result = days.result?.get(key);
-        const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}${result ? `, ${result}` : ''}` : '';
-        const qbs = passers?.get(`${season}|${Number(w)}|${team}`);
+        const here = clubOnly && team === clubOnly;
+        const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${!here && defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}${result ? `, ${result}` : ''}` : '';
+        const qbs = here ? null : passers?.get(`${season}|${Number(w)}|${team}`);
         const st = snaps?.stOnly?.get(`${Number(w)}|${team}`), def = snaps?.defOnly?.get(`${Number(w)}|${team}`);
         missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}${where}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : def ? `no offensive snaps (${def} on defense)` : st ? `special teams only (${st} snaps), no offensive snaps` : `did not play${why ? ` (${why})` : ''}`}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}` });
       }

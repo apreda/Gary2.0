@@ -219,7 +219,7 @@ export function buildFootballPropSheets({
     if (!tag) { const out = outAroundLine(context.injuries, entry.team, entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out); }
     // Under a side's heading the club's games are printed once (clubWeeks); his rows keep his own numbers (round 16).
     const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [],
-      defenses: tag ? null : context.defenses, passers: tag ? null : context.passers, rosterWords: context.rosterWords, pressure: context.pressure, hurt: context.hurt, without: tag ? null : context.without, plays: context.plays, drops: context.drops,
+      defenses: context.defenses, passers: context.passers, clubOnly: tag ? (tag === 'home' ? context.homeAbbr : context.awayAbbr) : null, rosterWords: context.rosterWords, pressure: context.pressure, hurt: context.hurt, without: context.without, plays: context.plays, drops: context.drops,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     else if (context.weeksMissing) facts.push("by game: not on file (this season's weekly stats did not load)");
