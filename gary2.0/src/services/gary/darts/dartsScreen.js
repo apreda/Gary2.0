@@ -12,10 +12,10 @@
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { hitterProfile, hitterDistribution, pitcherProfile, probOver, implied, marketProbabilities, rankScore } from '../pickdesk/propModel.js';
 import { buildNflGameContext, nflPlayerProfile, screenNflBoard } from '../pickdesk/nflPropModel.js';
-import { seasonClause, usageLine, priorRoleNote } from '../pickdesk/footballPropSheets.js';
+import { seasonClause, priorRoleNote } from '../pickdesk/footballPropSheets.js';
 import { sideRole, snapScale } from '../pickdesk/nflRoleChanges.js';
 import { priceHistoryLine } from '../pickdesk/priceHistory.js';
-import { nflGameLog, targetShareLine, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
+import { nflGameLog, defenseLine, outAroundLine, withSnapGames } from '../../sports/nfl/nflPlayerContext.js';
 import { redZoneLine } from '../../sports/nfl/nflRedZone.js';
 import {
   hitterGameLog, hitterWindows, pitcherStartLog, pitcherSeasonLine, platoonLine, slotLine, vsPitcherLine, expectedStatsLine, contactQualityLine,
@@ -324,8 +324,8 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   if (prev) lines.push(prev);
   const roleNote = prev ? priorRoleNote(games, prior, priorLabel) : null;
   if (roleNote) lines.push(roleNote);
-  const use = usageLine(games, seasonLabel) || usageLine(prior, priorLabel);
-  if (use) lines.push(use);
+  // No per-game averages or running target shares: the by-game rows below carry each game's numbers, as the prop sheets
+  // do (round 9, Oct 29 2026).
   // The facts around the numbers (Sep 24 2026): his price before today, his
   // share of the targets lately, red zone, snaps, tonight's defense against
   // his position, who is out around him, and his games dated with the defense.
@@ -334,8 +334,6 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
   if (hist) lines.push(hist);
   const weeks = ctx.weeksByName?.get(normName(c.player)) || [];
-  const share = ['WR', 'TE', 'RB'].includes(c.position) ? targetShareLine(weeks, ctx.teamTargets, ctx.snaps?.get(normName(c.player)), Number(seasonLabel)) : null;
-  if (share) lines.push(share);
   const rz = redZoneLine(ctx.rz, c.player, season, c.position);
   if (rz) lines.push(rz);
   const frame = ctx.frameOf?.(c.gameId);
@@ -344,7 +342,8 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   if (def) lines.push(def);
   const out = outAroundLine(ctx.injuries, c.team, c.player);
   if (out) lines.push(out);
-  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords });
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords,
+    defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
 }

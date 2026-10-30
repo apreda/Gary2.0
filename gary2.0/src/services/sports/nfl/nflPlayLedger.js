@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 12;
+const LEDGER_SCHEMA = 13;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -76,6 +76,8 @@ const WANTED = [
   // Oct 12 2026 (blind spots): the drive each play belongs to, and the game's site and weather.
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
+  // Round 9 (Oct 29 2026): the play's text, for a second foul on one play (nflverse fills penalty_team for one only).
+  'desc',
   // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
   // Oct 29 2026: the game clock, who scored and who kicked, and each drive's time of possession.
@@ -289,8 +291,12 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
   // On a kickoff the receiving team is posteam, so the kicking team that recovers its own kick is defteam.
   if (playType === 'kickoff' && flag(g('own_kickoff_recovery')) && E(defteam)) E(defteam).onside += 1;
   if (flag(g('penalty'))) {
-    const e = E(g('penalty_team'));
-    if (e) { e.penalties += 1; e.penaltyYards += num(g('penalty_yards')) ?? 0; }
+    // Two accepted fouls on one play are two penalties, each with its yards (round 9: Patriots @ Bills Wk 4 read 5 for
+    // 30 where the box has 6 for 35); one foul, or offsetting ones, as the play's own fields have it.
+    const text = String(g('desc') || '');
+    const fouls = /offset/i.test(text) ? [] : [...text.matchAll(/PENALTY on ([A-Z]{2,3})(?:-[^,]*)?, [^,]+, (\d+) yards?, enforced/g)].map((m) => ({ team: m[1], yards: Number(m[2]) }));
+    if (fouls.length > 1) for (const f of fouls) { const e = E(f.team); if (e) { e.penalties += 1; e.penaltyYards += f.yards; } }
+    else { const e = E(g('penalty_team')); if (e) { e.penalties += 1; e.penaltyYards += num(g('penalty_yards')) ?? 0; } }
   }
   // Each third and fourth down run from scrimmage, with the distance; a fourth-down try with where and the score
   // (Oct 29 2026, founder: "how the team did on third downs and fourth downs, coupled with down and distance").
@@ -367,6 +373,10 @@ function addDriveRow(drives, gameId, posteam, g, playType = '') {
   if (playType !== 'kickoff') d.fromKickoff = false;
   if (posteam !== d.team) return;
   if (!d.top && g('drive_time_of_possession')) d.top = g('drive_time_of_possession');
+  // The drive's first downs from any of its rows: the first row (a timeout, a kickoff) can carry none (round 9: the
+  // Saints' 19 first downs read 15).
+  const fd = num(g('drive_first_downs'));
+  if (fd != null && (d.firstDowns == null || fd > d.firstDowns)) d.firstDowns = fd;
   if (playType && playType !== 'no_play' && playType !== 'kickoff') d.lastType = playType;
   if (d.scoreStart == null) d.scoreStart = scoreStart;
   if (scoreEnd != null && (d.scoreEnd == null || scoreEnd > d.scoreEnd)) d.scoreEnd = scoreEnd;

@@ -36,6 +36,7 @@ const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/spor
 const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords } = await import('../src/services/sports/nfl/nflPlayerContext.js');
 const { loadNflverseFile, getPracticeReport, nflverseCode } = await import('../src/services/providers/nflverseService.js');
 const { finalReportNotDue } = await import('../src/services/sports/nfl/nflAvailability.js');
+const { defensesFaced, etDate: nflEtDate } = await import('../src/services/sports/nfl/nflBettorData.js');
 const { getNflSchedule, scheduleRowFor } = await import('../src/services/sports/nfl/nflSchedule.js');
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
@@ -191,7 +192,9 @@ async function throwLeague(league) {
       const weeksByName = new Map();
       for (const r of [...(weekRows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
       const framesById = new Map(board.frames.map((f) => [String(f.gameId), f]));
-      const ctx = { rz, days, snaps, defCur, defPrev, weeksByName, teamTargets: teamTargetTotals(weekRows), weekRows, injuries, history, frameOf: (gid) => framesById.get(String(gid)),
+      // Each past opponent's record and points allowed on the game rows, as the prop sheets (round 9).
+      const defenses = schedule && !schedule.unavailable ? defensesFaced(schedule.rows, board.season, nflEtDate(), new Date().toISOString()) : null;
+      const ctx = { rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(weekRows), weekRows, injuries, history, frameOf: (gid) => framesById.get(String(gid)),
         passers: weekPassers(weekRows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null), seasonMissing: Boolean(gamesByName?.missing) };
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
       for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f)); starts.set(String(f.gameId), f.commence); }

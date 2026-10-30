@@ -82,17 +82,21 @@ async function seasonLines(season) {
 
 // His last three games as games, newest first (Oct 29 2026, founder: no season totals; it read "7 games, 45 targets, 31
 // catches, 512 rec yds, 4 TD"). A game he played without a stat row is a game with nothing in it.
-function statText(pos, s) {
+// The team's last three games when its schedule is on file, a game he missed said so (round 9: Lamar Jackson's line read
+// "last 3: Wk 4, 3, 2", his three missed games since unsaid). `elsewhere(w)` names another club he played for that week.
+function statText(pos, s, teamWeeks = null, elsewhere = () => null) {
   if (!s) return null;
   const rows = new Map((s.rows || []).map((r) => [r.week, r]));
-  const last = [...(s.weeks || [])].sort((a, b) => b - a).slice(0, 3).map((w) => {
+  const weeks = teamWeeks?.length ? teamWeeks.slice(0, 3) : [...(s.weeks || [])].sort((a, b) => b - a).slice(0, 3);
+  const last = weeks.map((w) => {
     const r = rows.get(w);
+    if (!r && !s.weeks?.has(w)) { const other = elsewhere(w); return `Wk ${w} ${other ? `with ${other}` : 'did not play'}`; }
     if (!r) return `Wk ${w} no touches`;
-    if (pos === 'QB') return `Wk ${w} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds`;
+    if (pos === 'QB') return `Wk ${w} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds, ${r.rushTd || 0} rush TD`;
     if (pos === 'RB' || pos === 'FB') return `Wk ${w} ${r.carries} carries ${r.rushYds} yds${r.rushTd ? ` ${r.rushTd} TD` : ''}, ${r.targets} tgt ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}`;
     return `Wk ${w} ${r.targets} tgt, ${r.rec} catch${r.rec === 1 ? '' : 'es'} ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}${r.rushTd ? `, ${r.rushTd} rush TD` : ''}`;
   });
-  return `${s.games} game${s.games === 1 ? '' : 's'}; last ${last.length}, newest first: ${last.join('; ')}`;
+  return `${s.games} game${s.games === 1 ? '' : 's'}; ${teamWeeks?.length ? `his team's last ${last.length}` : `last ${last.length}`}, newest first: ${last.join('; ')}`;
 }
 
 export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null }) {
@@ -202,7 +206,10 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const cur = now26 || thisYear.byName.get(nk);
         const facts = [`${info.name} ${pos}`];
         if (status) facts.push(status.toLowerCase());
-        facts.push(cur ? `${season}: ${statText(pos, cur)}` : thisYear.missing ? `${season}: games not on file (the weekly stats did not load)` : `${season}: no games yet`);
+        const teamWeeks = abbr && schedule && !schedule.unavailable ? schedule.rows.filter((r) => Number(r.season) === season && (r.home_team === abbr || r.away_team === abbr)
+          && r.home_score !== '' && r.home_score != null && String(r.gameday) < date).map((r) => Number(r.week)).sort((a, b) => b - a) : null;
+        const elsewhere = (w) => [...thisYear.byKey].find(([k, v]) => k.startsWith(`${nk}|`) && k !== `${nk}|${abbr}` && v.weeks.has(w))?.[0].split('|')[1] || null;
+        facts.push(cur ? `${season}: ${statText(pos, cur, now26 ? teamWeeks : null, elsewhere)}` : thisYear.missing ? `${season}: games not on file (the weekly stats did not load)` : `${season}: no games yet`);
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;

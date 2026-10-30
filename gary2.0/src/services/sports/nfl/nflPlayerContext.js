@@ -99,6 +99,8 @@ export const defenseByPosition = (season) => once(`def|${season}`, async () => {
     add('targets', n(r.targets)); add('rec', n(r.receptions)); add('recYds', n(r.receiving_yards)); add('recTd', n(r.receiving_tds));
     add('carries', n(r.carries)); add('rushYds', n(r.rushing_yards)); add('rushTd', n(r.rushing_tds));
     add('passYds', n(r.passing_yards)); add('passTd', n(r.passing_tds)); add('int', n(r.passing_interceptions));
+    // Who threw against it that day (round 9: a defense's game against a backup read the same as against a starter).
+    if (n(r.attempts) > 0) (wk.passers ||= []).push({ name: r.player_display_name, att: n(r.attempts) });
   }
   return out;
 });
@@ -116,7 +118,9 @@ export function defenseLine(cur, prev, defense, position, season) {
     const bits = (x) => (g === 'QB' ? `${x.passYds || 0} passing yards, ${x.passTd || 0} TD, ${x.int || 0} INT, ${x.rushYds || 0} rushing`
       : g === 'RB' ? `${x.carries || 0} carries for ${x.rushYds || 0}, ${x.rushTd || 0} TD; ${x.rec || 0} catches for ${x.recYds || 0}, ${x.recTd || 0} TD`
         : `${x.rec || 0} catches on ${x.targets || 0} targets, ${x.recYds || 0} yards, ${x.recTd || 0} TD`);
-    const rows = [...games].sort((a, b) => b[0] - a[0]).map(([wk, x]) => `Wk ${wk} vs ${x.opp}: ${bits(x[g])}`);
+    // "against", not "vs": the rows carry no site (round 9: road games read as home ones).
+    const threw = (x) => (x.passers?.length ? ` (${x.passers.sort((a, b) => b.att - a.att).map((p) => `${p.name} ${p.att} att`).join(', ')})` : '');
+    const rows = [...games].sort((a, b) => b[0] - a[0]).map(([wk, x]) => `Wk ${wk} against ${x.opp}${g === 'QB' ? threw(x) : ''}: ${bits(x[g])}`);
     return `${defense} defense against ${TEAM_WORD[g]}, ${season} game by game, newest first: ${rows.join(' · ')}`;
   }
   const one = (map, label) => {
@@ -180,7 +184,9 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
-    const qbs = !n(r.attempts) ? passers?.get(`${r.season}|${wk}|${r.team}`) : null;
+    // The week's quarterbacks unless he is one of them (round 9: a receiver's trick-play pass hid the week's QB).
+    const listed = passers?.get(`${r.season}|${wk}|${r.team}`);
+    const qbs = listed && !listed.some((q) => normName(q) === normName(r.player_display_name)) ? listed : null;
     if (qbs?.length) bits.push(`QB ${qbs.join(', ')}`);
     const faced = defenses?.get(r.opponent_team);
     const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;

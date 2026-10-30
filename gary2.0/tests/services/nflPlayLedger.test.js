@@ -31,7 +31,7 @@ const HEADER = [
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
-  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession'
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession', 'desc'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {

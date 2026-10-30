@@ -614,7 +614,7 @@ export function formatKeyPlayers(homeTeam, awayTeam, keyPlayers, redZone = null,
     return '';
   }
   // Player red zone (Sep 24 2026): carries and targets inside the 20 (and 10,
-  // and carries inside the 5), this season beside last, from BDL play-by-play.
+  // and carries inside the 5), this season game by game, from BDL play-by-play.
   const redZoneFor = (player) => (redZone && season && ['QB', 'RB', 'WR', 'TE'].includes(player.position)
     ? redZoneLine(redZone, player.name, season, player.position) : null);
 
@@ -1409,7 +1409,7 @@ ${filteredPlayers.join(', ')}
     const { supabaseAdmin } = await import('../../../../../supabaseClient.js');
     if (supabaseAdmin) {
       await refreshNflRedZone({ supabase: supabaseAdmin, seasons: [nflSeasonYear], log: { warn: () => {} } }).catch(() => 0);
-      playerRedZone = await loadNflRedZone({ supabase: supabaseAdmin, seasons: [nflSeasonYear, nflSeasonYear - 1] });
+      playerRedZone = await loadNflRedZone({ supabase: supabaseAdmin, seasons: [nflSeasonYear] }); // this season only, never last
     }
   } catch { /* the lines print without red zone */ }
 

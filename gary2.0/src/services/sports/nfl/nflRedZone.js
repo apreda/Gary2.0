@@ -105,21 +105,21 @@ export async function refreshNflRedZone({ supabase, seasons, log = console }) {
   return read;
 }
 
-/** Season totals: { byName: Map "season|name" → totals, byId: Map "season|id" → totals }. */
+/** Each player's games with a red-zone touch: { byName: Map "season|name" → [rows by week], byId: Map "season|id" → [...] }.
+ * Game by game, no season totals (round 9, Oct 29 2026: the line was the one season total left on the prop and dart sheets). */
 export async function loadNflRedZone({ supabase, seasons }) {
   const byName = new Map(), byId = new Map();
-  const cols = 'season, player_id, player_name, team, carries_in20, carries_in10, carries_in5, rush_tds_in20, targets_in20, targets_in10, receptions_in20, rec_tds_in20, pass_att_in20, pass_tds_in20';
+  const cols = 'season, week, player_id, player_name, team, carries_in20, carries_in10, carries_in5, rush_tds_in20, targets_in20, targets_in10, receptions_in20, rec_tds_in20, pass_att_in20, pass_tds_in20';
   for (const season of seasons) {
     for (let from = 0; from < 20000; from += 1000) {
-      const { data, error } = await supabase.from('nfl_red_zone_games').select(cols).eq('season', season).range(from, from + 999);
+      const { data, error } = await supabase.from('nfl_red_zone_games').select(cols).eq('season', season).order('game_id').order('player_id').range(from, from + 999);
       if (error) throw new Error(error.message);
       for (const r of data || []) {
+        const row = { week: Number(r.week), ...Object.fromEntries(Object.keys(blank()).map((k) => [k, Number(r[k]) || 0])) };
         for (const [map, key] of [[byId, `${season}|${r.player_id}`], [byName, `${season}|${normName(r.player_name)}`]]) {
           if (!r.player_name && map === byName) continue;
-          const t = map.get(key) || { games: 0, ...blank() };
-          t.games += 1;
-          for (const k of Object.keys(blank())) t[k] += Number(r[k]) || 0;
-          map.set(key, t);
+          if (!map.has(key)) map.set(key, []);
+          map.get(key).push(row);
         }
       }
       if (!data || data.length < 1000) break;
@@ -128,20 +128,20 @@ export async function loadNflRedZone({ supabase, seasons }) {
   return { byName, byId };
 }
 
-function oneSeason(t, label, position) {
-  if (!t) return null;
+function oneGame(t, position) {
   const bits = [];
   const pos = String(position || '').toUpperCase();
   if (pos === 'QB' && t.pass_att_in20) bits.push(`${t.pass_att_in20} passes inside the 20, ${t.pass_tds_in20} TD`);
   if (t.carries_in20) bits.push(`${t.carries_in20} carries inside the 20 (${t.carries_in10} inside the 10, ${t.carries_in5} inside the 5), ${t.rush_tds_in20} rushing TD`);
   if (t.targets_in20) bits.push(`${t.targets_in20} targets inside the 20 (${t.targets_in10} inside the 10), ${t.receptions_in20} caught, ${t.rec_tds_in20} TD`);
-  return `${label}: ${bits.length ? bits.join('; ') : 'no red-zone touches'}`;
+  return bits.length ? `Wk ${t.week} ${bits.join('; ')}` : null;
 }
 
-/** "red zone, 2026: 4 carries inside the 20 (...) · 2025: ..." — this season beside last. */
+/** "red zone, 2026 by game, newest first: Wk 7 2 carries inside the 20 (...) · Wk 5 ...; none in his other games". This
+ * season only. */
 export function redZoneLine(rz, name, season, position) {
   if (!rz) return null;
-  const cur = rz.byName.get(`${season}|${normName(name)}`), prev = rz.byName.get(`${season - 1}|${normName(name)}`);
-  if (!cur && !prev) return null;
-  return `red zone, ${[oneSeason(cur, String(season), position) || `${season}: no red-zone touches`, oneSeason(prev, String(season - 1), position)].filter(Boolean).join(' · ')}`;
+  const games = (rz.byName.get(`${season}|${normName(name)}`) || []).slice().sort((a, b) => b.week - a.week).map((g) => oneGame(g, position)).filter(Boolean);
+  if (!games.length) return `red zone, ${season}: no red-zone touches in any game`;
+  return `red zone, ${season} by game, newest first: ${games.join(' · ')}; no red-zone touches in his other games`;
 }

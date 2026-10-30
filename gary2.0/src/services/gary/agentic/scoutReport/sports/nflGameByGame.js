@@ -505,9 +505,13 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       // game he was hurt in, after 59-79% in every game before it, and the read took him for a rotation player).
       // Every team game before it with its week, a game he missed said so and why from the weekly roster (round 8: A.J.
       // Terrell's "9%, 93%" hid four weeks on IR between them).
-      const statusAt = (w) => { const r = rosterRows.find((x) => x.pfr_id && x.pfr_id === pfrOf.get(player) && Number(x.week) === w); return !r ? null
-        : r.status === 'INA' ? 'inactive' : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'IR' : 'reserve')
-          : r.status === 'EXE' ? "commissioner's exempt list" : r.status === 'DEV' ? 'practice squad' : null; };
+      // By the report's league id, then PFR id, then his name on this club's roster: linemen carry no PFR id (round 9:
+      // Landon Dickerson's five weeks on IR read "did not play"). A week on another club's roster says which.
+      const nk = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
+      const statusAt = (w) => { const r = rosterRows.find((x) => Number(x.week) === w && ((injury.gsis_id && x.gsis_id === injury.gsis_id) || (x.pfr_id && x.pfr_id === pfrOf.get(player)) || (x.team === code0 && nk(x.full_name) === nk(player))));
+        const word = !r ? null : r.status === 'INA' ? 'inactive' : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'IR' : 'reserve')
+          : r.status === 'EXE' ? "commissioner's exempt list" : r.status === 'DEV' ? 'practice squad' : null;
+        return r && r.team !== code0 ? `with ${r.team}${word ? `, ${word}` : ''}` : word; };
       const earlier = weeks.filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5)
         .map((w) => { const x = shares.get(w); return `Wk ${w} ${!x ? (statusAt(w) || 'did not play') : x.kick ? `${x.st}%` : x.share != null ? `${x.share}%` : 'special teams only'}`; });
       injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: last.share ?? null, lastText: textOf(last), earlier };
