@@ -131,6 +131,11 @@ enum GaryTour {
             #if DEBUG
             UserDefaults.standard.set(arg == "off" ? "" : arg, forKey: "garyMoodPreview")
             #endif
+        case "garyclip":
+            // "garyclip gary-paper" plays that clip next on Home (for checking a clip); "garyclip off" restores chance.
+            #if DEBUG
+            UserDefaults.standard.set(arg == "off" ? "" : arg, forKey: "garyClipPreview")
+            #endif
         case "cashrail":
             // "cashrail demo" / "cashrail off" — the Cash Rail card replays the
             // approved mock's game in the marquee slot (CashRailDemo.swift).

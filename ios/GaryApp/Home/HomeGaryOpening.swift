@@ -597,8 +597,12 @@ final class GaryLife: ObservableObject {
         }
         var first = true
         while !Task.isCancelled {
-            guard let name = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1)),
-                  let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
+            var pick = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1))
+            #if DEBUG
+            // Tour verb `garyclip <name>` plays that clip every time, to check it.
+            if let forced = UserDefaults.standard.string(forKey: "garyClipPreview"), !forced.isEmpty { pick = forced }
+            #endif
+            guard let name = pick, let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
             let item = AVPlayerItem(url: url)
             player.replaceCurrentItem(with: item)
             let stand = GaryLifePlan.stand(first: first, roll: Double.random(in: 0..<1))
