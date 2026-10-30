@@ -54,7 +54,7 @@ export function injuriesAsReported(desk) {
 }
 
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date. */
-export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null, forProps = false } = {}) {
+export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null, sheetPlayers = null } = {}) {
   const before = etDate(asOf);
   // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,
   // Oct 23 2026: the market is other people's opinions, and Gary reads the game; see nflKnowledge.js).
@@ -82,9 +82,9 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
     ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", `${gameByGame(data, awayTeam, before, { read })}\n\n${gameByGame(data, homeTeam, before, { meetingUnder: awayTeam, read })}`],
-    // The props message leaves this out: its sheets carry each board player's games (round 16).
-    forProps ? null : ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season and in each of its last three games, quarterbacks aside)",
-      `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'))}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'))}`],
+    // The props message leaves out the players with a sheet below; their games are on it (round 16).
+    ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season and in each of its last three games, quarterbacks aside)",
+      `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'), { skip: sheetPlayers })}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'), { skip: sheetPlayers })}`],
     ['SCHEDULE, TRAVEL AND WEATHER', situation],
   ];
   return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };

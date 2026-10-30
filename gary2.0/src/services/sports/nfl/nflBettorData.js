@@ -497,7 +497,9 @@ function lineupChanges(d, code, gs) {
  * do is play games"), and whether he is on this week's injury report (`reportText`). Counts, not rates (Oct 23 2026:
  * Kenneth Walker led the league in rushing and carried Kansas City past the Chargers; Gary read only quarterbacks, and
  * called Kansas City thin without Rice and Thornton without knowing who was left). */
-export function skillPlayers(d, team, before, reportText = '') {
+// `skip`: names (any spelling key) printed elsewhere in full, left out here (the props message: each board player's
+// own sheet carries his games; teammates without one stay, so who else gets the work is still said; round 16).
+export function skillPlayers(d, team, before, reportText = '', { skip = null } = {}) {
   if (d.scheduleMissing || !d.playerWeek) return `${team}: the players' weekly stats are not on file.`;
   const c = codeOf(team); const gs = teamGames(d, c, d.season, before);
   if (!gs.length) return `${team}: no games played yet this season.`;
@@ -513,7 +515,8 @@ export function skillPlayers(d, team, before, reportText = '') {
   const gameTop = (gid, k, top) => [...by.values()].map((rs) => [rs, rs.find((r) => r.game_id === gid)]).filter(([, r]) => r && n(r[k]) >= floor[k])
     .sort((a, b) => n(b[1][k]) - n(a[1][k])).slice(0, top).map(([rs]) => rs);
   const recent = gs.slice(-3).flatMap((x) => [...gameTop(x.g.game_id, 'carries', 2), ...gameTop(x.g.game_id, 'targets', 4)]);
-  const chosen = [...new Set([...ranked('carries').slice(0, 2), ...ranked('targets').slice(0, 4), ...recent])];
+  const keyOf = (nm) => String(nm || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+  const chosen = [...new Set([...ranked('carries').slice(0, 2), ...ranked('targets').slice(0, 4), ...recent])].filter((rs) => !skip?.has(keyOf(rs[0]?.player_display_name)));
   const text = String(reportText).toLowerCase().replace(/[^a-z]/g, '');
   // A game with no stats row is "did not play" only when the snap counts have no snap for him either: Rice left Week 4
   // after 10% of the snaps without a touch.
@@ -707,9 +710,6 @@ function pressureByGame(passRows, defRows) {
   return { qbs, rushers };
 }
 const pct = (v) => (v === '' || v == null ? null : Math.round(Number(v) * 100));
-// PFR's charting for both sides of a game: its pressure line then carries the hits, and the box's own QB-hit count, a
-// different tally, stays off the row (round 16: the two disagreed in 48 of 63 rows).
-const pressureOnFile = (d, x, code) => Boolean(d.pressure) && [code, x.opp].every((t) => (d.pressure.qbs.get(`${x.g.game_id}|${t}`) || []).length > 0);
 function pressureLine(d, x, code) {
   if (!d.pressure) return 'pressure: not on file';
   const side = (team) => {
@@ -723,7 +723,8 @@ function pressureLine(d, x, code) {
     .map((r) => `${r.pfr_player_name} ${n(r.def_pressures)}`).join(', ');
   const ours = side(code), theirs = side(x.opp);
   if (!ours && !theirs) return 'pressure: not on file for this game';
-  return `pressure: ${nickname(code)} ${ours || 'not on file'}${rush(x.opp) ? ` (${nickname(x.opp)} rushers: ${rush(x.opp)})` : ''} · ${nickname(x.opp)} ${theirs || 'not on file'}${rush(code) ? ` (${nickname(code)} rushers: ${rush(code)})` : ''}`;
+  // PFR's own charting, named so its hits (sacks apart) are not read against the official box's count (round 16).
+  return `pressure (PFR charting; its hits do not include sacks): ${nickname(code)} ${ours || 'not on file'}${rush(x.opp) ? ` (${nickname(x.opp)} rushers: ${rush(x.opp)})` : ''} · ${nickname(x.opp)} ${theirs || 'not on file'}${rush(code) ? ` (${nickname(code)} rushers: ${rush(code)})` : ''}`;
 }
 
 // The run game's contact and the tackling, game by game, from PFR's charting (round 12, the blind-spots hunt: missed
@@ -834,7 +835,7 @@ function roleLine(d, x, code, o) {
   return a || b ? `  quarterbacks: ${[a ? `${nickname(code)} ${a}` : null, b ? `${nickname(o)} ${b}` : null].filter(Boolean).join(' · ')}` : null;
 }
 const boxLine = (x, code, d = null) => (!x.off || !x.def ? 'box score not on file'
-  : `${Math.round(x.off.yards)} yards (${rushing(x, code)}), allowed ${Math.round(x.def.yards)} (${rushing(x, code, 'def')}) · ${giveaways(x.off)}, ${count(x.def.giveaways, 'takeaway')} · ${count(x.off.sacked, 'sack')} allowed, ${x.def.sacked} made${d && pressureOnFile(d, x, code) ? '' : ` · QB hits (sacks included): ${x.def.hitsMade} taken, ${x.off.hitsMade} made`}`);
+  : `${Math.round(x.off.yards)} yards (${rushing(x, code)}), allowed ${Math.round(x.def.yards)} (${rushing(x, code, 'def')}) · ${giveaways(x.off)}, ${count(x.def.giveaways, 'takeaway')} · ${count(x.off.sacked, 'sack')} allowed, ${x.def.sacked} made${` · QB hits in the official box (sacks included): ${x.def.hitsMade} taken, ${x.off.hitsMade} made`}`);
 // The score by quarter from the play ledger, kept only when it adds up to the final (Oct 23 2026 data audit: the
 // Chargers' "never blown out" read off final margins; Seattle led them 30-13 after three quarters). Checked against
 // ESPN's quarter scores for 27 games.
@@ -934,7 +935,9 @@ export function gameByGame(d, team, before, { meetingUnder = null, read = null }
   if (!gs.length) return `${team}: no games played yet this season.`;
   const changes = lineupChanges(d, c, gs);
   return [seasonHeader(d, gs, team, before), ...gs.slice().reverse().map((x) => {
-    if (meetingUnder && x.opp === codeOf(meetingUnder)) return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}: the meeting, in full under ${meetingUnder} above`;
+    // The lines only this side's row has stay: its view of the other side's passers, top rusher, and its own sack and
+    // interception makers, and its own lineup that day (every other line covers both teams).
+    if (meetingUnder && x.opp === codeOf(meetingUnder)) return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''}: the meeting, in full under ${meetingUnder} above${[againstLine(d, x, c), changes.get(x.g.game_id)].filter(Boolean).map((l) => `\n      ${l}`).join('')}`;
     // The starter who left early first, said so, as the second system says it (Oct 29 2026 hunt, round 7: the Vikings'
     // Week 1 read "Carson Wentz 12-of-19 ...; Kyler Murray 3-of-5", Murray's start read as late relief).
     const st = startedEarlyExit(d, x.g, c);

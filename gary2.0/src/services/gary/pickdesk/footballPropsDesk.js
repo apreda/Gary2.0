@@ -351,13 +351,6 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // fallback to the full desk, which carries last season and the line (Oct 29 2026 hunt; the NBA props desk the same):
   // a story that fails fails the props run.
   let deskText = scoutText;
-  if (league === 'NFL') {
-    // Without CARRIES AND TARGETS: every board player's games are on his sheet below (round 16: the same weeks twice).
-    const { story } = await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
-      gameDate: game.commence_time ? etDate(game.commence_time) : null, forProps: true });
-    const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time }).catch(() => null);
-    deskText = `${story}\n\nTODAY'S NEWS\n${news || NFL_NEWS_NOT_ON_FILE}`;
-  }
 
   // 3. Cleared counts from NFL game logs ("over in 4 of his last 5 games").
   // NCAAF has season totals only — no per-game logs, so no counts (fail-soft;
@@ -413,6 +406,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   // board player's own values against the exact stat his markets settle on.
   // NCAAF has season totals only, no per-game logs, so it prints no sheets.
   let sheetsBlock = '';
+  let sheetsOk = false;
   if (league === 'NFL') {
     const sheetMarkets = board.markets;
     const sheetContext = await loadNflSheetContext({ season: Number(context.dataWindow?.season), game, players: [...new Set(sheetMarkets.map((m) => m.player))] })
@@ -430,11 +424,23 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
       awayTeam,
     });
     if (sheets.text) {
+      sheetsOk = true;
       sheetsBlock = `\n\n${sheets.text}`;
       console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${readBoard.players.size} on the board`);
     } else {
       sheetsBlock = "\n\n═══ THE PROP SHEETS ═══\nNot on file: the players' games did not load.";
     }
+  }
+
+  // The story after the sheets: CARRIES AND TARGETS leaves out the players whose sheet is below and keeps their
+  // teammates, so who else gets the work is still said (round 16). Without sheets, everyone stays.
+  if (league === 'NFL') {
+    const keyOf = (nm) => String(nm || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+    const sheetPlayers = sheetsOk ? new Set(board.markets.map((m) => keyOf(m.player))) : null;
+    const { story } = await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
+      gameDate: game.commence_time ? etDate(game.commence_time) : null, sheetPlayers });
+    const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time }).catch(() => null);
+    deskText = `${story}\n\nTODAY'S NEWS\n${news || NFL_NEWS_NOT_ON_FILE}`;
   }
 
   // NFL: no second model's scores (Oct 19 2026); Gary reads the evidence himself.
