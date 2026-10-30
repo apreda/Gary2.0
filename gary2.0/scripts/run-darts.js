@@ -202,8 +202,8 @@ async function throwLeague(league) {
         pressure: await qbPressure(board.season).catch(() => null),
         without: regularsOut(snapFile, roster && !roster.unavailable ? roster.rows : null),
         // In-game injuries from the play ledger, by week and club (round 13).
-        drops: await receiverDrops(board.season).catch(() => null),
-        plays: await getPlayLedger(board.season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), teamLastQ: g.teamLastQ }])))).catch(() => null),
+        drops: await receiverDrops(board.season, roster && !roster.unavailable ? roster.rows : null).catch(() => null),
+        plays: await getPlayLedger(board.season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ }])))).catch(() => null),
         hurt: await getPlayLedger(board.season).then((L) => { const m = new Map(); for (const g of L?.games || []) for (const e of g.hurt || []) { const k = `${g.week}|${e.team}`; m.set(k, [...(m.get(k) || []), e]); } return m; }).catch(() => null) };
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
       // Each game's stadium and kickoff forecast in its frame, as the reads have it (round 11).

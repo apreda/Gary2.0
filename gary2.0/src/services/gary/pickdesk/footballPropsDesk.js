@@ -270,8 +270,8 @@ async function loadNflSheetContext({ season, game, players }) {
     pressure: await qbPressure(season).catch(() => null),
     // Regulars out each week and in-game injuries, as the dart rows have them (round 14).
     without: regularsOut(snapFile, roster && !roster.unavailable ? roster.rows : null),
-    drops: await receiverDrops(season).catch(() => null),
-        plays: await getPlayLedger(season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), teamLastQ: g.teamLastQ }])))).catch(() => null),
+    drops: await receiverDrops(season, roster && !roster.unavailable ? roster.rows : null).catch(() => null),
+        plays: await getPlayLedger(season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ }])))).catch(() => null),
         hurt: await getPlayLedger(season).then((L) => { const m = new Map(); for (const g of L?.games || []) for (const e of g.hurt || []) { const k = `${g.week}|${e.team}`; m.set(k, [...(m.get(k) || []), e]); } return m; }).catch(() => null) };
 }
 

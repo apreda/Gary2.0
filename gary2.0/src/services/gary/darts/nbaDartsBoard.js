@@ -196,7 +196,10 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
     // Out for good before the 4th (round 13: the live log's words, on his own row).
     const off = x.rec.lastOff?.[x.me.name];
-    const gone = off && off.clock !== 'end' && off.period <= 3 ? `, left in the ${['1st', '2nd', '3rd'][off.period - 1]} quarter with ${/:/.test(String(off.clock)) ? off.clock : `${off.clock} seconds`} left and did not return` : '';
+    // On the floor to a quarter's end and never back, when every later quarter was followed (round 15).
+    const sat = off && off.clock === 'end' && off.period <= 3 && x.me.min >= 15 && !(x.rec.wholeMinuteQuarters || []).some((q) => q > off.period)
+      ? `, played to the end of the ${['1st', '2nd', '3rd'][off.period - 1]} quarter and did not return` : '';
+    const gone = sat || off && off.clock !== 'end' && off.period <= 3 ? sat || `, left in the ${['1st', '2nd', '3rd'][off.period - 1]} quarter with ${/:/.test(String(off.clock)) ? off.clock : `${off.clock} seconds`} left and did not return` : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
     // A teammate who started and played under 15 minutes (round 12: Jalen Duren's 10-minute exit read as a full game around
     // him), the rule the live read uses.
