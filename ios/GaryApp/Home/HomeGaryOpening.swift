@@ -5,11 +5,11 @@ import SwiftUI
 /// THE GARY OPENING — Home's first thing (founder, Oct 30 2026: "the Gary mascot in the middle, not in a
 /// container ... like a scientific diagram", replacing the Bento: "it's not an analytics dashboard").
 /// Gary is an old-school gambler, not a flashy one ("think more Mike Ditka"): sweater vest, loosened tie,
-/// pencil behind his ear, the racing form in his paw. He's alive (GaryIdleFigure): he puffs the cigar,
-/// reads the form, looks up, and reacts to last night. Six labels point at him the way a diagram labels a
-/// figure: last night at his sunglasses, tonight's Winners at his tie, the run of nights at his knee, and
-/// three prompts that change through the day (founder: "the Parlay of the day has arrived and those kinds
-/// of things"): the parlay at his cigar, the darts at his pocket, his picks at his shoe. A prompt that's new
+/// pencil behind his ear. He's alive (GaryIdleFigure): he stands a while, then lives a moment from a drawn
+/// clip. Six labels point at his outline the way a diagram labels a figure: last night at his sunglasses,
+/// tonight's Winners at his hip, the run of nights at his leg, and three prompts that change through the day
+/// (founder: "the Parlay of the day has arrived and those kinds of things"): the parlay at his cigar, the
+/// darts at his other hip, his picks at his shoe. A prompt that's new
 /// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
 struct HomeGaryOpening: View {
     enum Door { case winners, darts, parlay, picks }
@@ -142,9 +142,9 @@ struct HomeGaryOpening: View {
 
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
     private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt]) -> some View {
-        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: w - 106, y: 232), CGPoint(x: w - 120, y: 232), at(GaryIdleFigure.tie))]
+        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: w - 106, y: 232), CGPoint(x: w - 120, y: 232), at(GaryIdleFigure.hip))]
         if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
-        if run.count > 0 { lines.append((CGPoint(x: w - 100, y: 326), CGPoint(x: w - 114, y: 326), at(GaryIdleFigure.knee))) }
+        if run.count > 0 { lines.append((CGPoint(x: w - 100, y: 326), CGPoint(x: w - 114, y: 326), at(GaryIdleFigure.leg))) }
         for p in prompts {
             let to = at(GaryIdleFigure.anchor(p.spot))
             switch p.spot {
@@ -452,14 +452,16 @@ struct GaryIdleFigure: View {
     /// Where the stance sits inside every clip's frame: the clips were drawn from it, on a 1080 × 1728 crop.
     static let clipStance = CGRect(x: 80.0 / 1080, y: 256.0 / 1728, width: 920.0 / 1080, height: 1458.0 / 1728)
 
-    /// Where the labels point on the stance: left of his sunglasses, his tie, his right knee, his cigar, his
-    /// trouser pocket, his shoe.
-    static let head = CGPoint(x: 0.36, y: 0.09)
-    static let tie = CGPoint(x: 0.55, y: 0.31)
-    static let knee = CGPoint(x: 0.62, y: 0.72)
+    /// Where the labels point on the stance: always his outline, about level with each label, so a line never
+    /// crosses him and his hands never cover one (founder, Oct 30 2026: "the lines should stay to the outer
+    /// parts of Gary"). The edge of his sunglasses, his right hip, the outside of his right leg, his cigar
+    /// tip, his left hip, the toe of his left shoe.
+    static let head = CGPoint(x: 0.34, y: 0.09)
+    static let hip = CGPoint(x: 0.75, y: 0.59)
+    static let leg = CGPoint(x: 0.645, y: 0.86)
     static let cigar = CGPoint(x: 0.67, y: 0.195)
-    static let pocket = CGPoint(x: 0.36, y: 0.585)
-    static let shoe = CGPoint(x: 0.21, y: 0.95)
+    static let pocket = CGPoint(x: 0.29, y: 0.57)
+    static let shoe = CGPoint(x: 0.12, y: 0.955)
 
     /// The spot on him each prompt points at.
     static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {

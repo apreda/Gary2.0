@@ -541,42 +541,40 @@ struct HomeMarqueeTracker: View {
         return cal.component(.hour, from: d) >= 17 ? "TONIGHT" : "TODAY"
     }
 
-    /// The countdown card, one size for every game: when, the matchup, and the clock to the start.
+    /// The countdown card, one size for every game: when and the matchup on the left with the start time
+    /// tucked under the teams, the clock to the start on the right, centered (founder, Oct 30 2026).
     private func countdownHero(kicker: String, matchup: String, time: String, start: Date?, league: String?,
                                interruption: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(kicker)
-                .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
-                .foregroundStyle(GaryColors.gold)
-            Text(matchup)
-                .font(GaryFonts.display(36))
-                .foregroundStyle(GaryColors.warmWhite)
-                .fitsOneLine()
-            // THE CLOCK TICKS (founder, Aug 4: "this should be counting down
-            // to the start of the next game"). The static "7:10 PM" told you
-            // nothing you couldn't get from the board; the countdown is the
-            // reason to look. Start time rides beside it so the clock has a
-            // referent. Falls back to the plain time if the board's row
-            // carried no parseable commence_time.
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(kicker)
+                    .font(GaryFonts.mono(11, bold: true)).tracking(1.5)
+                    .foregroundStyle(GaryColors.gold)
+                Text(matchup)
+                    .font(GaryFonts.display(34))
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .fitsOneLine()
+                // The sport's own start word: an NFL game kicks off (founder, Oct 29 2026: "it says First Pitch").
+                Text("\(startWord(league)) \(time.uppercased())")
+                    .font(GaryFonts.mono(11.5, bold: true))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .fitsOneLine()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // THE CLOCK TICKS (founder, Aug 4: "this should be counting down to the start of the next game").
             if let interruption {
                 Text(interruption.uppercased())
                     .font(GaryFonts.mono(11.5, bold: true))
                     .foregroundStyle(GaryColors.gold)
+                    .fitsLines(2)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 110, alignment: .trailing)
             } else if let start, start > Date() {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    HomeCountdownText(target: start, size: 15)
-                    // The sport's own start word: an NFL game kicks off (founder, Oct 29 2026: "it says First Pitch").
-                    Text("· \(startWord(league)) \(time.uppercased())")
-                        .font(GaryFonts.mono(11.5, bold: true))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-            } else {
-                Text(time.uppercased())
-                    .font(GaryFonts.mono(11.5, bold: true))
-                    .foregroundStyle(.white.opacity(0.72))
+                HomeCountdownText(target: start, size: 22)
+                    .fitsOneLine()
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 13)
+        .padding(.horizontal, 14).padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
