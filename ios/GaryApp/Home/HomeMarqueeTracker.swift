@@ -230,7 +230,8 @@ struct HomeMarqueeTracker: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if !rail.isEmpty || tomorrowTease != nil {
+            // (With no game today the hero IS tomorrow's tease; the band would only say it again.)
+            if !rail.isEmpty || (tomorrowTease != nil && hero != nil) {
                 // C1's dark crawl band: the slate runs on its own darker
                 // surface under a gold rule, so it reads as the wire and the
                 // hero keeps the room.

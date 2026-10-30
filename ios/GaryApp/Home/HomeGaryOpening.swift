@@ -4,17 +4,30 @@ import SwiftUI
 /// container ... like a scientific diagram", replacing the Bento: "it's not an analytics dashboard").
 /// Gary is an old-school gambler, not a flashy one ("think more Mike Ditka"): sweater vest, loosened tie,
 /// pencil behind his ear, the racing form in his paw. He's alive (GaryIdleFigure): he puffs the cigar,
-/// reads the form, looks up, and reacts to last night. Three labels point at him the way a diagram
-/// labels a figure: last night at his head, tonight's Winners at his tie, the run of nights at his knee.
-/// Everything opens Winners.
+/// reads the form, looks up, and reacts to last night. Six labels point at him the way a diagram labels a
+/// figure: last night at his sunglasses, tonight's Winners at his tie, the run of nights at his knee, and
+/// three prompts that change through the day (founder: "the Parlay of the day has arrived and those kinds
+/// of things"): the parlay at his cigar, the darts at his pocket, his picks at his shoe. A prompt that's new
+/// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
 struct HomeGaryOpening: View {
-    let onOpen: () -> Void
+    enum Door { case winners, darts, parlay, picks }
+
+    /// Gary's picks on today's slate, and the games on it (the board's own counts).
+    var picks = 0
+    var games = 0
+    let onOpen: (Door) -> Void
 
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bankroll: GaryBankrollSnapshot?
     @State private var tonight: LabBoard?
+    @State private var darts: DartsBoard?
+    @State private var parlay: ParlaySlipModel?
+    @State private var lastParlay: ParlaySlipModel?
     @State private var now = Date()
+    /// Prompt keys already seen, newest last.
+    @AppStorage("garyPromptsSeen") private var seenRaw = ""
     #if DEBUG
     /// Tour verb `garymood GaryFire|GaryCooking|GaryBeer|GaryIceCold|GaryDoomsday|off` previews a reaction.
     @AppStorage("garyMoodPreview") private var moodPreviewRaw = ""
@@ -23,78 +36,121 @@ struct HomeGaryOpening: View {
     private var moodPreview: String? { nil }
     #endif
 
-    static let height: CGFloat = 404
-    private static let garyHeight: CGFloat = 330
-    private static let garyTop: CGFloat = 40
+    static let height: CGFloat = 408
+    private static let garyHeight: CGFloat = 344
+    private static let garyTop: CGFloat = 28
 
     private var slate: String { SupabaseAPI.todayEST() }
+    private var live: Bool { activePage && scenePhase == .active }
 
     var body: some View {
-        Button(action: onOpen) {
-            GeometryReader { geo in
-                let w = geo.size.width
-                let gh = Self.garyHeight
-                let gw = gh * GaryIdleFigure.baseAspect
-                // Gary stands left of center so the labels on his right have open page.
-                let center = w * 0.4
-                let gx = center - gw / 2
-                let at = { (p: CGPoint) in CGPoint(x: gx + p.x * gw, y: Self.garyTop + p.y * gh) }
-                ZStack(alignment: .topLeading) {
-                    // The spotlight that lifts a black suit off a black page, and the floor under him.
-                    Ellipse()
-                        .fill(RadialGradient(colors: [GaryColors.lightGold.opacity(0.2), GaryColors.gold.opacity(0.07), .clear],
-                                             center: .center, startRadius: 0, endRadius: 170))
-                        .frame(width: 310, height: 350)
-                        .position(x: center, y: Self.garyTop + gh * 0.5)
-                    Ellipse()
-                        .fill(RadialGradient(colors: [.black.opacity(0.6), .clear], center: .center, startRadius: 0, endRadius: 85))
-                        .frame(width: 170, height: 14)
-                        .position(x: center, y: Self.garyTop + gh + 2)
-                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: activePage && scenePhase == .active)
-                        .frame(width: center * 2, height: gh + 30)
-                        .position(x: center, y: Self.garyTop - 30 + (gh + 30) / 2)
-                    leaders(width: w, head: at(GaryIdleFigure.head), tie: at(GaryIdleFigure.tie), knee: at(GaryIdleFigure.knee))
-                    if let d = lastNight {
-                        lastNightLabel(d).frame(width: 100, alignment: .leading).position(x: 50, y: 52)
-                    }
-                    tonightLabel.frame(width: 104, alignment: .leading).position(x: w - 52, y: 188)
-                    if run.count > 0 {
-                        streakLabel.frame(width: 100, alignment: .leading).position(x: w - 50, y: 318)
-                    }
-                    Text("FIG. 1 — GARY")
-                        .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
-                        .foregroundStyle(CR.mute2)
-                        .position(x: 44, y: Self.height - 14)
+        GeometryReader { geo in
+            let w = geo.size.width
+            let gh = Self.garyHeight
+            let gw = gh * GaryIdleFigure.baseAspect
+            let center = w / 2
+            let gx = center - gw / 2
+            let at = { (p: CGPoint) in CGPoint(x: gx + p.x * gw, y: Self.garyTop + p.y * gh) }
+            let prompts = self.prompts
+            ZStack(alignment: .topLeading) {
+                // The spotlight that lifts him off a black page, and the floor under him.
+                Ellipse()
+                    .fill(RadialGradient(colors: [GaryColors.lightGold.opacity(0.2), GaryColors.gold.opacity(0.07), .clear],
+                                         center: .center, startRadius: 0, endRadius: 170))
+                    .frame(width: 310, height: 350)
+                    .position(x: center, y: Self.garyTop + gh * 0.5)
+                Ellipse()
+                    .fill(RadialGradient(colors: [.black.opacity(0.6), .clear], center: .center, startRadius: 0, endRadius: 85))
+                    .frame(width: 170, height: 14)
+                    .position(x: center, y: Self.garyTop + gh + 2)
+                Button { onOpen(.winners) } label: {
+                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live)
+                        .frame(width: gw + 60, height: gh + 30)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .position(x: center, y: Self.garyTop - 30 + (gh + 30) / 2)
+                .accessibilityLabel(garyAccessibility)
+                .accessibilityHint("Opens Winners")
+
+                leaders(width: w, at: at, prompts: prompts)
+                ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
+                    PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
+                }
+
+                if let d = lastNight {
+                    tap(.winners, key: nil) { lastNightLabel(d) }
+                        .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
+                }
+                tap(.winners, key: nil) { tonightLabel }
+                    .frame(width: 100, alignment: .leading).offset(x: w - 100, y: 226)
+                if run.count > 0 {
+                    tap(.winners, key: nil) { streakLabel }
+                        .frame(width: 94, alignment: .leading).offset(x: w - 94, y: 316)
+                }
+                ForEach(prompts, id: \.spot) { p in
+                    let place = Self.place(p.spot, width: w)
+                    tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                        .frame(width: place.width, alignment: .leading)
+                        .offset(x: place.x, y: place.y)
+                }
+                Text("FIG. 1 — GARY")
+                    .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
+                    .foregroundStyle(CR.mute2)
+                    .offset(x: 0, y: Self.height - 20)
+                    .accessibilityHidden(true)
             }
-            .frame(height: Self.height)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .frame(height: Self.height)
         .pageGutter()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Opens Winners")
-        .accessibilityAddTraits(.isButton)
-        .task(id: activePage && scenePhase == .active) {
+        .task(id: live) {
             if tonight == nil {
                 tonight = SupabaseAPI.cachedLabBoard(date: slate, account: AuthManager.shared.currentUser?.id)
             }
-            guard activePage, scenePhase == .active else { return }
+            guard live else { return }
             while !Task.isCancelled {
                 await refresh()
                 do { try await Task.sleep(for: .seconds(90)) } catch { break }
             }
         }
+        // Leaving Home is having looked: what was new on it isn't any more.
+        .onChange(of: live) { isLive in
+            if !isLive { markSeen(prompts.compactMap(\.key)) }
+        }
     }
 
     // MARK: - The figure
 
+    /// Where each prompt sits around him (x from the left edge, the label's width).
+    private static func place(_ spot: GaryPrompt.Spot, width w: CGFloat) -> (x: CGFloat, y: CGFloat, width: CGFloat) {
+        switch spot {
+        case .cigar: return (w - 94, 52, 94)
+        case .pocket: return (0, 196, 100)
+        case .shoe: return (0, 294, 92)
+        }
+    }
+
+    private static func door(_ spot: GaryPrompt.Spot) -> Door {
+        switch spot {
+        case .cigar: return .parlay
+        case .pocket: return .darts
+        case .shoe: return .picks
+        }
+    }
+
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
-    private func leaders(width w: CGFloat, head: CGPoint, tie: CGPoint, knee: CGPoint) -> some View {
-        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: w - 108, y: 172), CGPoint(x: w - 124, y: 172), tie)]
-        if lastNight != nil { lines.append((CGPoint(x: 96, y: 40), CGPoint(x: 112, y: 40), head)) }
-        if run.count > 0 { lines.append((CGPoint(x: w - 104, y: 324), CGPoint(x: w - 128, y: 324), knee)) }
+    private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt]) -> some View {
+        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: w - 106, y: 232), CGPoint(x: w - 120, y: 232), at(GaryIdleFigure.tie))]
+        if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
+        if run.count > 0 { lines.append((CGPoint(x: w - 100, y: 326), CGPoint(x: w - 114, y: 326), at(GaryIdleFigure.knee))) }
+        for p in prompts {
+            let to = at(GaryIdleFigure.anchor(p.spot))
+            switch p.spot {
+            case .cigar: lines.append((CGPoint(x: w - 100, y: 68), CGPoint(x: w - 114, y: 68), to))
+            case .pocket: lines.append((CGPoint(x: 84, y: 214), CGPoint(x: 100, y: 214), to))
+            case .shoe: lines.append((CGPoint(x: 78, y: 320), CGPoint(x: 94, y: 320), to))
+            }
+        }
         return Canvas { ctx, _ in
             for (from, elbow, to) in lines {
                 var p = Path(); p.move(to: from); p.addLine(to: elbow); p.addLine(to: to)
@@ -105,6 +161,17 @@ struct HomeGaryOpening: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    /// A label as its own button: it opens its page, and a prompt tapped has been seen.
+    private func tap<L: View>(_ door: Door, key: String?, @ViewBuilder _ label: () -> L) -> some View {
+        Button {
+            if let key { markSeen([key]) }
+            onOpen(door)
+        } label: { label().contentShape(Rectangle()) }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - The labels
@@ -172,13 +239,85 @@ struct HomeGaryOpening: View {
         }
     }
 
-    private var accessibilityText: String {
-        var parts = ["Gary"]
-        if let d = lastNight { parts.append("\(dayWord(d.date).capitalized), \(d.wins) and \(d.losses), \(LabFormat.unitsNet(d.net_units))") }
-        if run.count > 0 { parts.append("\(run.count) \(run.sign > 0 ? "winning" : "losing") nights in a row") }
-        let t = tonightWords
-        parts.append("Tonight\(t.state.map { " \($0.lowercased())" } ?? ""), \(t.top.capitalized)\(t.money.map { ", \(LabFormat.unitsNet($0))" } ?? "")")
-        return parts.joined(separator: ". ")
+    /// Gary himself: his mood tonight is last night's.
+    private var garyAccessibility: String {
+        guard let d = lastNight else { return "Gary" }
+        return "Gary, after \(dayWord(d.date).lowercased()): \(d.wins) and \(d.losses), \(LabFormat.unitsNet(d.net_units))"
+    }
+
+    // MARK: - The prompts
+
+    /// The three around him, as the day stands.
+    private var prompts: [GaryPrompt] {
+        let today = (darts?.today ?? []).filter { !$0.isScratched }.map {
+            GaryPrompts.Dart(id: $0.id, player: $0.player, kind: $0.kind, prop: $0.prop, bet: $0.bet, odds: $0.odds, result: $0.result)
+        }
+        let yesterday = (darts?.yesterday ?? []).map {
+            GaryPrompts.Dart(id: $0.id, player: $0.player, kind: $0.kind, prop: $0.line.map { "line \($0.value)" }, bet: $0.bet,
+                             odds: $0.odds, result: "hit")
+        }
+        return [
+            GaryPrompts.parlay(date: slate, today: parlay.map(Self.lean), yesterday: lastParlay.map(Self.lean)),
+            darts == nil ? nil : GaryPrompts.darts(date: slate, today: today, yesterdayHits: yesterday),
+            GaryPrompts.picks(date: slate, picks: picks, games: games),
+        ].compactMap { $0 }
+    }
+
+    private static func lean(_ p: ParlaySlipModel) -> GaryPrompts.Parlay {
+        GaryPrompts.Parlay(odds: p.american_odds, result: p.result,
+                           landed: p.landed ?? p.legs.filter { $0.result == "won" }.count, legs: p.legs.count)
+    }
+
+    private var seen: Set<String> { Set(seenRaw.split(separator: "|").map(String.init)) }
+    private func fresh(_ p: GaryPrompt) -> Bool { p.key.map { !seen.contains($0) } ?? false }
+
+    private func markSeen(_ keys: [String]) {
+        var list = seenRaw.split(separator: "|").map(String.init)
+        for k in keys where !list.contains(k) { list.append(k) }
+        seenRaw = list.suffix(60).joined(separator: "|")
+    }
+
+    private func promptLabel(_ p: GaryPrompt) -> some View {
+        let isNew = fresh(p)
+        let chevron = Image(systemName: "chevron.right")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(GaryColors.gold)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                if isNew {
+                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                        .background(Circle().fill(GaryColors.win.opacity(0.22)).frame(width: 12, height: 12))
+                }
+                Text(isNew ? (p.newKicker ?? p.kicker) : p.kicker)
+                    .font(GaryFonts.kicker(9.5, .bold)).tracking(1.5)
+                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
+                    .fitsOneLine()
+            }
+            // Display lines set tight, the way a label on a diagram reads (the face's own leading is loose).
+            let lines = p.news.components(separatedBy: "\n")
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    HStack(spacing: 5) {
+                        Text(line)
+                            .font(GaryFonts.display(21)).foregroundStyle(GaryColors.warmWhite)
+                            .fitsOneLine()
+                        if p.hook == nil, i == lines.count - 1 { chevron }
+                    }
+                    .frame(height: 23, alignment: .leading)
+                }
+            }
+            .padding(.vertical, 1)
+            if let hook = p.hook {
+                HStack(spacing: 4) {
+                    Text(hook)
+                        .font(GaryFonts.display(18))
+                        .foregroundStyle(p.hookWins ? GaryColors.win : GaryColors.lightGold)
+                        .monospacedDigit().fitsOneLine()
+                    chevron
+                }
+            }
+        }
+        .accessibilityLabel("\(isNew ? "New: " : "")\(p.kicker.capitalized), \(p.news.replacingOccurrences(of: "\n", with: " ").capitalized)\(p.hook.map { ", \($0)" } ?? "")")
     }
 
     @MainActor private func refresh() async {
@@ -188,10 +327,18 @@ struct HomeGaryOpening: View {
             guard let data = try? await WinnersAccessStore.request("rest/v1/rpc/get_gary_bankroll", body: [:]) else { return nil }
             return try? JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
         }()
-        let (b, m) = await (board, money)
+        async let dartBoard = try? SupabaseAPI.fetchDarts(date: slate)
+        async let todayParlay = try? SupabaseAPI.fetchParlay(date: slate)
+        let (b, m, d, p) = await (board, money, dartBoard, todayParlay)
         guard !Task.isCancelled else { return }
         if let b { tonight = b }
         if let m { bankroll = m }
+        if let d { darts = d }
+        if let p { parlay = p }
+        // Before tonight's parlay lands, last night's (a hit says so).
+        if parlay == nil, lastParlay?.date != LabFormat.yesterday(of: slate) {
+            if case let y?? = try? await SupabaseAPI.fetchParlay(date: LabFormat.yesterday(of: slate)) { lastParlay = y }
+        }
     }
 
     // MARK: - The days
@@ -324,11 +471,24 @@ struct GaryIdleFigure: View {
     /// His habits, taken three a loop in turn.
     static let habits = ["puff", "cash", "phone", "tickets", "watch", "coin", "paper", "tap"]
 
-    /// The stance's shape and where the labels point on it: left of his sunglasses, his tie, his right knee.
+    /// The stance's shape and where the labels point on it: left of his sunglasses, his tie, his right knee,
+    /// his cigar, his trouser pocket, his shoe.
     static let baseAspect: CGFloat = 568 / 900
     static let head = CGPoint(x: 0.36, y: 0.09)
-    static let tie = CGPoint(x: 0.5, y: 0.3)
+    static let tie = CGPoint(x: 0.55, y: 0.31)
     static let knee = CGPoint(x: 0.62, y: 0.72)
+    static let cigar = CGPoint(x: 0.67, y: 0.195)
+    static let pocket = CGPoint(x: 0.36, y: 0.585)
+    static let shoe = CGPoint(x: 0.21, y: 0.95)
+
+    /// The spot on him each prompt points at.
+    static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {
+        switch spot {
+        case .cigar: return cigar
+        case .pocket: return pocket
+        case .shoe: return shoe
+        }
+    }
 
     static func reaction(_ face: String?) -> String {
         switch face {
@@ -520,5 +680,24 @@ private struct ColdMark: View {
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Color(hex: "#9DBBD3"))
             .accessibilityHidden(true)
+    }
+}
+
+/// The ring that pulses on Gary where a new prompt points (still under Reduce Motion).
+private struct PromptPulse: View {
+    let still: Bool
+    @State private var out = false
+
+    var body: some View {
+        Circle()
+            .stroke(GaryColors.win.opacity(still ? 0.55 : (out ? 0 : 0.7)), lineWidth: 1.5)
+            .frame(width: 24, height: 24)
+            .scaleEffect(still ? 1 : (out ? 1.6 : 0.6))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onAppear {
+                guard !still else { return }
+                withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) { out = true }
+            }
     }
 }

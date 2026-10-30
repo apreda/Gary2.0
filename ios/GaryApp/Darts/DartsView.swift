@@ -135,6 +135,8 @@ extension SupabaseAPI {
 }
 
 struct DartsView: View {
+    /// Set by Home's parlay prompt: open the parlay once it's read.
+    static let openParlayKey = "darts.openParlay"
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var board: DartsBoard?
     @State private var loading = true
@@ -452,6 +454,11 @@ struct DartsView: View {
             case .success(let fresh):
                 parlay = fresh; parlayDay = day
                 if fresh == nil, featureSheet == .parlay { featureSheet = nil }
+                // Home's "parlay of the day" prompt sent us here for it.
+                if fresh != nil, UserDefaults.standard.bool(forKey: Self.openParlayKey) {
+                    UserDefaults.standard.removeObject(forKey: Self.openParlayKey)
+                    featureSheet = .parlay
+                }
             case .failure:
                 // Keep today's ticket through a failed read; never another day's.
                 if parlayDay != day { parlay = nil; if featureSheet == .parlay { featureSheet = nil } }

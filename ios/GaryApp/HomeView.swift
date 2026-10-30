@@ -998,15 +998,31 @@ struct HomeView: View {
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
-        // ── GARY opens Home (founder, Oct 30 2026): Gary in his suit, labelled like a diagram with last night,
-        // tonight's Winners and his run of nights, in place of the Bento ("it's not an analytics dashboard").
-        // Each finished game's story opens from its own row on the board (HomeBoardStory).
-        HomeGaryOpening {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
+        // ── THE MARQUEE — the day's big games, tracked live (founder): countdown → live score + where Gary
+        // stands → result → the next one. Above Gary (founder, Oct 30 2026: "get the scoreboard back up ... if
+        // it was above Gary"), and on a day with no big game it counts down to tomorrow's.
+        if !marqueeEntries.isEmpty || marqueeTomorrowTease != nil {
+            HomeMarqueeTracker(entries: marqueeEntries,
+                               tomorrowTease: marqueeTomorrowTease,
+                               onOpenGame: { m, league in openGame(matchup: m, league: league) })
+                .allowsHitTesting(!boardLifted)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
+        }
+
+        // ── GARY (founder, Oct 30 2026): Gary in his vest, labelled like a diagram with last night, tonight's
+        // Winners and his run of nights, plus three prompts that change with the day (the parlay of the day,
+        // the darts, his picks), in place of the Bento ("it's not an analytics dashboard"). Each finished
+        // game's story opens from its own row on the board (HomeBoardStory).
+        HomeGaryOpening(picks: todayPicks.filter { !$0.isScratched }.count,
+                        games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count) { door in
+            if door == .parlay { UserDefaults.standard.set(true, forKey: DartsView.openParlayKey) }
+            let tab: Int = { switch door { case .winners: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
         }
         .allowsHitTesting(!boardLifted)
         .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
+        .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
 
         // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
         // the exhibitions, so the dark days lead with them instead of a void.
@@ -1019,16 +1035,6 @@ struct HomeView: View {
             .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
 
-        // ── THE MARQUEE — the day's big games, tracked live (founder):
-        // countdown → live score + where Gary stands → result → the next one.
-        if !marqueeEntries.isEmpty {
-            HomeMarqueeTracker(entries: marqueeEntries,
-                               tomorrowTease: marqueeTomorrowTease,
-                               onOpenGame: { m, league in openGame(matchup: m, league: league) })
-                .allowsHitTesting(!boardLifted)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
-        }
 
         // (Overnight strip removed Aug 3 — with the record box now holding
         // yesterday until first pitch and going live after, the strip said
