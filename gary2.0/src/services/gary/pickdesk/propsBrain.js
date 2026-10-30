@@ -254,11 +254,13 @@ export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) 
     const weighted = counted ? twoSided.flatMap((c) => Array(c.book_count || 1).fill(Number(c.line))).sort((x, y) => x - y) : [];
     const middle = weighted.length ? weighted[Math.floor((weighted.length - 1) / 2)] : null;
     const ranked = twoSided.slice().sort((a, b) => {
+      // The market's line first: most books, then the middle of the books' lines (round 13: a juiced consensus line lost to
+      // one book's alt line inside the price window). The window is applied after: a main line with no takeable side
+      // leaves the board, never swapped for another line.
+      if (counted && (b.book_count || 1) !== (a.book_count || 1)) return (b.book_count || 1) - (a.book_count || 1);
+      if (counted && middle != null && Math.abs(Number(a.line) - middle) !== Math.abs(Number(b.line) - middle)) return Math.abs(Number(a.line) - middle) - Math.abs(Number(b.line) - middle);
       const at = tier(a), bt = tier(b);
       if (at !== bt) return at - bt;
-      // The line most books post first; then the middle of the books' lines; the balance of merged best prices last.
-      if ((b.book_count || 1) !== (a.book_count || 1)) return (b.book_count || 1) - (a.book_count || 1);
-      if (middle != null && Math.abs(Number(a.line) - middle) !== Math.abs(Number(b.line) - middle)) return Math.abs(Number(a.line) - middle) - Math.abs(Number(b.line) - middle);
       const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
       const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
       if (aBal !== bBal) return aBal - bBal;

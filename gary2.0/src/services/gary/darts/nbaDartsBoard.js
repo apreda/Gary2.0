@@ -192,6 +192,9 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     if (!x.me || !(x.me.min > 0)) return `${where}: did not play (${why})`;
     // Fouls that cut his minutes (round 9: Giannis's 25 minutes on Oct 24 were six fouls).
     const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
+    // Out for good before the 4th (round 13: the live log's words, on his own row).
+    const off = x.rec.lastOff?.[x.me.name];
+    const gone = off && off.clock !== 'end' && off.period <= 3 ? `, left in the ${['1st', '2nd', '3rd'][off.period - 1]} quarter with ${/:/.test(String(off.clock)) ? off.clock : `${off.clock} seconds`} left and did not return` : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
     // A teammate who started and played under 15 minutes (round 12: Jalen Duren's 10-minute exit read as a full game around
     // him), the rule the live read uses.
@@ -201,7 +204,7 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     const m = x.me, shots = m.fga == null ? null
       : fields.some((f) => f === 'pts' || f === 'pra') ? `${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
         : fields.includes('fg3m') ? `${m.fg3m}-${m.fg3a} 3PT` : null;
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
   });
 }
 

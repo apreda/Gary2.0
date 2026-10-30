@@ -140,20 +140,29 @@ export function overPrice(rows, { propType, line = null } = {}) {
 }
 
 /**
- * A book's over/under rows for one market, unless that book prints two for
- * the same player: one of them is mislabeled and neither is its main line,
- * so the book sits out (the props board's ambiguousBookLines rule). FanDuel
- * files its rushing + receiving yards as receiving yards: Blake Corum
- * "under 40.5 receiving yards" against a real 2.5 (Oct 12 2026).
+ * A book's over/under rows for one market. A book that prints two for the same player has one mislabeled: FanDuel
+ * files its rushing + receiving yards as receiving yards (Blake Corum "under 40.5 receiving yards" against a real 2.5,
+ * Oct 12 2026). Its row nearest the other books' lines still counts toward the line (round 13: dropping the whole book
+ * let one book's outlier become the dart line), marked `doubled` so it never prices the line (the props board's
+ * ambiguousBookLines rule).
  */
 function mainLineRows(rows, propType) {
   const ou = (rows || []).filter((r) => r.prop_type === propType && r.market?.type === 'over_under');
   const perBook = new Map();
   for (const r of ou) {
     const key = `${r.vendor}|${r.player_id}`;
-    perBook.set(key, (perBook.get(key) || 0) + 1);
+    perBook.set(key, [...(perBook.get(key) || []), r]);
   }
-  return ou.filter((r) => perBook.get(`${r.vendor}|${r.player_id}`) === 1);
+  const out = [];
+  for (const list of perBook.values()) {
+    if (list.length === 1) { out.push(list[0]); continue; }
+    const others = ou.filter((r) => !list.includes(r) && String(r.player_id) === String(list[0].player_id) && perBook.get(`${r.vendor}|${r.player_id}`)?.length === 1).map((r) => Number(r.line_value)).sort((a, b) => a - b);
+    if (!others.length) continue;
+    const mid = others[Math.floor((others.length - 1) / 2)];
+    const near = [...list].sort((a, b) => Math.abs(Number(a.line_value) - mid) - Math.abs(Number(b.line_value) - mid))[0];
+    out.push({ ...near, doubled: true });
+  }
+  return out;
 }
 
 /** The market's line: the one most books post, and in a split market the middle of the books' lines (round 11: the
@@ -177,9 +186,10 @@ export function mainLineBoth(rows, propType) {
     Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
   if (!ou.length) return null;
   const line = consensusLine(ou.map((r) => r.line_value));
-  const at = ou.filter((r) => Number(r.line_value) === line);
+  const at = ou.filter((r) => Number(r.line_value) === line && !r.doubled);
   at.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
   const r = at[0];
+  if (!r) return null;
   return { line: Number(r.line_value), over: Number(r.market.over_odds), under: Number(r.market.under_odds), book: r.vendor };
 }
 

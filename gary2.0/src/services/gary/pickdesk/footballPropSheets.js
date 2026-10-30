@@ -213,9 +213,9 @@ export function buildFootballPropSheets({
     const pos = String(position || '').toUpperCase();
     if (['WR', 'TE', 'RB'].includes(pos) && !propSheetsByGame()) { const sh = targetShareLine(weeks, context.teamTargets, context.snaps?.get(normName(entry.name)), season); if (sh) facts.push(sh); }
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
-    const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
-    const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
-    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out);
+    // A side's club report and the defense it faces by position are printed once under the side's heading (round 13:
+    // every sheet repeated them, a fifth of the block); a player no side claimed keeps his own.
+    if (!tag) { const out = outAroundLine(context.injuries, entry.team, entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out); }
     const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
@@ -223,8 +223,10 @@ export function buildFootballPropSheets({
     return [head, ...lines, ...facts.map((f) => `   ${f}`)];
   };
 
+  const season = Number(context.season || seasonLabel);
   for (const side of [{ label: awayTeam, tag: 'away' }, { label: homeTeam, tag: 'home' }]) {
     const lines = [];
+    const positions = new Set();
     for (const [key, entry] of byPlayer) {
       if (placed.has(key) || !teamMatches(entry.team, side.label)) continue;
       const sheet = sheetFor(key, entry, side.tag);
@@ -232,8 +234,14 @@ export function buildFootballPropSheets({
       placed.add(key);
       players += 1;
       lines.push(...sheet);
+      positions.add(String(positionByName?.get(key) || '').toUpperCase());
     }
-    if (lines.length) blocks.push(`${String(side.label).toUpperCase()} (${side.tag})\n${lines.join('\n')}`);
+    if (!lines.length) continue;
+    const opp = side.tag === 'home' ? context.awayAbbr : context.homeAbbr;
+    const heading = [];
+    const out = outAroundLine(context.injuries, side.label, null, { weeksByName: context.weeksByName, snaps: context.snaps, label: 'club report' }); if (out) heading.push(` ${out}`);
+    for (const pos of ['QB', 'RB', 'WR', 'TE']) if (positions.has(pos)) { const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) heading.push(` ${def}`); }
+    blocks.push([`${String(side.label).toUpperCase()} (${side.tag})`, ...heading, ...lines].join('\n'));
   }
 
   // Board players no side claimed (a team name the book spells its own way).
