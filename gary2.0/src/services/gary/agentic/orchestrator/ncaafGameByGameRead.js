@@ -14,8 +14,11 @@ import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
 import { officialSacks } from '../../../sports/ncaaf/ncaafStarters.js';
-import { espnGameClause, placeHurt, getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
+import { checkedScoring, espnGameClause, placeHurt, getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
+import { teamReportHistory, outOnGameDay } from '../../../sports/ncaaf/ncaafAvailabilityReports.js';
+import { getSeasonWeather, gameWeatherFor } from '../../../providers/cfbdService.js';
+import { playedInWeather } from '../scoutReport/sports/ncaafSchedule.js';
 
 export const NCAAF_WINDOW = 6;
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
@@ -36,7 +39,7 @@ async function teamInfo(id) {
   if (!t) return null;
   // FBS is ESPN's group 80, as a conference's parent or the team's own group; every other group is FCS or below.
   const division = !t.groups ? null : t.groups.parent?.id === '80' || t.groups.id === '80' ? 'FBS' : 'FCS';
-  return { id: String(t.id), name: t.displayName, short: t.nickname || t.shortDisplayName || t.displayName, division, college: t.location, abbr: t.abbreviation };
+  return { id: String(t.id), name: t.displayName, short: t.nickname || t.shortDisplayName || t.displayName, division, college: t.location, abbr: t.abbreviation, conference: t.groups?.id ? String(t.groups.id) : null };
 }
 
 /** A team's finished games before `before` (an instant), oldest first: { id, date, venue, neutral, home, us, them }. */
@@ -111,6 +114,10 @@ function playerLines(box, teamId, positions = {}, starters = null) {
   return { off, def, otherTackles, kick, quiet, onFile: ps.length > 0 };
 }
 
+const histories = new Map(), weathers = new Map();
+const reportHistory = (t, date) => { const k = `${t.id}|${date}`; if (!histories.has(k)) histories.set(k, teamReportHistory({ college: t.college, name: t.name }, { date }).catch(() => null)); return histories.get(k); };
+const seasonWeather = (season) => { if (!weathers.has(season)) weathers.set(season, getSeasonWeather(season).catch(() => null)); return weathers.get(season); };
+
 async function fullGame(g, season, tonight) {
   const box = await getNcaafGameBox(g.id);
   const [opp, mine] = await Promise.all([teamInfo(g.them.id), teamInfo(g.us.id).catch(() => null)]);
@@ -122,7 +129,7 @@ async function fullGame(g, season, tonight) {
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   // Overtime has no clock (Oct 29 2026 hunt: "5th 0:00").
-  const scores = (box.scoring || []).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
+  const scores = checkedScoring(box).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${/not on file/.test(p.note || '') ? p.note : `${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home}${p.note ? `; ${p.note}` : ''}`})`.trim());
   const drives = (id, short) => { const all = (box.drives || []).filter((d) => d.teamId === id); if (!all.length) return `${short} not on file`;
     // Overtime possessions apart, from the 25 by rule (round 10).
     const ds = all.filter((d) => !d.ot), ot = all.filter((d) => d.ot); const rz = ncaafRedZone(ds);
@@ -161,6 +168,17 @@ async function fullGame(g, season, tonight) {
     `  returns: ${returns(g.us.id, g.us.short)} · ${returns(g.them.id, g.them.short)}`,
     `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
   const [usInfo, themInfo] = await Promise.all([teamInfo(g.us.id), opp]);
+  // Who each side was without that day (conference reports, conference games only) and rain, wind or cold at kickoff, as
+  // the live read has them (round 15: the second system's game blocks said neither).
+  const day = new Date(g.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (usInfo?.conference && usInfo.conference === themInfo?.conference) {
+    const tonightDay = new Date(tonight).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const outs = await Promise.all([usInfo, themInfo].map((t) => reportHistory(t, tonightDay).then((h) => (h?.found ? outOnGameDay(h, day) : null))));
+    if (outs.some((x) => x != null)) lines.push(`  out on game day (conference reports): ${[[g.us.short, outs[0]], [g.them.short, outs[1]]].map(([k, x]) => `${k} ${x == null ? 'not on file' : x.join(', ') || 'nobody'}`).join(' · ')}`);
+  }
+  const wx = await seasonWeather(season);
+  const row = gameWeatherFor(wx, g.us.name, g.them.name, g.date);
+  if (!row) lines.push('  weather: not on file'); else if (playedInWeather(row)) lines.push(`  ${playedInWeather(row)}`);
   const lineups = await Promise.all([[usInfo, themInfo], [themInfo, usInfo]].map(([a, b]) => (a?.college
     ? teamStarters({ college: a.college, abbr: a.abbr }, [{ gameId: g.id, date: g.date, opponent: { college: b?.college, abbr: b?.abbr } }], season).then((m) => m.get(String(g.id)) || null).catch(() => null) : null)));
   for (const [i, side] of [g.us, g.them].entries()) {

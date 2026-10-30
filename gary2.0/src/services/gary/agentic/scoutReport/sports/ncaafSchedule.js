@@ -910,12 +910,11 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
 Every completed game this season, newest first: date, site, score, the
-score by quarter, the opponent's conference, current record and AP rank, what the
-opponent allows and scores per game this season with its rank among FBS
-teams, who played quarterback (the most pass attempts), each unit's box
-score (runs, passing, turnovers, third and fourth downs, penalties) and where
-each side's points came from, and the weather at kickoff when it was rain,
-snow, a storm, wind of 15 mph or more, or freezing.
+score by quarter, the opponent (its conference, record now and other games),
+each unit's box score (runs, passing, turnovers, third and fourth downs,
+penalties), where each side's points came from, kicking, drives, scoring and
+flow, who was out, and the weather at kickoff when it was rain, snow, a
+storm, wind of 15 mph or more, or freezing.
 
 ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
