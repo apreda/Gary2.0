@@ -192,14 +192,20 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     const why = mine ? `out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')}`
       : listedAs ? `listed ${String(listedAs.status || '').toLowerCase()}` : !x.rec.report?.[x.side] || x.rec.report[x.side].notOnFile ? 'the injury report not on file' : 'not on the injury report';
     if (!x.me || !(x.me.min > 0)) return `${where}: did not play (${why})`;
+    // Ejected, and why, from the record's incidents (round 15: Tari Eason's flagrant 2 in the 1st read as an early exit,
+    // Aaron Gordon's two technicals and Day'Ron Sharpe's second flagrant 1 in the 4th as nothing or "fouled out").
+    const incs = (x.rec.incidents || []).filter((e) => { const who = String(e.text || '').replace(/\s+(?:ejected|technical foul|flagrant foul type \d)$/i, ''); return who !== e.text && samePlayerIn(x.me.name, [who], names); });
+    const ej = incs.find((e) => /\sejected$/i.test(e.text));
+    const count = (re) => incs.filter((e) => re.test(e.text)).length;
+    const ejected = ej ? `, ejected in the ${['1st', '2nd', '3rd', '4th'][ej.period - 1] || 'overtime'}${count(/flagrant foul type 2$/i) ? ' (flagrant 2)' : count(/flagrant foul type 1$/i) >= 2 ? ' (second flagrant 1)' : count(/technical foul$/i) >= 2 ? ' (two technicals)' : ''}` : '';
     // Fouls that cut his minutes (round 9: Giannis's 25 minutes on Oct 24 were six fouls).
-    const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
+    const fouls = ejected ? '' : x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
     // Out for good before the 4th (round 13: the live log's words, on his own row).
     const off = x.rec.lastOff?.[x.me.name];
     // On the floor to a quarter's end and never back, when every later quarter was followed (round 15).
     const sat = off && off.clock === 'end' && off.period <= 3 && x.me.min >= 15 && !(x.rec.wholeMinuteQuarters || []).some((q) => q > off.period)
       ? `, played to the end of the ${['1st', '2nd', '3rd'][off.period - 1]} quarter and did not return` : '';
-    const gone = sat || off && off.clock !== 'end' && off.period <= 3 ? sat || `, left in the ${['1st', '2nd', '3rd'][off.period - 1]} quarter with ${/:/.test(String(off.clock)) ? off.clock : `${off.clock} seconds`} left and did not return` : '';
+    const gone = ejected || sat || off && off.clock !== 'end' && off.period <= 3 ? ejected || sat || `, left in the ${['1st', '2nd', '3rd'][off.period - 1]} quarter with ${/:/.test(String(off.clock)) ? off.clock : `${off.clock} seconds`} left and did not return` : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
     // A teammate who started and played under 15 minutes (round 12: Jalen Duren's 10-minute exit read as a full game around
     // him), the rule the live read uses.

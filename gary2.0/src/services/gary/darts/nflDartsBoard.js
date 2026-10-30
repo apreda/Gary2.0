@@ -136,6 +136,12 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
   const teamOfRow = (i) => i?.player?.team?.full_name || i?.team?.full_name || '';
   const injuryByName = new Map(injuries.filter((i) => i?.player?.id == null).map((i) => [`${teamOfRow(i)}|${normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`)}`, String(i.status || '')]));
+  // Then the one report-only row on his club with his last name and first initial (round 15: the report's Matthew
+  // Hibner is BDL's Matt Hibner, and his line carried no status; an Out player spelled apart would stay on the board).
+  const initialKey = (team, full) => { const k = normName(full).split(' ').filter(Boolean); return k.length > 1 ? `${team}|${k.at(-1)}|${k[0][0]}` : null; };
+  const byInitial = new Map();
+  for (const i of injuries.filter((x) => x?.player?.id == null)) { const k = initialKey(teamOfRow(i), `${i.player?.first_name || ''} ${i.player?.last_name || ''}`); if (k) byInitial.set(k, byInitial.has(k) ? null : String(i.status || '')); }
+  const injuryByInitial = (team, full) => { const k = initialKey(team, full); return (k && byInitial.get(k)) || ''; };
   // The morning board's quarterback write-up no longer rides the frames (round 10: season totals, per-attempt averages,
   // opinions and a status from the morning). Each sheet carries the games themselves.
 
@@ -193,7 +199,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
       roster.sort((a, b) => order[POS[a.info.position]] - order[POS[b.info.position]]);
       for (const { pid, info } of roster) {
         const pos = POS[info.position];
-        const status = injuryById.get(pid) || injuryByName.get(`${teamName}|${normName(info.name)}`) || '';
+        const status = injuryById.get(pid) || injuryByName.get(`${teamName}|${normName(info.name)}`) || injuryByInitial(teamName, info.name);
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
         const td = overPrice(r, { propType: 'anytime_td', line: 0.5 });

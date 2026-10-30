@@ -182,6 +182,9 @@ export function regularsOut(snaps, roster) {
 export function aliasByRoster(snaps, statRows, roster) {
   if (!snaps?.byPfr || !roster?.length) return snaps;
   const pfr = new Map(roster.filter((r) => r.gsis_id && r.pfr_id).map((r) => [r.gsis_id, r.pfr_id]));
+  // By league id too, for report names spelled apart from the snap file (round 15: the report's Drew Ogletree, JuJu
+  // Brents and DJ Glaze, who play every week, read with no last game played).
+  snaps.byGsis = new Map([...pfr].map(([gsis, id]) => [gsis, snaps.byPfr.get(id)]).filter(([, list]) => list));
   for (const r of statRows || []) {
     const k = normName(r.player_display_name), list = snaps.byPfr.get(pfr.get(r.player_id));
     if (list && !snaps.has(k)) snaps.set(k, list);
@@ -319,7 +322,9 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const qbs = listed && !listed.some((q) => normName(q) === normName(r.player_display_name)) ? listed : null;
     if (qbs?.length) bits.push(`QB ${qbs.join(', ')}`);
     const faced = defenses?.get(r.opponent_team);
-    const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
+    // No schedule, no site: "against", and the log says what is missing (round 15: a failed download read every road
+    // game as a home game and dropped the results and missed weeks without a word).
+    const where = !days ? `against ${r.opponent_team}` : site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
     const result = days?.result?.get(`${season}|${wk}|${r.team}`);
     const parts = String(r.player_display_name || '').replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV)$/i, '').split(/\s+/);
     const h = (hurt?.get(`${wk}|${r.team}`) || []).find((e) => { const [i, l] = String(e.who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); });
@@ -369,7 +374,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       }
     }
   }
-  return [...played, ...missed].sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
+  const log = [...played, ...missed].sort((a, b) => b.wk - a.wk).slice(0, limit).map((x) => x.text);
+  return days ? log : [...log, 'dates, sites, results and missed games: not on file (the schedule did not load)'];
 }
 
 // A game he played without a catch, carry or pass has no stat row in either feed, so it read "did not play" and dropped
@@ -448,9 +454,16 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
   const lastWeek = (i) => {
     if (!weeksByName && !snaps) return null;
     const nm = normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`);
-    const ws = [...(weeksByName?.get(nm) || []).filter((r) => !club || r.team === club).map((r) => Number(r.week)),
-      ...(snaps?.get(nm) || []).filter((x) => !club || x.team === club).map((x) => Number(x.week)),
-      ...[...(snaps?.get(nm)?.stOnly?.keys() || []), ...(snaps?.get(nm)?.defOnly?.keys() || [])].filter((k) => !club || k.endsWith(`|${club}`)).map((k) => Number(k.split('|')[0]))];
+    const gsis = i.report?.gsis_id || null;
+    const stats = weeksByName?.get(nm) || (gsis && weeksByName ? [...weeksByName.values()].flat().filter((r) => r.player_id === gsis) : []);
+    // Else the one snap-file player on his club with his last name (linemen carry no PFR id: the report's DJ Glaze is
+    // the snap file's Delmar Glaze).
+    const last = normName(i.player?.last_name || '');
+    const byLast = () => { if (!snaps || !club || !last) return null; const hits = [...snaps.entries()].filter(([k, v]) => k.endsWith(` ${last}`) && (v || []).some((x) => x.team === club)); return new Set(hits.map(([, v]) => v)).size === 1 ? hits[0][1] : null; };
+    const sl = snaps?.get(nm) || (gsis && snaps?.byGsis?.get(gsis)) || byLast() || null;
+    const ws = [...stats.filter((r) => !club || r.team === club).map((r) => Number(r.week)),
+      ...(sl || []).filter((x) => !club || x.team === club).map((x) => Number(x.week)),
+      ...[...(sl?.stOnly?.keys() || []), ...(sl?.defOnly?.keys() || [])].filter((k) => !club || k.endsWith(`|${club}`)).map((k) => Number(k.split('|')[0]))];
     return ws.length ? Math.max(...ws) : null;
   };
   const detail = (r) => {
