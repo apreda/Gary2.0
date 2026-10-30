@@ -311,7 +311,7 @@ export function nflGameBlock(frame) {
 
 /** One NFL player in a line for the whole-board read. */
 export function nflBoardLine(kind, c, games, seasonLabel) {
-  return `${c.player} (${[c.position, c.team ? c.team.replace(/^.* /, '') : null, c.status].filter(Boolean).join(', ')}) · ${c.matchup} · ${nflLabel(kind)} ${nflPriceText(kind, c)} · ${seasonLabel}: ${games.length} game${games.length === 1 ? '' : 's'}`;
+  return `${c.player} (${[c.position, c.team ? c.team.replace(/^.* /, '') : null, c.status].filter(Boolean).join(', ')}) · ${c.matchup} · ${nflLabel(kind)} ${nflPriceText(kind, c)} · ${c.recent || `${seasonLabel}: ${games.length} game${games.length === 1 ? '' : 's'}`}`;
 }
 
 export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {}) {
@@ -333,7 +333,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const histProp = { td: 'anytime_td', qbtd: 'anytime_td', recyds: 'receiving_yards', rushyds: 'rushing_yards', passtd: 'passing_tds', int: 'interceptions' }[kind];
   const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
   if (hist) lines.push(hist);
-  const weeks = ctx.weeksByName?.get(normName(c.player)) || [];
+  const weeks = ctx.weeksByName?.get(c.statKey || normName(c.player)) || [];
   const rz = redZoneLine(ctx.rz, c.player, season, c.position);
   if (rz) lines.push(rz);
   const frame = ctx.frameOf?.(c.gameId);
@@ -342,7 +342,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   if (def) lines.push(def);
   const out = outAroundLine(ctx.injuries, c.team, c.player);
   if (out) lines.push(out);
-  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords,
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords,
     defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
@@ -366,7 +366,7 @@ export function screenNflCategory({ kind, board, gamesByName: logged, priorByNam
   // model, the sheet and the board line count them.
   const filled = new Map();
   const gamesByName = { get: (k) => { if (!filled.has(k)) filled.set(k, withSnapGames(logged.get(k) || [], ctx.snaps?.get(k) || [], { season, days: ctx.days })); return filled.get(k); } };
-  const markets = nflMarkets(kind, board).filter((m) => { const k = normName(board.candidates.get(m.id)?.player); return clearsNflFloor(kind, gamesByName.get(k), priorByName.get(k)); });
+  const markets = nflMarkets(kind, board).filter((m) => { const c = board.candidates.get(m.id); const k = c?.statKey || normName(c?.player); return clearsNflFloor(kind, gamesByName.get(k), priorByName.get(k)); });
   const profiles = new Map();
   const sideOf = (ctx, team) => {
     const t = normName(team);
@@ -388,7 +388,9 @@ export function screenNflCategory({ kind, board, gamesByName: logged, priorByNam
     }
     return roles.get(gameId);
   };
-  const profileFor = (key, m) => {
+  const profileFor = (marketKey, m) => {
+    // The stats' spelling of the player (round 10), not the market's.
+    const key = board.candidates.get(m.id)?.statKey || marketKey;
     const k = `${key}|${m.game_id}`;
     if (!profiles.has(k)) {
       const c = board.candidates.get(m.id);
@@ -407,7 +409,7 @@ export function screenNflCategory({ kind, board, gamesByName: logged, priorByNam
   const read = markets.map((m) => {
     const c = board.candidates.get(m.id);
     const s = byId.get(m.id) || null;
-    const key = normName(c.player);
+    const key = c.statKey || normName(c.player);
     const sheet = nflSheet(kind, c, gamesByName.get(key) || [], priorByName.get(key) || [], String(season), String(season - 1), ctx);
     return { id: m.id, c, gameId: c.gameId, edge: s?.edge ?? null, side: s?.side ?? (m.under_odds != null ? null : 'over'), chance: s ? { p: s.pModel, games: s.sample } : null,
       sheet, line: nflBoardLine(kind, c, gamesByName.get(key) || [], String(season)) };

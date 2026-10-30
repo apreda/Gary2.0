@@ -120,7 +120,7 @@ export function defenseLine(cur, prev, defense, position, season) {
         : `${x.rec || 0} catches on ${x.targets || 0} targets, ${x.recYds || 0} yards, ${x.recTd || 0} TD`);
     // "against", not "vs": the rows carry no site (round 9: road games read as home ones).
     const threw = (x) => (x.passers?.length ? ` (${x.passers.sort((a, b) => b.att - a.att).map((p) => `${p.name} ${p.att} att`).join(', ')})` : '');
-    const rows = [...games].sort((a, b) => b[0] - a[0]).map(([wk, x]) => `Wk ${wk} against ${x.opp}${g === 'QB' ? threw(x) : ''}: ${bits(x[g])}`);
+    const rows = [...games].sort((a, b) => b[0] - a[0]).map(([wk, x]) => `Wk ${wk} against ${x.opp}${threw(x)}: ${bits(x[g])}`);
     return `${defense} defense against ${TEAM_WORD[g]}, ${season} game by game, newest first: ${rows.join(' · ')}`;
   }
   const one = (map, label) => {
@@ -148,7 +148,7 @@ export function rosterWeekWords(roster) {
   for (const r of roster || []) {
     const w = r.status === 'INA' ? 'inactive' : r.status === 'EXE' ? "commissioner's exempt list"
       : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'injured reserve' : 'on a reserve list')
-        : r.status === 'DEV' ? 'practice squad' : null;
+        : r.status === 'DEV' ? 'practice squad' : r.status === 'CUT' ? 'released' : r.status === 'RET' ? 'retired' : /^TR/.test(String(r.status)) ? 'traded' : null;
     if (w && r.gsis_id) out.set(`${r.gsis_id}|${Number(r.week)}`, w);
   }
   return out;

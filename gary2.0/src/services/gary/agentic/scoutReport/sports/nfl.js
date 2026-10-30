@@ -1069,7 +1069,9 @@ export async function buildNflScoutReport(game, options = {}) {
         // feed's weekly word is its placeholder too, whether or not the report file loaded (round 8: Monday's Seahawks
         // read backup Drew Lock and Zach Charbonnet "Questionable" from a bulk stamp on 34 players).
         const pending = finalReportNotDue(game.commence_time);
-        (injuries.notOnFile ||= []).push(`Official injury report, Wk ${scheduleWeek}, ${team}: ${pending ? "not filed yet; this week's game statuses come with the final report" : 'not on file'}; the statuses below are the injury feed's.`);
+        // The league's file not having the team is not the team not having filed (round 10: the Bears' Thursday report was
+        // out on NFL.com while the file had no Bears rows yet).
+        (injuries.notOnFile ||= []).push(`Official injury report, Wk ${scheduleWeek}, ${team}: not in the league's file yet${pending ? "; this week's game statuses come with the final report" : ''}; the statuses below are the injury feed's.`);
         if (pending && Array.isArray(injuries[side])) for (const i of injuries[side]) i.statusesPending = true;
         continue;
       }
@@ -1100,7 +1102,7 @@ export async function buildNflScoutReport(game, options = {}) {
         const hurt = [p.injury, p.secondary].filter(Boolean).filter((v, i, a) => a.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === i).join(', ');
         // The practice word is the latest one the league's file holds, which can trail the feed's dated note by a day
         // (round 8: Kelce read "practice: Full" beside "limited in Thursday's practice"); it says so.
-        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practice ? `; practice, the latest day in the league's file: ${p.practice}` : ''}`;
+        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practiceDays?.length ? `; practice, by the day the league's file was published: ${p.practiceDays.map((x) => `${x.day} ${x.practice}`).join(' · ')}` : p.practice ? `; practice, the latest day in the league's file: ${p.practice}` : ''}`;
         const listed = findListed(first, rest.join(' '));
         if (listed) {
           if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }

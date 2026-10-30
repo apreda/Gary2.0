@@ -510,7 +510,8 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       const nk = (x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '');
       const statusAt = (w) => { const r = rosterRows.find((x) => Number(x.week) === w && ((injury.gsis_id && x.gsis_id === injury.gsis_id) || (x.pfr_id && x.pfr_id === pfrOf.get(player)) || (x.team === code0 && nk(x.full_name) === nk(player))));
         const word = !r ? null : r.status === 'INA' ? 'inactive' : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'IR' : 'reserve')
-          : r.status === 'EXE' ? "commissioner's exempt list" : r.status === 'DEV' ? 'practice squad' : null;
+          : r.status === 'EXE' ? "commissioner's exempt list" : r.status === 'DEV' ? 'practice squad'
+            : r.status === 'CUT' ? 'released' : r.status === 'RET' ? 'retired' : /^TR/.test(String(r.status)) ? 'traded' : null;
         return r && r.team !== code0 ? `with ${r.team}${word ? `, ${word}` : ''}` : word; };
       const earlier = weeks.filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5)
         .map((w) => { const x = shares.get(w); return `Wk ${w} ${!x ? (statusAt(w) || 'did not play') : x.kick ? `${x.st}%` : x.share != null ? `${x.share}%` : 'special teams only'}`; });

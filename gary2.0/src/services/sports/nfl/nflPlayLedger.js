@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 13;
+const LEDGER_SCHEMA = 14;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -78,6 +78,8 @@ const WANTED = [
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
   // Round 9 (Oct 29 2026): the play's text, for a second foul on one play (nflverse fills penalty_team for one only).
   'desc',
+  // Round 10: punting per game (founder: special teams game by game).
+  'punt_inside_twenty',
   // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
   // Oct 29 2026: the game clock, who scored and who kicked, and each drive's time of possession.
@@ -234,7 +236,7 @@ function extraUnit() {
   return {
     ints: 0, fumbles: 0, fumblesLost: 0, returnedForTd: 0, defTds: 0, stTds: 0, safeties: 0,
     fgMade: 0, fgAtt: 0, fgMissed: [], fgBlocked: [], xpMade: 0, xpAtt: 0, xpBlocked: 0,
-    puntsBlocked: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
+    puntsBlocked: 0, punts: 0, puntYards: 0, puntsInside20: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
     penalties: 0, penaltyYards: 0,
     contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0,
     thirdDowns: [], fourthDowns: [], bigPlays: [],
@@ -283,6 +285,7 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
     else if (result === 'blocked') k.xpBlocked += 1;
   }
   if (playType === 'punt' && flag(g('punt_blocked')) && E(posteam)) E(posteam).puntsBlocked += 1;
+  if (playType === 'punt' && E(posteam)) { const k = E(posteam); k.punts += 1; k.puntYards += num(g('kick_distance')) ?? 0; if (flag(g('punt_inside_twenty'))) k.puntsInside20 += 1; }
   if (KICKS.has(playType)) {
     const returner = g('return_team');
     const yards = num(g('return_yards'));
@@ -293,8 +296,10 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
   if (flag(g('penalty'))) {
     // Two accepted fouls on one play are two penalties, each with its yards (round 9: Patriots @ Bills Wk 4 read 5 for
     // 30 where the box has 6 for 35); one foul, or offsetting ones, as the play's own fields have it.
-    const text = String(g('desc') || '');
-    const fouls = /offset/i.test(text) ? [] : [...text.matchAll(/PENALTY on ([A-Z]{2,3})(?:-[^,]*)?, [^,]+, (\d+) yards?, enforced/g)].map((m) => ({ team: m[1], yards: Number(m[2]) }));
+    // After a replay reversal the text tells the play twice: the final ruling is after the last "REVERSED." (round 10:
+    // the Chargers' one hold read as two). A foul "placed at" a spot (a short kickoff) is a foul with no yards.
+    const all = String(g('desc') || ''); const cut = all.lastIndexOf('REVERSED.'); const text = cut >= 0 ? all.slice(cut) : all;
+    const fouls = /offset/i.test(text) ? [] : [...text.matchAll(/PENALTY on ([A-Z]{2,3})(?:-[^,]*)?, [^,]+, (?:(\d+) yards?, enforced|placed at)/g)].map((m) => ({ team: m[1], yards: Number(m[2] || 0) }));
     if (fouls.length > 1) for (const f of fouls) { const e = E(f.team); if (e) { e.penalties += 1; e.penaltyYards += f.yards; } }
     else { const e = E(g('penalty_team')); if (e) { e.penalties += 1; e.penaltyYards += num(g('penalty_yards')) ?? 0; } }
   }
@@ -437,7 +442,7 @@ function finishGameDetail(e) {
     safeties_scored: e.safeties,
     fg_made: e.fgMade, fg_att: e.fgAtt, fg_missed_distances: e.fgMissed, fg_blocked_distances: e.fgBlocked,
     xp_made: e.xpMade, xp_att: e.xpAtt, xp_blocked: e.xpBlocked,
-    punts_blocked: e.puntsBlocked,
+    punts_blocked: e.puntsBlocked, punts: e.punts, punt_yards: e.puntYards, punts_inside_20: e.puntsInside20,
     long_returns: e.longReturns,
     special_teams_fumbles: e.stFumbles, special_teams_fumbles_lost: e.stFumblesLost,
     onside_recoveries: e.onside,
@@ -549,7 +554,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           const td = g('td_player_name');
           const how = pts >= 6 ? (playType === 'pass' && scorer === posteam ? `${td || g('receiver_player_name') || '?'} ${yards ?? '?'}-yd pass from ${g('passer_player_name') || '?'}`
             : playType === 'run' && scorer === posteam ? `${td || g('rusher_player_name') || '?'} ${yards ?? '?'}-yd run`
-              : KICKS.has(playType) ? `${td || '?'} ${playType} return` : `${td || '?'} ${flag(g('interception')) ? 'interception' : flag(g('fumble')) ? 'fumble' : ''} return`.replace('  ', ' ') + ' TD')
+              : KICKS.has(playType) ? `${td || '?'} ${playType === 'punt' && flag(g('punt_blocked')) ? 'blocked punt' : playType} return` : `${td || '?'} ${flag(g('interception')) ? 'interception' : flag(g('fumble')) ? 'fumble' : ''} return`.replace('  ', ' ') + ' TD')
             : pts === 3 ? `${g('kicker_player_name') || '?'} ${num(g('kick_distance')) ?? '?'}-yd FG`
               : pts === 2 && flag(g('safety')) ? 'safety' : pts === 2 && f.tryOpen ? 'two points on the other team\'s try (returned)' : `${pts} points`;
           f.events.push({ q: qtr, clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, team: scorer, pts, how: pts >= 6 && !/ TD$/.test(how) ? `TD, ${how}` : how, home: homeNow, away: awayNow });

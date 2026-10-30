@@ -54,7 +54,7 @@ async function seasonLines(season) {
     cur.targets += n(r.targets); cur.rec += n(r.receptions); cur.recYds += n(r.receiving_yards); cur.recTd += n(r.receiving_tds);
     cur.carries += n(r.carries); cur.rushYds += n(r.rushing_yards); cur.rushTd += n(r.rushing_tds);
     cur.passTd += n(r.passing_tds); cur.int += n(r.passing_interceptions); cur.attempts += n(r.attempts);
-    cur.weeks = cur.weeks || new Set(); cur.weeks.add(n(r.week));
+    cur.weeks = cur.weeks || new Set(); cur.weeks.add(n(r.week)); cur.display = cur.display || r.player_display_name;
     cur.rows = cur.rows || [];
     cur.rows.push({ week: n(r.week), opp: r.opponent_team, targets: n(r.targets), rec: n(r.receptions), recYds: n(r.receiving_yards), recTd: n(r.receiving_tds),
       carries: n(r.carries), rushYds: n(r.rushing_yards), rushTd: n(r.rushing_tds), passTd: n(r.passing_tds), int: n(r.passing_interceptions) });
@@ -112,7 +112,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
   if (!games.length) return { league: 'NFL', games: 0, text: '', candidates: new Map(), eligible: {} };
 
   const [odds, feed, thisYear, schedule] = await Promise.all([
-    bdl.getOddsV2({ game_ids: games.map((g) => g.id) }, 'nfl').catch(() => []),
+    bdl.getOddsV2({ game_ids: games.map((g) => g.id) }, 'nfl').catch(() => null),
     bdl.getNflPlayerInjuries().catch(() => []),
     seasonLines(season),
     getNflSchedule().catch(() => null),
@@ -128,12 +128,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));
   const teamOfRow = (i) => i?.player?.team?.full_name || i?.team?.full_name || '';
   const injuryByName = new Map(injuries.filter((i) => i?.player?.id == null).map((i) => [`${teamOfRow(i)}|${normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`)}`, String(i.status || '')]));
-  // The quarterbacks' write-up (the Arms take ported to football) from the morning board, when it ran.
-  const qbTake = new Map();
-  if (supabase) {
-    const { data: day } = await supabase.from('tomorrow_board').select('board').eq('date', date).maybeSingle();
-    for (const r of day?.board || []) if (r.league === 'NFL' && r.arms_take) qbTake.set(`${r.away_team}|${r.home_team}`, String(r.arms_take).replace(/\s*\n+\s*/g, ' '));
-  }
+  // The morning board's quarterback write-up no longer rides the frames (round 10: season totals, per-attempt averages,
+  // opinions and a status from the morning). Each sheet carries the games themselves.
 
   const candidates = new Map();
   const eligible = { td: [], qbtd: [], recyds: [], rushyds: [], passtd: [], int: [] };
@@ -154,15 +150,23 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
       head.push(sp < 0 ? `${clubShort(home)} ${sp}` : sp > 0 ? `${clubShort(away)} ${-sp}` : 'pick em');
     }
     if (line?.total_value != null) head.push(`total ${line.total_value}`);
+    // A failed feed said, never a game with no line (round 10; the NBA board has said so since round 7).
+    if (!line) head.push(odds === null ? 'spread and total not on file (the odds feed did not load)' : 'spread and total not on file');
     lines.push(head.join(' · '));
     const gameLine = head.slice(1).join(' · ') || null;
     frames.push({ gameId: String(g.id), matchup, homeFull: home, awayFull: away, homeAbbr: ABBR_BY_NAME[home] || null, awayAbbr: ABBR_BY_NAME[away] || null,
       spreadHome: line?.spread_home_value != null ? Number(line.spread_home_value) : null, total: line?.total_value != null ? Number(line.total_value) : null, commence: g.date,
-      extra: qbTake.get(`${away}|${home}`) ? [`The quarterbacks: ${qbTake.get(`${away}|${home}`)}`] : [] });
+      extra: [] });
 
-    const rows = await bdl.getNflPlayerProps(g.id);
-    const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];
-    const players = ids.length ? await bdl.getNflPlayersByIds(ids) : {};
+    let rows = [], players = {};
+    try {
+      rows = await bdl.getNflPlayerProps(g.id, { throwOnError: true });
+      const ids = [...new Set(rows.map((r) => r.player_id).filter((x) => x != null))];
+      players = ids.length ? await bdl.getNflPlayersByIds(ids, { throwOnError: true }) : {};
+    } catch (e) {
+      frames.at(-1).extra.push(`players' prices not on file (the props feed did not load: ${e?.message || e})`);
+      lines.push(`  players' prices not on file (the props feed did not load)`);
+    }
     const byPlayer = new Map();
     for (const r of rows) {
       const k = String(r.player_id);
@@ -201,7 +205,13 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         if (pass) prices.push(both('PASSING TDS', pass));
         if (int) prices.push(both('INTERCEPTIONS', int));
         if (!prices.length) continue;
-        const nk = normName(info.name);
+        // The stats' spelling of him: his own name, else the one player on his team with his last name (round 10: BDL's
+        // Joshua Palmer, Matt Hibner and Hollywood Brown are nflverse's Josh Palmer, Matthew Hibner and Marquise Brown,
+        // and read "no games yet").
+        const lastOf = (x) => normName(String(x || '').replace(/\s+(?:jr|sr|ii|iii|iv|v)\.?$/i, '').trim().split(/\s+/).pop());
+        const same = abbr && !thisYear.byKey.has(`${normName(info.name)}|${abbr}`)
+          ? [...thisYear.byKey].filter(([k, v]) => k.endsWith(`|${abbr}`) && v.display && lastOf(v.display) === lastOf(info.name)) : [];
+        const nk = same.length === 1 ? same[0][0].split('|')[0] : normName(info.name);
         const now26 = abbr ? thisYear.byKey.get(`${nk}|${abbr}`) : null;
         const cur = now26 || thisYear.byName.get(nk);
         const facts = [`${info.name} ${pos}`];
@@ -209,12 +219,15 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const teamWeeks = abbr && schedule && !schedule.unavailable ? schedule.rows.filter((r) => Number(r.season) === season && (r.home_team === abbr || r.away_team === abbr)
           && r.home_score !== '' && r.home_score != null && String(r.gameday) < date).map((r) => Number(r.week)).sort((a, b) => b - a) : null;
         const elsewhere = (w) => [...thisYear.byKey].find(([k, v]) => k.startsWith(`${nk}|`) && k !== `${nk}|${abbr}` && v.weeks.has(w))?.[0].split('|')[1] || null;
-        facts.push(cur ? `${season}: ${statText(pos, cur, now26 ? teamWeeks : null, elsewhere)}` : thisYear.missing ? `${season}: games not on file (the weekly stats did not load)` : `${season}: no games yet`);
+        const recent = cur ? `${season}: ${statText(pos, cur, now26 ? teamWeeks : null, elsewhere)}` : thisYear.missing ? `${season}: games not on file (the weekly stats did not load)` : `${season}: no games yet`;
+        facts.push(recent);
         const id = `P${++seq}`;
         lines.push(`  [${id}] ${facts.join(' · ')} · ${prices.join(' · ')}`);
         const matchKey = info.name;
+        // statKey: the stats' spelling; recent: his team's last three games for the one-line board (round 10: built, never
+        // read; the line Gary picks sheets from carried only a game count).
         candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int, tdKind,
-          status: status ? status.toLowerCase() : null, gameLine });
+          status: status ? status.toLowerCase() : null, gameLine, statKey: nk, recent });
         if (td && !usedSet[tdKind].has(matchKey)) eligible[tdKind].push(id);
         if (rec && !usedSet.recyds.has(matchKey)) eligible.recyds.push(id);
         if (rush && !usedSet.rushyds.has(matchKey)) eligible.rushyds.push(id);

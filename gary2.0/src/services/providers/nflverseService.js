@@ -108,7 +108,7 @@ async function fetchRelease(url, fetchImpl) {
     const response = await fetchImpl(url, { signal: controller.signal });
     if (response.status === 404) return { status: 404 };
     if (!response.ok) return { status: response.status };
-    return { status: 200, text: await response.text() };
+    return { status: 200, text: await response.text(), modified: response.headers?.get?.('last-modified') || null };
   } finally {
     clearTimeout(timer);
   }
@@ -132,7 +132,7 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
       } else if (r.status !== 200) {
         lastError = new Error(`HTTP ${r.status}`);
       } else {
-        value = { rows: parseCsv(r.text) };
+        value = { rows: parseCsv(r.text), modified: r.modified || null, real: disk };
         if (disk) { try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(file, r.text); } catch { /* the copy is a convenience */ } }
       }
     } catch (error) {
@@ -143,7 +143,7 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
     // A failed fetch is NOT an empty result: the last good copy if it is recent, else the failure, said so.
     try {
       const age = disk ? Date.now() - statSync(file).mtimeMs : Infinity;
-      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000) };
+      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000), modified: new Date(statSync(file).mtimeMs).toUTCString(), real: true };
     } catch { /* no copy */ }
     return { unavailable: true, reason: `Could not reach nflverse for ${asset}_${season}.csv: ${lastError?.message || 'no answer'}` };
   }
@@ -156,6 +156,22 @@ const PRACTICE_SHORT = {
   'Limited Participation in Practice': 'Limited',
   'Full Participation in Practice': 'Full'
 };
+
+// The practice words seen for a week, by the published day of the file that carried them, kept on disk:
+// Map(player key -> [{ day, practice }]) in the order the files came.
+function practiceDays(season, week, entries, day) {
+  const path = join(DISK_DIR, `practice_days_${season}.json`);
+  let store = {};
+  try { store = JSON.parse(readFileSync(path, 'utf8')); } catch { /* first file of the season */ }
+  const out = new Map();
+  for (const [k, word] of entries) {
+    const key = `${week}|${k}`; const list = store[key] || [];
+    if (word && !list.some((x) => x.day === day)) list.push({ day, practice: word });
+    store[key] = list; out.set(k, list);
+  }
+  try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(path, JSON.stringify(store)); } catch { /* a convenience */ }
+  return out;
+}
 
 /**
  * The practice report for one team's week.
@@ -183,11 +199,19 @@ export async function getPracticeReport(teamName, season, week = null, opts = {}
     return { unavailable: true, reason: `No ${season} week ${targetWeek} practice rows for ${teamName} — that week's report may not be filed yet.` };
   }
 
+  // Each practice word with the day the league's file that carried it was published, kept across the week's daily files
+  // (round 10: the read gave one undated word; on Thursday night it was Wednesday's practice). The file holds one word
+  // per player, so the days are the files this machine has read.
+  const fileDay = new Date(file.modified && !Number.isNaN(Date.parse(file.modified)) ? Date.parse(file.modified) : Date.now())
+    .toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
+  // Kept only for the league's real file (a test's stand-in rows never reach the store).
+  const days = file.real ? practiceDays(season, targetWeek, rows.map((r) => [r.gsis_id || r.full_name, PRACTICE_SHORT[r.practice_status] || r.practice_status || null]), fileDay) : new Map();
   const players = rows.map((r) => ({
     name: r.full_name,
     position: r.position || null,
     game_status: r.report_status || null,
     practice: PRACTICE_SHORT[r.practice_status] || r.practice_status || null,
+    practiceDays: days.get(r.gsis_id || r.full_name) || null,
     injury: r.report_primary_injury || r.practice_primary_injury || null,
     // The practice rows carry the second injury too (Oct 29 2026 hunt, round 7: Golden's foot, Evans' knee, Brents'
     // concussion, Chase's ankle behind "resting player"); the league id joins a report name the feed spells otherwise.

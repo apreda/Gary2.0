@@ -311,6 +311,8 @@ export const nflPlayersMethods = {
       const status = error?.response?.status;
       const msg = error?.response?.data?.error || error.message;
       console.error(`[Ball Don't Lie] NFL player props error: ${status} - ${msg}`);
+      // A caller that must say the feed failed asks for the error (round 10: the darts board read a failure as no props).
+      if (options.throwOnError) throw error;
       return [];
     }
   },
@@ -320,7 +322,7 @@ export const nflPlayersMethods = {
    * @param {Array<number>} playerIds - Array of player IDs
    * @returns {Promise<Object>} - Map of player_id to player info
    */
-  async getNflPlayersByIds(playerIds) {
+  async getNflPlayersByIds(playerIds, { throwOnError = false } = {}) {
     try {
       if (!playerIds || playerIds.length === 0) return {};
 
@@ -354,6 +356,7 @@ export const nflPlayersMethods = {
     } catch (error) {
       recordPickDataFailure('BDL:getNflPlayersByIds', error);
       console.error(`[Ball Don't Lie] NFL players error:`, error?.response?.data || error.message);
+      if (throwOnError) throw error;
       return {};
     }
   },

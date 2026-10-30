@@ -289,7 +289,11 @@ function lineupChanges(d, code, gs) {
   // Off the team that week: matched on an earlier week's roster and on none of this week's (Oct 23 2026 audit: an id
   // missing from every week read as "no longer on the roster" for every lineman).
   const everOnRoster = (id) => [...rosterWeeks].some((w) => keysOf(id).some((k) => status.has(`${w}|${k}`)));
-  const gone = (g, id) => rosterWeeks.has(g.week) && !statusAt(g, id) && everOnRoster(id);
+  // Released, retired or traded that week is off the team too (round 10: Najee Harris, released in Week 7, read as a
+  // missing regular who "did not play").
+  const OFF = { CUT: 'released', RET: 'retired', TRD: 'traded', TRT: 'traded', TRC: 'traded' };
+  const offWord = (g, id) => OFF[statusAt(g, id)?.status] || null;
+  const gone = (g, id) => rosterWeeks.has(g.week) && (!statusAt(g, id) || Boolean(offWord(g, id))) && everOnRoster(id);
   const st = new Map();
   for (const r of rows) st.set(`${r.game_id}|${r.pfr_player_id}`, n(r.st_pct));
   const specialTeamsOnly = (g, id) => (st.get(`${g.g.game_id}|${id}`) || 0) > 0;
@@ -297,7 +301,7 @@ function lineupChanges(d, code, gs) {
   const of = (g, id) => share.get(`${g.g.game_id}|${id}`) || 0;
   const label = (g, id, pct, extra = '') => `${name.get(id).name} (${posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos}${pct ? `, ${Math.round(100 * of(g, id))}% of snaps` : ''}${extra})`;
   const list = (ps, f) => ps.slice(0, 8).map(f).join(', ') + (ps.length > 8 ? ` and ${ps.length - 8} more` : '');
-  const why = (g, id) => reserveWord(g, id) || (wasInactive(g, id) ? 'inactive' : specialTeamsOnly(g, id) ? 'special teams only' : statusAt(g, id)?.status === 'ACT' ? 'active, did not play' : 'did not play');
+  const why = (g, id) => reserveWord(g, id) || offWord(g, id) || (statusAt(g, id)?.status === 'DEV' ? 'practice squad' : null) || (wasInactive(g, id) ? 'inactive' : specialTeamsOnly(g, id) ? 'special teams only' : statusAt(g, id)?.status === 'ACT' ? 'active, did not play' : 'did not play');
   // The weekly stats' players (GSIS ids) as snap-count players (PFR ids): through the weekly roster, else the name.
   const pfrOfGsis = new Map();
   for (const r of d.rosterWeekly || []) if (r.team === code && r.gsis_id && r.pfr_id) pfrOfGsis.set(r.gsis_id, r.pfr_id);
@@ -355,10 +359,19 @@ function lineupChanges(d, code, gs) {
     out.limited.set(g.g.game_id, limited.map((id) => label(g, id, true)));
     out.absent.set(g.g.game_id, absent.slice().sort((a, b) => (name.get(b).pos === 'QB') - (name.get(a).pos === 'QB') || snapsBefore(b) - snapsBefore(a))
       .map((id) => ({ name: name.get(id).name, pos: posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos, why: why(g, id) })));
+    // Who played his spot that game: anyone at the same position group with half the snaps or more who is not a regular
+    // himself (round 10: Josh Wallace, 100% at corner for the Rams with Trent McDuffie out, appeared nowhere in the read).
+    const GROUP = (pos) => (/^(T|G|C|OT|OG|OL)$/.test(pos) ? 'OL' : /^(DE|DT|NT|DL|EDGE)$/.test(pos) ? 'DL' : /LB$/.test(pos) ? 'LB' : /^(CB|S|FS|SS|DB|SAF)$/.test(pos) ? 'DB' : pos);
+    const posOf = (id) => posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos;
+    // Measured against the last game the missing player played: who was under half the snaps then and over half now
+    // (a fill-in who has started three weeks is a regular by now, and still the one in his place).
+    const inPlace = (id) => { const lastWith = prior.slice().reverse().find((e) => of(e, id) >= 0.5);
+      return players.filter((p) => p !== id && GROUP(posOf(p)) === GROUP(posOf(id)) && of(g, p) >= 0.5 && (lastWith ? of(lastWith, p) < 0.5 : !snapRegular(p)))
+        .map((p) => `${name.get(p).name} ${Math.round(100 * of(g, p))}%`); };
     const parts = [
-      missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}, ${why(g, id)})`)}` : null,
+      missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}, ${why(g, id)}${inPlace(id).length ? `; at ${GROUP(posOf(id))} that day: ${inPlace(id).join(', ')}` : ''})`)}` : null,
       limited.length ? `left early or limited: ${list(limited, (id) => label(g, id, true))}` : null,
-      departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos})`)}` : null,
+      departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos}${offWord(g, id) ? `, ${offWord(g, id)}` : ''})`)}` : null,
       reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos}, ${reserveWord(g, id)})`)}` : null,
       back.length ? `back: ${list(back, (id) => label(g, id, true))}` : null,
       fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? `, off ${statusAt(gs[i - 1], id)?.status === 'EXE' ? "the commissioner's exempt list" : 'reserve'}` : ''))}` : null,
@@ -396,7 +409,10 @@ export function skillPlayers(d, team, before, reportText = '') {
   // A game with no stats row is "did not play" only when the snap counts have no snap for him either: Rice left Week 4
   // after 10% of the snaps without a touch.
   const snapRow = snapMatcher(d, c);
-  const snapShare = (row, gameId) => { const r = snapRow(row, gameId); return r ? Math.max(n(r.offense_pct), n(r.defense_pct)) : 0; };
+  // Offensive snaps for an offensive usage line, defense said apart (round 10: Travis Hunter's 100% on defense read "no
+  // touches (100% of snaps)").
+  const snapShare = (row, gameId) => { const r = snapRow(row, gameId); return r ? n(r.offense_pct) : 0; };
+  const defShare = (row, gameId) => n(snapRow(row, gameId)?.defense_pct);
   // Special-teams snaps are playing too (Oct 27 2026 data check: KaVontae Turpin, hurt on his first return in Week 6,
   // read "did not play").
   const stShare = (row, gameId) => n(snapRow(row, gameId)?.st_pct);
@@ -407,11 +423,13 @@ export function skillPlayers(d, team, before, reportText = '') {
   const rosterAt = new Map((d.rosterWeekly || []).filter((r) => r.gsis_id).map((r) => [`${r.gsis_id}|${n(r.week)}`, r]));
   const notPlayed = (p, week) => {
     const elsewhere = d.playerWeek.find((r) => r.player_id === p.player_id && n(r.week) === week && r.team !== c && String(r.season) === String(d.season));
-    if (elsewhere) return `with ${elsewhere.team}: ${game(elsewhere)}`;
+    // That game's own opponent, not this team's that week (round 10: Harrison's Arizona games read beside Houston's).
+    if (elsewhere) return `with ${elsewhere.team} against ${elsewhere.opponent_team}: ${game(elsewhere)}`;
     const r = rosterAt.get(`${p.player_id}|${week}`);
     if (!r) return d.rosterWeekly?.length ? 'on no club\'s roster that week' : 'did not play';
     const st = String(r.status || '').toUpperCase();
     const word = st === 'INA' ? 'inactive' : st === 'EXE' ? "commissioner's exempt list" : st === 'DEV' ? 'practice squad'
+      : st === 'CUT' ? 'released' : st === 'RET' ? 'retired' : /^TR/.test(st) ? 'traded'
       : st === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'injured reserve' : 'on a reserve list') : st === 'ACT' ? 'active, did not play' : 'did not play';
     return r.team !== c ? `with ${r.team}, ${word}` : st === 'ACT' ? 'did not play, active' : word === 'did not play' ? word : `did not play (${word})`;
   };
@@ -420,8 +438,11 @@ export function skillPlayers(d, team, before, reportText = '') {
     const played = new Map(rs.map((r) => [r.game_id, r]));
     // Each game names the opponent (Oct 26 2026): the game log above says who it was and how good it is.
     // A stat row with no carry or target (a return) says how much he played.
-    const rowGame = (x) => { const t = game(played.get(x.g.game_id)); if (t !== 'no touches') return t; const off = snapShare(last, x.g.game_id), sts = stShare(last, x.g.game_id); return off > 0 ? `no touches (${Math.round(100 * off)}% of snaps)` : sts > 0 ? `no carries or targets; special teams only (${Math.round(100 * sts)}% of special-teams snaps)` : t; };
-    const recent = gs.slice().reverse().map((x) => `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last, x.g.game_id))}% of snaps)` : stShare(last, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last, x.g.game_id))}% of special-teams snaps)` : notPlayed(last, x.week)}`);
+    const rowGame = (x) => { const t = game(played.get(x.g.game_id)); if (t !== 'no touches') return t; const off = snapShare(last, x.g.game_id), sts = stShare(last, x.g.game_id); return off > 0 ? `no touches (${Math.round(100 * off)}% of offensive snaps)` : sts > 0 && !defShare(last, x.g.game_id) ? `no carries or targets; special teams only (${Math.round(100 * sts)}% of special-teams snaps)` : defShare(last, x.g.game_id) > 0 ? 'no offensive snaps' : t; };
+    const recent = gs.slice().reverse().map((x) => { const why = played.has(x.g.game_id) ? null : snapShare(last, x.g.game_id) > 0 ? null : stShare(last, x.g.game_id) > 0 ? null : notPlayed(last, x.week);
+      // Another club's game is its own row, with its own opponent; this team's opponent that week is not his.
+      if (why && /^with [A-Z]+ against /.test(why)) return `Wk ${x.week} ${why}`;
+      return `Wk ${x.week} ${versus(x, nickname(x.opp), true)} ${played.has(x.g.game_id) ? rowGame(x) : snapShare(last, x.g.game_id) > 0 ? `no touches (${Math.round(100 * snapShare(last, x.g.game_id))}% of offensive snaps)` : stShare(last, x.g.game_id) > 0 ? `special teams only (${Math.round(100 * stShare(last, x.g.game_id))}% of special-teams snaps)` : why}${defShare(last, x.g.game_id) > 0 ? `; ${Math.round(100 * defShare(last, x.g.game_id))}% on defense` : ''}`; });
     // With his status, as the report lists it (Oct 24 2026: Rice read "on this week's injury report" while Out).
     const reportLine = String(reportText).split('\n').find((l) => l.toLowerCase().replace(/[^a-z]/g, '').includes(sameKey(last.player_display_name)));
     // A player on a reserve list has his status after his name there (Oct 29 2026 hunt, round 7: De'Von Achane, out for
@@ -568,6 +589,20 @@ function pressureLine(d, x, code) {
   return `pressure: ${nickname(code)} ${ours || 'not on file'}${rush(x.opp) ? ` (${nickname(x.opp)} rushers: ${rush(x.opp)})` : ''} · ${nickname(x.opp)} ${theirs || 'not on file'}${rush(code) ? ` (${nickname(code)} rushers: ${rush(code)})` : ''}`;
 }
 
+// Coverage and throws, game by game, from the same PFR charting (round 10: only pressure was printed): each defender
+// thrown at three times or more with what he allowed, and each quarterback's dropped passes and bad throws.
+function coverageLine(d, x, code) {
+  if (!d.pressure) return null;
+  const cover = (team) => (d.pressure.rushers.get(`${x.g.game_id}|${team}`) || []).filter((r) => n(r.def_targets) >= 3)
+    .sort((a, b) => n(b.def_targets) - n(a.def_targets)).slice(0, 5)
+    .map((r) => `${r.pfr_player_name} ${n(r.def_completions_allowed)} of ${n(r.def_targets)} for ${n(r.def_yards_allowed)}${n(r.def_receiving_td_allowed) ? `, ${n(r.def_receiving_td_allowed)} TD` : ''}${n(r.def_missed_tackles) >= 2 ? `, ${n(r.def_missed_tackles)} missed tackles` : ''}`).join('; ');
+  const throws = (team) => (d.pressure.qbs.get(`${x.g.game_id}|${team}`) || []).filter((r) => r.passing_drops !== '' || r.passing_bad_throws !== '')
+    .map((r) => `${r.pfr_player_name} ${n(r.passing_drops)} dropped, ${n(r.passing_bad_throws)} bad throws`).join('; ');
+  const side = (team) => `${nickname(team)} defenders thrown at: ${cover(team) || 'none three times or more'}`;
+  const qbs = [code, x.opp].map((t) => throws(t) ? `${nickname(t)} ${throws(t)}` : null).filter(Boolean);
+  return `coverage: ${side(code)} · ${side(x.opp)}${qbs.length ? `; passes: ${qbs.join(' · ')}` : ''}`;
+}
+
 // THE GAME'S FLOW AND ITS DOWNS (founder GO, Oct 29 2026: "who got ahead, how, when did the team go up 14 versus
 // being close the whole game", "how the team did on third downs and fourth downs, coupled with down and distance").
 // From the play ledger: every score in order with the score after it, the largest lead each way and when, lead
@@ -643,6 +678,22 @@ const quarterLine = (x, code) => {
 // from 50-plus, or by a kicker who is not kicking today).
 const kicks = (k) => [k.fgAtt ? `FG ${k.kickers?.length ? `${k.kickers.join(' and ')} ` : ''}${k.fgMade}-of-${k.fgAtt}${k.made?.length || k.missed.length || k.blocked.length ? ` (${[k.made?.length ? `made ${k.made.join(', ')}` : null, k.missed.length ? `missed ${k.missed.join(', ')}` : null, k.blocked.length ? `blocked ${k.blocked.join(', ')}` : null].filter(Boolean).join('; ')})` : ''}` : 'no field goal tries',
   k.xpAtt ? `XP ${k.xpKickers?.length && (k.xpKickers.length > 1 || k.xpKickers[0] !== k.kickers?.[0]) ? `${k.xpKickers.join(' and ')} ` : ''}${k.xpMade}-of-${k.xpAtt}` : null].filter(Boolean).join(', ');
+// Special teams game by game for both sides (round 10, founder: special teams; the read had only unnamed 40+ returns):
+// punting from the play ledger (punts, gross yards, inside the 20, blocked), who returned kicks and punts and for how
+// much from the weekly player stats, and who blocked a punt, field goal or extra point.
+function specialTeamsLine(d, x, code) {
+  const rows = (d.playerWeek || []).filter((r) => r.game_id === x.g.game_id);
+  const side = (c) => {
+    const L = x.ledger?.lines?.[c];
+    const punting = !L ? 'punting not on file' : !n(L.punts) ? 'no punts' : `${n(L.punts)} punt${n(L.punts) === 1 ? '' : 's'} for ${n(L.punt_yards)} yds (${n(L.punts_inside_20)} inside the 20${n(L.punts_blocked) ? `, ${n(L.punts_blocked)} blocked` : ''})`;
+    const mine = rows.filter((r) => r.team === c);
+    const ret = mine.filter((r) => n(r.kickoff_returns) || n(r.punt_returns)).map((r) => `${r.player_display_name} ${[n(r.kickoff_returns) ? `${n(r.kickoff_returns)} kickoff return${n(r.kickoff_returns) === 1 ? '' : 's'} for ${n(r.kickoff_return_yards)}` : null, n(r.punt_returns) ? `${n(r.punt_returns)} punt return${n(r.punt_returns) === 1 ? '' : 's'} for ${n(r.punt_return_yards)}` : null].filter(Boolean).join(', ')}`);
+    const blocks = mine.flatMap((r) => [['def_punt_blocks', 'punt'], ['def_fg_blocks', 'field goal'], ['def_pat_blocks', 'extra point']].filter(([k]) => n(r[k])).map(([k, w]) => `${r.player_display_name} blocked a ${w}`));
+    return `${nickname(c)} ${punting}; returns ${rows.length ? ret.join('; ') || 'none' : 'not on file'}${blocks.length ? `; ${blocks.join(', ')}` : ''}`;
+  };
+  return `special teams: ${side(code)} · ${side(x.opp)}`;
+}
+
 // How each side's drives ended, red-zone trips, drives that began in the other side's territory and their points, and
 // touchdowns the offense did not score: counts from the play ledger, never its average start or per-play numbers
 // (Oct 23 2026 data audit: Denver began 5 of 12 drives in Chargers territory and scored 20 of its 23 points there).
@@ -705,7 +756,7 @@ export function gameByGame(d, team, before) {
     const kicking = x.off && x.def ? `kicking: ${nickname(c)} ${kicks(x.off.kicking)}; ${nickname(x.opp)} ${kicks(x.def.kicking)}` : null;
     const scoring = !d.ledgerGames ? null : !x.ledger ? 'quarters and drives not on file' : quarterLine(x, c);
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
-    const detail = [without, boxLine(x, c), pressureLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null, flowLine(x, c), downsLine(x, c), bigPlaysLine(x, c), byScoreLine(x, c),
+    const detail = [without, boxLine(x, c), pressureLine(d, x, c), coverageLine(d, x, c), [scoring, kicking].filter(Boolean).join(' · ') || null, specialTeamsLine(d, x, c), flowLine(x, c), downsLine(x, c), bigPlaysLine(x, c), byScoreLine(x, c),
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
     return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
@@ -999,10 +1050,12 @@ export function nflGameFull(d, x, code, before) {
   const changesUs = lineupChanges(d, code, ourGames).get(x.g.game_id), changesThem = lineupChanges(d, o, oppGames).get(x.g.game_id);
   const lines = [head, setting, weather ? `  ${weather}` : null,
     `  how it went: ${[scoring, kicking].filter(Boolean).join(' · ')}`,
+    `  ${specialTeamsLine(d, x, code)}`,
     d.ledgerGames && x.ledger ? `  ${driveLine(x, code)}` : null,
     `  quarterbacks: ${nickname(code)} ${qb(code)} · ${nickname(o)} ${qb(o)}`,
     `  ${boxLine(x, code)}`,
     `  ${pressureLine(d, x, code)}`,
+    coverageLine(d, x, code) ? `  ${coverageLine(d, x, code)}` : null,
     flowLine(x, code) ? `  ${flowLine(x, code)}` : null,
     downsLine(x, code) ? `  ${downsLine(x, code)}` : null,
     bigPlaysLine(x, code) ? `  ${bigPlaysLine(x, code)}` : null,

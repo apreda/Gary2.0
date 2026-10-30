@@ -36,7 +36,10 @@ export const NEWS_NOT_ON_FILE = "The news search did not return a report for thi
 // Regulars who missed or left the last game and are not on this week's report, under it (nflBettorData notOnReport).
 export function backOffReport(data, desk, awayTeam, homeTeam, before) {
   const report = sectionOf(desk, 'INJURY REPORT');
-  const lines = [awayTeam, homeTeam].map((t) => notOnReport(data, t, before, report)).filter(Boolean);
+  // Only against a report that loaded: a team whose official report is not in the league's file has no list to be off
+  // (round 10: T.J. Edwards, on the Bears' Thursday report, read "not on this week's injury report").
+  const lines = [awayTeam, homeTeam].map((t) => (report.includes(`${t}: not in the league's file yet`) ? `${t}: the official report is not in the league's file yet, so who is off it is not known`
+    : notOnReport(data, t, before, report))).filter(Boolean);
   return lines.length ? `MISSED OR LEFT THE LAST GAME, NOT ON THIS WEEK'S INJURY REPORT\n${lines.join('\n')}` : null;
 }
 
