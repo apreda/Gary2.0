@@ -124,11 +124,12 @@ function scoringLine(rows, teams, official = null) {
   const both = teams.map((t, i) => side(t, official ? [official.us, official.them][i] : null));
   return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
 }
-function whoPlayed(box, others, out, starters, scoring, official) {
+function whoPlayed(box, others, out, starters, scoring, official, ownOut = '') {
   if (!box) return ['      who played: box score not on file', scoring, out].filter(Boolean).join('\n');
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
+  // Not one the row's own Out line already names with his reason (round 16: Curry, Green and Podziemski twice a row).
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
-    .filter((nm) => !played.some((p) => p.name === nm));
+    .filter((nm) => !played.some((p) => p.name === nm) && !String(ownOut || '').includes(nm));
   // Everyone who played, the first eight with points, rebounds, assists, turnovers and shooting; the opponent's players
   // with 15+ minutes and their points (the top five left out a starter at 24 minutes; Oct 23 2026 audit). Rebounds,
   // assists and turnovers reached Gary only through the news until Oct 27 2026 ("16 Cunningham turnovers", Towns' 14
@@ -136,14 +137,16 @@ function whoPlayed(box, others, out, starters, scoring, official) {
   // Foul trouble (Oct 28 2026 read check: Thompson fouled out at New York and Reed had five fouls early in the third,
   // read as a managed workload and a weak frontcourt).
   const fouls = (p) => (p.pf >= 6 ? 'fouled out' : p.pf === 5 ? '5 fouls' : null);
-  const rest = played.slice(8).map((p) => `${p.name} ${p.min}${fouls(p) ? ` (${fouls(p)})` : ''}`);
+  // Past the first eight, ten minutes or more gets points, rebounds and shooting (round 16: the bench players who took a
+  // missing starter's minutes, Collin Sexton 14 and Robert Williams III 18, read minutes only).
+  const rest = played.slice(8).map((p) => `${p.name} ${p.min}${p.min >= 10 ? ` (${[`${p.pts} pts`, `${p.reb} reb`, shooting(p), fouls(p)].filter(Boolean).join(', ')})` : fouls(p) ? ` (${fouls(p)})` : ''}`);
   const theirs = (box.opponent || []).filter((p) => p.min >= 15).sort((a, b) => b.min - a.min).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, shooting(p), fouls(p)].filter(Boolean).join(', ')})`);
   return [`      box: ${boxLine(box, official?.us)} · ${boxLine(box.opponent, official?.them)}`,
     scoring,
     // Who started (Oct 24 2026: minutes alone read a starter moved to the bench the same as one who started).
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
     `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p), fouls(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
-    missed.length ? `      did not play: ${missed.join(', ')}` : null,
+    missed.length ? `      did not play${ownOut && !/not on file|not filed/.test(ownOut) ? ' (not Out on the report)' : ''}: ${missed.join(', ')}` : null,
     theirs.length ? `      theirs with 15+ minutes: ${theirs.join(', ')}` : null,
     out].filter(Boolean).join('\n');
 }
@@ -195,7 +198,9 @@ async function opponentOut(g, team, opp, oppId, who = 'their') {
     const not = out.filter((r) => !hadPlayed(r));
     const games = before.n === 1 ? 'its one game' : `any of its ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
     if (!not.length) return `      ${who} Out on ${when}: ${played.map(said).join(', ')}`;
-    return `      ${who} Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;
+    // The long absentees by name only: their reasons are on the report at the top and were on every row (round 16: the
+    // same three Warriors and their surgeries on five rows).
+    return `      ${who} Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map((r) => r.name).join(', ')}`;
   } catch (e) {
     return `      ${who} Out list: not on file (${e.message})`;
   }
@@ -324,7 +329,9 @@ export async function nextGameLine(team, tip, season = nbaSeason()) {
   return `${t.name}: next game ${when}, ${home ? 'at home vs' : 'at'} ${opp}${off <= 0 ? ' (tonight is the first night of a back-to-back)' : `, after ${off} day${off === 1 ? '' : 's'} off`}`;
 }
 
-export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data } = {}) {
+// `meetingUnder`: tonight's opponent, whose log is printed first; a game against it is printed there in full and here as its
+// score with a pointer (round 16: a meeting read twice, and Grimes's 3-5 threes in it read twice in two forms).
+export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data, meetingUnder = null } = {}) {
   const ts = data === undefined ? await teamSeason(team, before, season) : data;
   if (!ts) return `${head}: games not on file.`;
   const { games, boxes } = ts;
@@ -416,12 +423,13 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const gp = oppGames ? oppGames.length : o?.gp;
     const rec = wl ? ` (${wl} now${gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : byTeamSummaries ? '' : '; their other games: not on file'})` : '';
     const q = quarterLine(g, home, us, them);
+    if (meetingUnder && String(opp).split(' ').pop() === String(meetingUnder).split(' ').pop()) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above`;
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     const stored = flows.get(String(g.id));
     const flow = stored ? `      flow: ${flowFacts(stored, ts.id, byTeamSummaries)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), earlyLine(i, g)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i]), earlyLine(i, g)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

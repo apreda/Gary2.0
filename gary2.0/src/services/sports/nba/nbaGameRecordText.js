@@ -124,7 +124,8 @@ function reportText(rec, side, before) {
   for (const x of rows) {
     const fresh = before.length && !samePlayerIn(x.name, played, names);
     const key = `${x.status}${fresh ? ` (not in ${before.length === 1 ? 'their one game' : `any of their ${before.length} games`} before this one)` : ''}`;
-    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(`${x.name} (${reason(x)})`);
+    // Long absentees by name only (round 16: the same reasons on every game).
+    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(fresh ? x.name : `${x.name} (${reason(x)})`);
   }
   return `${short}: ${[...groups].map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ')}`;
 }
@@ -169,7 +170,8 @@ export function fullGameText(rec, teamId, byTeam) {
   };
   lines.push(`  on the floor at the end: ${rec.closing ? `${rec[us].short} ${rec.closing[us].join(', ')} · ${rec[them].short} ${rec.closing[them].join(', ')}` : 'not on file (the play-by-play does not account for the last quarter\'s minutes)'}`);
   const cut = (rec.wholeMinuteQuarters || []).filter((q) => q >= 4).length ? ' (whole minutes, cut down)' : '';
-  lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}${cut}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
+  // Only when some player's quarters are not on his row below, which already ends with his 4th (round 16).
+  if (rec.players.some((p) => p.min > 0 && !p.quarters)) lines.push(`  minutes in the 4th${rec.periods.length > 4 ? ' and overtime' : ''}${cut}: ${rec[us].short} ${q4(us) || 'not on file'} · ${rec[them].short} ${q4(them) || 'not on file'}`);
   if (rec.incidents?.length) lines.push(`  technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}`);
   lines.push(`  injury report at tip: ${reportText(rec, us, before(rec[us].id))} · ${reportText(rec, them, before(rec[them].id))}`);
   for (const side of [us, them]) {

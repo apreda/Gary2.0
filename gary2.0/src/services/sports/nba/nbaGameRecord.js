@@ -250,7 +250,11 @@ export async function buildNbaGameRecord(gameId) {
     // already taken (round 15: a DNP teammate could inherit the line of a teammate with his last name).
     for (const p of [...players].sort((a, b) => (b.min > 0) - (a.min > 0))) {
       const mine = official.filter((x) => x.side === p.side && !matched.has(x));
-      const o = p.min > 0 ? officialLineFor(p.name, mine) : mine.find((x) => x.key === espnNameKey(p.name)) || null;
+      // Or by the same words in another order (round 16: BDL's "Hansen Yang" at 0 from an early box is ESPN's Yang Hansen,
+      // and the record held him twice); never by a last name alone.
+      const wordSet = (n) => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
+      const sameWords = (x) => Boolean(wordSet(p.name)) && wordSet(x.name) === wordSet(p.name);
+      const o = p.min > 0 ? officialLineFor(p.name, mine) : mine.find((x) => x.key === espnNameKey(p.name)) || (mine.filter(sameWords).length === 1 ? mine.find(sameWords) : null);
       if (!o) { if (p.min > 0) unmatched.push(p.name); continue; }
       if (!(p.min > 0) && !(o.min > 0)) continue;
       matched.add(o);

@@ -253,10 +253,10 @@ function teamHead(desk, ratings, team, ts) {
   const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
 }
-async function gameLog(desk, ratings, team, asOf, ts) {
+async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null) {
   const h = teamHead(desk, ratings, team, ts);
   if (!h.head) return h.text;
-  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts }).catch(() => `${h.head}: games not on file.`);
+  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts, meetingUnder }).catch(() => `${h.head}: games not on file.`);
   return h.rated ? log.replace(/^(.*)\n/, `$1\n  ${h.rated}\n`) : log;
 }
 
@@ -631,15 +631,29 @@ function withoutOrphans(lines, drop) {
           continue;
         }
       }
+      // A bullet ending in ':' whose deeper bullets all left goes the same way (round 16: "Rotowire's projections (Oct. 29,
+      // unconfirmed):" over two dropped starters tables).
+      if (/:\s*(?:\*\*)?\s*$/.test(lines[i]) && listy(i)) {
+        const depth = (k) => lines[k].match(/^\s*/)[0].length;
+        const kids = []; for (let k = i + 1; k < lines.length; k += 1) { if (blank(k)) continue; if (depth(k) <= depth(i)) break; kids.push(k); }
+        if (kids.length && kids.every((k) => drop[k])) {
+          const rest = beforeLastSentence(lines[i]);
+          if (rest && rest !== lines[i].trim() && !/^\s*[-•*]\s*(?:\*\*[^*]+\*\*)?\s*$/.test(rest)) { lines[i] = `${lines[i].match(/^\s*[-•*]\s/)[0]}${rest.replace(/^[-•*]\s*/, '')}`; changed = true; } else set(i);
+          continue;
+        }
+      }
       if (ANAPHOR.test(lines[i]) && !listy(i)) { const p = prevIdx(i); if (p >= 0 && drop[p] && !heading(p)) set(i); }
       // A bold heading straight over another (a team's name over its "Current storylines") owns everything to the next
       // such parent heading, its own subheadings included (round 12: the Kings' storylines read under the Pelicans' name
       // when the team heading went for having no line before its first subheading).
       if (heading(i)) {
-        // Over the next line still kept, a dropped intro paragraph skipped (round 15: the Kings' heading, over a dropped
-        // first paragraph, went and its storylines read under the Pelicans').
-        const nextLive = (k) => { let j = k + 1; while (j < lines.length && (blank(j) || drop[j])) j += 1; return j < lines.length ? j : -1; };
-        const parentAt = (k) => heading(k) && nextLive(k) >= 0 && heading(nextLive(k));
+        // From the desk as written: a heading straight over another, or (round 15: the Kings' heading, over a dropped first
+        // paragraph, went and its storylines read under the Pelicans') one over only dropped lines and then a subheading,
+        // when it is not itself a subheading straight under a heading (round 16: Utah's first subsection, emptied, read as a
+        // parent and took the team heading with it).
+        const overDropped = (k) => { const n = nextIdx(k); if (n < 0 || heading(n) || !drop[n]) return false;
+          let j = n; while (j < lines.length && (blank(j) || (drop[j] && !heading(j)))) j += 1; return j < lines.length && heading(j); };
+        const parentAt = (k) => heading(k) && nextIdx(k) >= 0 && (heading(nextIdx(k)) || (overDropped(k) && !(prevIdx(k) >= 0 && heading(prevIdx(k)))));
         const parent = parentAt(i);
         let k = i + 1, kept = false;
         while (k < lines.length && !(parent ? parentAt(k) : heading(k))) { if (!blank(k) && !drop[k] && !heading(k)) { kept = true; break; } k += 1; }
@@ -713,7 +727,10 @@ export function newsForGary(desk, { facts = null, start = null, asOf = new Date(
   const text = i >= 0 ? state.slice(i + NEWS_MARK.length) : '';
   // The search's own opening line ("I'll use the latest roster news ...") is its note to itself, not news.
   const lines = withoutEmptyNews(withoutBettingLines(text.trim().replace(/^I(?:’|')ll [^\n]*\n+|^I will [^\n]*\n+/, ''))).split('\n');
-  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || Boolean(facts && uncheckedNumbers(l, facts).length)));
+  // TV and radio listings carry nothing about the game (round 16: "WUAB, Rock Entertainment Sports Network and DAZN, with
+  // radio coverage on WTAM 1100").
+  const broadcast = (l) => /^\s*(?:[-•*]\s*)?\*\*(?:TV|Radio|Broadcast|Television|Streaming)[^*]*:?\*\*/i.test(l) || /\b(?:listings? include|radio coverage|broadcast on|televised on)\b/i.test(l);
+  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || broadcast(l) || Boolean(facts && uncheckedNumbers(l, facts).length)));
   for (const k of startersTables(lines, desk)) drop[k] = true;
   withoutOrphans(lines, drop);
   return lines.filter((_, k) => !drop[k]).filter((p, k, a) => p.trim() || (k > 0 && a[k - 1].trim())).join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -760,7 +777,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
   const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
-    gameLog(desk, ratings, homeTeam, asOf, seasons[0]),
+    gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
