@@ -1,3 +1,5 @@
+import AVFoundation
+import CoreImage
 import SwiftUI
 
 /// THE GARY OPENING — Home's first thing (founder, Oct 30 2026: "the Gary mascot in the middle, not in a
@@ -29,7 +31,7 @@ struct HomeGaryOpening: View {
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
     #if DEBUG
-    /// Tour verb `garymood GaryFire|GaryCooking|GaryBeer|GaryIceCold|GaryDoomsday|off` previews a reaction.
+    /// Tour verb `garymood GaryFire|GaryCooking|GaryBeer|GaryIceCold|GaryDoomsday|off` previews a mood (it tilts his clips).
     @AppStorage("garyMoodPreview") private var moodPreviewRaw = ""
     private var moodPreview: String? { moodPreviewRaw.isEmpty ? nil : moodPreviewRaw }
     #else
@@ -427,53 +429,31 @@ struct HomeGaryOpening: View {
     }
 }
 
-/// Gary alive on Home (founder, Oct 30 2026: "he needs to be alive not still", with the betting personality
-/// of an old-school Vegas bettor). Between beats of his easy stance he works: puffs the cigar, counts his
-/// roll, calls a bet in on the old phone, fans his tickets, checks his watch, flips his lucky coin, marks
-/// the form. Each loop takes three of those in turn and ends on his reaction to last night: cash in the
-/// air, a kiss for the ticket, arms crossed, a shrug, a ticket torn in half. Frames cross-fade; under them
-/// he breathes, sways a little, settles on each new frame, and smoke curls off the cigar. Still on Reduce
-/// Motion or when Home is off screen.
+/// Gary alive on Home (founder, Oct 30 2026: "a live character who is fluid, does his own thing, moves around
+/// a little bit, smokes his cigar, reads the newspaper ... without having to have these looped reactions").
+/// He stands in his easy stance a few seconds at a time, breathing, swaying a little, smoke curling off the
+/// cigar, then lives a moment from a drawn clip: a slow puff, a look at the racing form. Every clip starts and
+/// ends on the stance, so they chain with no cut. Which clip comes next and how long he stands between them
+/// are left to chance, never the same clip twice running, and last night tilts the odds: more cigar after a
+/// good night, more of the form after a bad one. Still on Reduce Motion or when Home is off screen.
 struct GaryIdleFigure: View {
-    /// Last night's face (Home's LAST NIGHT ladder) picks the reaction.
+    /// Last night's face (Home's LAST NIGHT ladder) tilts which clip comes up.
     let mood: String?
     let height: CGFloat
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @StateObject private var life = GaryLife()
 
-    /// One drawn frame: its art size at the shared scale (the stance is 900 tall), its center of mass
-    /// across the width, and the cigar tip smoke rises from (none when he holds it or it's out).
-    struct Frame {
-        let asset: String
-        let size: CGSize
-        let cx: CGFloat
-        let smoke: CGPoint?
-    }
-
-    static let frames: [String: Frame] = [
-        "base": Frame(asset: "GaryIdleBase", size: CGSize(width: 568, height: 900), cx: 0.487, smoke: CGPoint(x: 0.68, y: 0.19)),
-        "puff": Frame(asset: "GaryIdlePuff", size: CGSize(width: 545, height: 895), cx: 0.501, smoke: nil),
-        "paper": Frame(asset: "GaryIdlePaper", size: CGSize(width: 520, height: 901), cx: 0.466, smoke: CGPoint(x: 0.64, y: 0.2)),
-        "tap": Frame(asset: "GaryIdleTap", size: CGSize(width: 485, height: 896), cx: 0.485, smoke: CGPoint(x: 0.66, y: 0.2)),
-        "cash": Frame(asset: "GaryActCash", size: CGSize(width: 502, height: 902), cx: 0.491, smoke: CGPoint(x: 0.7, y: 0.215)),
-        "phone": Frame(asset: "GaryActPhone", size: CGSize(width: 497, height: 903), cx: 0.511, smoke: CGPoint(x: 0.66, y: 0.22)),
-        "tickets": Frame(asset: "GaryActTickets", size: CGSize(width: 567, height: 895), cx: 0.508, smoke: CGPoint(x: 0.66, y: 0.2)),
-        "watch": Frame(asset: "GaryActWatch", size: CGSize(width: 568, height: 904), cx: 0.487, smoke: CGPoint(x: 0.7, y: 0.21)),
-        "coin": Frame(asset: "GaryActCoin", size: CGSize(width: 556, height: 901), cx: 0.487, smoke: CGPoint(x: 0.72, y: 0.21)),
-        "toss": Frame(asset: "GaryMoodToss", size: CGSize(width: 691, height: 1069), cx: 0.494, smoke: nil),
-        "kiss": Frame(asset: "GaryMoodKiss", size: CGSize(width: 553, height: 897), cx: 0.506, smoke: nil),
-        "fine": Frame(asset: "GaryMoodFine", size: CGSize(width: 429, height: 896), cx: 0.498, smoke: CGPoint(x: 0.66, y: 0.2)),
-        "cold": Frame(asset: "GaryMoodCold", size: CGSize(width: 605, height: 896), cx: 0.499, smoke: nil),
-        "tear": Frame(asset: "GaryMoodTear", size: CGSize(width: 508, height: 899), cx: 0.487, smoke: nil),
-    ]
-
-    /// His habits, taken three a loop in turn.
-    static let habits = ["puff", "cash", "phone", "tickets", "watch", "coin", "paper", "tap"]
-
-    /// The stance's shape and where the labels point on it: left of his sunglasses, his tie, his right knee,
-    /// his cigar, his trouser pocket, his shoe.
+    /// The stance's art (568 × 900), its center of mass across the width, and the cigar tip smoke rises from.
     static let baseAspect: CGFloat = 568 / 900
+    static let stanceCx: CGFloat = 0.487
+    static let stanceSmoke = CGPoint(x: 0.68, y: 0.19)
+    /// Where the stance sits inside every clip's frame: the clips were drawn from it, on a 1080 × 1728 crop.
+    static let clipStance = CGRect(x: 80.0 / 1080, y: 256.0 / 1728, width: 920.0 / 1080, height: 1458.0 / 1728)
+
+    /// Where the labels point on the stance: left of his sunglasses, his tie, his right knee, his cigar, his
+    /// trouser pocket, his shoe.
     static let head = CGPoint(x: 0.36, y: 0.09)
     static let tie = CGPoint(x: 0.55, y: 0.31)
     static let knee = CGPoint(x: 0.62, y: 0.72)
@@ -490,91 +470,56 @@ struct GaryIdleFigure: View {
         }
     }
 
-    static func reaction(_ face: String?) -> String {
-        switch face {
-        case "GaryFire": return "toss"
-        case "GaryCooking": return "kiss"
-        case "GaryBeer": return "fine"
-        case "GaryIceCold": return "cold"
-        case "GaryDoomsday": return "tear"
-        default: return "tap"
-        }
-    }
-
-    /// Loop `k`: the stance, three habits in turn (a beat of stance between the first two), the reaction.
-    /// Every loop is the same length, so the clock alone says where he is.
-    private func routine(_ k: Int) -> [(String, Double)] {
-        let h = Self.habits
-        let pick = { (i: Int) in h[(k * 3 + i) % h.count] }
-        return [("base", 2.4), (pick(0), 2.2), ("base", 1.3), (pick(1), 2.2), (pick(2), 2.0), (Self.reaction(mood), 2.6)]
-    }
-    private static let loopLength = 12.7
-
-    private static let fade = 0.32
-
-    private static func smooth(_ x: Double) -> Double {
-        let t = min(1, max(0, x)); return t * t * (3 - 2 * t)
-    }
-
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion)) { ctx in
-            figure(at: reduceMotion ? 0 : ctx.date.timeIntervalSinceReferenceDate)
+            figure(at: reduceMotion ? Date(timeIntervalSinceReferenceDate: 0) : ctx.date)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    private func figure(at t: Double) -> some View {
-        let total = Self.loopLength
-        let steps = routine(Int((t / total).rounded(.down)))
-        let local = t.truncatingRemainder(dividingBy: total)
-        var start = 0.0, i = 0
-        while i < steps.count - 1 && local >= start + steps[i].1 { start += steps[i].1; i += 1 }
-        let since = local - start
-        let current = steps[i].0
-        let previous = steps[(i + steps.count - 1) % steps.count].0
-        let fadeIn = reduceMotion ? 1 : Self.smooth(since / Self.fade)
-        // The breath, the sway, and the small settle as a new frame lands.
-        let breath = 1 + 0.009 * sin(2 * .pi * t / 3.4)
-        let sway = 0.7 * sin(2 * .pi * t / 6.3)
-        let settle = -0.01 * (1 - Self.smooth(since / 0.45))
-        return GeometryReader { geo in
-            let w = geo.size.width, floor = geo.size.height
-            ZStack(alignment: .topLeading) {
-                ForEach([previous, current], id: \.self) { key in
-                    if let f = Self.frames[key] {
-                        let o = key == current ? fadeIn : (previous == current ? 0 : 1 - fadeIn)
-                        if o > 0 { draw(f, width: w, floor: floor, opacity: o, breath: breath, sway: sway, settle: key == current ? settle : 0) }
-                    }
-                }
-                if !reduceMotion, let f = Self.frames[current], let tip = f.smoke {
-                    smoke(from: point(tip, in: f, width: w, floor: floor), t: t, strength: fadeIn)
-                }
-            }
+        .onChange(of: mood) { m in life.mood = m }
+        // Lives while he's on screen and moving; SwiftUI ends it when he leaves and starts it again on return.
+        .task(id: active && !reduceMotion) {
+            life.mood = mood
+            guard active && !reduceMotion else { return }
+            await life.live()
         }
     }
 
-    private func frameSize(_ f: Frame) -> CGSize {
-        let h = height * f.size.height / 900
-        return CGSize(width: h * f.size.width / f.size.height, height: h)
-    }
-
-    private func point(_ p: CGPoint, in f: Frame, width w: CGFloat, floor: CGFloat) -> CGPoint {
-        let s = frameSize(f)
-        let left = w / 2 - f.cx * s.width
-        return CGPoint(x: left + p.x * s.width, y: floor - s.height + p.y * s.height)
-    }
-
-    private func draw(_ f: Frame, width w: CGFloat, floor: CGFloat, opacity: Double, breath: Double, sway: Double, settle: Double) -> some View {
-        let s = frameSize(f)
-        return Image(f.asset)
-            .resizable()
-            .frame(width: s.width, height: s.height)
-            .rotationEffect(.degrees(sway), anchor: .bottom)
-            .scaleEffect(x: 2 - breath, y: breath, anchor: .bottom)
-            .offset(y: settle * s.height)
-            .opacity(opacity)
-            .position(x: w / 2 - (f.cx - 0.5) * s.width, y: floor - s.height / 2)
+    private func figure(at date: Date) -> some View {
+        let t = date.timeIntervalSinceReferenceDate
+        let clip = life.clipShown(at: date)
+        // The breath and the sway, eased out before a clip and back in after it, so the hand-off is exact.
+        let calm = life.stanceMotion(at: date)
+        let breath = 1 + 0.009 * calm * sin(2 * .pi * t / 3.4)
+        let sway = 0.7 * calm * sin(2 * .pi * t / 6.3)
+        return GeometryReader { geo in
+            let w = geo.size.width, floor = geo.size.height
+            let s = CGSize(width: height * Self.baseAspect, height: height)
+            let left = w / 2 - Self.stanceCx * s.width
+            let r = Self.clipStance
+            let vw = s.width / r.width, vh = s.height / r.height
+            ZStack(alignment: .topLeading) {
+                Image("GaryIdleBase")
+                    .resizable()
+                    .frame(width: s.width, height: s.height)
+                    .rotationEffect(.degrees(sway), anchor: .bottom)
+                    .scaleEffect(x: 2 - breath, y: breath, anchor: .bottom)
+                    .opacity(1 - clip)
+                    .position(x: left + s.width / 2, y: floor - s.height / 2)
+                if !reduceMotion && clip < 1 {
+                    smoke(from: CGPoint(x: left + Self.stanceSmoke.x * s.width, y: floor - s.height + Self.stanceSmoke.y * s.height),
+                          t: t, strength: 1 - clip)
+                }
+                // Always mounted, so the next clip's first frame is up before it shows. Its smoke fades out
+                // over the top before it reaches the scoreboard.
+                GaryClipView(player: life.player)
+                    .frame(width: vw, height: vh)
+                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .opacity(clip)
+                    .position(x: left - r.minX * vw + vw / 2, y: floor - s.height - r.minY * vh + vh / 2)
+            }
+        }
     }
 
     /// Three soft puffs at a time, rising and widening off the cigar tip.
@@ -596,6 +541,170 @@ struct GaryIdleFigure: View {
                          with: .color(Color.white.opacity(a)))
             }
         }
+    }
+}
+
+/// Gary's days between the labels: a stand of a few seconds, a clip, a stand, another clip. The next clip is
+/// loaded at the start of each stand, so its first frame (the stance) is waiting when the stand ends.
+/// `live()` runs inside the figure's task, so leaving Home ends it.
+@MainActor
+final class GaryLife: ObservableObject {
+    /// Each clip and its odds after a good night and after a bad one.
+    static let clips: [(name: String, good: Double, bad: Double)] = [
+        ("gary-cigar", 3, 1),
+        ("gary-paper", 1, 3),
+    ]
+
+    let player = AVPlayer()
+    var mood: String?
+    @Published private(set) var clipStart: Date?
+    @Published private(set) var clipEnd: Date?
+    private var standEnd: Date?
+    private var lastClipEnd: Date?
+    private var last: String?
+
+    private static let fadeIn = 0.25, fadeOut = 0.3
+
+    init() {
+        player.isMuted = true
+        player.actionAtItemEnd = .pause
+        player.preventsDisplaySleepDuringVideoPlayback = false
+    }
+
+    /// How much of the clip shows: 0 in his stance, 1 while a clip plays.
+    func clipShown(at now: Date) -> Double {
+        guard let start = clipStart else { return 0 }
+        var v = Self.smooth(now.timeIntervalSince(start) / Self.fadeIn)
+        if let end = clipEnd { v *= 1 - Self.smooth(now.timeIntervalSince(end) / Self.fadeOut) }
+        return v
+    }
+
+    /// How much the stance breathes and sways: none during a clip, easing back after one and out before the next.
+    func stanceMotion(at now: Date) -> Double {
+        if clipStart != nil && clipEnd == nil { return 0 }
+        var v = 1.0
+        if let end = lastClipEnd { v = min(v, Self.smooth(now.timeIntervalSince(end) / 1.2)) }
+        if let next = standEnd { v = min(v, Self.smooth(next.timeIntervalSince(now) / 0.8)) }
+        return v
+    }
+
+    /// His days, until the task is cancelled; then back to the still stance.
+    func live() async {
+        defer {
+            player.pause()
+            clipStart = nil
+            clipEnd = nil
+            standEnd = nil
+        }
+        var first = true
+        while !Task.isCancelled {
+            let name = pick()
+            guard let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
+            let item = AVPlayerItem(url: url)
+            player.replaceCurrentItem(with: item)
+            let stand = first ? Double.random(in: 1.5...3) : Double.random(in: 3...9)
+            first = false
+            standEnd = Date().addingTimeInterval(stand)
+            try? await Task.sleep(nanoseconds: UInt64(stand * 1e9))
+            while item.status == .unknown && !Task.isCancelled { try? await Task.sleep(nanoseconds: 50_000_000) }
+            guard !Task.isCancelled, item.status == .readyToPlay else { return }
+            let length = item.duration.seconds.isFinite ? item.duration.seconds : 8
+            standEnd = nil
+            clipEnd = nil
+            clipStart = Date()
+            player.play()
+            // Back to the still stance over the clip's last moment, which is the stance again.
+            try? await Task.sleep(nanoseconds: UInt64(max(0, length - Self.fadeOut) * 1e9))
+            guard !Task.isCancelled else { return }
+            clipEnd = Date()
+            try? await Task.sleep(nanoseconds: UInt64(Self.fadeOut * 1e9))
+            guard !Task.isCancelled else { return }
+            lastClipEnd = Date()
+            clipStart = nil
+            clipEnd = nil
+            last = name
+        }
+    }
+
+    /// The next clip: never the last one, weighted by last night.
+    private func pick() -> String {
+        let good = mood == "GaryFire" || mood == "GaryCooking"
+        let bad = mood == "GaryIceCold" || mood == "GaryDoomsday"
+        let pool = Self.clips.filter { $0.name != last }
+        let weights = pool.map { good ? $0.good : bad ? $0.bad : 1 }
+        var roll = Double.random(in: 0..<weights.reduce(0, +))
+        for (c, w) in zip(pool, weights) {
+            if roll < w { return c.name }
+            roll -= w
+        }
+        return pool.last?.name ?? Self.clips[0].name
+    }
+
+    private static func smooth(_ x: Double) -> Double {
+        let t = min(1, max(0, x)); return t * t * (3 - 2 * t)
+    }
+}
+
+/// A clip with its see-through kept. Each clip is one plain video, the picture over its alpha (a video's own
+/// alpha doesn't show in the simulator or on every device), put back together here every frame.
+private struct GaryClipView: UIViewRepresentable {
+    let player: AVPlayer
+
+    final class ClipView: UIView {
+        private static let context = CIContext(options: [.cacheIntermediates: false])
+        private let output = AVPlayerItemVideoOutput(pixelBufferAttributes:
+            [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        private var link: CADisplayLink?
+        private weak var item: AVPlayerItem?
+        weak var player: AVPlayer?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            link?.invalidate()
+            link = nil
+            guard window != nil else { return }
+            let l = CADisplayLink(target: self, selector: #selector(tick))
+            l.preferredFramesPerSecond = 30
+            l.add(to: .main, forMode: .common)
+            link = l
+        }
+
+        @objc private func tick() {
+            guard let current = player?.currentItem else { return }
+            if current !== item {
+                item?.remove(output)
+                current.add(output)
+                item = current
+            }
+            let t = output.itemTime(forHostTime: CACurrentMediaTime())
+            guard output.hasNewPixelBuffer(forItemTime: t),
+                  let buffer = output.copyPixelBuffer(forItemTime: t, itemTimeForDisplay: nil) else { return }
+            let full = CIImage(cvPixelBuffer: buffer)
+            let w = full.extent.width, h = full.extent.height / 2
+            // Core Image counts from the bottom: the picture is the upper half, its alpha the lower.
+            let picture = full.cropped(to: CGRect(x: 0, y: h, width: w, height: h))
+                .transformed(by: CGAffineTransform(translationX: 0, y: -h))
+            let alpha = full.cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
+            let frame = picture.applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha,
+            ])
+            guard let image = Self.context.createCGImage(frame, from: CGRect(x: 0, y: 0, width: w, height: h)) else { return }
+            layer.contents = image
+        }
+    }
+
+    func makeUIView(context: Context) -> ClipView {
+        let v = ClipView()
+        v.isOpaque = false
+        v.backgroundColor = .clear
+        v.isUserInteractionEnabled = false
+        v.layer.contentsGravity = .resize
+        v.player = player
+        return v
+    }
+
+    func updateUIView(_ v: ClipView, context: Context) {
+        v.player = player
     }
 }
 

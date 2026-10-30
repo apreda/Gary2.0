@@ -81,6 +81,12 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
     expect(r).toEqual(['THURSDAY NIGHT FOOTBALL', 'SUNDAY NIGHT FOOTBALL', 'MONDAY NIGHT FOOTBALL', 'NFL', 'NFL']);
   });
 
+  it('turns NFL and NBA big games into the scoreboard, and bills the NBA as the NBA', () => {
+    const r = swiftJSON(`out([CashRailFormat.hasScoreboard("NFL"), CashRailFormat.hasScoreboard("nba"), CashRailFormat.hasScoreboard("NCAAF"),
+     CashRailFormat.hasScoreboard(nil), CashRailFormat.billing(league: "NBA", commence: nil)])`);
+    expect(r).toEqual([true, true, false, false, 'NBA']);
+  });
+
   it('puts the spread and Gary\'s pick under the team names', () => {
     const r = swiftJSON(`out([
   CashRailFormat.marketLine(oddsLine: "CAR +130 · GB -155 · O/U 46.5 · RL GB -2.5", pickLine: "Packers -2.5") ?? "nil",

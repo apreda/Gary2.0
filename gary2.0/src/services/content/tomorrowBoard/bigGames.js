@@ -8,7 +8,8 @@ import { PRIMETIME_HOUR_ET, nameKey, gameTimeBucket, rowMatchupKey, repeatedMatc
 /**
  * Select up to five games with an actual marquee reason. College uses
  * ranked matchups; NFL uses its existing national-window rule. MLB uses
- * standings, rivalry and probable starters. Start time breaks ties among
+ * standings, rivalry and probable starters. The NBA's headliner (rivalry,
+ * national draws, the late window) always makes it, plus a rivalry. Start time breaks ties among
  * qualified games; it never makes an ordinary matchup a big game.
  */
 export function buildBigGames(board, { mlb }) {
@@ -22,6 +23,7 @@ export function buildBigGames(board, { mlb }) {
     // BOTH probable starters' last names for MLB cards => { away, home }.
     // null for non-MLB. "Undecided" per side when a probable is unposted.
     let pitchers = null;
+    let rivalry = false;
 
     const setReason = (label, w) => {
       if (w > bestReasonW) { bestReasonW = w; reason = label; }
@@ -112,28 +114,38 @@ export function buildBigGames(board, { mlb }) {
     } else if (row.league === 'NFL' && isBigGame({ league: 'NFL', game: row })) {
       weight += 40;
       setReason('NATIONAL WINDOW', 40);
+    } else if (row.league === 'NBA') {
+      const draw = nbaDraw(row);
+      weight += draw.weight;
+      rivalry = draw.rivalry;
+      setReason(draw.rivalry ? 'RIVALRY' : 'HEADLINER', draw.weight);
     }
 
     // PRIMETIME — national window weight boost (never a chip alone).
     const h = etHour(row.commence_time);
     if (h != null && h >= PRIMETIME_HOUR_ET) weight += 8;
 
-    return { row, weight, reason, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
+    return { row, weight, reason, rivalry, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
   }).filter((game) => game.reason != null);
 
-  scored.sort((a, b) => {
+  const byWeight = (a, b) => {
     if (b.weight !== a.weight) return b.weight - a.weight;
     // tie-break by earliest start (the marquee opener leads)
     return new Date(a.row.commence_time || 0) - new Date(b.row.commence_time || 0);
-  });
+  };
+  // The NBA plays most nights (founder, Oct 30 2026: "there has to be a game tonight? at least a big nba
+  // game"): its headliner always makes it, a second game only when it's a rivalry, never the whole slate.
+  const nba = scored.filter((s) => s.row.league === 'NBA').sort(byWeight);
+  const nbaKept = new Set(nba.filter((s, i) => i === 0 || (i === 1 && s.rivalry)));
+  const ranked = scored.filter((s) => s.row.league !== 'NBA' || nbaKept.has(s)).sort(byWeight);
 
   // BIG GAMES SIZE + MIX — up to 5 (founder is fine with 4–5, not a hard 3), and
   // always mix in at least one MLB game so other leagues don't crowd the
   // domestic games out entirely.
   const MAX_BIG = 5;
-  const picked = scored.slice(0, MAX_BIG);
+  const picked = ranked.slice(0, MAX_BIG);
   if (!picked.some((s) => s.row.league === 'MLB')) {
-    const bestMlb = scored.find((s) => s.row.league === 'MLB');
+    const bestMlb = ranked.find((s) => s.row.league === 'MLB');
     if (bestMlb) picked[picked.length - 1] = bestMlb;   // swap weakest slot for the top MLB
   }
 
@@ -159,6 +171,23 @@ export function buildBigGames(board, { mlb }) {
     }
     return item;
   });
+}
+
+// The NBA's national draws and its rivalries, by nickname.
+const NBA_DRAWS = new Set(['Lakers', 'Warriors', 'Celtics', 'Knicks']);
+const NBA_RIVALRIES = [
+  ['Lakers', 'Celtics'], ['Lakers', 'Warriors'], ['Lakers', 'Clippers'], ['Lakers', 'Nuggets'],
+  ['Knicks', 'Celtics'], ['Knicks', '76ers'], ['Knicks', 'Nets'], ['Knicks', 'Heat'],
+  ['Celtics', '76ers'], ['Celtics', 'Heat'], ['Bulls', 'Pistons'], ['Warriors', 'Cavaliers'],
+];
+
+/** An NBA game's pull: a rivalry, the national draws in it, and the late national window. */
+function nbaDraw(row) {
+  const a = nick(row.away_team), h = nick(row.home_team);
+  const rivalry = NBA_RIVALRIES.some(([x, y]) => (x === a && y === h) || (x === h && y === a));
+  const draws = [a, h].filter((t) => NBA_DRAWS.has(t)).length;
+  const late = (etHour(row.commence_time) ?? 0) >= 22;
+  return { rivalry, weight: 10 + (rivalry ? 10 : 0) + 6 * draws + (late ? 3 : 0) };
 }
 
 /** "American League East" -> "AL East"; "National League Central" -> "NL Central". */

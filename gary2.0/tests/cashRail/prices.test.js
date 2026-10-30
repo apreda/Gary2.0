@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { freezeBoard } from '../../src/services/cashRail/prices.js';
+import { nbaSettleable } from '../../src/services/cashRail/settleNba.js';
 
 const fixture = name => JSON.parse(readFileSync(new URL(`../fixtures/cashRail/${name}`, import.meta.url), 'utf8'));
 const row = (vendor, prop_type, line_value, market, player_id = 7) => ({ game_id: 1, player_id, vendor, prop_type, line_value, market });
@@ -111,5 +112,35 @@ describe('freezeBoard', () => {
         .map(r => r.market.odds).filter(Number.isFinite);
       expect(dec(m.price)).toBe(Math.max(...offers.map(dec)));
     }
+  });
+  it('freezes NBA props with the NBA set: full-game stats, combos and the double-double, no quarter windows', () => {
+    const { markets } = freezeBoard([
+      row('fanduel', 'points', '24.5', { type: 'over_under', over_odds: -110, under_odds: -110 }),
+      row('draftkings', 'points', '30', { type: 'milestone', odds: 320 }),
+      row('draftkings', 'points_rebounds_assists', '40', { type: 'milestone', odds: 190 }),
+      row('draftkings', 'double_double', '1', { type: 'milestone', odds: 140 }),
+      row('draftkings', 'points_1q', '8', { type: 'milestone', odds: 150 }),
+      row('draftkings', 'anytime_td', '1', { type: 'milestone', odds: 150 }),
+    ], [], { settleable: nbaSettleable });
+    expect(markets.map(x => x.key).sort()).toEqual(['7|double_double|milestone|1', '7|points_rebounds_assists|milestone|40',
+      '7|points|milestone|30', '7|points|over|24.5']);
+  });
+
+  it('never takes a price from a prediction market', () => {
+    const odds = [
+      { vendor: 'polymarket', spread_home_value: '-3.5', spread_home_odds: 19900, spread_away_value: '3.5', spread_away_odds: -19900,
+        moneyline_home_odds: -199900, moneyline_away_odds: 199900, total_value: '220.5', total_over_odds: 22122, total_under_odds: -22122 },
+      { vendor: 'kalshi', spread_home_value: '-3.5', spread_home_odds: 400, spread_away_value: '3.5', spread_away_odds: 400,
+        moneyline_home_odds: 400, moneyline_away_odds: 400, total_value: '220.5', total_over_odds: 400, total_under_odds: 400 },
+      { vendor: 'fanduel', spread_home_value: '-3.5', spread_home_odds: -110, spread_away_value: '3.5', spread_away_odds: -110,
+        moneyline_home_odds: -160, moneyline_away_odds: 135, total_value: '220.5', total_over_odds: -108, total_under_odds: -112 },
+    ];
+    const props = [row('polymarket', 'points', '30', { type: 'milestone', odds: 900 }), row('fanduel', 'points', '30', { type: 'milestone', odds: 300 })];
+    const { markets } = freezeBoard(props, odds, { settleable: nbaSettleable });
+    const price = key => markets.find(x => x.key === key)?.price;
+    expect(price('game|ml|away')).toBe(135);
+    expect(price('game|spread|home|-3.5')).toBe(-110);
+    expect(price('game|total|over|220.5')).toBe(-108);
+    expect(price('7|points|milestone|30')).toBe(300);
   });
 });

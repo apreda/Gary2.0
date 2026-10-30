@@ -3,7 +3,8 @@
  * shown at, frozen from the last snapshot before kickoff. One market per rung
  * (player + prop type + kind + line); its price is the best any book offered,
  * because that is what a fan could actually have gotten. Over/unders keep only
- * the over side: the board never shows an under.
+ * the over side: the board never shows an under. Prediction markets are not
+ * books: their "odds" are contract prices, so they never set a price here.
  */
 
 const BASE_TYPES = new Set([
@@ -23,6 +24,9 @@ export function settleableType(propType) {
   return Boolean(w) && propType.slice(0, -w.length) === 'anytime_td';
 }
 
+const PREDICTION_MARKETS = new Set(['polymarket', 'kalshi']);
+const isBook = r => !PREDICTION_MARKETS.has(String(r?.vendor || '').toLowerCase());
+
 export const decimalOdds = p => (p > 0 ? 1 + p / 100 : 1 + 100 / -p);
 const FLOOR_DECIMAL = 1.5; // −200: shorter than that is the obvious stuff
 const finitePrice = p => (Number.isFinite(p) && p !== 0 ? p : null);
@@ -30,15 +34,19 @@ const fmtLine = n => (Number.isInteger(n) ? String(n) : String(n));
 
 function milestoneLabel(propType, line) {
   if (propType.startsWith('first_td')) return 'First TD';
+  if (propType === 'double_double' || propType === 'triple_double') return 'Yes';
   return `${fmtLine(line)}+`;
 }
 
 /**
- * @param {object[]} propRows BDL /nfl/v1/odds/player_props rows
+ * @param {object[]} propRows BDL player prop rows (NFL or NBA)
  * @param {object[]} gameOdds BDL game odds rows (one per book)
+ * @param {{settleable?: (propType: string) => boolean}} [opts] the sport's gradeable prop types (NFL by default)
  * @returns {{ markets: Array<{key:string, playerId:number|null, propType:string, kind:string, line:number|null, label:string, price:number}> }}
  */
-export function freezeBoard(propRows = [], gameOdds = []) {
+export function freezeBoard(propRows = [], gameOdds = [], { settleable = settleableType } = {}) {
+  propRows = propRows.filter(isBook);
+  gameOdds = gameOdds.filter(isBook);
   const markets = new Map();
   const offer = (m) => {
     if (m.price == null) return;
@@ -58,7 +66,7 @@ export function freezeBoard(propRows = [], gameOdds = []) {
   for (const r of propRows) {
     const propType = r?.prop_type;
     const line = Number(r?.line_value);
-    if (!propType || !settleableType(propType) || !Number.isFinite(line)) continue;
+    if (!propType || !settleable(propType) || !Number.isFinite(line)) continue;
     const playerId = r.player_id ?? null;
     if (r.market?.type === 'milestone') {
       // "0.5" means one or more: a half-line milestone is the next whole number.

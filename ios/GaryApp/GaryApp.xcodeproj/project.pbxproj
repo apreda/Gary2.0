@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B21E4991D802F92893342666 /* gary-paper.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */; };
+		FCF41CF5A734C6425F3FA5BE /* gary-cigar.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */; };
 		7A7ACB3DFD4010D420391209 /* CashRailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C46537AC6CB82E614FC026 /* CashRailStore.swift */; };
 		A5C938444B5970D02C7F1DC6 /* CashRailCelebrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE9EA5E4EC7623E02A7DC7AD /* CashRailCelebrationView.swift */; };
 		C92965982993C73700A09D18 /* CashRailDance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3099280355E7F2AB0949EC03 /* CashRailDance.swift */; };
@@ -173,6 +175,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-paper.mp4"; sourceTree = "<group>"; };
+		2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-cigar.mp4"; sourceTree = "<group>"; };
 		B2C46537AC6CB82E614FC026 /* CashRailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailStore.swift; sourceTree = "<group>"; };
 		FE9EA5E4EC7623E02A7DC7AD /* CashRailCelebrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCelebrationView.swift; sourceTree = "<group>"; };
 		3099280355E7F2AB0949EC03 /* CashRailDance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailDance.swift; sourceTree = "<group>"; };
@@ -491,6 +495,8 @@
 		A9B7A0DCD1996F4BF6D28171 /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				82F3E97F1AF3A0C1E6D181FD /* gary-paper.mp4 */,
+				2F4E81FBE2596B8F19590FFF /* gary-cigar.mp4 */,
 				C568940569BDA7093C695587 /* CashRail */,
 				44E924B51A0530631BCA01C4 /* DailyRecapOverlay.swift */,
 				DAE92047709CBFC7EF21709F /* GamePickSources.swift */,
@@ -681,6 +687,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
+				B21E4991D802F92893342666 /* gary-paper.mp4 in Resources */,
+				FCF41CF5A734C6425F3FA5BE /* gary-cigar.mp4 in Resources */,
 				0984340298B6C347AF6F4588 /* BebasNeue-Regular.ttf in Resources */,
 				FAE577A219F049637480970D /* GoogleService-Info.plist in Resources */,
 				5EDA0A1CBF608AE80BCACE1A /* LaunchScreen.storyboard in Resources */,

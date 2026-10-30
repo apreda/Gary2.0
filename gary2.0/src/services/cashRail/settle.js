@@ -8,6 +8,7 @@
  * into ONE hit whose rungs climb; touchdowns, first TD and game lines are one
  * hit each. Nothing pending, nothing under, ever.
  */
+import { gameLineHits } from './gameLines.js';
 
 const MARKET_NAMES = {
   receiving_yards: 'Rec yards', rushing_yards: 'Rush yards', passing_yards: 'Pass yards',
@@ -20,7 +21,6 @@ const WINDOW_LABEL = { _1q: '1st quarter', _1h: '1st half', _2h: '2nd half' };
 const IN_WINDOW = { '': () => true, _1q: p => p === 1, _1h: p => p <= 2, _2h: p => p >= 3 };
 const SCORER_TYPES = ['receiver', 'rusher', 'interception_returner', 'kickoff_returner', 'punt_returner',
   'fumble_recoverer', 'recoverer', 'returner', 'blocked_kick_recoverer'];
-const MINUS = '−';
 
 const splitWindow = propType => {
   const w = Object.keys(WINDOW_LABEL).find(s => propType.endsWith(s));
@@ -35,7 +35,6 @@ const elapsedOf = p => (p.period <= 4
   : 3600 + (p.period - 5) * 600 + (600 - clockSecs(p.clock_display)));
 const whenOf = p => (p.period <= 4 ? `Q${p.period} ${p.clock_display}` : `OT ${p.clock_display}`);
 const ordinal = n => `${n}${(n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')}`;
-const minusSign = s => String(s).replace(/^-/, MINUS);
 const ids = (p, type) => (p.participants || []).filter(x => x.type === type).map(x => x.player_id);
 
 /** The stat lines one play adds: [playerId, stat, value, 'add'|'max']. */
@@ -185,14 +184,6 @@ export function settleNfl({ markets = [], plays = [], game = {}, players = {}, g
   const finalElapsed = Math.max(3600, last ? elapsedOf(last) : 0);
   const homeName = game.home_team?.name || 'Home';
   const awayName = game.visitor_team?.name || 'Away';
-  const isGary = key => {
-    if (!garyPick) return false;
-    if (garyPick.type === 'spread') return key === `game|spread|${garyPick.side}|${garyPick.line}`;
-    if (garyPick.type === 'ml') return key === `game|ml|${garyPick.side}`;
-    if (garyPick.type === 'total') return key === `game|total|over|${garyPick.line}`;
-    return false;
-  };
-  const withGary = (key, h) => (isGary(key) ? { ...h, gary: true } : h);
 
   const hits = [];
   // Ladders: one hit per player + prop type, rungs low → high.
@@ -222,30 +213,9 @@ export function settleNfl({ markets = [], plays = [], game = {}, players = {}, g
       elapsed: elapsedOf(top.c.play), when: whenOf(top.c.play), play: playText(l.base, top.c.play, top.c.value) });
   }
 
-  // Game lines.
-  for (const [key, c] of totalCash) {
-    const m = markets.find(x => x.key === key);
-    hits.push(withGary(key, { key, who: 'Game total', market: `Over ${m.line}`, price: m.price,
-      elapsed: elapsedOf(c.play), when: whenOf(c.play), play: `Made it ${c.pts} points` }));
-  }
-  if (final) {
-    const home = Number(game.home_team_score ?? last?.home_score) || 0;
-    const away = Number(game.visitor_team_score ?? last?.away_score) || 0;
-    const finalText = `Final ${Math.max(home, away)}–${Math.min(home, away)}`;
-    for (const m of markets) {
-      const side = m.propType.endsWith('_home') ? 'home' : m.propType.endsWith('_away') ? 'away' : null;
-      if (!side) continue;
-      const margin = side === 'home' ? home - away : away - home;
-      const who = side === 'home' ? homeName : awayName;
-      if (m.kind === 'spread' && margin + m.line > 0) {
-        hits.push(withGary(m.key, { key: m.key, who, market: `Spread ${minusSign(m.label)}`, price: m.price,
-          elapsed: finalElapsed, when: 'FINAL', play: finalText }));
-      } else if (m.kind === 'ml' && margin > 0) {
-        hits.push(withGary(m.key, { key: m.key, who, market: 'Moneyline', price: m.price,
-          elapsed: finalElapsed, when: 'FINAL', play: finalText }));
-      }
-    }
-  }
+  hits.push(...gameLineHits({ markets, totalCash, final, garyPick, finalElapsed, homeName, awayName, elapsedOf, whenOf,
+    home: Number(game.home_team_score ?? last?.home_score) || 0,
+    away: Number(game.visitor_team_score ?? last?.away_score) || 0 }));
   hits.sort((a, b) => (a.elapsed - b.elapsed) || a.key.localeCompare(b.key));
 
   // The game's state from the last play.
