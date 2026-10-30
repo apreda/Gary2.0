@@ -10,6 +10,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 //   POST {}                                   one pass (the 20-minute cron)
 //   POST {"resolve": ["handle", ...]}         look the accounts up: name, picture, check ($0.01 a person)
 //   POST {"hydrate": true}                    re-read today's stored posts that lack text or media
+//   POST {"force": true}                      one pass past today's cap (never past the month's), for a check
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -115,7 +116,10 @@ async function slateGames(date: string): Promise<Game[]> {
   const rows: any[] = await db(`daily_slate?select=league,away_team,home_team&date=eq.${date}`);
   const board: any[] = await db(`tomorrow_board?select=big_games&date=eq.${date}`);
   const bigs = new Set(((board?.[0]?.big_games ?? []) as any[]).map((b) => String(b.matchup ?? "").toLowerCase()));
-  return rows.filter((r) => r.away_team && r.home_team).map((r) => {
+  // Gary's own leagues only: the slate also carries NHL games no board shows, and a search for "Wild" pays for
+  // every post that says "wild".
+  const boards = new Set(["NFL", "NCAAF", "NBA", "MLB"]);
+  return rows.filter((r) => r.away_team && r.home_team && boards.has(String(r.league ?? "").toUpperCase())).map((r) => {
     const matchup = `${r.away_team} @ ${r.home_team}`;
     const league = String(r.league ?? "").toUpperCase();
     return { league, matchup, big: bigs.has(matchup.toLowerCase()),
@@ -212,13 +216,13 @@ async function readsSoFar(day: string): Promise<{ today: number; month: number; 
   return { today: today?.posts ?? 0, month: rows.reduce((n, r) => n + (r.posts ?? 0), 0), since_id: today?.since_id ?? null };
 }
 
-async function pass() {
+async function pass(force = false) {
   const day = slateDay();
   const { hour } = etParts();
   // Takes on the night's games come from late morning to the last final; nothing is read overnight.
   if (hour >= 2 && hour < 11) return { ok: true, skipped: "overnight" };
   const spent = await readsSoFar(day);
-  if (spent.today >= DAILY_POST_CAP || spent.month >= MONTHLY_POST_CAP) return { ok: true, skipped: "budget", spent };
+  if ((!force && spent.today >= DAILY_POST_CAP) || spent.month >= MONTHLY_POST_CAP) return { ok: true, skipped: "budget", spent };
 
   const games = await slateGames(day);
   if (!games.length) return { ok: true, skipped: "no games" };
@@ -233,7 +237,7 @@ async function pass() {
   const keep: any[] = [];
   const errors: any[] = [];
   for (let i = 0; i < accounts.length; i += ACCOUNTS_PER_QUERY) {
-    if (spent.today + read >= DAILY_POST_CAP) break;
+    if (!force && spent.today + read >= DAILY_POST_CAP) break;
     const from = accounts.slice(i, i + ACCOUNTS_PER_QUERY).map((a) => `from:${a.username}`).join(" OR ");
     const tail = " -is:retweet -is:reply lang:en";
     const teams: string[] = [];
@@ -312,7 +316,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.resolve)) return Response.json(await resolve(body.resolve.map(String)));
     if (body?.hydrate) return Response.json(await hydrate());
-    return Response.json(await pass());
+    return Response.json(await pass(body?.force === true));
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
   }

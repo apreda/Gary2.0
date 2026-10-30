@@ -106,8 +106,10 @@ struct HomeXWire: View {
             guard activePage, scenePhase == .active else { return }
             while !Task.isCancelled {
                 if let fresh = await SupabaseAPI.fetchXWire(date: SupabaseAPI.todayEST()), fresh != posts {
+                    // The post on screen stays on screen through a refresh; the new ones join around it.
+                    let showing = posts.indices.contains(index) ? posts[index].id : nil
                     posts = fresh
-                    if index >= max(fresh.count, 1) { index = 0 }
+                    index = showing.flatMap { id in fresh.firstIndex { $0.id == id } } ?? 0
                 }
                 do { try await Task.sleep(for: .seconds(300)) } catch { break }
             }
