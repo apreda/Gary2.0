@@ -192,10 +192,11 @@ struct DartsView: View {
                     // matches Winners' size.
                     GaryPageHeader(title: "Darts", accent: LabFormat.shortDateWords(today), markSize: 52, trailing: { EmptyView() })
                     if sports.count > 1 {
-                        LabTextTabs(items: sports, selected: leagueBinding, size: 14, idle: DartsInk.idleTab)
-                            .padding(.top, 10).pageGutter()
+                        // The leagues in a sunk glass bar (mock B, Oct 30 2026).
+                        LeagueGlassBar(items: sports, selected: leagueBinding)
+                            .padding(.vertical, 8).pageGutter()
                     }
-                    content.padding(.top, 12)
+                    content
                     Color.clear.frame(height: 170)
                 }
                 // The lamp hangs over the dartboard and scrolls with it.
@@ -580,10 +581,12 @@ struct DartsView: View {
                 // Hot & Cold and All Darts when each has something today (Sep 25
                 // 2026). Before today's ticket is built, the parlay card says
                 // it's coming; so does Fantasy on an NFL day.
-                DartsFeaturedRow(league: league, parlay: parlay, parlayOpen: featureSheet == .parlay, primetime: primetime, fantasy: fantasy, recap: recap,
-                                 darts: leagueDarts, form: leagueForm,
-                                 onParlay: { featureSheet = .parlay },
-                                 onSheet: { featureSheet = $0 })
+                // The bento (founder, Oct 30 2026: mock B): the parlay of the
+                // day, tonight's big game, Winners, Hot/Cold and every dart.
+                DartsBento(league: league, parlay: parlay, primetime: primetime, fantasy: fantasy, recap: recap,
+                           darts: leagueDarts, form: leagueForm,
+                           onParlay: { featureSheet = .parlay },
+                           onSheet: { featureSheet = $0 })
                     .padding(.bottom, 16)
 
 
@@ -594,23 +597,27 @@ struct DartsView: View {
                 let rightRows = streaks.filter { pair.1.kinds.contains($0.kind ?? "") }.sorted { ($0.length ?? 0) > ($1.length ?? 0) }
                 if !leftRows.isEmpty || !rightRows.isEmpty {
                     PlayerStreakColumns(left: (pair.0, leftRows), right: (pair.1, rightRows)) { name, lg in streakCard = StreakCardSel(name: name, league: lg) }
-                        .padding(.top, 22).pageGutter()
+                        .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 14)
+                        .dartsCard(tint: GaryColors.win.opacity(0.12), glowAt: .top, face: [Color(hex: "#1C1A14"), Color(hex: "#13110D")])
+                        .padding(.top, 14)
                 }
 
                 let runs = streaks.filter { $0.kind == "win" || $0.kind == "loss" }
                 if !runs.isEmpty {
                     StreakMarketMap(rows: runs) { name, lg in teamCard = TeamCardSel(name: name, league: lg) }
-                        .padding(.top, 22).pageGutter()
+                        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 16)
+                        .dartsCard()
+                        .padding(.top, 14)
                 }
 
 
                 if let run = board?.run {
                     GaryRecordPanel(league: league, run: run, today: today)
-                        .padding(.top, 28).pageGutter()
+                        .padding(.top, 14)
                 }
 
                 DartsHitRates(league: league) { row, focus in rateCard = RateCardSel(row: row, focus: focus) }
-                    .padding(.top, 28)
+                    .padding(.top, 14)
             }
         }
     }
@@ -628,17 +635,12 @@ struct DartsView: View {
         } else {
             let index = cats.firstIndex { $0.kind == kind } ?? 0
             let current = cats[index]
-            VStack(alignment: .leading, spacing: 6) {
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LabTextTabs(items: cats.map(\.title), selected: Binding(
-                            get: { current.title },
-                            set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14, idle: DartsInk.idleTab)
-                            .padding(.horizontal, GaryLayout.gutter)
-                    }
-                    // A swipe on the board keeps its tab in view.
-                    .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                // The categories as words, the picked one glowing (mock B).
+                LitTextTabs(items: cats.map(\.title), selected: Binding(
+                    get: { current.title },
+                    set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14)
+                    .padding(.horizontal, 12).padding(.top, 6)
                 if thrown.isEmpty {
                     Dartboard(darts: current.rows,
                               throwOnce: league == "MLB" && index == 0 ? "darts.thrown.\(today).\(league)" : nil,
@@ -647,10 +649,9 @@ struct DartsView: View {
                               onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
                         // Nothing thrown yet today: glass over the board.
                         .overlay { if thrown.isEmpty { DartboardGlass() } }
-                        .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
                         .id("\(current.kind)-\(throwTake)")
                         .transition(.opacity)
-                        .pageGutter()
+                        .padding(12)
                         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
                             // A clear sideways swipe, not a scroll.
                             guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
@@ -676,6 +677,10 @@ struct DartsView: View {
                         .transition(.opacity)
                 }
             }
+            // The wheel's stage: a lit card, the board in its window (mock B).
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .dartsCard(tint: DartsLook.goldLabel.opacity(0.14), glowAt: UnitPoint(x: 0, y: 0.55),
+                       face: [Color(hex: "#2A2116"), Color(hex: "#16120D")])
         }
     }
 

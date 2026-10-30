@@ -87,16 +87,15 @@ struct GaryRecordPanel: View {
     var body: some View {
         let won = days.reduce(0) { $0 + ($1.won ?? 0) }
         let lost = days.reduce(0) { $0 + ($1.lost ?? 0) }
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
-                Image(GaryBrand.mark).resizable().scaledToFit().frame(width: 22, height: 22)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                Text("GARY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
+                Text("GARY ON THE BOARD").font(GaryFonts.display(14.8)).tracking(1.8).foregroundStyle(GaryColors.gold)
                 Spacer(minLength: 8)
-                LabTextTabs(items: Self.spans, selected: $span, size: 13).fixedSize()
+                LitTextTabs(items: Self.spans, selected: $span, size: 13).fixedSize()
             }
+            .frame(height: 30)
             if won + lost > 0 {
-                Text("\(won)-\(lost)").font(GaryFonts.display(52))
+                Text("\(won)-\(lost)").font(GaryFonts.display(59))
                     .foregroundStyle(won > lost ? GaryColors.win : won < lost ? GaryColors.loss : GaryColors.warmWhite)
                     .monospacedDigit()
                 chart
@@ -104,14 +103,19 @@ struct GaryRecordPanel: View {
                 Text("No games yet.").font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
             }
         }
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 16)
+        // Its own card (mock B), lit red on a losing run and green on a winning one.
+        .dartsCard(tint: (won < lost ? GaryColors.loss : GaryColors.win).opacity(won == lost ? 0 : 0.14),
+                   glowAt: UnitPoint(x: 0.2, y: 0.3), face: [Color(hex: "#201A15"), Color(hex: "#13110D")])
     }
 
     private var chart: some View {
         Chart {
             RuleMark(y: .value("Even", 0)).foregroundStyle(LabInk.hair)
             ForEach(points) { p in
-                BarMark(x: .value("Day", p.date, unit: .day), y: .value("Day's net", p.net), width: .ratio(0.55))
-                    .foregroundStyle(p.net >= 0 ? GaryColors.win.opacity(0.55) : GaryColors.loss.opacity(0.55))
+                BarMark(x: .value("Day", p.date, unit: .day), y: .value("Day's net", p.net), width: .ratio(0.62))
+                    .cornerRadius(5)
+                    .foregroundStyle(p.net >= 0 ? GaryColors.win.opacity(0.9) : Color(hex: "#C9474B").opacity(0.9))
             }
             ForEach(points) { p in
                 LineMark(x: .value("Day", p.date, unit: .day), y: .value("Running", p.running))
@@ -122,7 +126,7 @@ struct GaryRecordPanel: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
-        .frame(height: 110)
+        .frame(height: 120)
         .accessibilityLabel("Gary's record day by day")
     }
 }

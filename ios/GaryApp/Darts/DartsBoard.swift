@@ -470,9 +470,9 @@ struct PlayerStreakColumns: View {
     var body: some View {
         if both {
             VStack(spacing: 0) {
-                SplitColumns(lead: lead, gap: 8) {
+                SplitColumns(lead: lead, gap: 9) {
                     header(left.spec)
-                    Rectangle().fill(LabInk.hair).frame(width: 1)
+                    Color.clear.frame(width: 1)
                     header(right.spec)
                 }
                 scrolling(pairs(Self.window, rule: false), pairs(nil, rule: true))
@@ -502,11 +502,10 @@ struct PlayerStreakColumns: View {
         HStack(spacing: 7) {
             Image(systemName: spec.good ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                 .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(spec.good ? GaryColors.win : GaryColors.loss)
-            Text(spec.title).font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
+                .foregroundStyle(spec.good ? DartsLook.greenFigure : GaryColors.loss)
+            Text(spec.title).font(GaryFonts.display(13)).tracking(1.6).foregroundStyle(spec.good ? DartsLook.green : DartsLook.redFigure)
         }
-        .frame(height: 10)
-        .padding(.bottom, 6)
+        .frame(height: 30)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -520,9 +519,9 @@ struct PlayerStreakColumns: View {
         let shown = limit.map { min($0, count) } ?? count
         return VStack(spacing: 0) {
             ForEach(0..<shown, id: \.self) { i in
-                SplitColumns(lead: lead, gap: 8) {
+                SplitColumns(lead: lead, gap: 9) {
                     cell(left.rows, i, good: left.spec.good)
-                    Rectangle().fill(rule ? LabInk.hair : .clear).frame(width: 1)
+                    Color.clear.frame(width: 1)
                     cell(right.rows, i, good: right.spec.good)
                 }
             }
@@ -532,7 +531,7 @@ struct PlayerStreakColumns: View {
     private func cell(_ list: [StreakRow], _ i: Int, good: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if i < list.count {
-                if i > 0 { LabHairline() }
+                LabHairline()
                 row(list[i], good: good)
             }
         }
@@ -541,8 +540,8 @@ struct PlayerStreakColumns: View {
 
     private func rows(_ list: [StreakRow], good: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(list.enumerated()), id: \.offset) { i, r in
-                if i > 0 { LabHairline() }
+            ForEach(Array(list.enumerated()), id: \.offset) { _, r in
+                LabHairline()
                 row(r, good: good)
             }
         }
@@ -552,7 +551,7 @@ struct PlayerStreakColumns: View {
     @ViewBuilder private func row(_ r: StreakRow, good: Bool) -> some View {
         let name = r.subject ?? ""
         let n = r.length ?? 0
-        let tint = good ? GaryColors.win : GaryColors.loss
+        let tint = good ? DartsLook.greenFigure : DartsLook.redFigure
         let hitless = r.kind == "hitless"
         let note = [r.kind == "rec100" ? "Receiving" : r.kind == "rush100" ? "Rushing" : nil,
                     r.next_game.flatMap { $0.isEmpty ? nil : LabFormat.keepTimeTogether($0) }]
@@ -560,19 +559,19 @@ struct PlayerStreakColumns: View {
         Button { if let lg = r.league, !name.isEmpty { onPlayer(name, lg) } } label: {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(name.replacingOccurrences(of: "-", with: "\u{2011}")).font(GaryFonts.ui(14, .semibold)).foregroundStyle(GaryColors.warmWhite)
+                    Text(name.replacingOccurrences(of: "-", with: "\u{2011}")).font(GaryFonts.ui(13.5, .semibold)).foregroundStyle(GaryColors.warmWhite)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
-                    Text(hitless ? "0-FOR-\(n)" : "\(n)").font(GaryFonts.display(hitless ? 20.5 : 24))
+                    Text(hitless ? "0-FOR-\(n)" : "\(n)").font(GaryFonts.display(hitless ? 21 : 26))
                         .foregroundStyle(tint).monospacedDigit().fixedSize()
                 }
                 if !note.isEmpty {
-                    Text(note).font(GaryFonts.ui(10)).foregroundStyle(LabInk.dim)
+                    Text(note).font(GaryFonts.ui(10.5)).foregroundStyle(LabInk.dim)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -648,18 +647,14 @@ struct StreakMarketMap: View {
             // it should look like the NFL's), so the tiles step up in size.
             let weights = lengths.map { pow($0, 1.4) }
             let total = weights.reduce(0, +)
-            let least = lengths.last ?? 1, longest = lengths.first ?? 1
             // Tall enough that the smallest tile still holds its name.
             let height = min(440, max(120, CGFloat(5200 * total / ((weights.last ?? 1) * 357))))
             VStack(alignment: .leading, spacing: 6) {
                 // A plain label like the columns' above it, no band (founder,
                 // Sep 23 2026: no "market map inside of a rectangle container").
-                HStack(spacing: 7) {
-                    Image(systemName: "arrowtriangle.up.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(GaryColors.win)
-                    Image(systemName: "arrowtriangle.down.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(GaryColors.loss)
-                    Text("W/L").font(GaryFonts.kicker(9, .semibold)).tracking(1.3).foregroundStyle(LabInk.dim)
-                }
-                .frame(height: 10)
+                Text("W / L RUNS").font(GaryFonts.display(14.8)).tracking(1.8).foregroundStyle(GaryColors.gold)
+                    .frame(height: 26)
+                    .padding(.bottom, 4)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Win and loss streaks")
                 .accessibilityAddTraits(.isHeader)
@@ -667,28 +662,30 @@ struct StreakMarketMap: View {
                     // A short, wide map (a small slate) lays its tiles out
                     // landscape so it still reads as a mosaic, not a row of columns.
                     let stretch = max(1, (g.size.width / max(g.size.height, 1)) / 1.35)
-                    let rects = Squarify.layout(weights, in: CGRect(x: -1.5, y: -1.5, width: g.size.width + 3, height: g.size.height + 3), stretch: stretch)
-                    let depths = lengths.map { longest > least ? 0.12 + 0.18 * ($0 - least) / (longest - least) : 0.21 }
-                    ZStack(alignment: .topLeading) {
-                        // The colour: each tile deepest at its number and fading
-                        // toward its name; the map's outer edge dissolves into the
-                        // page, so the mosaic has no hard frame.
+                    let rects = Squarify.layout(weights, in: CGRect(x: -3, y: -3, width: g.size.width + 6, height: g.size.height + 6), stretch: stretch)
+                            ZStack(alignment: .topLeading) {
+                        // Each run a lit tile (mock B): its color deepening with
+                        // the run, a hairline of light on its top edge.
                         ZStack(alignment: .topLeading) {
                             ForEach(Array(list.enumerated()), id: \.offset) { i, r in
-                                let rect = rects[i].insetBy(dx: 1.5, dy: 1.5)
-                                let tint = r.kind == "win" ? GaryColors.win : GaryColors.loss
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(LinearGradient(colors: [tint.opacity(depths[i] * 0.35), tint.opacity(depths[i])],
+                                let rect = rects[i].insetBy(dx: 3, dy: 3)
+                                let won = r.kind == "win"
+                                let n = Double(r.length ?? 0)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(LinearGradient(colors: won
+                                                         ? [GaryColors.win.opacity(min(0.45, 0.16 + 0.05 * n)), Color(red: 18 / 255, green: 40 / 255, blue: 24 / 255).opacity(0.9)]
+                                                         : [GaryColors.loss.opacity(min(0.45, 0.14 + 0.05 * n)), Color(red: 48 / 255, green: 16 / 255, blue: 16 / 255).opacity(0.9)],
                                                          startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .stroke(LinearGradient(colors: [.white.opacity(0.07), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
                                     .frame(width: rect.width, height: rect.height)
                                     .position(x: rect.midX, y: rect.midY)
                             }
                         }
-                        .mask(RoundedRectangle(cornerRadius: 22, style: .continuous).padding(5).blur(radius: 9))
                         .accessibilityHidden(true)
                         // The words and the taps, never faded.
                         ForEach(Array(list.enumerated()), id: \.offset) { i, r in
-                            let rect = rects[i].insetBy(dx: 1.5, dy: 1.5)
+                            let rect = rects[i].insetBy(dx: 3, dy: 3)
                             tile(r, size: rect.size)
                                 .frame(width: rect.width, height: rect.height)
                                 .position(x: rect.midX, y: rect.midY)
@@ -702,7 +699,7 @@ struct StreakMarketMap: View {
 
     private func tile(_ r: StreakRow, size: CGSize) -> some View {
         let won = r.kind == "win"
-        let tint = won ? GaryColors.win : GaryColors.loss
+        let tint = won ? DartsLook.green : DartsLook.redFigure
         let n = r.length ?? 0
         let team = r.subject ?? ""
         let name = LabFormat.nickname(team)
@@ -860,11 +857,13 @@ struct DartWheel: View {
 
     var body: some View {
         GeometryReader { g in
-            let k = g.size.width / 402
+            // Inside the stage card (mock B): the board in its window at the
+            // card's left edge, the rows at its right.
+            let k = g.size.width / 378
             let h = g.size.height
-            let cx = 14 * k, cy = h / 2, r = 150 * k
-            let colX = 172 * k
-            let colW = g.size.width - colX - GaryLayout.gutter
+            let cx = 2 * k, cy = h / 2, r = 148 * k
+            let colX = 158 * k
+            let colW = g.size.width - colX - 14
             ZStack(alignment: .topLeading) {
                 // The board, the shipping board's own drawing, half off the left wall.
                 let side = r * 358 / 172
@@ -873,18 +872,11 @@ struct DartWheel: View {
                     .opacity(0.85)
                     .position(x: cx, y: cy)
                     .accessibilityHidden(true)
-                // The lamp hangs a little right of the bull.
-                Color.clear.frame(width: 2 * r, height: 2 * r)
-                    .position(x: cx + 60 * k, y: cy)
-                    .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
-                    .allowsHitTesting(false)
-
-                // The glass the picked row sits in.
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), Color(hex: "#18150F")], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
-                    .frame(width: colW, height: Self.rowHeight + 12)
+                // The gold tile the picked row sits on, lit from its left.
+                DartsLook.goldTileFill(radius: 18)
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(RadialGradient(colors: [DartsLook.goldLabel.opacity(0.28), .clear], center: .leading, startRadius: 0, endRadius: colW * 0.7)))
+                    .frame(width: colW + 8, height: Self.rowHeight + 16)
                     .position(x: colX + colW / 2, y: cy)
                     .accessibilityHidden(true)
 
@@ -916,12 +908,12 @@ struct DartWheel: View {
                 DartWheelInput(rowHeight: Self.rowHeight, jump: jump,
                                onPos: { p in turned(to: p) },
                                onTap: { y in tapped(y: y, height: h) })
-                    .frame(width: colW + GaryLayout.gutter, height: h)
+                    .frame(width: colW + 14, height: h)
                     .offset(x: colX)
                     .accessibilityHidden(true)
             }
         }
-        .frame(height: 406)
+        .frame(height: 380)
         .clipped()
         .onChange(of: kind) { newKind in
             // A tab tap turns the wheel to that category's #1.
@@ -1243,5 +1235,132 @@ private struct DartWheelInput: UIViewRepresentable {
             guard let v = g.view as? UIScrollView else { return }
             parent.onTap(g.location(in: v).y - v.contentOffset.y)
         }
+    }
+}
+
+// MARK: - The page in cards (founder, Oct 30 2026: mock B, "identical to the mock")
+
+/// The Darts page's one look: every section a lit, rounded card on the page,
+/// a soft glow of its own color at its top, a hairline of light on its edge.
+enum DartsLook {
+    static let card = [Color(hex: "#1E1A15"), Color(hex: "#13110D")]
+    static let goldTile = [Color(hex: "#3A2C0F"), Color(hex: "#1E170B")]
+    static let goldWord = Color(hex: "#F2D27A")
+    static let goldLabel = Color(hex: "#E8C45A")
+    static let green = Color(hex: "#6FD08A")
+    static let greenFigure = Color(hex: "#57C46B")
+    static let redFigure = Color(hex: "#FF7A7E")
+
+    /// The gold tile a picked tab or the picked dart row sits on.
+    static func goldTileFill(radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(LinearGradient(colors: goldTile, startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(LinearGradient(colors: [.white.opacity(0.09), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+            .shadow(color: .black.opacity(0.45), radius: 7, y: 6)
+    }
+}
+
+/// A section's card: the page's dark warm face with a glow of `tint` where
+/// `glowAt` says, 22-point corners, lifted on a shadow.
+struct DartsCard: ViewModifier {
+    var tint: Color? = nil
+    var glowAt: UnitPoint = .top
+    var face: [Color] = DartsLook.card
+    func body(content: Content) -> some View {
+        content
+            .background {
+                GeometryReader { g in
+                    ZStack {
+                        LinearGradient(colors: face, startPoint: UnitPoint(x: 0.35, y: 0), endPoint: UnitPoint(x: 0.65, y: 1))
+                        if let tint {
+                            RadialGradient(colors: [tint, .clear], center: glowAt, startRadius: 0, endRadius: max(g.size.width, g.size.height) * 0.7)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(LinearGradient(colors: [.white.opacity(0.08), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.12)), lineWidth: 1))
+                .shadow(color: .black.opacity(0.45), radius: 15, y: 16)
+            }
+            .padding(.horizontal, 12)
+    }
+}
+
+extension View {
+    func dartsCard(tint: Color? = nil, glowAt: UnitPoint = .top, face: [Color] = DartsLook.card) -> some View {
+        modifier(DartsCard(tint: tint, glowAt: glowAt, face: face))
+    }
+}
+
+/// Tabs as words: the picked one lit gold and glowing, no box, no bar
+/// (design.md: no pills). Spread across the width when they fit; a row that
+/// scrolls when they don't (the NFL's six).
+struct LitTextTabs: View {
+    let items: [String]
+    @Binding var selected: String
+    var size: CGFloat = 14
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element) { i, item in
+                    if i > 0 { Spacer(minLength: 12) }
+                    word(item)
+                }
+            }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 18) { ForEach(items, id: \.self) { word($0) } }
+                }
+                // The wheel moving the category keeps its word in view.
+                .onChange(of: selected) { item in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(item, anchor: .center) } }
+            }
+        }
+    }
+
+    private func word(_ item: String) -> some View {
+        let on = selected == item
+        return Button { withAnimation(.easeOut(duration: 0.18)) { selected = item } } label: {
+            Text(item.uppercased()).font(GaryFonts.display(size)).tracking(1.2)
+                .foregroundStyle(on ? DartsLook.goldWord : DartsInk.idleTab)
+                .shadow(color: on ? DartsLook.goldLabel.opacity(0.55) : .clear, radius: 7)
+                .fixedSize()
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .id(item)
+    }
+}
+
+/// The leagues in a sunk glass bar, the picked one raised on a gold tile.
+struct LeagueGlassBar: View {
+    let items: [String]
+    @Binding var selected: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(items, id: \.self) { item in
+                let on = selected == item
+                Button { withAnimation(.easeOut(duration: 0.18)) { selected = item } } label: {
+                    Text(item).font(GaryFonts.display(15.7)).tracking(1.6)
+                        .foregroundStyle(on ? DartsLook.goldLabel : DartsInk.idleTab)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background { if on { DartsLook.goldTileFill(radius: 13) } }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: "#0F0D0A"), Color(hex: "#15120E")], startPoint: .top, endPoint: .bottom)
+                    .shadow(.inner(color: .black.opacity(0.6), radius: 4, y: 3)))
+        )
+        .frame(height: 46)
     }
 }

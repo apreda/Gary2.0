@@ -822,3 +822,264 @@ extension LabFormat {
         return monthDayWords.string(from: d)
     }
 }
+
+// MARK: - The bento (founder, Oct 30 2026: mock B, "identical to the mock")
+
+/// The featured cards as a bento: the parlay of the day tall on the left
+/// with Gary holding his tickets, tonight's big game wide at the right with
+/// Gary at his watch, Winners and Hot/Cold under it, and every dart in a
+/// bar across the bottom. No balls (founder, Oct 30 2026).
+struct DartsBento: View {
+    let league: String
+    let parlay: ParlaySlipModel?
+    let primetime: PrimetimeModel?
+    let fantasy: FantasyColumnModel?
+    let recap: WinnersRecapModel?
+    let darts: [DartRow]
+    let form: [PlayerFormRow]
+    let onParlay: () -> Void
+    let onSheet: (DartsFeatureSheet) -> Void
+
+    private static let gap: CGFloat = 8
+    private static let tall: CGFloat = 214
+
+    private var game: PrimetimeGame? { primetime?.games.first { $0.league == league } }
+    private var bank: Double? { recap?.bankroll_dollars?.value }
+    private var lead: PlayerFormRow? { form.first { $0.kind == "hot" } ?? form.first { $0.kind == "hot_arm" } }
+    private var live: [DartRow] { darts.filter { !$0.isScratched } }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            GeometryReader { g in
+                let heroW = ((g.size.width - Self.gap) * 0.4916).rounded()
+                HStack(alignment: .top, spacing: Self.gap) {
+                    hero.frame(width: heroW, height: Self.tall)
+                    right
+                }
+            }
+            .frame(height: Self.tall)
+            bottom
+        }
+        .padding(.top, 6)
+        .padding(.horizontal, GaryLayout.gutter)
+    }
+
+    // MARK: Tiles
+
+    private var hero: some View {
+        let (figure, sub) = parlayWords
+        return Button { if parlay != nil { onParlay() } } label: {
+            BentoTile(face: [Color(hex: "#3B2D10"), Color(hex: "#1A140A")], glow: Color(hex: "#E8C45A").opacity(0.45),
+                      glowAt: UnitPoint(x: 0.3, y: 1.1), radius: 22) {
+                Image("GaryActTickets").resizable().scaledToFit().frame(height: 232)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 42, y: 112)
+                    .accessibilityHidden(true)
+            } words: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("PARLAY OF THE DAY").font(GaryFonts.display(13.9)).tracking(1.8).foregroundStyle(DartsLook.goldLabel)
+                    Text(figure).font(GaryFonts.display(37)).foregroundStyle(GaryColors.warmWhite).monospacedDigit().fitsOneLine()
+                    Text(sub).font(GaryFonts.ui(12)).foregroundStyle(LabInk.dim)
+                }
+                .padding(16)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Parlay of the day, \(figure), \(sub)")
+    }
+
+    /// The parlay as words: coming, its price and legs, legs in, or done.
+    private var parlayWords: (String, String) {
+        guard let p = parlay else { return ("TONIGHT", "Coming soon") }
+        let n = p.legs.count
+        let price = LabFormat.price(p.american_odds)
+        switch p.result {
+        case "won": return (price, "It hit")
+        case "lost": return (price, "\(p.landed ?? 0) of \(n)")
+        default:
+            if let l = p.landed, l > 0 { return (price, "\(l) of \(n) in") }
+            return (price, "\(n) legs")
+        }
+    }
+
+    @ViewBuilder private var right: some View {
+        VStack(spacing: Self.gap) {
+            if let game { primeTile(game).frame(height: 104) }
+            let pair = [bank.map { _ in "w" }, lead.map { _ in "h" }].compactMap { $0 }
+            if game == nil {
+                // No big game tonight: Winners and Hot/Cold stand one over the
+                // other, Gary as big as the tile they're given.
+                ForEach(pair, id: \.self) { k in (k == "w" ? AnyView(winnersTile(pair.count == 1 ? .tall : .wide)) : AnyView(hotTile(pair.count == 1 ? .tall : .wide))).frame(maxHeight: .infinity) }
+            } else if !pair.isEmpty {
+                HStack(spacing: Self.gap) {
+                    ForEach(pair, id: \.self) { k in k == "w" ? AnyView(winnersTile(.small)) : AnyView(hotTile(.small)) }
+                }
+                .frame(height: 102)
+            }
+            if game == nil && pair.isEmpty { Color.clear }
+        }
+        .frame(maxWidth: .infinity, maxHeight: Self.tall, alignment: .top)
+    }
+
+    private func primeTile(_ game: PrimetimeGame) -> some View {
+        let label = game.slot == "MARQUEE GAME" ? "MARQUEE" : "PRIMETIME"
+        let away = teamAbbrevFromName(game.away_team, league: game.league).uppercased()
+        let home = teamAbbrevFromName(game.home_team, league: game.league).uppercased()
+        let figure = Self.primetimeFigure(game)
+        return Button { onSheet(.primetime) } label: {
+            BentoTile(face: [Color(hex: "#1B2540"), Color(hex: "#0E1322")], glow: Color(hex: "#6E96FF").opacity(0.30),
+                      glowAt: .bottomTrailing, radius: 20, artCorner: .topTrailing) {
+                Image("GaryActWatch").resizable().scaledToFit().frame(height: 196)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .offset(x: 22, y: 6)
+                    .accessibilityHidden(true)
+            } words: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(label).font(GaryFonts.display(13)).tracking(1.6).foregroundStyle(Color(hex: "#9DB4FF"))
+                    Text(figure).font(GaryFonts.display(35.2)).foregroundStyle(GaryColors.warmWhite).monospacedDigit().fitsOneLine()
+                    Text("\(away) @ \(home)").font(GaryFonts.ui(11.5)).foregroundStyle(LabInk.dim)
+                }
+                .padding(.horizontal, 14).padding(.top, 13)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label.capitalized), \(game.matchupWords), \(figure)")
+    }
+
+    /// A small tile's shape: one of two under the big game, one of two
+    /// stacked when there is no big game, or the whole column alone.
+    private enum TileSize { case small, wide, tall }
+
+    private func winnersTile(_ size: TileSize) -> some View {
+        let words = LabFormat.dollars((bank ?? 0).rounded())
+        return Button { onSheet(.winners) } label: {
+            smallTile(label: "WINNERS", color: DartsLook.green, figure: words,
+                      face: [Color(hex: "#13301E"), Color(hex: "#0B170F")], glow: GaryColors.win.opacity(0.35)) {
+                Image("GaryActCash").resizable().scaledToFit().frame(height: size == .tall ? 232 : size == .wide ? 186 : 130)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: size == .tall ? 34 : size == .wide ? 18 : 30, y: size == .tall ? 104 : size == .wide ? 88 : 86)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Winners, bankroll \(words)")
+    }
+
+    private func hotTile(_ size: TileSize) -> some View {
+        let figure = lead?.short ?? "Tonight"
+        return Button { onSheet(.form) } label: {
+            smallTile(label: "HOT/COLD", color: Color(hex: "#FF9A5A"), figure: figure,
+                      face: [Color(hex: "#3A170C"), Color(hex: "#140C09")], glow: Color(hex: "#FF7828").opacity(0.35)) {
+                Image("GaryFire").resizable().scaledToFit().frame(width: size == .tall ? 140 : size == .wide ? 100 : 70)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .offset(x: 14, y: 14)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Hot and cold, \(lead.map { "\($0.player), \($0.short ?? "")" } ?? "tonight")")
+    }
+
+    private func smallTile<Art: View>(label: String, color: Color, figure: String, face: [Color], glow: Color, @ViewBuilder art: () -> Art) -> some View {
+        BentoTile(face: face, glow: glow, glowAt: .bottomTrailing, radius: 20) {
+            art().accessibilityHidden(true)
+        } words: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label).font(GaryFonts.display(11.6)).tracking(1.4).foregroundStyle(color)
+                Text(figure).font(GaryFonts.display(21.3)).foregroundStyle(GaryColors.warmWhite).monospacedDigit().fitsOneLine()
+            }
+            .padding(11)
+        }
+    }
+
+    // MARK: The bottom bar
+
+    @ViewBuilder private var bottom: some View {
+        let fantasyOn = league == "NFL" && (fantasy != nil || primetime?.games.contains(where: { $0.league == "NFL" }) == true)
+        if !live.isEmpty || fantasyOn {
+            HStack(spacing: Self.gap) {
+                if fantasyOn {
+                    bar(title: "FANTASY", note: fantasy.flatMap { c in c.week.map { "Week \($0)" } } ?? "Coming soon", tap: fantasy == nil ? nil : .fantasy)
+                }
+                if !live.isEmpty {
+                    let boards = Set(live.map(\.kind)).count
+                    let games = Set(live.compactMap { $0.game_id?.value ?? $0.matchup }).count
+                    bar(title: "ALL \(live.count) DARTS", note: fantasyOn ? nil : "\(boards) boards · \(games) games", tap: .allDarts)
+                }
+            }
+            .frame(height: 54)
+        }
+    }
+
+    private func bar(title: String, note: String?, tap: DartsFeatureSheet?) -> some View {
+        Button { if let tap { onSheet(tap) } } label: {
+            HStack(spacing: 12) {
+                Text(title).font(GaryFonts.display(18.5)).tracking(0.8).foregroundStyle(GaryColors.warmWhite).fixedSize()
+                Spacer(minLength: 6)
+                if let note { Text(note).font(GaryFonts.ui(12)).foregroundStyle(LabInk.dim).fitsOneLine() }
+                if tap != nil {
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(GaryColors.gold)
+                }
+            }
+            .padding(.leading, 16).padding(.trailing, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), Color(hex: "#17130F")], startPoint: .leading, endPoint: .trailing))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(LinearGradient(colors: [.white.opacity(0.06), .clear], startPoint: .top, endPoint: .center), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.4), radius: 11, y: 12)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The NFL window as fans say it (TNF, SNF, MNF), a game's start time;
+    /// while it plays and after, the score.
+    static func primetimeFigure(_ game: PrimetimeGame) -> String {
+        if game.started, let a = game.live?.away_score, let h = game.live?.home_score { return "\(a)-\(h)" }
+        if game.league == "NFL", let day = game.slot?.split(separator: " ").first {
+            switch day {
+            case "THURSDAY": return "TNF"
+            case "SUNDAY": return "SNF"
+            case "MONDAY": return "MNF"
+            default: return "\(day.prefix(3)) NIGHT"
+            }
+        }
+        guard let d = LabFormat.parseISO(game.commence_time) else { return "" }
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "h:mm"
+        return f.string(from: d)
+    }
+}
+
+/// One bento tile: its own two-color face with a glow in a corner, its art
+/// clipped to the tile, the words over the top-left.
+private struct BentoTile<Art: View, Words: View>: View {
+    let face: [Color]
+    let glow: Color
+    let glowAt: UnitPoint
+    let radius: CGFloat
+    /// The tile corner Gary is pinned to, the way the mock pins him.
+    var artCorner: Alignment = .bottomTrailing
+    @ViewBuilder let art: Art
+    @ViewBuilder let words: Words
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                LinearGradient(colors: face, startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [glow, .clear], center: glowAt, startRadius: 0, endRadius: max(g.size.width, g.size.height) * 0.75)
+                // The art lies over the tile without sizing it: a Gary taller
+                // than his tile sat lower than the mock when he set its height.
+                Color.clear.overlay(alignment: artCorner) { art }
+                words
+            }
+            .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .stroke(LinearGradient(colors: [.white.opacity(0.08), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.15)), lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 14, y: 14)
+        .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+    }
+}
