@@ -253,10 +253,10 @@ function teamHead(desk, ratings, team, ts) {
   const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
 }
-async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null) {
+async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null, meetingData = null) {
   const h = teamHead(desk, ratings, team, ts);
   if (!h.head) return h.text;
-  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts, meetingUnder }).catch(() => `${h.head}: games not on file.`);
+  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts, meetingUnder, meetingData }).catch(() => `${h.head}: games not on file.`);
   return h.rated ? log.replace(/^(.*)\n/, `$1\n  ${h.rated}\n`) : log;
 }
 
@@ -777,7 +777,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
   const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
-    gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam),
+    gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam, seasons[1]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),

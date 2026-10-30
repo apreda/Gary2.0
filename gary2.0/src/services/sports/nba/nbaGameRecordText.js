@@ -17,6 +17,14 @@ export const sideOf = (rec, teamId) => (String(rec.home.id) === String(teamId) ?
 const other = (s) => (s === 'home' ? 'away' : 'home');
 
 /** The season's summaries by team id, oldest first: Map(teamId -> [{ game_id, game_date, summary }]). */
+/** Each "Name (reason)" said in full the first time in `lines` (print order) and by name alone after (round 16: the same
+ * absentees and their surgeries on every game of a log). Only lines `test` passes; a reason that changes is said again. */
+export function reasonsOnce(lines, test = () => true) {
+  const seen = new Set();
+  return lines.map((l) => (l == null || !test(l) ? l : String(l).replace(/(\p{Lu}[\p{L}.'’-]*(?: (?:\p{Lu}[\p{L}.'’-]*|Jr\.|Sr\.|II|III|IV))*) \(((?!not in |not filed|not on file)[^()]+)\)/gu, (m, name, why) => {
+    const k = `${name}|${why}`; if (seen.has(k)) return name; seen.add(k); return m; })));
+}
+
 export function summariesByTeam(rows) {
   const out = new Map();
   for (const r of rows || []) for (const t of [r.summary.home, r.summary.away]) {
@@ -124,8 +132,7 @@ function reportText(rec, side, before) {
   for (const x of rows) {
     const fresh = before.length && !samePlayerIn(x.name, played, names);
     const key = `${x.status}${fresh ? ` (not in ${before.length === 1 ? 'their one game' : `any of their ${before.length} games`} before this one)` : ''}`;
-    // Long absentees by name only (round 16: the same reasons on every game).
-    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(fresh ? x.name : `${x.name} (${reason(x)})`);
+    if (!groups.has(key)) groups.set(key, []); groups.get(key).push(`${x.name} (${reason(x)})`);
   }
   return `${short}: ${[...groups].map(([k, v]) => `${k}: ${v.join(', ')}`).join('; ')}`;
 }

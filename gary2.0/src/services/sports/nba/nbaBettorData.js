@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, nextListed, olderGameFacts, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { flowFacts, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -198,9 +198,7 @@ async function opponentOut(g, team, opp, oppId, who = 'their') {
     const not = out.filter((r) => !hadPlayed(r));
     const games = before.n === 1 ? 'its one game' : `any of its ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
     if (!not.length) return `      ${who} Out on ${when}: ${played.map(said).join(', ')}`;
-    // The long absentees by name only: their reasons are on the report at the top and were on every row (round 16: the
-    // same three Warriors and their surgeries on five rows).
-    return `      ${who} Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map((r) => r.name).join(', ')}`;
+    return `      ${who} Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;
   } catch (e) {
     return `      ${who} Out list: not on file (${e.message})`;
   }
@@ -331,7 +329,7 @@ export async function nextGameLine(team, tip, season = nbaSeason()) {
 
 // `meetingUnder`: tonight's opponent, whose log is printed first; a game against it is printed there in full and here as its
 // score with a pointer (round 16: a meeting read twice, and Grimes's 3-5 threes in it read twice in two forms).
-export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data, meetingUnder = null } = {}) {
+export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data, meetingUnder = null, meetingData = null } = {}) {
   const ts = data === undefined ? await teamSeason(team, before, season) : data;
   if (!ts) return `${head}: games not on file.`;
   const { games, boxes } = ts;
@@ -340,10 +338,11 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const opp = g.home_team?.id === ts.id ? g.visitor_team : g.home_team;
     return opponentOut(g, team, opp?.full_name, opp?.id);
   }));
-  const ownOuts = await Promise.all(games.slice(0, BOX_GAMES).map((g) => {
+  // Each absentee's reason said on the newest row he is Out in, by name after (round 16).
+  const ownOuts = reasonsOnce(await Promise.all(games.slice(0, BOX_GAMES).map((g) => {
     const opp = g.home_team?.id === ts.id ? g.visitor_team : g.home_team;
     return opponentOut(g, opp?.full_name, team, ts.id, `${String(team).split(' ').pop()}'`.replace(/([^s])'$/, "$1's"));
-  }));
+  })));
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
   const lineups = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaLineups([g.id]).catch(() => [])));
   const startersOf = (rows, teamId) => rows.filter((r) => r.starter && r.team?.id === teamId).map((r) => `${r.player?.first_name} ${r.player?.last_name}`);
@@ -423,12 +422,17 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const gp = oppGames ? oppGames.length : o?.gp;
     const rec = wl ? ` (${wl} now${gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : byTeamSummaries ? '' : '; their other games: not on file'})` : '';
     const q = quarterLine(g, home, us, them);
-    if (meetingUnder && String(opp).split(' ').pop() === String(meetingUnder).split(' ').pop()) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above`;
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     const stored = flows.get(String(g.id));
     const flow = stored ? `      flow: ${flowFacts(stored, ts.id, byTeamSummaries)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
+    // A meeting printed in full under tonight's opponent, where that row has its boxes too: here only this side's own
+    // starters, minutes and who did not play (the rest of the row covers both teams).
+    const fullThere = meetingUnder && String(opp).split(' ').pop() === String(meetingUnder).split(' ').pop()
+      && (meetingData?.games || []).slice(0, BOX_GAMES).some((x) => String(x.id) === String(g.id));
+    if (fullThere && i < BOX_GAMES) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above; the ${team} side of it:\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), null, starters[i], null, officials[i], ownOuts[i]).split('\n').filter((l) => /^\s+(?:started|minutes|did not play)/.test(l)).join('\n')}`;
+    if (fullThere) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above`;
     return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i]), earlyLine(i, g)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');

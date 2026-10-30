@@ -19,7 +19,7 @@ import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { cupWords } from '../../../sports/nba/nbaBettorData.js';
 import { saveGameRecord, storedGameIds, teamRecords, seasonSummaries, recordsById } from '../../../gamebygame/gameRecordStore.js';
 import { buildNbaGameRecord, NBA_RECORD_VERSION, settingOf } from '../../../sports/nba/nbaGameRecord.js';
-import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine, wonLost } from '../../../sports/nba/nbaGameRecordText.js';
+import { fullGameText, shortGameText, summariesByTeam, sideOf, resultLine, wonLost, reasonsOnce } from '../../../sports/nba/nbaGameRecordText.js';
 
 export const NBA_WINDOW = 10;
 const SHORT_LINES = 15;
@@ -184,6 +184,7 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
   const standings = `LEAGUE RECORDS BEFORE TONIGHT\nEast: ${conf('East')}\nWest: ${conf('West')}`;
 
   const finals = new Set(summaries.map((r) => `${r.summary.home.score}-${r.summary.away.score}`));
-  const story = [header, tonightPart, standings, meetingPart, teamPart(away, awayRecs), teamPart(home, homeRecs)].join('\n\n');
+  // Each absentee's reason at tip said the first time, by name after (round 16: the same reasons on every game).
+  const story = reasonsOnce([header, tonightPart, standings, meetingPart, teamPart(away, awayRecs), teamPart(home, homeRecs)].join('\n\n').split('\n'), (l) => /^\s*injury report at tip:/.test(l)).join('\n');
   return { line: nbaLineOf(desk), story, news: newsWithoutRecaps(news, finals) };
 }
