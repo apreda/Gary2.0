@@ -78,9 +78,16 @@ export function sheetsByGame(entries, blocks = new Map(), starts = new Map()) {
   const games = new Map();
   for (const e of entries) { const k = String(e.gameId ?? ''); if (!games.has(k)) games.set(k, []); games.get(k).push(e); }
   const order = [...games.keys()].sort((a, b) => (Date.parse(starts.get(a)) || 0) - (Date.parse(starts.get(b)) || 0));
+  // A defense line two or more of the game's sheets share is printed once above them, and each sheet points to it (round 17:
+  // the same 650-character "BUF defense against wide receivers" line on three Ravens receivers' sheets).
+  const DEF = /^\s*[A-Z]{2,4} defense against [^,]+, \d{4} game by game\b/;
   return order.map((k) => {
     const list = games.get(k);
-    const body = list.map((e) => `  [${e.id}] ${e.sheet}`).join('\n\n');
+    const counts = new Map();
+    for (const e of list) for (const l of new Set(String(e.sheet).split('\n').filter((x) => DEF.test(x)).map((x) => x.trim()))) counts.set(l, (counts.get(l) || 0) + 1);
+    const shared = [...counts].filter(([, c]) => c > 1).map(([l]) => l);
+    const sheetOf = (e) => (shared.length ? String(e.sheet).split('\n').map((l) => (shared.includes(l.trim()) ? l.replace(/^(\s*)([A-Z]{2,4} defense against [^,]+),.*$/, '$1$2: printed once above') : l)).join('\n') : e.sheet);
+    const body = [shared.length ? shared.map((l) => `  ${l}`).join('\n') : null, list.map((e) => `  [${e.id}] ${sheetOf(e)}`).join('\n\n')].filter(Boolean).join('\n\n');
     if (list.every((e) => e.standalone) || !blocks.get(k)) return body;
     const block = blocks.get(k);
     return `${/^GAME\b/.test(block) ? block : `GAME · ${block}`}\n\n${body}`;
