@@ -65,12 +65,26 @@ describe('freezeBoard', () => {
     ]);
   });
 
-  it('drops rungs nobody would bet (shorter than −400)', () => {
+  it('drops rungs nobody would bet (shorter than −200)', () => {
     const { markets } = freezeBoard([
       row('draftkings', 'receiving_yards', '10', { type: 'milestone', odds: -2800 }),
+      row('draftkings', 'receiving_yards', '30', { type: 'milestone', odds: -280 }),
       row('draftkings', 'receiving_yards', '40', { type: 'milestone', odds: -144 }),
     ], []);
     expect(markets.map(m => m.label)).toEqual(['40+']);
+  });
+
+  it('keeps the bets people talk about: no attempts or completions, and quarter or half windows only for touchdowns', () => {
+    const { markets } = freezeBoard([
+      row('fanduel', 'rushing_attempts', '15', { type: 'milestone', odds: 120 }),
+      row('fanduel', 'passing_completions', '25', { type: 'milestone', odds: 130 }),
+      row('fanduel', 'passing_attempts', '35', { type: 'milestone', odds: 140 }),
+      row('fanduel', 'receiving_yards_1q', '30', { type: 'milestone', odds: 236 }),
+      row('fanduel', 'receptions_1h', '4', { type: 'milestone', odds: 300 }),
+      row('fanduel', 'anytime_td_1q', '1', { type: 'milestone', odds: 900 }),
+      row('fanduel', 'anytime_td_1h', '1', { type: 'milestone', odds: 410 }),
+    ], []);
+    expect(markets.map(m => m.propType)).toEqual(['anytime_td_1q', 'anytime_td_1h']);
   });
 
   it('keeps one over line per player prop and per game total: the line most books hang', () => {

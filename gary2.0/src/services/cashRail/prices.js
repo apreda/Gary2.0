@@ -9,7 +9,7 @@
 const BASE_TYPES = new Set([
   'anytime_td', 'first_td',
   'receiving_yards', 'rushing_yards', 'passing_yards', 'rushing_receiving_yards',
-  'receptions', 'passing_tds', 'passing_completions', 'passing_attempts', 'rushing_attempts',
+  'receptions', 'passing_tds',
   'interceptions', 'longest_reception', 'longest_rush', 'longest_pass',
 ]);
 const WINDOWS = ['_1q', '_1h', '_2h'];
@@ -18,11 +18,13 @@ const WINDOWS = ['_1q', '_1h', '_2h'];
 export function settleableType(propType) {
   if (BASE_TYPES.has(propType)) return true;
   const w = WINDOWS.find(s => propType.endsWith(s));
-  return Boolean(w) && BASE_TYPES.has(propType.slice(0, -w.length)) && propType !== 'first_td' + w;
+  // Quarter and half windows only for touchdowns: a 1st-quarter yards line is
+  // the same story as the game's ladder, told again at a shorter price.
+  return Boolean(w) && propType.slice(0, -w.length) === 'anytime_td';
 }
 
 export const decimalOdds = p => (p > 0 ? 1 + p / 100 : 1 + 100 / -p);
-const FLOOR_DECIMAL = 1.25; // −400
+const FLOOR_DECIMAL = 1.5; // −200: shorter than that is the obvious stuff
 const finitePrice = p => (Number.isFinite(p) && p !== 0 ? p : null);
 const fmtLine = n => (Number.isInteger(n) ? String(n) : String(n));
 
@@ -40,7 +42,7 @@ export function freezeBoard(propRows = [], gameOdds = []) {
   const markets = new Map();
   const offer = (m) => {
     if (m.price == null) return;
-    // A rung nobody would bet (shorter than −400) is not worth a line on the board.
+    // A rung nobody would bet (shorter than −200) is not worth a line on the board.
     if (m.playerId != null && decimalOdds(m.price) < FLOOR_DECIMAL) return;
     const have = markets.get(m.key);
     if (!have || decimalOdds(m.price) > decimalOdds(have.price)) markets.set(m.key, have ? { ...have, price: m.price } : m);
