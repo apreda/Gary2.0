@@ -64,6 +64,19 @@ const displayName = (s) => {
   return /^(jr|sr|ii|iii|iv|v)\.?$/i.test(first.trim()) ? `${last.trim()} ${first.trim()}` : `${first.trim()} ${last.trim()}`;
 };
 
+/** The official box's team stats as the school's stat crew kept them, by the table's column labels ("WSU", "ARI"):
+ * { labels: [a, b], sacks: [[n, yds], [n, yds]] } (round 13: ESPN's team row, its credits and its play-by-play each
+ * miscount college sacks in some games; the official box is the count). Null when the row is not on the page. */
+export function teamStatsFromBoxPage(html) {
+  const h = String(html || ''); const i = h.indexOf('Sacks: Total - Yds');
+  if (i < 0) return null;
+  const tableAt = h.lastIndexOf('<table', i);
+  const heads = [...h.slice(tableAt, tableAt + 4000).matchAll(/<th[^>]*>(.*?)<\/th>/gs)].map((m) => text(m[1]).trim()).filter((x) => x && x !== '-');
+  const row = text(h.slice(i, h.indexOf('</tr>', i))).match(/Sacks: Total - Yds\.?\s*(\d+)\s*-\s*(-?\d+)\s+(\d+)\s*-\s*(-?\d+)/);
+  if (!row || heads.length < 2) return null;
+  return { labels: [decode(heads[0]), decode(heads[1])], sacks: [[Number(row[1]), Number(row[2])], [Number(row[3]), Number(row[4])]] };
+}
+
 /** One official box page's starters: { date: 'YYYY-MM-DD', teams: [{ label, starters: [{ name, jersey, position, unit }] }] }, or null. */
 export function startersFromBoxPage(html) {
   const title = String(html).match(/<title>([^<]*)<\/title>/)?.[1] || '';
@@ -130,10 +143,10 @@ async function readSite(college, season, fetchImpl) {
     const pattern = new RegExp(`/sports/football/stats/${season}/[^"]*/boxscore/\\d+|/boxscore\\.aspx\\?id=\\d+`, 'g');
     return { links: [...new Set(pages.flatMap((page) => String(page || '').match(pattern) || []))] };
   }, { ttlMs: 6 * HOUR }).catch(() => null);
-  const boxes = await Promise.all((links?.links || []).map((path) => cachedResearch(`cfb_official_box_v1:${domain}${path}`, async () => {
+  const boxes = await Promise.all((links?.links || []).map((path) => cachedResearch(`cfb_official_box_v2:${domain}${path}`, async () => {
     const page = await get(`https://${domain}${path}`, fetchImpl);
     const box = page ? startersFromBoxPage(page) : null;
-    return box ? { ...box, settled: Date.now() - Date.parse(`${box.date}T12:00:00Z`) > 3 * 24 * HOUR } : { unavailable: true };
+    return box ? { ...box, stats: teamStatsFromBoxPage(page), settled: Date.now() - Date.parse(`${box.date}T12:00:00Z`) > 3 * 24 * HOUR } : { unavailable: true };
   }, { ttlMs: 30 * 24 * HOUR, valid: (v) => !v?.unavailable && v?.settled }).catch(() => null)));
   return boxes.filter(Boolean);
 }
@@ -171,6 +184,27 @@ export async function teamStarters(team, games, season, { fetchImpl = fetch } = 
         const mine = ma > mb && ob >= oa ? a : mb > ma && oa >= ob ? b : ma === mb && oa !== ob ? (oa > ob ? b : a) : null;
         if (!mine || Math.max(ma, mb, oa, ob) === 0) continue;
         out.set(String(g.gameId), mine.starters.map((s) => ({ ...s, key: nameKey(s.name) })));
+        break;
+      }
+      if (out.has(String(g.gameId))) break;
+    }
+  }
+  return out;
+}
+
+/** Each game's sacks made by `team` and the opponent, from the official box: Map game id -> { made: [n, yds], taken: [n,
+ * yds] }, only games a box with the row was found for (same games argument as teamStarters). */
+export async function officialSacks(team, games, season, { fetchImpl = fetch } = {}) {
+  const out = new Map();
+  for (const g of games || []) {
+    for (const school of [team.college, g.opponent?.college]) {
+      if (!SITES[school]) continue;
+      for (const box of (await siteBoxes(school, season, fetchImpl)).filter((b) => b.stats && sameDay(g.date, b.date))) {
+        const [a, b] = box.stats.labels;
+        const [ma, mb, oa, ob] = [likeness(a, team), likeness(b, team), likeness(a, g.opponent || {}), likeness(b, g.opponent || {})];
+        const k = ma > mb && ob >= oa ? 0 : mb > ma && oa >= ob ? 1 : ma === mb && oa !== ob ? (oa > ob ? 1 : 0) : null;
+        if (k == null || Math.max(ma, mb, oa, ob) === 0) continue;
+        out.set(String(g.gameId), { made: box.stats.sacks[k], taken: box.stats.sacks[1 - k] });
         break;
       }
       if (out.has(String(g.gameId))) break;

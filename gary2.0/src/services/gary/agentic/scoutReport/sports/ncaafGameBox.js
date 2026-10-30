@@ -143,7 +143,10 @@ export function gameBoxFromSummary(summary, eventId) {
     // Inside the other team's 20 on any of its snaps (round 9: the college reads had no red-zone trips; the NFL's do).
     // A foul inside the 20 counts too: the ball was there (round 12: San Diego State's drive to the Fresno 16, pushed back
     // by a false start, was a trip in the official box).
-    const fouls = (d?.plays || []).filter((p) => /penalty/i.test(String(p?.type?.text || '')) && !/kickoff|extra point|two.?point|2pt/i.test(String(p?.text || ''))
+    // Only fouls before the drive's touchdown: a delay of game on the try starts at the 3 (round 13: Ole Miss's 62-yard
+    // touchdown drive read as a red-zone trip).
+    const tdAt = (d?.plays || []).findIndex((p) => /touchdown/i.test(String(p?.type?.text || '')));
+    const fouls = (d?.plays || []).filter((p, k) => (tdAt < 0 || k < tdAt) && /penalty/i.test(String(p?.type?.text || '')) && !/kickoff|extra point|two.?point|2pt/i.test(String(p?.text || ''))
       && String(p?.start?.team?.id ?? d?.team?.id ?? '') === String(d?.team?.id ?? ''));
     const inside20 = [...snaps, ...fouls].some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20; });
     // An overtime possession starts at the 25 by rule (round 10: Miami's two overtime TDs read as short fields).
@@ -166,10 +169,12 @@ export function gameBoxFromSummary(summary, eventId) {
       const isSack = /^sack$/i.test(type) || (/\bsacked\b/i.test(said) && !/no play/i.test(said) && (!/^penalty$/i.test(type) || /declined/i.test(said)));
       if (!sacks || !isSack) continue;
       const teamId = String(play?.start?.team?.id ?? drive?.team?.id ?? '');
-      const m = said.match(/loss of (\d+) yards?/i) || said.match(/sacked by [^,]*? for -(\d+) y(?:ar)?ds?/i);
-      if (!m) { sacks = null; continue; }
+      // The yards from the words, else the play's own yardage (round 13: an intentional grounding typed "Sack" has no
+      // yards in its words and blanked the game's sacks); a play with neither leaves only that sack's yards unknown.
+      const m = said.match(/loss of (\d+) yards?/i) || said.match(/sacked\s+by [^,]*? for -(\d+) y(?:ar)?ds?/i);
+      const yds = m ? Number(m[1]) : Number.isFinite(Number(play?.statYardage)) ? -Number(play.statYardage) : null;
       const s = sacks[teamId] || (sacks[teamId] = { n: 0, yards: 0 });
-      s.n += 1; s.yards -= Number(m[1]);
+      s.n += 1; if (yds != null) s.yards -= yds; else s.unknownYards = true;
     }
   }
   // Everyone the play-by-play names ("#99 R.Porter" on a tackle, "#13 C.Durr Jr." on a target), as jersey|name keys
@@ -292,7 +297,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
-  return cachedResearch(`espn_cfb_box_v20:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v21:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -311,19 +316,21 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
  * or { unavailable }. */
 export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.fetch } = {}) {
   if (teamId == null) return { unavailable: true, reason: 'no team id' };
-  return cachedResearch(`espn_cfb_roster_v3:${teamId}`, async () => {
+  return cachedResearch(`espn_cfb_roster_v4:${teamId}`, async () => {
     try {
       // The roster page stops at 100 players unless asked for more (Oct 27 2026 data loop: Miami's 117 read as 100, and
       // Malachi Toney, Daylyn Upshaw and Mohamed Toure, starters, had no position).
       const roster = await getJson(`${SITE}/teams/${teamId}/roster?limit=300`, fetchImpl);
-      const positions = {}, jerseys = {};
+      // `byJersey` (jersey -> [first initial and last name]) places a player the box score never lists (round 13: a hurt
+      // lineman read "team not on file").
+      const positions = {}, jerseys = {}, byJersey = {};
       for (const group of roster?.athletes || []) {
         for (const a of group?.items || []) {
           if (a?.id && a?.position?.abbreviation) positions[String(a.id)] = a.position.abbreviation;
-          if (a?.id && a?.jersey != null) jerseys[String(a.id)] = String(a.jersey);
+          if (a?.id && a?.jersey != null) { jerseys[String(a.id)] = String(a.jersey); (byJersey[String(a.jersey)] ||= []).push(`${String(a.firstName || '')[0] || ''}|${String(a.lastName || '').toLowerCase()}`); }
         }
       }
-      return Object.keys(positions).length ? { positions, jerseys } : { unavailable: true, reason: 'ESPN roster empty' };
+      return Object.keys(positions).length ? { positions, jerseys, byJersey } : { unavailable: true, reason: 'ESPN roster empty' };
     } catch (error) {
       console.warn(`[NCAAF box] ESPN roster for team ${teamId} not retrieved: ${error.message}`);
       return { unavailable: true, reason: error.message };

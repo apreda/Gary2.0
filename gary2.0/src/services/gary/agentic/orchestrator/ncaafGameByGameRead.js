@@ -123,11 +123,13 @@ async function fullGame(g, season, tonight) {
   // "122 rushing on 35" held two sacks for -19; the live read already separates them).
   // The play-by-play's count only when it equals the sacks the other side's players are credited with in the box, as the
   // live read does (round 9: Florida's five sacks at Texas read four, a strip-sack typed as a fumble).
-  const boxSacks = (id) => (box.players || []).filter((p) => p.teamId !== String(id)).reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0);
+  // The other side's team total where ESPN gives one (round 13: the athletes' credits count a shared sack twice).
+  const boxSacks = (id) => { const other = Object.keys(box.defTotals || {}).find((k) => k !== String(id)); const t = other ? Number(box.defTotals[other]?.sacks) : NaN;
+    return Number.isFinite(t) ? t : (box.players || []).filter((p) => p.teamId !== String(id)).reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0); };
   const sackNote = (id) => { const k = box.sacks === null ? null : box.sacks?.[String(id)]; const credited = boxSacks(id);
     if (box.sacks === null) return ', sacks in it not on file';
     if ((box.players || []).some((p) => p.stats?.defensive) && (k?.n || 0) !== credited) return credited ? `, including ${credited} sack${credited === 1 ? '' : 's'} (their yards not on file)` : '';
-    return k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'} for ${k.yards} yards` : ''; };
+    return k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'}${k.unknownYards ? ' (their yards not on file)' : ` for ${k.yards} yards`}` : ''; };
   // Possession only when the two times add up to 60 minutes in a regulation game (round 12).
   const secs = (v) => { const m = String(v || '').match(/^(\d+):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const possOk = (() => { const a = secs(us?.totals?.possessionTime), b = secs(them?.totals?.possessionTime); return a != null && b != null && ((us?.quarters?.length || 0) > 4 || Math.abs(a + b - 3600) <= 30); })();
@@ -156,7 +158,17 @@ async function fullGame(g, season, tonight) {
   // The opponent coming in: its division, its record before this game and its games, its record before tonight.
   const oppGames = await finishedGames(g.them.id, season, tonight);
   const prior = oppGames.filter((x) => Date.parse(x.date) < Date.parse(g.date));
-  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${x.neutral ? ' (neutral site)' : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
+  // Each of its games with who threw most and what it ran and passed for and allowed, from ESPN's box (round 13: scores
+  // only, so its record mixed games with and without its starter).
+  const priorFacts = await Promise.all(prior.map(async (x) => {
+    const b = await getNcaafGameBox(x.id).catch(() => null);
+    if (!b || b.unavailable) return '';
+    const mine = b.teams.find((t) => t.id === x.us.id)?.totals, theirs = b.teams.find((t) => t.id !== x.us.id)?.totals;
+    const qb = (b.players || []).filter((p) => p.teamId === x.us.id && Number(p.stats?.passing?.passingAttempts) >= 5).sort((a2, b2) => Number(b2.stats.passing.passingAttempts) - Number(a2.stats.passing.passingAttempts)).map((p) => p.name).join(' and ');
+    const units = mine && theirs ? `ran ${mine.rushingYards ?? '?'} on ${mine.rushingAttempts ?? '?'}, passed for ${mine.netPassingYards ?? '?'}; allowed ${theirs.rushingYards ?? '?'} rushing, ${theirs.netPassingYards ?? '?'} passing` : '';
+    return [qb ? `QB ${qb}` : null, units || null].filter(Boolean).join('; ');
+  }));
+  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x, k) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
   return lines.join('\n');
 }
 

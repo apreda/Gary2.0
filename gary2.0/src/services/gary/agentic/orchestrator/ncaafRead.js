@@ -57,10 +57,15 @@ const SEARCH_NOTE = /^(?:No|Nothing)\b[^.]*\b(?:found|verified|located|identifie
 const LAST_SEASON = /\blast (?:season|year)\b|\b(?:previous|prior) seasons?\b|\ba year ago\b|\bpreseason\b|\btraining camp\b|\bspring (?:game|practice)\b/i;
 // The search in the first person ("The search limit cut off my last search"), poll places, and a season before this one by
 // its year ("since 2015", "his 2023 rookie season") (round 12). A rank in front of a team's name is taken off the name.
-const FIRST_PERSON = /\b(?:I|my|we|our)\b[^.]*\b(?:search(?:es|ed)?|found no|didn't find|did not find|couldn't (?:open|find)|could not (?:open|find))\b|\bsearch (?:limit|summary)\b|\bcouldn't be (?:opened|dated)\b/i;
+// The desk's own search words only, never a quote (round 13: a coach's "we did not find answers on third down" left).
+const FIRST_PERSON = /\b(?:I|my)\b[^."“”]*\b(?:search(?:es|ed)?|found no|didn't find|did not find|couldn't (?:open|find)|could not (?:open|find))\b|\bsearch (?:limit|summary)\b|\bcouldn't be (?:opened|dated)\b/i;
 const POLL = /\b(?:AP|coaches|CFP|College Football Playoff) (?:poll|Top 25|rankings?)\b|\bin the (?:AP|coaches) poll\b/i;
 const seasonYear = () => { const d = new Date(); return d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear(); };
-const pastYear = (x) => [...String(x).matchAll(/\b((?:19|20)\d\d)\b/g)].some((m) => Number(m[1]) < seasonYear());
+// A sentence about an earlier season, not one that only dates something this week's news turns on ("activated ... his
+// first game since his December 2024 knee injury", "the No. 1 pick in the 2025 draft, was limited Thursday"; round 13:
+// Tank Dell's activation was cut). This week's status words keep it.
+const NOW_WORDS = /\b(?:activated|questionable|doubtful|ruled out|out for|expected to (?:play|start|return)|will (?:start|play|return|miss)|returns?|returned|practiced|practice|limited|full participant|did not participate|snaps?|starts?|starting|listed|designated|cleared|injured reserve|IR)\b/i;
+const pastYear = (x) => !NOW_WORDS.test(x) && [...String(x).matchAll(/\b((?:19|20)\d\d)\b/g)].some((m) => Number(m[1]) < seasonYear());
 export function footballNews(text) {
   return String(text || '').split('\n').map((l) => {
     const label = l.match(/^((?:[A-Z][A-Z0-9 .'&()-]*[A-Z)]|BOTH)\s*[:–-]\s+)/)?.[1] || '';
