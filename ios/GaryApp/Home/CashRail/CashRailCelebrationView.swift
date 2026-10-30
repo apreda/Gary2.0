@@ -307,6 +307,9 @@ struct CashRailCelebrationView: View {
                 .scaleEffect(1 - min(0.5, lift * 2.5))
                 .opacity(1 - min(0.6, lift * 3))
                 .position(x: width / 2, y: height * (1 - 0.016) - height * 0.02)
+            if c.assets.prop == "goalpost" {
+                Self.goalpost(width: width, height: height).opacity(introOpacity)
+            }
             ForEach(Array(Set(tl.seq.map(\.slug))).sorted(), id: \.self) { slug in
                 let o = tl.opacity(slug, at: t)
                 if o > 0, let f = reel.frames[slug] {
@@ -342,6 +345,25 @@ struct CashRailCelebrationView: View {
             .shadow(color: .black.opacity(0.35), radius: 9, y: 18)
             .opacity(opacity)
             .position(x: x, y: floor - h / 2)
+    }
+
+    /// The goalpost Gary dunks over: the post rises behind him, the crossbar
+    /// sits just under his reach at the top of the leap, uprights to the top.
+    private static func goalpost(width w: CGFloat, height h: CGFloat) -> some View {
+        let floor = h * (1 - 0.025), bar = floor - h * 0.6, left = w * 0.14, right = w * 0.86
+        let path = Path { p in
+            p.move(to: CGPoint(x: w / 2, y: floor)); p.addLine(to: CGPoint(x: w / 2, y: bar))
+            p.move(to: CGPoint(x: left, y: bar)); p.addLine(to: CGPoint(x: right, y: bar))
+            p.move(to: CGPoint(x: left, y: bar)); p.addLine(to: CGPoint(x: left, y: h * 0.06))
+            p.move(to: CGPoint(x: right, y: bar)); p.addLine(to: CGPoint(x: right, y: h * 0.06))
+        }
+        return ZStack {
+            path.stroke(Color(hex: "#5C4600"), style: StrokeStyle(lineWidth: w * 0.03, lineCap: .round))
+            path.stroke(Color(hex: "#F5C518"), style: StrokeStyle(lineWidth: w * 0.019, lineCap: .round))
+        }
+        .frame(width: w, height: h)
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 6)
+        .allowsHitTesting(false)
     }
 
     private static let confettiColors = [GaryColors.lightGold, GaryColors.gold, CR.ink, Color(hex: "#1F6B3F")]

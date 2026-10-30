@@ -70,6 +70,16 @@ const db = {
   insertSnapshot: async row => { must(await supabase.from('live_board_prices').insert(row)); },
   getBoard: async (league, id) => must(await supabase.from('live_boards').select('status').eq('league', league).eq('game_id', id).maybeSingle()),
   upsertBoard: async row => { must(await supabase.from('live_boards').upsert(row, { onConflict: 'league,game_id' })); },
+  // Gary's props (prop_picks, by the game's ET date) and darts on this game.
+  garyBets: async (id, g) => {
+    const day = etDate(new Date(g.date));
+    const rows = must(await supabase.from('prop_picks').select('picks').eq('date', day));
+    const props = rows.flatMap(r => (typeof r.picks === 'string' ? JSON.parse(r.picks) : (r.picks || [])))
+      .filter(p => p.sport === 'NFL' && String(p.game_id) === id);
+    const darts = must(await supabase.from('darts').select('player,player_id,prop,bet,odds')
+      .eq('league', 'NFL').eq('game_id', id).is('scratched_at', null).order('rank', { ascending: true }));
+    return { props, darts };
+  },
   garyPickRow: async g => {
     const weeks = must(await supabase.from('weekly_nfl_picks').select('picks,week_start').order('week_start', { ascending: false }).limit(2));
     for (const w of weeks) {
@@ -89,6 +99,14 @@ function slateDates(now = new Date()) {
 }
 
 const log = msg => console.log(`[cash-rail ${new Date().toISOString()}] ${msg}`);
+// `--game <id>` settles that one game again, final or not (after a fix), and exits.
+const gameArg = process.argv.indexOf('--game');
+if (gameArg >= 0) {
+  const id = process.argv[gameArg + 1];
+  const g = await bdl.game(id);
+  await runPass({ date: etDate(new Date(g.date)), db, bdl, log, only: id, resettle: true });
+  process.exit(0);
+}
 const passes = process.argv.includes('--once') ? 1 : 4;
 for (let i = 0; i < passes; i++) {
   const started = Date.now();

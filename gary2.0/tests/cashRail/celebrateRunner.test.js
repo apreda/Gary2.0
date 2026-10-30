@@ -35,7 +35,7 @@ describe('runCelebrations', () => {
     const f = fakes();
     const n = await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 });
     expect(n).toBe(1);
-    const dance = DANCES.find(d => d.id === pickDance('935@592'));
+    const dance = DANCES.find(d => d.id === pickDance('935@592', 'td'));
     expect(f.writes.claims[0]).toMatchObject({ league: 'NFL', game_id: '1392323', play_key: '935@592', hit_key: '935|first_td', price: 1100, kind: 'td', dance: dance.id, team: 'GB', number: '85' });
     expect(f.writes.art).toEqual(['bg', ...danceUniqueFrames(dance).map(x => x.slug)]);
     const a = f.writes.ready[0].assets;

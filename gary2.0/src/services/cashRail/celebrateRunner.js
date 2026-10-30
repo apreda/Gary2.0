@@ -30,7 +30,7 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
       const who = await bdl.player(p.playerId);
       const team = TEAM_LOOKS[who?.team] ? who.team : 'GB';
       const number = who?.number ? String(who.number) : '1';
-      const dance = DANCES.find(d => d.id === pickDance(p.playKey));
+      const dance = DANCES.find(d => d.id === pickDance(p.playKey, p.kind));
       const row = {
         league: board.league, game_id: board.game_id, play_key: p.playKey, hit_key: p.hit.key,
         who: p.hit.who, market: ladderMarket(p.hit), price: p.hit.price, when_label: p.hit.when, play: p.hit.play,
@@ -46,7 +46,7 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
           const bytes = await art({ prompt: posePrompt(f.pose, TEAM_LOOKS[team], number), transparent: true, slug: f.slug });
           frames[f.slug] = await store.put(`frames/${board.game_id}/${p.playKey}/${f.slug}.webp`, bytes);
         }));
-        await db.markReady(p.playKey, { bg: store.url(bgPath), frames, seq: dance.seq, name: dance.name });
+        await db.markReady(p.playKey, { bg: store.url(bgPath), frames, seq: dance.seq, name: dance.name, ...(dance.prop ? { prop: dance.prop } : {}) });
         drawn++;
         log(`celebration ${p.playKey}: ${p.hit.who} #${number} ${team} · ${dance.name}`);
       } catch (e) {

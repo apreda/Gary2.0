@@ -51,6 +51,31 @@ struct CashRailBoard: Codable, Equatable {
     let hits: [CashRailHit]
     /// The favorite and its frozen line ("GB -3.5").
     var spread: String? = nil
+    /// Gary's own pick, props and darts on this game (the strip under the scoreboard).
+    var gary_bets: [CashRailGaryBet]? = nil
+}
+
+/// One box of the strip: GAME PICK, PROPS or DARTS (cash-rail garyBets.js).
+struct CashRailGaryBet: Codable, Equatable, Identifiable {
+    /// One bet's progress: "LOVE O 259.5 PASS YDS", "212 OF 259.5", 0.82.
+    struct Focus: Codable, Equatable {
+        let label: String
+        let note: String?
+        let progress: Double?
+        let status: String?
+        let ok: Bool?
+    }
+    let kind: String
+    let title: String
+    var label: String? = nil
+    var note: String? = nil
+    var progress: Double? = nil
+    var status: String? = nil
+    var ok: Bool? = nil
+    /// One per prop or dart: "won", "lost" or "live".
+    var dots: [String]? = nil
+    var focus: Focus? = nil
+    var id: String { kind }
 }
 
 extension CashRailBoard {
@@ -150,6 +175,8 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
         let frames: [String: String]
         let seq: [Step]
         let name: String
+        /// A piece of the field drawn behind Gary ("goalpost" for the dunk).
+        var prop: String? = nil
     }
     let play_key: String
     let who: String

@@ -41,7 +41,9 @@ export const TEAM_LOOKS = {
   WAS: { uniform: 'a burgundy jersey with gold numerals outlined in white, gold pants, burgundy socks', bg: 'burgundy' },
 };
 
-/** Ten dances: each a routine of [frame, hold ms, move] over a few drawn poses. */
+/** Sixteen celebrations: each a routine of [frame, hold ms, move] over a few drawn poses.
+ * `scoring` ones carry the football (a touchdown only); `prop` adds a drawn
+ * piece of the field behind Gary (the goalpost for the dunk). */
 export const DANCES = [
   { id: 'griddy', name: 'THE GRIDDY', poses: {
       g4: 'the Griddy, heel tap: hopping on his LEFT foot with his RIGHT heel tapping the ground out in front of him toes up, right arm swung forward and left arm swung back, elbows bent.',
@@ -56,7 +58,7 @@ export const DANCES = [
       b2: 'the Bring the Boom crab flex: knees deeply bent, torso leaning forward, both arms flexed DOWN in front of his belly in a most-muscular bodybuilder pose, roaring with his mouth wide open.',
       b5: 'pointing one paw straight up at the sky with his arm fully extended, other fist pounding his chest, chin up.' },
     seq: [['b3', 380, ''], ['b4', 220, 'rise'], ['b1', 480, 'shake'], ['b2', 480, 'shake'], ['b1', 420, 'pop'], ['b5', 2000, 'pop']] },
-  { id: 'leap', name: 'THE LEAP', poses: {
+  { id: 'leap', name: 'THE LEAP', scoring: true, poses: {
       l4: 'running hard toward the viewer with the football tucked under his right arm, left arm pumping, leaning forward, one foot off the ground.',
       l1: 'loading for a jump: crouched very low like a coiled spring, knees deeply bent, both arms swung back behind him, football tucked under one arm.',
       l5: 'taking off for a jump: right foot leaving the ground, left knee driving up, both arms swinging up high, football in one paw.',
@@ -112,6 +114,44 @@ export const DANCES = [
       f4: 'THE FLOSS: hips centered, both straight arms swung across the front of his body the other way, smirking.',
       f5: 'THE FLOSS: fast, hips out to his right, arms behind to his left, big grin, mid-motion.' },
     seq: [['f1', 170, 'right'], ['f2', 130, ''], ['f3', 170, 'left'], ['f4', 130, ''], ['f1', 170, 'right'], ['f2', 130, ''], ['f3', 170, 'left'], ['f4', 130, ''], ['f5', 1900, 'pop']] },
+  // The classic touchdown celebrations (founder, Oct 30 2026: "the normal TD
+  // celebrations ... like Spike and dunking on the goal post").
+  { id: 'spike', name: 'THE SPIKE', scoring: true, poses: {
+      sp1: 'running hard toward the viewer holding a brown football high over his head in his right paw, mouth open shouting.',
+      sp2: 'winding up a spike: the football raised far back behind his head with his right arm cocked, left arm out for balance, leaning back.',
+      sp3: 'spiking the football: right arm whipped all the way down, the brown football bouncing off the ground at his feet, body bent forward, mouth open yelling.',
+      sp4: 'after the spike: standing tall, both arms spread wide with palms up to the crowd, chin up, big grin.' },
+    seq: [['sp1', 320, 'run'], ['sp2', 300, 'rise'], ['sp3', 260, 'land'], ['sp4', 1900, 'pop']] },
+  { id: 'dunk', name: 'THE GOALPOST DUNK', scoring: true, prop: 'goalpost', poses: {
+      gd1: 'running hard toward the viewer with a brown football in his right paw, crouching low to jump.',
+      gd2: 'launching off both feet, body stretched upward, right arm holding the brown football reaching straight up above his head.',
+      gd3: 'at the top of a huge leap, both feet high off the ground, right arm slamming the brown football down over his head like a basketball dunk, left arm raised.',
+      gd4: 'landing in a deep crouch with knees bent, both fists pulled down to his hips, roaring.',
+      gd5: 'standing tall, pointing his right index finger straight up at the sky, left paw on his chest.' },
+    seq: [['gd1', 300, 'run'], ['gd2', 220, 'rise'], ['gd3', 520, 'air'], ['gd4', 360, 'land'], ['gd5', 1800, 'pop']] },
+  { id: 'heisman', name: 'THE HEISMAN', scoring: true, poses: {
+      hs1: 'running toward the viewer with a brown football tucked under his left arm, right arm pumping.',
+      hs3: 'planting his left foot, right knee starting to lift, right arm pulling back, brown football tucked under his left arm.',
+      hs2: 'the Heisman Trophy pose: body turned sideways, right knee raised high, right arm stretched straight out in a stiff-arm with the paw flat and facing forward, brown football tucked under his left arm, serious face.' },
+    seq: [['hs1', 300, 'run'], ['hs3', 260, 'drop'], ['hs2', 2000, 'freeze']] },
+  { id: 'salute', name: 'THE SALUTE', poses: {
+      sa1: 'standing at attention facing the viewer, heels together, arms straight down at his sides, chest out, chin up.',
+      sa2: 'a crisp military salute: right paw with fingers together at the edge of his sunglasses, elbow out to the side, left arm straight down, serious face.',
+      sa3: 'holding the military salute with a proud small smile, chin up.',
+      sa4: 'pumping his right fist up toward the sky, mouth open cheering, left fist at his side.' },
+    seq: [['sa1', 380, ''], ['sa2', 600, 'hit'], ['sa3', 400, ''], ['sa4', 1800, 'pop']] },
+  { id: 'spin', name: 'THE BALL SPIN', scoring: true, poses: {
+      bs1: 'crouched on one knee, right paw resting on top of a brown football standing on its tip on the ground in front of him.',
+      bs2: 'crouched on one knee, flicking his paw away as the brown football spins on its tip on the ground in front of him, motion swirl lines around the ball, looking down at it.',
+      bs3: 'still crouched on one knee, both paws held open beside the spinning brown football like a magician revealing a trick, grinning at the viewer.',
+      bs4: 'standing up with his arms crossed over his chest, cool smirk, the brown football spinning on the ground by his feet.' },
+    seq: [['bs1', 360, 'drop'], ['bs2', 320, 'hit'], ['bs3', 380, 'pop'], ['bs4', 1800, 'rise']] },
+  { id: 'bow', name: 'TAKE A BOW', poses: {
+      bw1: 'standing tall facing the viewer, both arms spread wide to the crowd, chin up, smiling.',
+      bw2: 'a deep theatrical bow: bent forward at the waist, right paw across his belly, left arm swept out wide to the side.',
+      bw3: 'coming up from the bow, right paw tipping an imaginary hat, grinning.',
+      bw4: 'both arms raised high over his head in a V, mouth open cheering.' },
+    seq: [['bw1', 420, 'rise'], ['bw2', 620, 'drop'], ['bw3', 360, 'hop'], ['bw4', 1800, 'pop']] },
 ];
 
 const TD_KEY = /\|(first_td|anytime_td)/;
@@ -142,10 +182,12 @@ export function celebrationPlays(hits = []) {
 }
 
 /** The same play always gets the same dance. */
-export function pickDance(playKey) {
+export function pickDance(playKey, kind = 'td') {
   let h = 2166136261;
   for (const c of String(playKey)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
-  return DANCES[h % DANCES.length].id;
+  // Spiking or dunking the ball belongs to a touchdown, not a 7th catch.
+  const pool = kind === 'td' ? DANCES : DANCES.filter(d => !d.scoring);
+  return pool[h % pool.length].id;
 }
 
 /** Each distinct pose a routine uses, once. */

@@ -8,6 +8,7 @@
  */
 import { freezeBoard } from './prices.js';
 import { settleNfl } from './settle.js';
+import { garyBets } from './garyBets.js';
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
 const SNAPSHOT_WINDOW_MIN = 60;
@@ -42,12 +43,13 @@ export function garyPickMarket(pick, game) {
 }
 
 /**
- * @param {{ now?: Date, date: string, db: object, bdl: object, log?: Function }} deps
+ * @param {{ now?: Date, date: string, db: object, bdl: object, log?: Function, only?: string|number, resettle?: boolean }} deps
+ * `only` runs one game; `resettle` settles it again even when its board is final.
  * @returns {Promise<{snapshots: number, boards: number}>}
  */
-export async function runPass({ now = new Date(), date, db, bdl, log = () => {} }) {
+export async function runPass({ now = new Date(), date, db, bdl, log = () => {}, only = null, resettle = false }) {
   const done = { snapshots: 0, boards: 0 };
-  for (const gameId of await db.listNflGameIds(date)) {
+  for (const gameId of only != null ? [only] : await db.listNflGameIds(date)) {
     const g = await bdl.game(gameId);
     if (!g) continue;
     const id = String(gameId);
@@ -76,7 +78,7 @@ export async function runPass({ now = new Date(), date, db, bdl, log = () => {} 
     }
 
     const board = await db.getBoard('NFL', id);
-    if (board?.status === 'final') continue;
+    if (board?.status === 'final' && !resettle) continue;
     const snap = await db.frozenSnapshot('NFL', id, g.date);
     const markets = snap ? freezeBoard(snap.props, snap.game_odds).markets : [];
     const gary = garyPickMarket(await db.garyPickRow(g), g);
@@ -87,7 +89,10 @@ export async function runPass({ now = new Date(), date, db, bdl, log = () => {} 
       ? `${g.home_team?.abbreviation} ${homeSpread.line}` : `${g.visitor_team?.abbreviation} ${-homeSpread.line}`;
     const plays = await bdl.plays(gameId);
     const out = settleNfl({ markets, plays: plays ?? [], game: g, players: snap?.players ?? {}, garyPick: gary?.garyPick ?? null });
-    await db.upsertBoard({ league: 'NFL', game_id: id, date, ...out, spread, prices_frozen_at: snap?.captured_at ?? null, updated_at: now.toISOString() });
+    // Gary's own pick, props and darts on this game, for the strip under the scoreboard.
+    const mine = db.garyBets ? await db.garyBets(id, g) : null;
+    const gary_bets = garyBets({ plays: plays ?? [], game: g, garyPick: gary?.garyPick ?? null, props: mine?.props ?? [], darts: mine?.darts ?? [] });
+    await db.upsertBoard({ league: 'NFL', game_id: id, date, ...out, spread, gary_bets, prices_frozen_at: snap?.captured_at ?? null, updated_at: now.toISOString() });
     done.boards++;
     log(`board ${id}: ${out.status} ${out.clock} · ${out.hits.length} hits`);
   }

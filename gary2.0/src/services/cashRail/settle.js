@@ -112,6 +112,24 @@ function tdMarketName(line, window) {
  *          garyPick: {type:'spread'|'ml'|'total', side?:'home'|'away'|'over', line?:number}|null}} input
  * @returns {{hits: object[], possession: string|null, situation: string|null, elapsed_s: number, clock: string, status: string}}
  */
+/** Each player's full-game totals from the plays so far: `${pid}|${stat}` → value. */
+export function playerTotals(plays = []) {
+  const ordered = plays
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => Number.isFinite(p.period) && p.period >= 1)
+    .sort((a, b) => (elapsedOf(a.p) - elapsedOf(b.p)) || (a.i - b.i))
+    .map(({ p }) => p);
+  const totals = new Map();
+  for (const p of ordered) {
+    for (const [pid, stat, value, mode] of statLines(p)) {
+      const k = `${pid}|${stat}`;
+      const before = totals.get(k) ?? 0;
+      totals.set(k, mode === 'max' ? Math.max(before, value) : before + value);
+    }
+  }
+  return { totals, last: ordered[ordered.length - 1] ?? null };
+}
+
 export function settleNfl({ markets = [], plays = [], game = {}, players = {}, garyPick = null }) {
   const ordered = plays
     .map((p, i) => ({ p, i }))

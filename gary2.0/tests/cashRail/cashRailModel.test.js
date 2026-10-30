@@ -52,8 +52,9 @@ out([f.hero!.key, f.ranked.first!.key])`);
       assets: { bg: 'https://x/bg.webp', name: 'THE DIRTY BIRD', frames: { db1: 'https://x/1.webp', db2: 'https://x/2.webp' }, seq: [['db1', 420, ''], ['db2', 230, 'rise']] } });
     const r = swiftJSON(`let j = #"${json}"#
 let c = try! JSONDecoder().decode(CashRailCelebration.self, from: Data(j.utf8))
-out([c.id, c.assets.seq.count, c.assets.seq[1].slug, c.assets.seq[1].hold, c.assets.seq[1].move, c.assets.frames.count, c.assets.name] as [Any])`);
-    expect(r).toEqual(['935@592', 2, 'db2', 230, 'rise', 2, 'THE DIRTY BIRD']);
+let d = try! JSONDecoder().decode(CashRailCelebration.Assets.self, from: Data(#"{"bg":"b","frames":{},"seq":[],"name":"THE GOALPOST DUNK","prop":"goalpost"}"#.utf8))
+out([c.id, c.assets.seq.count, c.assets.seq[1].slug, c.assets.seq[1].hold, c.assets.seq[1].move, c.assets.frames.count, c.assets.name, c.assets.prop ?? "none", d.prop ?? "none"] as [Any])`);
+    expect(r).toEqual(['935@592', 2, 'db2', 230, 'rise', 2, 'THE DIRTY BIRD', 'none', 'goalpost']);
   });
 
   it('shows a rung strip only once two rungs have cashed', () => {
@@ -94,6 +95,19 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
   CashRailFormat.marketLine(oddsLine: "O/U 46.5", pickLine: "Packers -3.5", spread: "GB -3.5") ?? "nil",
   CashRailFormat.marketLine(oddsLine: "RL GB -2.5", pickLine: nil, spread: "GB -3.5") ?? "nil"])`);
     expect(r).toEqual(['GB −3.5 · GARY PACKERS −3.5', 'GB −2.5']);
+  });
+
+  it('reads Gary\'s own bets on the game for the strip', () => {
+    const json = JSON.stringify({ league: 'NFL', game_id: '1', status: 'final', possession: null, situation: null, elapsed_s: 3600, clock: 'FINAL', hits: [],
+      gary_bets: [{ kind: 'pick', title: 'GAME PICK', label: 'PACKERS −3.5', note: 'UP 8 · NEEDS 4+', status: 'won', ok: true, progress: null },
+        { kind: 'props', title: 'PROPS', dots: ['won', 'live'], focus: { label: 'LOVE O 259.5 PASS YDS', note: '212 OF 259.5', progress: 0.82, status: 'live', ok: false } },
+        { kind: 'darts', title: 'DARTS', label: '4 OF 8 HIT', dots: ['won', 'lost'] }] });
+    const r = swiftJSON(`let j = #"${json}"#
+let b = try! JSONDecoder().decode(CashRailBoard.self, from: Data(j.utf8))
+let g = b.gary_bets!
+let old = try! JSONDecoder().decode(CashRailBoard.self, from: Data(#"{"league":"NFL","game_id":"1","status":"live","elapsed_s":0,"hits":[]}"#.utf8))
+out([g.count, g[0].label!, g[1].focus!.label, g[1].focus!.progress!, g[2].dots!.count, old.gary_bets == nil] as [Any])`);
+    expect(r).toEqual([3, 'PACKERS −3.5', 'LOVE O 259.5 PASS YDS', 0.82, 2, true]);
   });
 
   it('an empty board has no hero and counts nothing', () => {

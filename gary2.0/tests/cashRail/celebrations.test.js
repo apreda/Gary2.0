@@ -26,11 +26,23 @@ describe('which hits get a celebration', () => {
 });
 
 describe('the dance', () => {
-  it('has ten dances and picks the same one for the same play every time', () => {
-    expect(DANCES.length).toBe(10);
-    expect(pickDance('935@592')).toBe(pickDance('935@592'));
-    const picked = new Set(['1@1', '2@2', '3@3', '4@4', '5@5', '6@6', '7@7', '8@8', '9@9', '10@10', '11@11', '12@12'].map(pickDance));
-    expect(picked.size).toBeGreaterThan(4);
+  it('has sixteen celebrations and picks the same one for the same play every time', () => {
+    expect(DANCES.length).toBe(16);
+    expect(pickDance('935@592', 'td')).toBe(pickDance('935@592', 'td'));
+    const picked = new Set(Array.from({ length: 40 }, (_, i) => pickDance(`${i}@${i * 7}`, 'td')));
+    expect(picked.size).toBeGreaterThan(8);
+  });
+
+  it('a touchdown can spike it or dunk it; a big cash that is not a score never celebrates with the ball', () => {
+    const keys = Array.from({ length: 200 }, (_, i) => `${i}@${i * 13}`);
+    const scoring = new Set(DANCES.filter(d => d.scoring).map(d => d.id));
+    expect([...scoring]).toEqual(expect.arrayContaining(['spike', 'dunk']));
+    expect(keys.some(k => scoring.has(pickDance(k, 'td')))).toBe(true);
+    expect(keys.every(k => !scoring.has(pickDance(k, 'big')))).toBe(true);
+  });
+
+  it('the goalpost dunk stands Gary in front of a goalpost', () => {
+    expect(DANCES.find(d => d.id === 'dunk').prop).toBe('goalpost');
   });
 
   it('draws each distinct pose once even when the routine repeats it', () => {

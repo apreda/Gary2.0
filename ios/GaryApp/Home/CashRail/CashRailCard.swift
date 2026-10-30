@@ -45,10 +45,17 @@ struct CashRailCard: View {
         VStack(spacing: 0) {
             Button(action: onOpenGame) { scoreboard }
                 .buttonStyle(.plain)
-            CashRailRailView(elapsed: board?.elapsed_s ?? 0,
-                             hits: board?.hits ?? [],
-                             live: board?.status != "final")
-                .padding(.horizontal, 14).padding(.bottom, 10)
+            // Gary's own bets on the game where the rail was (founder pick,
+            // Oct 30 2026); the rail stays for a game Gary has nothing on.
+            if let bets = board?.gary_bets, !bets.isEmpty {
+                CashRailGaryStrip(bets: bets)
+                    .padding(.horizontal, 14).padding(.bottom, 12)
+            } else {
+                CashRailRailView(elapsed: board?.elapsed_s ?? 0,
+                                 hits: board?.hits ?? [],
+                                 live: board?.status != "final")
+                    .padding(.horizontal, 14).padding(.bottom, 10)
+            }
             if let hero, let board {
                 hits(hero: hero, board: board)
             }

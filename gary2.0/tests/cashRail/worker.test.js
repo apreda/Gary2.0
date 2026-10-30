@@ -83,6 +83,21 @@ describe('Cash Rail worker pass', () => {
     expect(f.writes.boards[0].spread).toBe('CHI -3.5');
   });
 
+  it('writes Gary\'s own bets on the game for the strip under the scoreboard', async () => {
+    const snap = { captured_at: at(-5).toISOString(), props, game_odds: [], players: {} };
+    const f = fakes({ status_state: 'in', snapshots: [snap] });
+    f.db.garyBets = async () => ({ props: [], darts: [{ player: "D'Andre Swift", player_id: '465', prop: 'anytime_td 0.5', bet: 'over' }] });
+    await runPass({ now: at(30), date: 'd', db: f.db, bdl: f.bdl });
+    expect(f.writes.boards[0].gary_bets.map(b => b.kind)).toEqual(['pick', 'darts']);
+    expect(f.writes.boards[0].gary_bets[0].label).toBe('BEARS −3.5');
+  });
+
+  it('re-settles one finished game on request (after a fix)', async () => {
+    const snap = { captured_at: at(-5).toISOString(), props, game_odds: [], players: {} };
+    const f = fakes({ status_state: 'final', snapshots: [snap], board: { status: 'final' } });
+    expect(await runPass({ now: at(300), date: 'd', db: f.db, bdl: f.bdl, only: game.id, resettle: true })).toEqual({ snapshots: 0, boards: 1 });
+  });
+
   it('settles a final game once more and then leaves it alone', async () => {
     const f = fakes({ status_state: 'final', board: { status: 'final' } });
     expect(await runPass({ now: at(300), date: 'd', db: f.db, bdl: f.bdl })).toEqual({ snapshots: 0, boards: 0 });
