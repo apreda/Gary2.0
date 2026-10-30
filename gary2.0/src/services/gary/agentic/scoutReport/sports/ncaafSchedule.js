@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, ncaafRedZone } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -152,16 +152,14 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
  * gives the short form for the one-line schedule behind the season totals.
  */
-function opponentLabel(opponentId, { teamsById, records, apRankOf, league = null, full = true }) {
+function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, full = true }) {
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
-  const rank = team ? apRankOf(team.full_name, team) : null;
-  // The rank is this week's, like the record, and says so: on a past game's line "AP No. 22" read as the rank that day
-  // (Kentucky beat No. 10 LSU; Oct 23 2026 data audit).
+  // Its record now and its games; no AP poll place (round 9, Oct 29 2026: ranks and places are out of what Gary reads).
   const record = records.get(Number(opponentId));
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
-    record || rank ? `now ${[record, rank ? `No. ${rank} in the AP poll` : null].filter(Boolean).join(' and ')}` : null,
-    full ? opponentSeasonClause(league, opponentId) : null].filter(Boolean).join(', ');
+    record ? `now ${record}` : null,
+    full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null) }) : null].filter(Boolean).join(', ');
 }
 
 /**
@@ -175,7 +173,7 @@ function opponentLabel(opponentId, { teamsById, records, apRankOf, league = null
  * against the 120th). Shared by the desk and by the stat tools, so both say
  * the same thing about the same opponent.
  */
-export async function opponentContext({ teams, resultLists, season, cutoff = null, apRankOf = () => null, known = new Map() }) {
+export async function opponentContext({ teams, resultLists, season, cutoff = null, leagueGames = null, known = new Map() }) {
   const teamsById = new Map((teams || []).map((t) => [Number(t.id), t]));
   const counted = (results) => results.filter((r) => !cutoff || new Date(r.date) < new Date(cutoff));
   const records = new Map(known);
@@ -187,7 +185,7 @@ export async function opponentContext({ teams, resultLists, season, cutoff = nul
       if (results.length) records.set(id, record(results));
     }),
   ]);
-  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, apRankOf, league, full });
+  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, full });
 }
 
 function splitLine(team, label, results, describe) {
@@ -429,7 +427,8 @@ async function playerGames(sides, boxes) {
         const tally = (list) => ncaafDriveTally(list.map((d) => d.result));
         const short = counted.filter((d) => d.oppHalf);
         const ended = ds.length - counted.length;
-        return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;
+        const rz = ncaafRedZone(ds);
+        return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${rz ? `; ${rz}` : ''}${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;
       };
       // Who played quarterback for the opponent that day, everyone with five or more passes (Oct 24 2026: a win over a
       // team playing its backup is not a win over the team; the NFL's line has said so since Oct 23).
@@ -769,7 +768,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     { team: awayTeam, id: away.id, results: before(awayTeam, awayResults), atHome: false }];
 
   // Each opponent's current record, from its own game list.
-  const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, apRankOf,
+  const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, leagueGames,
     known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
   const weeks = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.week))).filter((w) => Number.isFinite(w) && w > 0 && w < 900))];

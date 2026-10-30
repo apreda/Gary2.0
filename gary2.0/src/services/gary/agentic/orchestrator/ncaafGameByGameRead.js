@@ -13,7 +13,7 @@ import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quar
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
-import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines } from '../scoutReport/sports/ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
@@ -114,10 +114,16 @@ async function fullGame(g, season, tonight) {
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   // Overtime has no clock (Oct 29 2026 hunt: "5th 0:00").
   const scores = (box.scoring || []).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
-  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})`; };
+  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; const rz = ncaafRedZone(ds); return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})${rz ? `, ${rz}` : ''}`; };
   // College counts sacks as runs: the sacks and the yards they lost are said inside the rushing (Oct 29 2026 hunt: Baylor's
   // "122 rushing on 35" held two sacks for -19; the live read already separates them).
-  const sackNote = (id) => { const k = box.sacks === null ? null : box.sacks?.[String(id)]; return box.sacks === null ? ', sacks in it not on file' : k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'} for ${k.yards} yards` : ''; };
+  // The play-by-play's count only when it equals the sacks the other side's players are credited with in the box, as the
+  // live read does (round 9: Florida's five sacks at Texas read four, a strip-sack typed as a fumble).
+  const boxSacks = (id) => (box.players || []).filter((p) => p.teamId !== String(id)).reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0);
+  const sackNote = (id) => { const k = box.sacks === null ? null : box.sacks?.[String(id)]; const credited = boxSacks(id);
+    if (box.sacks === null) return ', sacks in it not on file';
+    if ((box.players || []).some((p) => p.stats?.defensive) && (k?.n || 0) !== credited) return credited ? `, including ${credited} sack${credited === 1 ? '' : 's'} (their yards not on file)` : '';
+    return k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'} for ${k.yards} yards` : ''; };
   const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}${sackNote(t.id)}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${x.possessionTime ?? '?'}`; };
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,

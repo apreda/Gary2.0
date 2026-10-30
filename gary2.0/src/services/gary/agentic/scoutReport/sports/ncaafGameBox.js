@@ -79,7 +79,7 @@ export function gameBoxFromSummary(summary, eventId) {
       // A blocked or missed kick's return is told as the return ("Donovan Dunmore 55 Yd Return of Blocked Field Goal"):
       // no kicker in it, and its yards are the return's; the try's distance is then from the line of scrimmage (Oct 29
       // 2026 hunt: Eastern Michigan's blocked try read as a kicker "o.Blocked" from 55).
-      const returned = /\breturn\b/i.test(text);
+      const returned = /\breturn(?:s|ed)?\b/i.test(text); // "returns blocked FG 88 yds" too (round 9)
       const fromLine = Number.isFinite(Number(play?.start?.yardsToEndzone)) ? Number(play.start.yardsToEndzone) + 17 : null;
       const yards = returned ? fromLine : num(text.match(/(\d+)\s*(?:yd|yards?)/i)?.[1]);
       // Who kicked it (founder, Oct 24 2026: a miss says nothing about today if someone else kicks today).
@@ -120,7 +120,9 @@ export function gameBoxFromSummary(summary, eventId) {
     const yl = Number(d?.start?.yardLine), home = teams.find((t) => t.homeAway === 'home')?.id;
     const own = Number.isFinite(yl) && yl > 0 && yl < 100 ? (String(d?.team?.id ?? '') === home ? yl : 100 - yl) : null;
     const oppHalf = own != null ? own > 50 : Boolean(at && Number(at[2]) > 0 && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50);
-    return { teamId: String(d?.team?.id ?? ''), result, oppHalf };
+    // Inside the other team's 20 on any snap of the drive (round 9: the college reads had no red-zone trips; the NFL's do).
+    const inside20 = (d?.plays || []).some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20 && !/kickoff|punt|penalty/i.test(String(p?.type?.text || '')); });
+    return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20 };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
   // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
@@ -130,7 +132,11 @@ export function gameBoxFromSummary(summary, eventId) {
   let sacks = {};
   for (const drive of summary?.drives?.previous || []) {
     for (const play of drive?.plays || []) {
-      if (!sacks || !/^sack$/i.test(String(play?.type?.text || '').trim())) continue;
+      // A sack whatever ESPN types the play: strip-sacks are "Fumble Recovery (Own)", some are "Penalty" with the foul
+      // declined (round 9: Florida's five sacks of Arch Manning read four). A play wiped out by an accepted foul is none.
+      const type = String(play?.type?.text || '').trim(), said = String(play?.text || '');
+      const isSack = /^sack$/i.test(type) || (/\bsacked\b/i.test(said) && !/no play/i.test(said) && (!/^penalty$/i.test(type) || /declined/i.test(said)));
+      if (!sacks || !isSack) continue;
       const teamId = String(play?.start?.team?.id ?? drive?.team?.id ?? '');
       const m = String(play?.text || '').match(/loss of (\d+) yards?/i);
       if (!m) { sacks = null; continue; }
@@ -154,9 +160,21 @@ export function gameBoxFromSummary(summary, eventId) {
     .filter((p) => BIG.test(String(p?.type?.text || '')) && Number(p?.statYardage) >= 20)
     .filter((p, i, a) => !p?.id || a.findIndex((x) => x?.id === p.id) === i)
     .map((p) => { const t = String(p.text || ''); const pass = /Pass/.test(p.type.text);
-      return { teamId: String(p?.start?.team?.id ?? d?.team?.id ?? ''), yards: Number(p.statYardage), kind: pass ? 'catch' : 'run',
-        who: (pass ? t.match(/complete to (.+?) for -?\d+ y/)?.[1] : t.match(/^(.+?) (?:run|rush) for/)?.[1]) || null }; })) : null;
+      return { teamId: String(p?.start?.team?.id ?? d?.team?.id ?? ''), yards: Number(p.statYardage), kind: pass ? 'catch' : 'run', who: bigPlayWho(t, pass) }; })) : null;
   return { eventId: String(eventId), teams, players, scoring, fieldGoals, drives, bigPlays, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
+}
+
+// Who made a 20+ yard play, from ESPN's words in either form (round 9: 798 of 812 read "?"): "#12 A.Philo pass complete
+// short right to #1 V.Brown III caught at FAU50, for 49 yards", "#13 J.Baugh rush right for 25 yards gain", the scoring
+// form "TK Keyes 76 Yd pass from Goose Crowder (Ethan Head Kick)" and "Jamal Roberts 13 Yd Run (...)".
+const NAME = "\\p{Lu}[\\p{L}.'-]*(?:\\s(?:\\p{Lu}[\\p{L}.'-]*|Jr\\.?|Sr\\.?|II|III|IV))*";
+export function bigPlayWho(text, pass) {
+  const t = String(text || '').replace(/^\(\d{1,2}:\d{2}\)\s*/, '');
+  const tries = pass
+    ? [new RegExp(`\\bto (?:#\\d+\\s+)?(${NAME})(?:\\s+caught|\\s+for\\b|,|$)`, 'u'), new RegExp(`^(${NAME}) \\d+ Yd pass from`, 'iu')]
+    : [new RegExp(`#\\d+\\s+(${NAME}) (?:rush|run)\\b`, 'iu'), new RegExp(`^(${NAME}) \\d+ Yd Run`, 'iu'), new RegExp(`^(${NAME}) (?:rush|run)\\b`, 'iu')];
+  for (const re of tries) { const m = t.match(re); if (m) return m[1].replace(/\s+(?:pass|rush|run|complete).*$/i, '').trim(); }
+  return null;
 }
 
 /** A player's play-by-play key: first initial and the first word of the last name, letters only ("r|porter"). */
@@ -193,10 +211,13 @@ export function ncaafFlowLines(box, teamId, names = {}) {
   }
   const leadText = (id) => (lead[id] ? `${name(id)} by ${lead[id].by} (${lead[id].at})` : `${name(id)} never led`);
   const hurries = (id) => (box.players || []).filter((p) => p.teamId === id).reduce((a, p) => a + (Number(p.stats?.defensive?.hurries) || 0), 0);
+  // None credited to either side is a stat crew that does not chart hurries, not zero pressure (round 9: Georgia's and
+  // Maryland's home boxes show "-" in every QH column, and ESPN writes 0).
+  const hurryText = hurries(us.id) + hurries(them.id) === 0 ? 'quarterback hurries not charted in this game\'s box' : `quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`;
   const big = (id) => (box.bigPlays === null ? 'not on file' : (box.bigPlays || []).filter((b) => b.teamId === id).map((b) => `${b.who || '?'} ${b.yards} ${b.kind}`).join(', ') || 'none');
   return [
     `scoring: ${box.scoring.length ? box.scoring.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${p.text} (${score(p)})`).join(' · ') : 'none'}`,
-    `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · possession ${us.totals?.possessionTime ?? '?'} to ${them.totals?.possessionTime ?? '?'} · quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`,
+    `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · possession ${us.totals?.possessionTime ?? '?'} to ${them.totals?.possessionTime ?? '?'} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
   ];
 }
@@ -204,8 +225,8 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers.
-  return cachedResearch(`espn_cfb_box_v15:${eventId}`, async () => {
+  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns.
+  return cachedResearch(`espn_cfb_box_v16:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -368,6 +389,14 @@ export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 
   'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
   'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file' };
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
+/** A team's red-zone trips in one game and how many ended in a touchdown (round 9, Oct 29 2026: the college reads had
+ * none; the NFL's drive line does). Null when the drives carry no snap positions (an older cached box). */
+export function ncaafRedZone(drives) {
+  if (!drives?.length || drives.every((d) => d.inside20 === undefined)) return null;
+  const trips = drives.filter((d) => d.inside20), td = trips.filter((d) => ncaafDriveWord(d.result) === 'TD').length;
+  return trips.length ? `red zone ${trips.length} trip${trips.length === 1 ? '' : 's'}, ${td} TD` : 'no red-zone trips';
+}
+
 /** Drive results counted in words: "6 punts, 1 safety, 3 on downs, 1 TD". */
 export function ncaafDriveTally(results) {
   const counts = new Map();

@@ -191,12 +191,12 @@ export function availabilityReport(desk) {
   }).join('\n\n');
 }
 
-// HOW GOOD THEY ARE: the poll, the conferences, and each team's season against FBS teams with who played quarterback.
+// HOW GOOD THEY ARE: the conferences, and each team's season against FBS teams with who played quarterback.
 // Oct 23 2026 (founder, after TNF: "its data we know its data"): the provider's season table and per-play measures
 // went. Both blended games against FCS teams and games another quarterback played: Oregon's 317 passing yards a game on
 // Oct 17 were mostly Dante Moore's, with Moore out and Brock Thomas (15 passes all year) starting, and an 84-0 win
 // over Portland State sat inside its averages. Every game's own unit lines stay in the season game by game.
-// Each team's game log opens with its record (and against FBS teams), its conference and its place in the AP poll, and,
+// Each team's game log opens with its record (and against FBS teams) and its conference (no AP poll place: a rank, round 9), and,
 // when this week's quarterback did not throw the most passes in every game, the record by who did. A separate HOW GOOD
 // THEY ARE section repeated the log's scores and yards under a heading that told him what to conclude (Oct 23 2026).
 // One quarterback is one group, whether or not a game's lineup marked him "(started)" (Oct 28 2026 sweep: UCF's Keyone
@@ -223,7 +223,7 @@ function qbSplit(gs, qb) {
 }
 function gameLog(desk) {
   const byTeam = (section, strip = (l) => l) => new Map(sectionOf(desk, section).split('\n').map(strip).map((l) => l.match(/^(.+?): (.+)$/)).filter(Boolean).map((m) => [m[1].trim(), m[2].trim()]));
-  const poll = byTeam('AP TOP 25'), conf = byTeam('NCAAF CONFERENCE CONTEXT', (l) => (/^\[(?:HOME|AWAY)\] /.test(l) ? l.replace(/^\[(?:HOME|AWAY)\] /, '') : ''));
+  const conf = byTeam('NCAAF CONFERENCE CONTEXT', (l) => (/^\[(?:HOME|AWAY)\] /.test(l) ? l.replace(/^\[(?:HOME|AWAY)\] /, '') : ''));
   const teams = seasonGames(desk);
   const starters = thisWeeksQuarterbacks(desk, teams.map((t) => t.team));
   const log = afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME'));
@@ -231,18 +231,17 @@ function gameLog(desk) {
     const t = teams.find((x) => x.team === team);
     if (!t) return whole;
     const fbs = t.games.filter((g) => !g.fcs);
-    const head = `${team} (${rec}${fbs.length < t.games.length ? `; ${record(fbs)} against FBS teams` : ''})${conf.get(team) ? ` · ${conf.get(team)}` : ''}${poll.get(team) ? ` · ${poll.get(team)}` : ''}, newest first:`;
+    const head = `${team} (${rec}${fbs.length < t.games.length ? `; ${record(fbs)} against FBS teams` : ''})${conf.get(team) ? ` · ${conf.get(team)}` : ''}, newest first:`;
     return [head, qbSplit(t.games, starters.get(team))].filter(Boolean).join('\n');
   });
 }
 
 function howGood(desk) {
-  const poll = sectionOf(desk, 'AP TOP 25');
   const conferences = sectionOf(desk, 'NCAAF CONFERENCE CONTEXT').split('\n').filter((l) => /^\[(?:HOME|AWAY)\]/.test(l)).map((l) => l.replace(/^\[(?:HOME|AWAY)\] /, '')).join('\n');
   const teams = seasonGames(desk);
   const starters = thisWeeksQuarterbacks(desk, teams.map((t) => t.team));
   const seasons = teams.map(({ team, games }) => seasonLines(team, games, starters.get(team))).join('\n\n');
-  return [poll, conferences, seasons].filter(Boolean).join('\n\n');
+  return [conferences, seasons].filter(Boolean).join('\n\n');
 }
 
 // A note in parentheses is not part of the name (Oct 28 2026 sweep: the log's "Gunner Stockton (started)" never matched
