@@ -223,7 +223,20 @@ export async function filterStandardPropMarkets(rows, { league, game, env = proc
   for (const row of bdlRows) {
     const verified = { ...row, standard_market: {} };
     for (const side of ['over', 'under']) {
-      const proof = isAmericanPrice(row[`${side}_odds`]) ? bdlStandardProof(row, side, observedAt, ambiguous, allowLadder) : null;
+      let proof = isAmericanPrice(row[`${side}_odds`]) ? bdlStandardProof(row, side, observedAt, ambiguous, allowLadder) : null;
+      // A side quoted by a book that doubles this market (one row mislabeled) is priced from the best other book at the
+      // same line, so the line most books post stays on the board (round 14: Javonte Williams' 11.5 receiving yards,
+      // posted by four books, gave way to DraftKings' lone 10.5).
+      const source = row[`${side}_source_market`];
+      if (!proof && source && ambiguous.has(bookLineKey(source))) {
+        const alt = raw.filter((r) => r?.market?.type === 'over_under' && String(r.player_id) === String(row.player_id) && r.prop_type === row.prop_type
+          && Number(r.line_value) === Number(row.line) && !ambiguous.has(bookLineKey(r)) && isAmericanPrice(r.market?.[`${side}_odds`]))
+          .sort((a, b) => Number(b.market[`${side}_odds`]) - Number(a.market[`${side}_odds`]))[0];
+        if (alt) {
+          Object.assign(verified, { [`${side}_odds`]: Number(alt.market[`${side}_odds`]), [`${side}_vendor`]: alt.vendor, [`${side}_source_market`]: alt });
+          proof = bdlStandardProof(verified, side, observedAt, ambiguous, allowLadder);
+        }
+      }
       if (proof) verified.standard_market[side] = proof;
       else {
         verified[`${side}_odds`] = null;

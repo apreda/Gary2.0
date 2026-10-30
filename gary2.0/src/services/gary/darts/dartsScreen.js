@@ -348,7 +348,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   // repeated the frame's report).
   const out = ctx.frameReports ? null : outAroundLine(ctx.injuries, c.team, c.player, { weeksByName: ctx.weeksByName, snaps: ctx.snaps });
   if (out) lines.push(out);
-  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords, pressure: ctx.pressure, hurt: ctx.hurt, without: ctx.without,
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords, pressure: ctx.pressure, hurt: ctx.hurt, without: ctx.without, plays: ctx.plays, drops: ctx.drops,
     defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');

@@ -216,7 +216,7 @@ export function buildFootballPropSheets({
     // A side's club report and the defense it faces by position are printed once under the side's heading (round 13:
     // every sheet repeated them, a fifth of the block); a player no side claimed keeps his own.
     if (!tag) { const out = outAroundLine(context.injuries, entry.team, entry.name, { weeksByName: context.weeksByName, snaps: context.snaps }); if (out) facts.push(out); }
-    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure,
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure, hurt: context.hurt, without: context.without, plays: context.plays, drops: context.drops,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     else if (context.weeksMissing) facts.push("by game: not on file (this season's weekly stats did not load)");

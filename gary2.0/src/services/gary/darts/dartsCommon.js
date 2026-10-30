@@ -186,10 +186,15 @@ export function mainLineBoth(rows, propType) {
     Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
   if (!ou.length) return null;
   const line = consensusLine(ou.map((r) => r.line_value));
-  const at = ou.filter((r) => Number(r.line_value) === line && !r.doubled);
+  // When only the doubled book posts the consensus line, the nearest line another book prices (round 14: Rico Dowdle's
+  // 13.5 / 14.5 / 15.5 split left the dart board with no receiving line).
+  const priced = ou.filter((r) => !r.doubled);
+  if (!priced.length) return null;
+  const near = priced.some((r) => Number(r.line_value) === line) ? line
+    : priced.map((r) => Number(r.line_value)).sort((a, b) => Math.abs(a - line) - Math.abs(b - line) || a - b)[0];
+  const at = priced.filter((r) => Number(r.line_value) === near);
   at.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
   const r = at[0];
-  if (!r) return null;
   return { line: Number(r.line_value), over: Number(r.market.over_odds), under: Number(r.market.under_odds), book: r.vendor };
 }
 

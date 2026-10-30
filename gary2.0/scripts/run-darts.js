@@ -33,12 +33,13 @@ const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbG
 const { loadMlbGameFrames, loadMlbPlayerSplits } = await import('../src/services/sports/mlb/mlbGameFrames.js');
 const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/services/providers/baseballSavantService.js');
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
-const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure, regularsOut } = await import('../src/services/sports/nfl/nflPlayerContext.js');
+const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure, regularsOut, receiverDrops } = await import('../src/services/sports/nfl/nflPlayerContext.js');
 const { loadNflverseFile, getPracticeReport, nflverseCode } = await import('../src/services/providers/nflverseService.js');
 const { finalReportNotDue } = await import('../src/services/sports/nfl/nflAvailability.js');
 const { defensesFaced, etDate: nflEtDate } = await import('../src/services/sports/nfl/nflBettorData.js');
 const { stadiumWeatherLines } = await import('../src/services/gary/agentic/scoutReport/sports/nflSituation.js');
 const { getPlayLedger } = await import('../src/services/sports/nfl/nflPlayLedger.js');
+const { loadBettorData, rosterMoves } = await import('../src/services/sports/nfl/nflBettorData.js');
 const { getNflSchedule, scheduleRowFor } = await import('../src/services/sports/nfl/nflSchedule.js');
 const { ballDontLieService: bdl } = await import('../src/services/providers/ballDontLieService.js');
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
@@ -189,7 +190,7 @@ async function throwLeague(league) {
         return week ? [f.homeFull, f.awayFull].map((team) => getPracticeReport(team, board.season, week)
           .then((report) => ({ team, report: report?.unavailable ? null : report, pending })).catch(() => ({ team, report: null, pending }))) : [];
       })) : [];
-      const injuries = withOfficialReport(feedInjuries, reports);
+      const injuries = withOfficialReport(feedInjuries, reports, roster && !roster.unavailable ? roster.rows : null);
       const priorByName = new Map(), defPrev = null, history = null;
       const weeksByName = new Map();
       for (const r of [...(weekRows || [])].filter(isNflSkillRow).sort((a, b) => Number(b.week) - Number(a.week))) { const k = normName(r.player_display_name); if (!weeksByName.has(k)) weeksByName.set(k, []); weeksByName.get(k).push(r); }
@@ -197,14 +198,22 @@ async function throwLeague(league) {
       // Each past opponent's record and points allowed on the game rows, as the prop sheets (round 9).
       const defenses = schedule && !schedule.unavailable ? defensesFaced(schedule.rows, board.season, nflEtDate(), new Date().toISOString()) : null;
       const ctx = { rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(weekRows), weekRows, injuries, history, frameOf: (gid) => framesById.get(String(gid)),
-        passers: weekPassers(weekRows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null), seasonMissing: Boolean(gamesByName?.missing),
+        passers: weekPassers(weekRows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null, await loadNflverseFile('injuries', board.season).then((f) => (f?.unavailable ? null : f?.rows)).catch(() => null)), seasonMissing: Boolean(gamesByName?.missing),
         pressure: await qbPressure(board.season).catch(() => null),
         without: regularsOut(snapFile, roster && !roster.unavailable ? roster.rows : null),
         // In-game injuries from the play ledger, by week and club (round 13).
+        drops: await receiverDrops(board.season).catch(() => null),
+        plays: await getPlayLedger(board.season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), teamLastQ: g.teamLastQ }])))).catch(() => null),
         hurt: await getPlayLedger(board.season).then((L) => { const m = new Map(); for (const g of L?.games || []) for (const e of g.hurt || []) { const k = `${g.week}|${e.team}`; m.set(k, [...(m.get(k) || []), e]); } return m; }).catch(() => null) };
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
       // Each game's stadium and kickoff forecast in its frame, as the reads have it (round 11).
       for (const f of board.frames) f.extra = [...(f.extra || []), ...(await stadiumWeatherLines({ homeTeam: f.homeFull, awayTeam: f.awayFull, commence: f.commence, season: board.season }).catch(() => ['Stadium and kickoff weather: not on file.']))];
+      // Each club's roster moves since its last game, as the game reads have them (round 13: the deadline trades of Jeffery
+      // Simmons, Quenton Nelson and DeForest Buckner were nowhere in darts).
+      const bettor = await loadBettorData(board.season).catch(() => null);
+      for (const f of board.frames) f.extra = [...(f.extra || []), bettor
+        ? `Roster moves since each club's last game:\n${await rosterMoves(bettor, f.homeFull, f.awayFull, nflEtDate(new Date(f.commence))).catch((e) => `not on file (${e.message})`)}`
+        : "Roster moves since each club's last game: not on file (the weekly files did not load)"];
       ctx.frameReports = true;
       for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f, injuries, weeksByName, snaps)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, ctx, log: { log } }));

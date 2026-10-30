@@ -47,7 +47,8 @@ import {
 } from './propsBrain.js';
 import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
 import { refreshNflRedZone, loadNflRedZone } from '../../sports/nfl/nflRedZone.js';
-import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure } from '../../sports/nfl/nflPlayerContext.js';
+import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure, regularsOut, receiverDrops } from '../../sports/nfl/nflPlayerContext.js';
+import { getPlayLedger } from '../../sports/nfl/nflPlayLedger.js';
 import { loadNflverseFile, getPracticeReport, nflverseCode } from '../../providers/nflverseService.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
@@ -250,7 +251,7 @@ async function loadNflSheetContext({ season, game, players }) {
   const pending = finalReportNotDue(game.commence_time);
   const reports = week ? await Promise.all([game.home_team, game.away_team].map((team) => getPracticeReport(team, season, week)
     .then((report) => ({ team, report: report?.unavailable ? null : report, pending })).catch(() => ({ team, report: null, pending })))) : [];
-  const reported = withOfficialReport(injuries, reports);
+  const reported = withOfficialReport(injuries, reports, roster && !roster.unavailable ? roster.rows : null);
   // Who each game's defense is this season, beside the player's games (Oct 26 2026); a schedule that did not load
   // leaves the rows as they were.
   const defenses = schedule && !schedule.unavailable ? defensesFaced(schedule.rows, season, etDate(), new Date().toISOString()) : null;
@@ -265,8 +266,13 @@ async function loadNflSheetContext({ season, game, players }) {
   }
   const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
   return { season, rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(rows), injuries: reported, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team),
-    passers: weekPassers(rows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null), weeksMissing: !rows,
-    pressure: await qbPressure(season).catch(() => null) };
+    passers: weekPassers(rows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null, await loadNflverseFile('injuries', season).then((f) => (f?.unavailable ? null : f?.rows)).catch(() => null)), weeksMissing: !rows,
+    pressure: await qbPressure(season).catch(() => null),
+    // Regulars out each week and in-game injuries, as the dart rows have them (round 14).
+    without: regularsOut(snapFile, roster && !roster.unavailable ? roster.rows : null),
+    drops: await receiverDrops(season).catch(() => null),
+        plays: await getPlayLedger(season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), teamLastQ: g.teamLastQ }])))).catch(() => null),
+        hurt: await getPlayLedger(season).then((L) => { const m = new Map(); for (const g of L?.games || []) for (const e of g.hurt || []) { const k = `${g.week}|${e.team}`; m.set(k, [...(m.get(k) || []), e]); } return m; }).catch(() => null) };
 }
 
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */

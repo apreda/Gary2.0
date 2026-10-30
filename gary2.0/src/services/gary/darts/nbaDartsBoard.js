@@ -149,7 +149,9 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
 function listedLine(side, report) {
   if (!report) return 'not on file (the report did not load)';
   if (!side || side === 'unfiled') return 'not filed yet';
-  const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league - two-way/i.test(r.reason)).map((r) => r.name)]).filter(([, names]) => names.length);
+  // Each with the report's reason, without its "Injury/Illness - " prefix (round 13: a status only).
+  const why = (r) => { const t = String(r.reason || '').replace(/^\s*injury\/illness\s*-\s*/i, '').trim(); return t ? `${r.name} (${t.replace(/;\s*/g, ', ')})` : r.name; };
+  const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league - two-way/i.test(r.reason)).map(why)]).filter(([, names]) => names.length);
   return by.length ? by.map(([st, names]) => `${st.toLowerCase()} ${names.join(', ')}`).join('; ') : 'nobody listed';
 }
 
