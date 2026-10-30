@@ -163,7 +163,8 @@ function opponentLabel(opponentId, { teamsById, records, league = null, leagueGa
   const record = records.get(Number(opponentId));
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
     record ? `now ${record}` : null,
-    full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
+    // A league table that did not load is said (round 15: every opponent's games went without a word).
+    full && !league ? "its other games: not on file (the season's games could not be loaded)" : full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
       units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null) }) : null].filter(Boolean).join(', ');
 }
 
@@ -447,8 +448,8 @@ async function playerGames(sides, boxes) {
         const passers = playerGameRows(box, oppId, r.gameId, positions).filter((x) => Number(x.passing_attempts) >= 5)
           .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
         // With his runs, sacks inside them as college counts them (round 14: Louisiana's Lunch Winfield ran for 91 of the
-        // 146 USC allowed, and the read gave his passing only).
-        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds${Number(x.rushing_attempts) ? `; ${x.rushing_attempts} runs for ${x.rushing_yards} (sacks included)` : ''}`).join('; '));
+        // 146 USC allowed, and the read gave his passing only), after a comma: the passers are split on "; " (round 15).
+        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds${Number(x.rushing_attempts) ? `, ${x.rushing_attempts} run${Number(x.rushing_attempts) === 1 ? '' : 's'} for ${x.rushing_yards} (sacks included)` : ''}`).join('; '));
       }
       if (oppId) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);

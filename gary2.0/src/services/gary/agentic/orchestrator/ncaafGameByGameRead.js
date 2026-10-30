@@ -20,8 +20,10 @@ import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters
 export const NCAAF_WINDOW = 6;
 const SITE = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football';
 const fetched = new Map();
+// A failed fetch is tried once more and never kept (round 15: one timeout read as a 0-0 season for the rest of the run).
 const getJson = (url) => {
-  if (!fetched.has(url)) fetched.set(url, fetch(url, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null));
+  const once = () => fetch(url, { signal: AbortSignal.timeout(15_000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!fetched.has(url)) fetched.set(url, once().then((v) => v ?? once()).then((v) => { if (v == null) fetched.delete(url); return v; }));
   return fetched.get(url);
 };
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
@@ -39,7 +41,10 @@ async function teamInfo(id) {
 
 /** A team's finished games before `before` (an instant), oldest first: { id, date, venue, neutral, home, us, them }. */
 async function finishedGames(teamId, season, before) {
-  const events = (await getJson(`${SITE}/teams/${teamId}/schedule?season=${season}`))?.events || [];
+  // Null when ESPN did not answer, so a failure reads "not on file", never a 0-0 season (round 15).
+  const sched = await getJson(`${SITE}/teams/${teamId}/schedule?season=${season}`);
+  if (!sched) return null;
+  const events = sched.events || [];
   return events.map((e) => {
     const c = e.competitions?.[0]; const comp = c?.competitors || [];
     const us = comp.find((x) => String(x.team?.id) === String(teamId)), them = comp.find((x) => String(x.team?.id) !== String(teamId));
@@ -170,6 +175,7 @@ async function fullGame(g, season, tonight) {
   }
   // The opponent coming in: its division, its record before this game and its games, its record before tonight.
   const oppGames = await finishedGames(g.them.id, season, tonight);
+  if (!oppGames) { lines.push(`  ${g.them.name} coming in: not on file (ESPN did not answer for its schedule)`); return lines.join('\n'); }
   const prior = oppGames.filter((x) => Date.parse(x.date) < Date.parse(g.date));
   // Each of its games with who threw most and what it ran and passed for and allowed, from ESPN's box (round 13: scores
   // only, so its record mixed games with and without its starter).
@@ -203,10 +209,11 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   if (!homeId || !awayId) {
     return { line: lineOf(desk), story: [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart, 'THE GAMES: not on file (ESPN has no event for this game)'].join('\n\n'), news };
   }
-  const [awayGames, homeGames] = await Promise.all([finishedGames(awayId, yr, tonight), finishedGames(homeId, yr, tonight)]);
+  const [awayRaw, homeRaw] = await Promise.all([finishedGames(awayId, yr, tonight), finishedGames(homeId, yr, tonight)]);
+  const awayGames = awayRaw || [], homeGames = homeRaw || [];
   // Every team in the read: the two, their opponents, with division and record before tonight.
   const ids = [...new Set([homeId, awayId, ...awayGames.map((g) => g.them.id), ...homeGames.map((g) => g.them.id)])];
-  const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${wl(gs)}` : null; }));
+  const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${gs ? wl(gs) : 'record not on file'}` : null; }));
   const meetings = awayGames.filter((g) => g.them.id === homeId);
   const meetingIds = new Set(meetings.map((g) => g.id));
   // An older game says who threw for each side (round 8: Utah State's Sep 5 loss read with no quarterback, McCae
@@ -219,7 +226,8 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
     const qbs = box && !box.unavailable ? ` · QB ${passers(g.us.id) || 'not on file'} · theirs ${passers(g.them.id) || 'not on file'}` : ' · quarterbacks not on file';
     return `  ${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.name}${g.neutral ? ' at a neutral site' : ''}${qbs}`;
   };
-  const teamPart = async (name, games) => {
+  const teamPart = async (name, games, raw) => {
+    if (!raw) return `${name.toUpperCase()}: the season's games are not on file (ESPN did not answer for its schedule)`;
     if (!games.length) return `${name.toUpperCase()}: no games yet this season`;
     const newest = games.slice().reverse();
     const full = await Promise.all(newest.slice(0, NCAAF_WINDOW).map((g) => (meetingIds.has(g.id) ? `${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.short}: in this season's meetings above` : fullGame(g, yr, tonight))));
@@ -230,7 +238,7 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   const story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
     `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
     meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
-    await teamPart(awayTeam, awayGames), await teamPart(homeTeam, homeGames)].join('\n\n');
+    await teamPart(awayTeam, awayGames, awayRaw), await teamPart(homeTeam, homeGames, homeRaw)].join('\n\n');
   const finals = new Set([...awayGames, ...homeGames].map((g) => `${g.us.score}-${g.them.score}`));
   return { line: lineOf(desk), story, news: newsWithoutRecaps(news, finals) };
 }
