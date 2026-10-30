@@ -269,6 +269,11 @@ struct HomeWinnersBento: View {
         }()
         let title: String = {
             if sealed { return "GARY'S BETS ARE SEALED" }
+            // Live with nothing settled yet, the tile says the bets are on, not a hollow "0–0 · $0".
+            if underway && !bets.contains(where: settled) {
+                let live = bets.filter { LabFormat.parseISO($0.commence).map { $0 <= now } ?? false }.count
+                return "GARY'S \(live) \(live == 1 ? "BET IS" : "BETS ARE") LIVE"
+            }
             if underway { return "GARY IS \(line.record) · \(LabFormat.unitsNet(line.units))" }
             return count > 0 ? "SEE GARY'S \(count) \(count == 1 ? "BET" : "BETS")" : "OPEN GARY'S WINNERS"
         }()

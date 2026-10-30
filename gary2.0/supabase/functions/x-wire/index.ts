@@ -162,7 +162,9 @@ async function resolve(handles: string[]) {
 function cleanText(p: any): string {
   let text = String(p.note_tweet?.text ?? p.text ?? "");
   for (const u of (p.entities?.urls ?? []) as any[]) {
-    const isMedia = typeof u.media_key === "string" || /\/(photo|video)\/\d+$/.test(String(u.expanded_url ?? ""));
+    // A photo's own link, or a link to another post (a quote, drawn by X as a card the app does not draw), goes.
+    const isMedia = typeof u.media_key === "string" || /\/(photo|video)\/\d+$/.test(String(u.expanded_url ?? ""))
+      || /^https?:\/\/(www\.)?(x|twitter)\.com\/[^/]+\/status\//.test(String(u.expanded_url ?? ""));
     // A link reads as its site ("actionnetwork.com"): X's display_url ends in "…", and the app never shows one.
     let site = "";
     try { site = new URL(String(u.expanded_url ?? u.url)).hostname.replace(/^www\./, ""); } catch { site = ""; }

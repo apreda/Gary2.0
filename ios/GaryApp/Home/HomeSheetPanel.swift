@@ -229,6 +229,11 @@ struct HomeSheetPanel<YouScorecard: View>: View {
         }
         .onChange(of: selected) { _ in lifted = nil }
         .onChange(of: activePage) { _ in lifted = nil }
+        .onReceive(NotificationCenter.default.publisher(for: .homeBoardStoryClose)) { note in
+            // A tap on the board is the board's own to read (another score, or off); only one off it closes here.
+            if let at = note.userInfo?["at"] as? CGPoint, frames.board.contains(at) { return }
+            close()
+        }
         // Home lifts the whole board over the panels after it while a story is up, so the card never slides under them.
         .preference(key: HomeBoardLiftedKey.self, value: lifted != nil)
         // `story Raptors`: lift that finished game's story (the first with one when no name is given).
@@ -268,4 +273,9 @@ struct HomeSheetPanel<YouScorecard: View>: View {
 struct HomeBoardLiftedKey: PreferenceKey {
     static var defaultValue = false
     static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+}
+
+extension Notification.Name {
+    /// Home asks the board to put a lifted story back (a tap elsewhere on the page).
+    static let homeBoardStoryClose = Notification.Name("HomeBoardStoryClose")
 }

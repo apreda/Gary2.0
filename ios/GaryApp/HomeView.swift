@@ -250,12 +250,15 @@ struct HomeView: View {
 
                         // ── ⑥ Footer — quiet ──
                         footer
+                            .allowsHitTesting(!boardLifted)
                             .opacity(animateIn ? 1 : 0)
                             .animation(.easeOut(duration: 0.6).delay(0.3), value: animateIn)
                     }
                     // Live MLB rows must never enlarge the page's horizontal
                     // content area as scores and verdict labels change.
                     .frame(width: viewport.size.width, alignment: .leading)
+                    // (A story up on the board: the other sections stop taking taps; the scroll view's own tap,
+                    // below, puts the story back.)
                     .padding(.bottom, 110)
                     .background(HomeScrollDirectionLock())
                     // Parallax probe — a background measurement, never a layout
@@ -272,6 +275,12 @@ struct HomeView: View {
                     try? await Task.sleep(nanoseconds: 800_000_000)   // let the pull spinner show while the keyed .task reloads
                 }
                 .coordinateSpace(name: "homeScroll")
+                // A story up on the board: a tap anywhere off the board, the empty end of the page included, puts
+                // it back (founder, Oct 29 2026: "every click off is a true click off"). The board settles its own.
+                .simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
+                    guard boardLifted else { return }
+                    NotificationCenter.default.post(name: .homeBoardStoryClose, object: nil, userInfo: ["at": tap.location])
+                })
                 // NOTE: the page scroll keeps its clip — unclipping it let rows
                 // bleed through the status bar. The Jul 7 unclippedRail law is
                 // for horizontal card rails only; shadows clipping at the SCREEN
@@ -995,6 +1004,7 @@ struct HomeView: View {
         HomeWinnersBento {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = 1 }
         }
+        .allowsHitTesting(!boardLifted)
         .opacity(animateIn ? 1 : 0)
         .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
 
@@ -1015,6 +1025,7 @@ struct HomeView: View {
             HomeMarqueeTracker(entries: marqueeEntries,
                                tomorrowTease: marqueeTomorrowTease,
                                onOpenGame: { m, league in openGame(matchup: m, league: league) })
+                .allowsHitTesting(!boardLifted)
                 .opacity(animateIn ? 1 : 0)
                 .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
         }
@@ -1050,6 +1061,7 @@ struct HomeView: View {
         // Oct 29 2026). It replaced the Wire's moment and injury lines here: "people get that kind of information
         // elsewhere. That's not what Gary is."
         HomeXWire()
+            .allowsHitTesting(!boardLifted)
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.6).delay(0.07), value: animateIn)
         // (The Record now travels with the day cycle — see recordBlock above.
