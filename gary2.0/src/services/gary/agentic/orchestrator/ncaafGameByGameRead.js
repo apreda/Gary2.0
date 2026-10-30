@@ -14,9 +14,9 @@ import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
 import { officialSacks } from '../../../sports/ncaaf/ncaafStarters.js';
-import { checkedScoring, espnGameClause, placeHurt, getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
+import { checkedScoring, scoringWords, namedInPlays, espnGameClause, placeHurt, getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
-import { teamReportHistory, outOnGameDay } from '../../../sports/ncaaf/ncaafAvailabilityReports.js';
+import { teamReportHistory, outOnGameDay, gameTimeOnGameDay } from '../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { getSeasonWeather, gameWeatherFor } from '../../../providers/cfbdService.js';
 import { playedInWeather } from '../scoutReport/sports/ncaafSchedule.js';
 
@@ -129,7 +129,7 @@ async function fullGame(g, season, tonight) {
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   // Overtime has no clock (Oct 29 2026 hunt: "5th 0:00").
-  const scores = checkedScoring(box).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${/not on file/.test(p.note || '') ? p.note : `${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home}${p.note ? `; ${p.note}` : ''}`})`.trim());
+  const scores = checkedScoring(box).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${scoringWords(p.text)} (${/not on file/.test(p.note || '') ? p.note : `${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home}${p.note ? `; ${p.note}` : ''}`})`.trim());
   const drives = (id, short) => { const all = (box.drives || []).filter((d) => d.teamId === id); if (!all.length) return `${short} not on file`;
     // Overtime possessions apart, from the 25 by rule (round 10).
     const ds = all.filter((d) => !d.ot), ot = all.filter((d) => d.ot); const rz = ncaafRedZone(ds);
@@ -173,8 +173,13 @@ async function fullGame(g, season, tonight) {
   const day = new Date(g.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   if (usInfo?.conference && usInfo.conference === themInfo?.conference) {
     const tonightDay = new Date(tonight).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    const outs = await Promise.all([usInfo, themInfo].map((t) => reportHistory(t, tonightDay).then((h) => (h?.found ? outOnGameDay(h, day) : null))));
-    if (outs.some((x) => x != null)) lines.push(`  out on game day (conference reports): ${[[g.us.short, outs[0]], [g.them.short, outs[1]]].map(([k, x]) => `${k} ${x == null ? 'not on file' : x.join(', ') || 'nobody'}`).join(' · ')}`);
+    const hs = await Promise.all([usInfo, themInfo].map((t) => reportHistory(t, tonightDay)));
+    const outs = hs.map((h) => (h?.found ? outOnGameDay(h, day) : null));
+    // Game-time decisions, whether each played by this game's box and play-by-play (round 16).
+    const gtd = (h) => (h?.found ? gameTimeOnGameDay(h, day) : []).map((name) => { const [first, ...rest] = String(name).trim().split(/\s+/); const last = rest.join(' ').replace(/\s+(?:jr\.?|sr\.?|ii|iii|iv)$/i, '');
+      const inBox = (box.players || []).some((p) => String(p.last || '').toLowerCase() === last.toLowerCase() && String(p.first || '')[0]?.toLowerCase() === first[0]?.toLowerCase());
+      return `${name} (${inBox ? 'played' : namedInPlays(box.named, { first, last }) ? 'named in the play-by-play' : 'did not play: no box row, not in the play-by-play'})`; }).join(', ');
+    if (outs.some((x) => x != null)) lines.push(`  out on game day (conference reports): ${[[g.us.short, outs[0], hs[0]], [g.them.short, outs[1], hs[1]]].map(([k, x, h]) => `${k} ${x == null ? 'not on file' : x.join(', ') || 'nobody'}${gtd(h) ? `; game-time decision: ${gtd(h)}` : ''}`).join(' · ')}`);
   }
   const wx = await seasonWeather(season);
   const row = gameWeatherFor(wx, g.us.name, g.them.name, g.date);
@@ -202,7 +207,10 @@ async function fullGame(g, season, tonight) {
     if (!b || b.unavailable) return '';
     return espnGameClause(b, x.us.id) || '';
   }));
-  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x, k) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
+  // Its games against FCS teams marked, as the live read marks them (round 16: Utah State's loss to Idaho State read as an
+  // FBS result).
+  const fcs = await Promise.all(prior.map((x) => teamInfo(x.them.id).then((t) => t?.division === 'FCS').catch(() => false)));
+  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x, k) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${fcs[k] ? ' (FCS)' : ''}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
   return lines.join('\n');
 }
 
@@ -232,7 +240,8 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   // Every team in the read: the two, their opponents, with division and record before tonight.
   const ids = [...new Set([homeId, awayId, ...awayGames.map((g) => g.them.id), ...homeGames.map((g) => g.them.id)])];
   const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${gs ? wl(gs) : 'record not on file'}` : null; }));
-  const meetings = awayGames.filter((g) => g.them.id === homeId);
+  // From whichever schedule loaded (round 16: a failed away schedule read 'none before tonight').
+  const meetings = awayRaw ? awayGames.filter((g) => g.them.id === homeId) : homeGames.filter((g) => g.them.id === awayId);
   const meetingIds = new Set(meetings.map((g) => g.id));
   // An older game says who threw for each side (round 8: Utah State's Sep 5 loss read with no quarterback, McCae
   // Hillstead's start before Grady Brosterhous took over).
@@ -255,7 +264,7 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   };
   const story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
     `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
-    meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
+    !awayRaw && !homeRaw ? "THIS SEASON'S MEETINGS: not on file (ESPN did not answer for either team's schedule)" : meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
     await teamPart(awayTeam, awayGames, awayRaw), await teamPart(homeTeam, homeGames, homeRaw)].join('\n\n');
   const finals = new Set([...awayGames, ...homeGames].map((g) => `${g.us.score}-${g.them.score}`));
   return { line: lineOf(desk), story, news: newsWithoutRecaps(news, finals) };

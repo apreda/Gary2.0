@@ -252,6 +252,13 @@ export function backFromReports(history, reportedNames = []) {
 }
 
 /** The players a team listed Out on one game day (`date`, YYYY-MM-DD), from its report history; [] when none. */
+/** Players a team's report listed as a game-time decision on `date` (round 16: three in four of them did not play, and the
+ * game rows named only the outs). */
+export function gameTimeOnGameDay(history, date) {
+  if (!history?.found || !date) return [];
+  return [...history.byPlayer.values()].map((rows) => rows.find((r) => r.date === date && /game.?time|^gtd/i.test(r.gameDay))).filter(Boolean).map((r) => r.name);
+}
+
 export function outOnGameDay(history, date) {
   if (!history?.found || !date) return [];
   const names = [];

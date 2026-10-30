@@ -37,7 +37,8 @@ export function gameBoxFromSummary(summary, eventId) {
   const status = competition?.status?.type;
   if (!(status?.completed === true || /FINAL/i.test(String(status?.name || '')))) return { unavailable: true, reason: `ESPN game ${eventId} is not final` };
   // Each side's score by quarter too (Oct 27 2026, the game-by-game system).
-  const teams = (competition?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), homeAway: c?.homeAway, score: num(c?.score),
+  // The school's short name too, for the flow lines' labels (round 16: "Florida State Seminoles" on every score and hurt).
+  const teams = (competition?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), short: c?.team?.location || c?.team?.shortDisplayName || null, homeAway: c?.homeAway, score: num(c?.score),
     quarters: Array.isArray(c?.linescores) ? c.linescores.map((l) => num(l?.displayValue ?? l?.value)) : null }));
   const players = [];
   // Each team's own defensive totals row (round 12: the athletes' sack credits ran one over it, a sack wiped out by a foul).
@@ -206,7 +207,10 @@ export function gameBoxFromSummary(summary, eventId) {
     .filter((p) => BIG.test(String(p?.type?.text || '')) && Number(p?.statYardage) >= 20)
     .filter((p, i, a) => !p?.id || a.findIndex((x) => x?.id === p.id) === i)
     .map((p) => { const t = String(p.text || ''); const pass = /Pass/.test(p.type.text);
-      return { teamId: String(p?.start?.team?.id ?? d?.team?.id ?? ''), yards: Number(p.statYardage), kind: pass ? 'catch' : 'run', who: bigPlayWho(t, pass) }; })) : null;
+      // One form per player: a touchdown's "Joseph Himon II" as the play-by-play's "J.Himon II" (round 16: one runner read
+      // as two).
+      const who = bigPlayWho(t, pass); const initialed = who && !/^\p{Lu}\./u.test(who) && /\s/.test(who) ? `${who[0]}.${who.split(/\s+/).slice(1).join(' ')}` : who;
+      return { teamId: String(p?.start?.team?.id ?? d?.team?.id ?? ''), yards: Number(p.statYardage), kind: pass ? 'catch' : 'run', who: initialed }; })) : null;
   // Players the play-by-play marks hurt, when, and whether a later play names them (round 11: Colorado State's Mel Brown
   // went out in the second quarter against San Diego State and neither read said so). The side from the box's players.
   const allPlays = (summary?.drives?.previous || []).flatMap((d) => d?.plays || []);
@@ -250,7 +254,8 @@ export function gameBoxFromSummary(summary, eventId) {
     const t = String(p?.text || ''); const team = String(p?.start?.team?.id ?? ''); const period = Number(p?.period?.number) || 0;
     if (!team || !period || /^(?:Kickoff|Punt|Field Goal|Extra Point|Timeout|End )/i.test(String(p?.type?.text || ''))) return;
     lastPeriod.set(team, Math.max(lastPeriod.get(team) || 0, period));
-    const hits = [t.match(new RegExp(`${WHO}\\s+(?:rush|run|pass|scramble)`, 'i')), /\bpass/i.test(t) ? t.match(new RegExp(`\\b(?:to|intended for)\\s+${WHO}`)) : null].filter(Boolean);
+    // A catch, not a target: an incompletion is no touch (round 16: Nyck Harbor's four incomplete targets made five).
+    const hits = [t.match(new RegExp(`${WHO}\\s+(?:rush|run|pass|scramble)`, 'i')), /\bpass/i.test(t) && !/incomplete/i.test(t) ? t.match(new RegExp(`\\b(?:to|intended for)\\s+${WHO}`)) : null].filter(Boolean);
     for (const m of hits) {
       const who = m[2].replace(/\.\s?/, '.'); const k = `${team}|${m[1]}|${who}`;
       const x = touches.get(k) || { who, jersey: m[1], teamId: team, n: 0 };
@@ -265,7 +270,10 @@ export function gameBoxFromSummary(summary, eventId) {
     if (!p) return null; const st = (c, k) => Number(p.stats?.[c]?.[k]) || 0; return st('passing', 'passingAttempts') + st('rushing', 'rushingAttempts') + st('receiving', 'receptions'); };
   const earlyExits = !allPlays.length || !close ? [] : [...touches.values()]
     .filter((x) => { const b = boxTouches(x); return b != null && x.n >= 0.8 * b; })
-    .filter((x) => x.n >= 5 && x.period <= 2 && (lastPeriod.get(x.teamId) || 0) >= 4 && !hurt.some((h) => h.jersey === x.jersey && h.who === x.who))
+    .filter((x) => x.n >= 5 && (boxTouches(x) || 0) >= 5 && x.period <= 2 && (lastPeriod.get(x.teamId) || 0) >= 4 && !hurt.some((h) => h.jersey === x.jersey && h.who === x.who))
+    // Any later play naming him, a return, a fair catch, a tackle or a foul, puts him on the field (round 16: Harbor's
+    // third-quarter kickoff return).
+    .filter((x) => !allPlays.slice(x.at + 1).some((q) => new RegExp(`#${x.jersey}\\s+${x.who.replace('.', '\\.\\s?')}\\b`).test(String(q?.text || ''))))
     .sort((a, b) => b.n - a.n);
   // Each side's starting quarterback: the first of its passers the play-by-play has dropping back (round 15: Iowa's
   // starter Jeremy Hecklinski read second to the reliever, and Oregon's Dante Moore, hurt early, was dropped).
@@ -283,7 +291,8 @@ export function gameBoxFromSummary(summary, eventId) {
 // Who made a 20+ yard play, from ESPN's words in either form (round 9: 798 of 812 read "?"): "#12 A.Philo pass complete
 // short right to #1 V.Brown III caught at FAU50, for 49 yards", "#13 J.Baugh rush right for 25 yards gain", the scoring
 // form "TK Keyes 76 Yd pass from Goose Crowder (Ethan Head Kick)" and "Jamal Roberts 13 Yd Run (...)".
-const NAME = "\\p{Lu}[\\p{L}.'-]*(?:\\s(?:\\p{Lu}[\\p{L}.'-]*|Jr\\.?|Sr\\.?|II|III|IV))*";
+// Curly apostrophes and ", Jr." too (round 16: "J.Malau’ulu" and "J.Overton, Jr." read "?").
+const NAME = "\\p{Lu}[\\p{L}.'’-]*(?:,?\\s(?:\\p{Lu}[\\p{L}.'’-]*|Jr\\.?|Sr\\.?|II|III|IV))*";
 export function bigPlayWho(text, pass) {
   // The try after a TD is told in parentheses; its receiver is not the TD's (round 11: Bert Emanuel Jr. read for Jordan
   // Napier's 24-yard catch).
@@ -392,7 +401,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
   const hurryText = hurries(us.id) + hurries(them.id) === 0 ? 'quarterback hurries not charted in this game\'s box' : `quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`;
   const big = (id) => (box.bigPlays === null ? 'not on file' : (box.bigPlays || []).filter((b) => b.teamId === id).map((b) => `${b.who || '?'} ${b.yards} ${b.kind}`).join(', ') || 'none');
   return [
-    `scoring: ${plays.length ? plays.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${p.text} (${/not on file/.test(p.note || '') ? p.note : `${score(p)}${p.note ? `; ${p.note}` : ''}`})`).join(' · ') : 'none'}`,
+    `scoring: ${plays.length ? plays.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${scoringWords(p.text)} (${/not on file/.test(p.note || '') ? p.note : `${score(p)}${p.note ? `; ${p.note}` : ''}`})`).join(' · ') : 'none'}`,
     `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · ${possession} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
     ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`]
@@ -406,7 +415,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
-  return cachedResearch(`espn_cfb_box_v25:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v26:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -536,6 +545,10 @@ const PLURAL = { 'TD on the offense\'s own fumble recovery': 'TDs on the offense
  * kick read 11-24 from 10-24, a 13-point deficit after the TD that was 7). A step a play cannot make is rebuilt from the
  * play's points when its try is told, else said not on file; `note` carries what was done.
  */
+/** A scoring play's words without a made kick's credit, which the kicking line counts, and without stray spaces (round 16:
+ * 76-97 "(Name Kick)" labels a read). A failed try and a two-point try stay. */
+export const scoringWords = (text) => String(text || '').replace(/\s*\((?![^)]*\b(?:fail|missed|miss|blocked|no good|two|2)\b)[^()]*\bkick\)/i, '').replace(/\s{2,}/g, ' ').trim();
+
 export function checkedScoring(box) {
   const homeId = box?.teams?.find((t) => t.homeAway === 'home')?.id, awayId = box?.teams?.find((t) => t.homeAway === 'away')?.id;
   let h = 0, a = 0;

@@ -24,7 +24,7 @@
  * Facts only. Nothing here says what a home field, a trip or a schedule is
  * worth; a source that does not answer is named as missing, never left out.
  */
-import { teamReportHistory, historyLine, backFromReports, outOnGameDay } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
+import { teamReportHistory, historyLine, backFromReports, outOnGameDay, gameTimeOnGameDay } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
@@ -107,11 +107,13 @@ export function playedInWeather(row) {
 // 2025; the game-by-game read, from ESPN, named it so).
 const RENAMED_VENUES = { 'FBC Mortgage Stadium': 'Acrisure Bounce House' };
 
+// The data's dome flag covers retractable roofs too (Oct 29 2026 hunt: Mercedes-Benz Stadium read "fixed roof"); one test
+// for the site line and the weather line (round 16: "dome" on one, "retractable roof" on the next).
+const retractable = (site) => Boolean(site?.dome) && /Mercedes-Benz Stadium|AT&T Stadium|NRG Stadium|Lucas Oil Stadium|State Farm Stadium/i.test(String(site.name || site.venue || ''));
 /** The kickoff-hour forecast at the site, as one line of facts. */
 async function weatherLine(site, game) {
   if (!site || site.missing || !game?.commence_time) return null;
-  // The data's dome flag covers retractable roofs too (Oct 29 2026 hunt: Mercedes-Benz Stadium read "fixed roof").
-  if (site.dome && /Mercedes-Benz Stadium|AT&T Stadium|NRG Stadium|Lucas Oil Stadium|State Farm Stadium/i.test(String(site.name || site.venue || ''))) return 'Kickoff weather: retractable roof (open or closed not on file).';
+  if (retractable(site)) return 'Kickoff weather: retractable roof (open or closed not on file).';
   if (site.dome) return 'Kickoff weather: indoors, fixed roof.';
   const weather = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(() => null);
   if (!weather) return 'Kickoff weather: the forecast lookup failed for this kickoff.';
@@ -129,7 +131,7 @@ async function weatherLine(site, game) {
 function siteLines(site, { homeTeam, awayTeam, game }) {
   if (!site || site.missing) return ['Site: the stadium for this game could not be resolved from the schedule provider.'];
   const place = [site.name, site.city, site.state].filter(Boolean).join(', ');
-  const facts = [site.capacity ? `capacity ${site.capacity.toLocaleString('en-US')}` : null, site.dome ? 'dome' : null,
+  const facts = [site.capacity ? `capacity ${site.capacity.toLocaleString('en-US')}` : null, site.dome ? (retractable(site) ? 'retractable roof' : 'dome') : null,
     site.surface, Number.isFinite(site.elevationFt) ? `elevation ${site.elevationFt.toLocaleString('en-US')} ft` : null].filter(Boolean);
   const lines = [`Site: ${place}${facts.length ? ` (${facts.join(', ')})` : ''}.`
     + (site.neutral ? ' NEUTRAL SITE: neither team is at home.' : ` ${homeTeam} are at home; ${awayTeam} are the visitors.`)
@@ -156,7 +158,7 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
  * gives the short form for the one-line schedule behind the season totals.
  */
-function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, full = true }) {
+function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, full = true, exclude = null }) {
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
   // Its record now and its games; no AP poll place (round 9, Oct 29 2026: ranks and places are out of what Gary reads).
@@ -165,7 +167,7 @@ function opponentLabel(opponentId, { teamsById, records, league = null, leagueGa
     record ? `now ${record}` : null,
     // A league table that did not load is said (round 15: every opponent's games went without a word).
     full && !league ? "its other games: not on file (the season's games could not be loaded)" : full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
-      units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null) }) : null].filter(Boolean).join(', ');
+      units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null), exclude }) : null].filter(Boolean).join(', ');
 }
 
 /**
@@ -191,7 +193,7 @@ export async function opponentContext({ teams, resultLists, season, cutoff = nul
       if (results.length) records.set(id, record(results));
     }),
   ]);
-  return (opponentId, { full = true } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, full });
+  return (opponentId, { full = true, exclude = null } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, full, exclude });
 }
 
 function splitLine(team, label, results, describe) {
@@ -459,7 +461,9 @@ async function playerGames(sides, boxes) {
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}${ret(found.teamId) ? `\n      returns: ${ret(found.teamId)} · opponent: ${ret(oppId)}` : ''}`);
         // The game's flow (ncaafFlowLines; Oct 29 2026, founder: who got ahead, how and when).
         await placeHurt(box, [found.teamId, oppId]);
-        const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: s.team, [oppId]: r.opponent || 'opponent' });
+        // Labeled by school (round 16: the full "School Mascot" on every score, lead, big play and hurt player).
+        const shortOf = (id) => (box.teams || []).find((t) => t.id === String(id))?.short;
+        const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: shortOf(found.teamId) || s.team, [oppId]: shortOf(oppId) || r.opponent || 'opponent' });
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }
@@ -743,8 +747,12 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
     for (const e of [...byStarter.values()].filter((x) => x.games.length >= 2 && x.games.length * 2 > earlierLineups.length && !startedIn(lastLineup, x.name, x.position) && !startedIn(listed, x.name))
       .sort((a, b) => b.games.length - a.games.length || a.name.localeCompare(b.name))) {
       const report = onReport(e.name, reported, exempt);
+      // What he did in the last game off the bench, when he played (round 16: Cincinnati's Simeon Coleman, 11 tackles and
+      // a sack at linebacker, read like a dropped starter).
+      const row = [...lastGame.entries()].find(([name]) => starterKey(name) === starterKey(e.name))?.[1]?.games.get(String(last.gameId));
+      const off = row ? `came off the bench: ${productionLine(row)}` : playedPerPlays(plays, last.gameId, { first: e.name.split(' ')[0], last: e.name.split(' ').slice(1).join(' ') }) ? 'named in its play-by-play' : null;
       lineup.push(`  ${e.name}${e.position ? ` (${e.position})` : ''}: started ${e.games.length} of the ${earlierLineups.length} earlier games with a starting lineup on file, the last ${day(e.games.at(-1))} ${versus(e.games.at(-1))}; `
-        + `not in the last game's starting lineup · ${report ? `${report.status} on this week's availability report` : offReport}`);
+        + `not in the last game's starting lineup${off ? ` (${off})` : ''} · ${report ? `${report.status} on this week's availability report` : offReport}`);
     }
   }
   // A regular with no stat row who is in the last game's official starting lineup played it (round 11: Brandon Finney
@@ -888,6 +896,21 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     const team = teamsById.get(id);
     opponentHistory.set(id, team ? await teamReportHistory(team, { date: reportDate }).catch(() => ({ found: false })) : { found: false });
   }
+  // Each game-time decision, whether he played: a box row, a play-by-play mention, or neither (round 16: Texas's Kobe Black
+  // and Georgia Tech's Justice Haynes sat, and the game rows named only the outs).
+  const etOf = (r) => (r.date ? new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : '');
+  const gtdBoxes = new Map();
+  await Promise.all(sides.flatMap((s, i) => s.results.map(async (r) => {
+    if (!gameTimeOnGameDay(histories[i], etOf(r)).length && !gameTimeOnGameDay(opponentHistory.get(Number(r.opponentId)), etOf(r)).length) return;
+    const f = boxes.find(s.team, r);
+    if (f?.game?.id != null) gtdBoxes.set(`${i}|${r.gameId}`, await getNcaafGameBox(f.game.id).catch(() => null));
+  })));
+  const gtdWords = (box, names) => names.map((name) => {
+    if (!box || box.unavailable) return `${name} (whether he played not on file)`;
+    const [first, ...rest] = String(name).trim().split(/\s+/); const last = rest.join(' ').replace(/\s+(?:jr\.?|sr\.?|ii|iii|iv)$/i, '');
+    const inBox = (box.players || []).some((p) => String(p.last || '').toLowerCase() === last.toLowerCase() && String(p.first || '')[0]?.toLowerCase() === first[0]?.toLowerCase());
+    return `${name} (${inBox ? 'played' : namedInPlays(box.named, { first, last }) ? 'named in the play-by-play' : 'did not play: no box row, not in the play-by-play'})`;
+  }).join(', ');
   // A report exists only for a game against a team of the same conference (the Big Ten and Big 12 report conference games
   // only), so outside one there is no list, not an empty one.
   const outLine = (i, r) => {
@@ -902,10 +925,13 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     if (mine == null && opp == null) return null;
     // Every name (round 8: the list stopped at 8 and hid starters who missed only that game behind season-long absentees).
     const list = (names) => (names.length ? names.join(', ') : 'nobody');
-    return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)} · opponent: ${opp == null ? 'not on file' : list(opp)}`;
+    const box = gtdBoxes.get(`${i}|${r.gameId}`);
+    const gtd = (h) => { const names = h?.found ? gameTimeOnGameDay(h, day) : []; return names.length ? `; game-time decision: ${gtdWords(box, names)}` : ''; };
+    return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)}${gtd(histories[i])} · opponent: ${opp == null ? 'not on file' : list(opp)}${gtd(theirs)}`;
   };
 
   // A game with no weather row says so: without the line, silence would read as a dry, calm day.
+  const shownOpponents = new Map();
   const weatherLine_ = (row) => (!row ? '\n      weather: not on file' : playedInWeather(row) ? `\n      ${playedInWeather(row)}` : '');
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
@@ -916,7 +942,7 @@ penalties), where each side's points came from, kicking, drives, scoring and
 flow, who was out, and the weather at kickoff when it was rain, snow, a
 storm, wind of 15 mph or more, or freezing.
 
-${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
+${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
     ? s.results.map((r) => {
       const official = sackBoxes[i]?.get(String(r.gameId));
       const totals = played[i].unitTotals?.get(String(r.gameId));
@@ -930,8 +956,16 @@ ${sides.map((s, i) => `${s.team} (${record(s.results)}):\n${s.results.length
         ? (starterListed ? listedQb.split('; ').map((x) => (x.toLowerCase().includes(lastName(starter)) ? x.replace(/^([^0-9]+?) (\d+-of-)/, '$1 (started) $2') : x)).sort((a, b) => /\(started\)/.test(b) - /\(started\)/.test(a)).join('; ')
           : `${starter} started (under five passes)${listedQb ? `; ${listedQb}` : ''}`)
         : listedQb;
-      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: label(r.opponentId) ? `opponent: ${label(r.opponentId)}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
-        + `\n      ${points || 'points from: not on file for this game'}`
+      // Each opponent's games in full once, later rows pointing to them, and never the game the row is (round 16: an
+      // opponent both teams played printed its season twice, and each list opened with the row's own score).
+      const etDayOf = (x) => new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      const seen = shownOpponents.get(Number(r.opponentId));
+      const oppText = seen ? `${label(r.opponentId, { full: false })}${label(r.opponentId, { full: false }) ? '; ' : ''}its games: under ${seen} above`
+        : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date) });
+      if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
+      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: oppText ? `opponent: ${oppText}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
+        // The scoring line says every score's kind; "points from" only stands in when that line is missing (round 16).
+        + (played[i].flow?.get(String(r.gameId)) ? '' : `\n      ${points || 'points from: not on file for this game'}`)
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
         + `\n      ${played[i].drives?.get(String(r.gameId)) || 'drives: not on file for this game'}`
         + `\n      ${played[i].flow?.get(String(r.gameId)) || 'scoring and flow: not on file for this game'}`

@@ -208,10 +208,11 @@ export function opponentQualityLine(context, opponentTeamId) {
 // Overtime and neutral sites said as on the team's own lines (round 9: Miami's 43-35 double-overtime win read as a
 // regulation one, and Texas's Red River loss as "@ Oklahoma"). `neutral(r)` says whether a result was at a neutral site.
 // `units(r)`: what the opponent ran and passed for and allowed in that game, when on file (round 12).
-export function opponentSeasonClause(context, opponentTeamId, { neutral = null, units = null } = {}) {
+export function opponentSeasonClause(context, opponentTeamId, { neutral = null, units = null, exclude = null } = {}) {
   if (!context || opponentTeamId == null) return null;
   const entry = context.byTeamId.get(Number(opponentTeamId));
   if (!entry?.results?.length) return null;
-  return `its games, newest first: ${[...entry.results].sort((a, b) => new Date(b.date) - new Date(a.date))
+  // `exclude` leaves out the game the clause sits under, whose score the row already has (round 16).
+  return `its games, newest first: ${[...entry.results].filter((r) => !exclude?.(r)).sort((a, b) => new Date(b.date) - new Date(a.date))
     .map((r) => { const away = neutral?.(r) === true; return `${r.scored > r.allowed ? 'W' : r.scored < r.allowed ? 'L' : 'T'} ${r.scored}-${r.allowed}${r.overtime ? ' (OT)' : ''} ${r.home || away ? 'vs' : '@'} ${r.opponent || '?'}${away ? ' (neutral site)' : ''}${r.fcs ? ' (FCS)' : ''}${units?.(r) ? ` (${units(r)})` : ''}`; }).join(', ')}`;
 }
