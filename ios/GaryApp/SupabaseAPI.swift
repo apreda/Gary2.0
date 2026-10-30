@@ -557,6 +557,24 @@ enum SupabaseAPI {
         return rows.first
     }
 
+    /// Gary's drawn celebrations (cash-rail-celebrate.js), newest first: one
+    /// game's, or the latest anywhere when `gameID` is nil. nil on failure.
+    static func fetchCelebrations(league: String, gameID: String?, limit: Int = 20) async -> [CashRailCelebration]? {
+        var query = [
+            URLQueryItem(name: "select", value: "play_key,who,market,price,when_label,play,kind,dance,team,number,ready_at,assets"),
+            URLQueryItem(name: "league", value: "eq.\(league)"),
+            URLQueryItem(name: "status", value: "eq.ready"),
+            URLQueryItem(name: "order", value: "ready_at.desc"),
+            URLQueryItem(name: "limit", value: "\(limit)")
+        ]
+        if let gameID { query.append(URLQueryItem(name: "game_id", value: "eq.\(gameID)")) }
+        let url = buildURL(table: "celebrations", query: query)
+        guard let (data, response) = try? await URLSession.shared.garyRead(for: makeRequest(url: url)),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let rows = try? JSONDecoder().decode([CashRailCelebration].self, from: data) else { return nil }
+        return rows
+    }
+
     /// One betting-angle wire item for the Home "Wire" feed — a result framed
     /// against the closing number, a line move, an injury with its market
     /// consequence, a curated X voice, or league pace. Written 3x daily by

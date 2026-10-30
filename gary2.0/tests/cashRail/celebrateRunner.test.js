@@ -44,6 +44,14 @@ describe('runCelebrations', () => {
     expect(a.seq).toEqual(dance.seq);
   });
 
+  it('draws the biggest play first when the pass cannot draw them all', async () => {
+    const f = fakes();
+    const big = { key: '77|receptions', who: 'Chuba Hubbard', market: 'Receptions', price: 1520, rungs: [{ label: '7+', price: 1520 }], elapsed: 3169, when: 'Q4 7:11', play: '9-yd catch' };
+    f.db.boards = async () => [{ ...board, hits: [...board.hits, big] }];
+    await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 1 });
+    expect(f.writes.claims.map(c => c.play_key)).toEqual(['77@3169']);
+  });
+
   it('reuses a team backdrop that already exists', async () => {
     const f = fakes({ bgExists: true });
     await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 });

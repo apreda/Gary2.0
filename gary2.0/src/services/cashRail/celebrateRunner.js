@@ -14,7 +14,10 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
   let drawn = 0;
   for (const board of await db.boards()) {
     const done = new Set(await db.existingPlayKeys(board.league, board.game_id));
-    for (const p of celebrationPlays(board.hits)) {
+    // Biggest first: when a pass can't draw every play, the one the app
+    // will show first is the one that gets drawn first.
+    const plays = celebrationPlays(board.hits).sort((a, b) => b.hit.price - a.hit.price);
+    for (const p of plays) {
       if (drawn >= limit) return drawn;
       if (done.has(p.playKey)) continue;
       const who = await bdl.player(p.playerId);

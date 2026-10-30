@@ -37,7 +37,23 @@ describe.skipIf(!hasSwiftCompiler)('Cash Rail board model', () => {
   it('puts the latest landing in the hero and ranks the rest by price', () => {
     const r = swiftJSON(`${board}
 out(["hero": b.hero!.key, "ranked": b.ranked.map { $0.key }, "count": b.cashedCount] as [String: Any])`);
-    expect(r).toEqual({ hero: 'reed|receiving_yards', ranked: ['sanders|first_td', 'kraft|anytime_td'], count: 4 });
+    expect(r).toEqual({ hero: 'reed|receiving_yards', ranked: ['sanders|first_td', 'kraft|anytime_td'], count: 3 });
+  });
+
+  it('once the game is final, the hero is the night\'s biggest hit, not the last one to settle', () => {
+    const r = swiftJSON(`${board}
+let f = CashRailBoard(league: b.league, game_id: b.game_id, status: "final", possession: nil, situation: nil, elapsed_s: 3600, clock: "FINAL", hits: b.hits + [CashRailHit(key: "game|spread|home|-3.5", who: "Packers", market: "Spread", price: -102, rungs: nil, elapsed: 3600, when: "FINAL", play: nil, gary: true)])
+out([f.hero!.key, f.ranked.first!.key])`);
+    expect(r).toEqual(['sanders|first_td', 'kraft|anytime_td']);
+  });
+
+  it('decodes a celebration with its dance routine', () => {
+    const json = JSON.stringify({ play_key: '935@592', who: 'Tucker Kraft', market: 'First TD scorer', price: 1100, when_label: 'Q1 5:08', play: '12-yd TD catch', kind: 'td', dance: 'bird', team: 'GB', number: '85', ready_at: '2026-10-30T03:45:39Z',
+      assets: { bg: 'https://x/bg.webp', name: 'THE DIRTY BIRD', frames: { db1: 'https://x/1.webp', db2: 'https://x/2.webp' }, seq: [['db1', 420, ''], ['db2', 230, 'rise']] } });
+    const r = swiftJSON(`let j = #"${json}"#
+let c = try! JSONDecoder().decode(CashRailCelebration.self, from: Data(j.utf8))
+out([c.id, c.assets.seq.count, c.assets.seq[1].slug, c.assets.seq[1].hold, c.assets.seq[1].move, c.assets.frames.count, c.assets.name] as [Any])`);
+    expect(r).toEqual(['935@592', 2, 'db2', 230, 'rise', 2, 'THE DIRTY BIRD']);
   });
 
   it('shows a rung strip only once two rungs have cashed', () => {

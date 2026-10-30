@@ -54,9 +54,13 @@ struct CashRailBoard: Codable, Equatable {
 }
 
 extension CashRailBoard {
-    /// The latest landing owns the hero (a tie goes to the longer price).
+    /// The latest landing owns the hero (a tie goes to the longer price); once
+    /// the game is final the night's biggest hit takes it back.
     var hero: CashRailHit? {
-        hits.max { a, b in
+        if status == "final" {
+            return hits.max { CashRailFormat.decimal($0.price) < CashRailFormat.decimal($1.price) }
+        }
+        return hits.max { a, b in
             a.elapsed != b.elapsed ? a.elapsed < b.elapsed
                 : CashRailFormat.decimal(a.price) < CashRailFormat.decimal(b.price)
         }
@@ -71,8 +75,8 @@ extension CashRailBoard {
         }
     }
 
-    /// Bets cashed: every rung of a ladder counts.
-    var cashedCount: Int { hits.reduce(0) { $0 + ($1.rungs?.count ?? 1) } }
+    /// Bets cashed, a player's ladder counted once (a 100-yard night is one story).
+    var cashedCount: Int { hits.count }
 }
 
 enum CashRailFormat {
@@ -118,5 +122,74 @@ enum CashRailFormat {
         if v >= 100 { return "$\(Int(v.rounded()))" }
         let s = String(format: "%.2f", v)
         return "$" + (s.hasSuffix(".00") ? String(s.dropLast(3)) : s)
+    }
+}
+
+/// Gary celebrating a big hit: the scorer's number and team colors, one of ten
+/// dances (scripts/cash-rail-celebrate.js draws the frames).
+struct CashRailCelebration: Codable, Equatable, Identifiable {
+    /// One beat of the routine: which frame, how long, and how it moves.
+    struct Step: Codable, Equatable {
+        let slug: String
+        let hold: Int
+        let move: String
+        init(slug: String, hold: Int, move: String) { self.slug = slug; self.hold = hold; self.move = move }
+        init(from decoder: Decoder) throws {
+            var c = try decoder.unkeyedContainer()
+            slug = try c.decode(String.self)
+            hold = try c.decode(Int.self)
+            move = (try? c.decode(String.self)) ?? ""
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.unkeyedContainer()
+            try c.encode(slug); try c.encode(hold); try c.encode(move)
+        }
+    }
+    struct Assets: Codable, Equatable {
+        let bg: String
+        let frames: [String: String]
+        let seq: [Step]
+        let name: String
+    }
+    let play_key: String
+    let who: String
+    let market: String
+    let price: Int
+    let when_label: String?
+    let play: String?
+    let kind: String
+    let dance: String
+    let team: String?
+    let number: String?
+    let ready_at: String?
+    let assets: Assets
+    var id: String { play_key }
+
+    /// A celebration is news for 20 minutes after its art is ready.
+    static let freshFor: TimeInterval = 20 * 60
+
+    var readyDate: Date? {
+        guard let s = ready_at else { return nil }
+        // Postgres writes fractional seconds of any length; whole seconds are plenty.
+        let trimmed = s.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
+        return ISO8601DateFormatter().date(from: trimmed)
+    }
+
+    /// The one to play now: the biggest price among fresh ones not yet seen.
+    static func next(_ rows: [CashRailCelebration], seen: Set<String>, now: Date) -> CashRailCelebration? {
+        rows.filter { c in
+            guard !seen.contains(c.play_key), let d = c.readyDate else { return false }
+            return now.timeIntervalSince(d) <= freshFor
+        }
+        .max { $0.price < $1.price }
+    }
+}
+
+extension CashRailHit {
+    /// The play this hit cashed on ("935@592"), matching a celebration's
+    /// play_key. Game lines settle at the final whistle, not on a play.
+    var playKey: String? {
+        guard let id = key.split(separator: "|").first, id != "game" else { return nil }
+        return "\(id)@\(elapsed)"
     }
 }

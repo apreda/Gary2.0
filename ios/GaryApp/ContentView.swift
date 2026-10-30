@@ -139,6 +139,9 @@ struct ContentView: View {
                 // typographic league switcher. Mounted HERE so it dims the whole
                 // screen, dock included, exactly as the mock drew it.
                 LeagueWordsOverlay()
+
+                // Gary's Cash Rail celebrations — over the dock too, Home only.
+                CashRailCelebrationHost()
             }
             // Every pop-up card (Home game card, Darts featured pages, past
             // parlays) is drawn here, over the dock, from the page that asked.

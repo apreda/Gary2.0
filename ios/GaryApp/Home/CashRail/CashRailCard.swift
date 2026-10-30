@@ -33,6 +33,7 @@ struct CashRailCard: View {
     let onOpenGame: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var celebrations = CashRailCelebrations.shared
     @Namespace private var priceSpace
     @State private var showSheet = false
     @State private var heroElapsed: Int? = nil
@@ -141,8 +142,15 @@ struct CashRailCard: View {
 
     private func hits(hero: CashRailHit, board: CashRailBoard) -> some View {
         VStack(spacing: 0) {
-            CashRailHeroView(hit: hero, space: priceSpace, glowKey: landing)
+            // After the final whistle the hero is the night's biggest hit.
+            CashRailHeroView(hit: hero, title: board.status == "final" ? "BIGGEST HIT" : "JUST CASHED",
+                             space: priceSpace, glowKey: landing)
                 .padding(.top, 14).padding(.bottom, 13)
+                .contentShape(Rectangle())
+                // A hit Gary danced for plays his dance again on a tap.
+                .onTapGesture {
+                    if let key = hero.playKey, let c = celebrations.known[key] { celebrations.play(c) }
+                }
             HStack {
                 Text("CASHED")
                 Spacer()
@@ -220,6 +228,7 @@ struct CashRailLabelRow: View {
 /// The latest cash, big: price and what $10 returned on the left, who and what on the right.
 struct CashRailHeroView: View {
     let hit: CashRailHit
+    var title = "JUST CASHED"
     let space: Namespace.ID
     let glowKey: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -228,7 +237,7 @@ struct CashRailHeroView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("JUST CASHED")
+                Text(title)
                     .foregroundStyle(blink ? CR.mute : GaryColors.gold)
                 Spacer()
                 Text(hit.when).tracking(0.8)
