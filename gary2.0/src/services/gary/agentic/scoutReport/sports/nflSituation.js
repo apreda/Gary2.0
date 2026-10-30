@@ -68,6 +68,33 @@ function teamLines(name, results, kickoff, atHome, place = null, lastSeason = nu
  * local kickoff time and the visitor's home clock, each team's rest and trip, and each head coach's seasons with
  * the club and any change this season. Facts only.
  */
+// The kickoff-hour forecast at the stadium, or indoors; null without a kickoff time.
+async function kickoffWeatherLine(site, commence) {
+  if (site.roof === 'dome') return 'Kickoff weather: indoors.';
+  if (!commence) return null;
+  const w = await getKickoffWeather({ lat: site.lat, lon: site.lon }, commence).catch(warnAs('kickoff weather', null));
+  const lead = site.roof === 'retractable' ? 'Kickoff weather outside the retractable roof (open or closed is decided on game day)' : 'Kickoff weather';
+  if (!w) return `${lead}: the forecast lookup failed.`;
+  if (w.unavailable) return `${lead}: no forecast yet at this range.`;
+  const r = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+  const facts = [r(w.temperature_f) != null ? `${r(w.temperature_f)}°F` : null, w.conditions,
+    windDescription(w) ? `wind ${windDescription(w)}` : null].filter(Boolean);
+  const hours = gameHoursDescription(w);
+  return `${lead}, forecast for the kickoff hour: ${facts.length ? facts.join(', ') : 'no readings'}${hours ? `; ${hours}` : ''}.`;
+}
+
+/** The stadium and its kickoff forecast for one game (round 11: the NFL dart frames had neither, with a thunderstorm
+ * forecast at Tampa). */
+export async function stadiumWeatherLines({ homeTeam, awayTeam, commence, season }) {
+  const schedule = await getNflSchedule().catch(() => null);
+  if (!schedule || schedule.unavailable) return ['Stadium and kickoff weather: not on file (the schedule file could not be read).'];
+  const row = scheduleRowFor(schedule, season, nflverseCode(homeTeam), nflverseCode(awayTeam), commence);
+  const site = row ? siteFor(row) : null;
+  if (!site) return ['Stadium and kickoff weather: not on file.'];
+  const building = { dome: 'fixed roof, indoors', retractable: 'retractable roof', outdoors: 'open-air' }[site.roof] || site.roof;
+  return [`Stadium: ${site.name}, ${site.city} (${building})${site.neutral ? ', a neutral site' : ''}.`, await kickoffWeatherLine(site, commence)].filter(Boolean);
+}
+
 async function siteLines({ homeTeam, awayTeam, game, season }) {
   const schedule = await getNflSchedule().catch(warnAs('schedule', null));
   if (!schedule || schedule.unavailable) return ['Site, rest and trip: the schedule file could not be read.'];
@@ -85,20 +112,8 @@ async function siteLines({ homeTeam, awayTeam, game, season }) {
       const visitorClock = away?.ownTz && away.ownTz !== site.tz ? `, ${at(away.ownTz)} on the ${awayTeam}' home clock` : '';
       lines.push(`Kickoff: ${at(site.tz)} ${zoneName(site.tz)} time at the stadium${visitorClock}.`);
     }
-    if (site.roof === 'dome') lines.push('Kickoff weather: indoors.');
-    else if (game?.commence_time) {
-      const w = await getKickoffWeather({ lat: site.lat, lon: site.lon }, game.commence_time).catch(warnAs('kickoff weather', null));
-      const lead = site.roof === 'retractable' ? 'Kickoff weather outside the retractable roof (open or closed is decided on game day)' : 'Kickoff weather';
-      if (!w) lines.push(`${lead}: the forecast lookup failed.`);
-      else if (w.unavailable) lines.push(`${lead}: no forecast yet at this range.`);
-      else {
-        const r = (v) => (Number.isFinite(v) ? Math.round(v) : null);
-        const facts = [r(w.temperature_f) != null ? `${r(w.temperature_f)}°F` : null, w.conditions,
-          windDescription(w) ? `wind ${windDescription(w)}` : null].filter(Boolean);
-        const hours = gameHoursDescription(w);
-        lines.push(`${lead}, forecast for the kickoff hour: ${facts.length ? facts.join(', ') : 'no readings'}${hours ? `; ${hours}` : ''}.`);
-      }
-    }
+    const weather = await kickoffWeatherLine(site, game?.commence_time);
+    if (weather) lines.push(weather);
   }
   // This season's head coaches from ESPN; nflverse's column for the season in progress can be out of date.
   const espnCoach = Object.fromEntries(await Promise.all([awayTeam, homeTeam].map(async (t) => [t, await getNflHeadCoach(t, season).catch(warnAs('head coach', null))])));

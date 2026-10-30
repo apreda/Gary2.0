@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { withoutBettingLines, footballNews } from './ncaafRead.js';
-import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate, rosterMoves } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate, rosterMoves, nextUp } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -38,7 +38,7 @@ export function backOffReport(data, desk, awayTeam, homeTeam, before) {
   const report = sectionOf(desk, 'INJURY REPORT');
   // Only against a report that loaded: a team whose official report is not in the league's file has no list to be off
   // (round 10: T.J. Edwards, on the Bears' Thursday report, read "not on this week's injury report").
-  const lines = [awayTeam, homeTeam].map((t) => (report.includes(`${t}: not in the league's file yet`) ? `${t}: the official report is not in the league's file yet, so who is off it is not known`
+  const lines = [awayTeam, homeTeam].map((t) => (report.includes(`${t}: not in the league's file yet`) || report.includes(`${t}: not on file (the league's file could not be downloaded)`) ? `${t}: the official report is not on file, so who is off it is not known`
     : notOnReport(data, t, before, report))).filter(Boolean);
   return lines.length ? `MISSED OR LEFT THE LAST GAME, NOT ON THIS WEEK'S INJURY REPORT\n${lines.join('\n')}` : null;
 }
@@ -73,6 +73,7 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
+    ["NEXT ON THE DEPTH CHART (ESPN), FOR STARTERS ON THIS WEEK'S REPORT", await nextUp(data, homeTeam, awayTeam, before)],
     ["ROSTER MOVES", await rosterMoves(data, homeTeam, awayTeam, before)],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.

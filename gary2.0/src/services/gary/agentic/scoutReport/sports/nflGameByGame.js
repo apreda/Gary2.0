@@ -493,7 +493,16 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
     const pfrByGsis = new Map(rosterRows.filter((r) => r.gsis_id && r.pfr_id).map((r) => [r.gsis_id, r.pfr_id]));
     const byId = new Map(list.filter((i) => i.gsis_id && pfrByGsis.has(i.gsis_id)).map((i) => [pfrByGsis.get(i.gsis_id), i]));
     const byNames = reportLookup(list, [...byPlayer.keys()], (player) => [...(namesOf.get(pfrOf.get(player)) || [])]);
-    const reported = (player) => byId.get(pfrOf.get(player)) || byNames(player);
+    // Linemen carry no PFR id on the weekly roster: the report's league id, through that roster row's names, to the snap
+    // file's name (round 11: the report's "DJ Glaze" is the roster's Delmar Glaze and the snaps' "Delmar Glaze").
+    const nk = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+    const byGsisName = new Map();
+    for (const i of list.filter((x) => x.gsis_id && !pfrByGsis.has(x.gsis_id))) {
+      const r = rosterRows.find((x) => x.gsis_id === i.gsis_id);
+      if (!r) continue;
+      for (const nm of [r.full_name, `${r.first_name || ''} ${r.last_name || ''}`, r.football_name ? `${r.football_name} ${r.last_name || ''}` : null]) if (nm && nm.trim()) byGsisName.set(nk(nm), i);
+    }
+    const reported = (player) => byId.get(pfrOf.get(player)) || byNames(player) || byGsisName.get(nk(player));
     for (const [player, shares] of byPlayer) {
       const injury = reported(player);
       if (!injury) continue;

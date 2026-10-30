@@ -47,7 +47,7 @@ import {
 } from './propsBrain.js';
 import { normName, isNflSkillRow } from '../darts/dartsCommon.js';
 import { refreshNflRedZone, loadNflRedZone } from '../../sports/nfl/nflRedZone.js';
-import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords } from '../../sports/nfl/nflPlayerContext.js';
+import { gameDays, snapCounts, defenseByPosition, weeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure } from '../../sports/nfl/nflPlayerContext.js';
 import { loadNflverseFile, getPracticeReport, nflverseCode } from '../../providers/nflverseService.js';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
@@ -265,7 +265,8 @@ async function loadNflSheetContext({ season, game, players }) {
   }
   const abbrOf = (full) => Object.entries(TEAM_NAMES).find(([, name]) => name === full)?.[0] || null;
   return { season, rz, days, snaps, defCur, defPrev, defenses, weeksByName, teamTargets: teamTargetTotals(rows), injuries: reported, history, homeAbbr: abbrOf(game.home_team), awayAbbr: abbrOf(game.away_team),
-    passers: weekPassers(rows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null), weeksMissing: !rows };
+    passers: weekPassers(rows), rosterWords: rosterWeekWords(roster && !roster.unavailable ? roster.rows : null), weeksMissing: !rows,
+    pressure: await qbPressure(season).catch(() => null) };
 }
 
 /** "over in 6 of his last 10 games in 2025" — the season is never implied. */

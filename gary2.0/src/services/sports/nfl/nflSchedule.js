@@ -138,7 +138,10 @@ export async function getNflSchedule({ fetchImpl = globalThis.fetch, force = fal
       if (!text) return { unavailable: true, reason: `Could not read nflverse's schedule file: ${error.message}` };
     }
   }
-  const value = { rows: parseCsv(text), stale };
+  // nflverse marks some open-air overseas venues "dome" (round 11: the Stade de France, whose roof covers only the
+  // stands); the stadium table's open-air roof wins there, so the game's weather is read.
+  const rows = parseCsv(text).map((r) => (r.roof === 'dome' && siteFor(r)?.roof === 'outdoors' ? { ...r, roof: 'outdoors' } : r));
+  const value = { rows, stale };
   memo = { value, expires: Date.now() + TTL_MS };
   return value;
 }

@@ -213,8 +213,8 @@ export function buildFootballPropSheets({
     const rz = redZoneLine(context.rz, entry.name, season, pos); if (rz) facts.push(rz);
     const opp = tag === 'home' ? context.awayAbbr : tag === 'away' ? context.homeAbbr : null;
     const def = defenseLine(context.defCur, context.defPrev, opp, pos, season); if (def) facts.push(def);
-    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name); if (out) facts.push(out);
-    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords,
+    const out = outAroundLine(context.injuries, entry.team || (tag === 'home' ? homeTeam : awayTeam), entry.name, { weeksByName: context.weeksByName }); if (out) facts.push(out);
+    const log = nflGameLog(weeks, { season, days: context.days, snaps: context.snaps?.get(normName(entry.name)) || [], defenses: context.defenses, passers: context.passers, rosterWords: context.rosterWords, pressure: context.pressure,
       ...(propSheetsByGame() ? { limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(pos) ? context.teamTargets : null } : {}) });
     if (log.length) facts.push(`by game, newest first:\n      ${log.join('\n      ')}`);
     else if (context.weeksMissing) facts.push("by game: not on file (this season's weekly stats did not load)");

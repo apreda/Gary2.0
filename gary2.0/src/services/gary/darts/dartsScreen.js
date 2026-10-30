@@ -282,7 +282,8 @@ const NFL_PROP = { td: 'anytime_td', qbtd: 'anytime_td', recyds: 'receiving_yard
 export function nflGameFromRow(r) {
   const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
   return { week: n(r.week), opp: r.opponent_team, pass_comp: n(r.completions), pass_att: n(r.attempts), pass_yds: n(r.passing_yards), pass_tds: n(r.passing_tds), ints: n(r.passing_interceptions),
-    rush_att: n(r.carries), rush_yds: n(r.rushing_yards), rush_tds: n(r.rushing_tds), receptions: n(r.receptions), targets: n(r.targets), rec_yds: n(r.receiving_yards), rec_tds: n(r.receiving_tds) };
+    rush_att: n(r.carries), rush_yds: n(r.rushing_yards), rush_tds: n(r.rushing_tds), receptions: n(r.receptions), targets: n(r.targets), rec_yds: n(r.receiving_yards), rec_tds: n(r.receiving_tds),
+    ret_tds: n(r.special_teams_tds) + n(r.fumble_recovery_tds) };
 }
 
 /** The market rows the volume model prices for one category. */
@@ -301,11 +302,14 @@ const nflPriceText = (kind, c) => (kind === 'td' || kind === 'qbtd' ? fmtOdds(c.
 const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB RUSHING TD' : NFL_PROP[kind].replace('_', ' '));
 
 /** The frame of one NFL game, printed once above its players' sheets. */
-export function nflGameBlock(frame) {
+// Both clubs' reports in the frame, so every sheet under the game shows the defense he faces (round 11; the NBA frame has
+// carried both since the start).
+export function nflGameBlock(frame, injuries = null, weeksByName = null) {
   const sp = frame.spreadHome;
   const spread = sp == null ? null : sp < 0 ? `${frame.homeFull?.replace(/^.* /, '')} ${sp}` : sp > 0 ? `${frame.awayFull?.replace(/^.* /, '')} ${-sp}` : 'pick em';
   const lines = [[`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ')];
   for (const extra of frame.extra || []) lines.push(extra);
+  if (injuries) for (const team of [frame.awayFull, frame.homeFull].filter(Boolean)) lines.push(outAroundLine(injuries, team, '', { weeksByName, label: `${team} report` }) || `${team} report: nobody listed`);
   return lines.join('\n    ');
 }
 
@@ -340,9 +344,9 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const opp = frame ? (c.team === frame.homeFull ? frame.awayAbbr : frame.homeAbbr) : null;
   const def = defenseLine(ctx.defCur, ctx.defPrev, opp, c.position, season);
   if (def) lines.push(def);
-  const out = outAroundLine(ctx.injuries, c.team, c.player);
+  const out = outAroundLine(ctx.injuries, c.team, c.player, { weeksByName: ctx.weeksByName });
   if (out) lines.push(out);
-  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords,
+  const log = nflGameLog(weeks, { season, days: ctx.days, snaps: ctx.snaps?.get(c.statKey || normName(c.player)) || [], passers: ctx.passers, rosterWords: ctx.rosterWords, pressure: ctx.pressure,
     defenses: ctx.defenses, limit: 17, teamTargets: ['WR', 'TE', 'RB'].includes(c.position) ? ctx.teamTargets : null });
   if (log.length) lines.push(`by game, newest first:\n      ${log.join('\n      ')}`);
   return lines.join('\n    ');
@@ -357,7 +361,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
  * went Oct 23 2026: no last season, ever; the runner passes no last-season games). */
 export function clearsNflFloor(kind, games, prior) {
   if (kind !== 'td') return true;
-  const tds = (list) => (list || []).reduce((a, g) => a + (Number(g.rush_tds) || 0) + (Number(g.rec_tds) || 0), 0);
+  const tds = (list) => (list || []).reduce((a, g) => a + (Number(g.rush_tds) || 0) + (Number(g.rec_tds) || 0) + (Number(g.ret_tds) || 0), 0);
   return tds(games) >= 1 || tds(prior) >= 5;
 }
 

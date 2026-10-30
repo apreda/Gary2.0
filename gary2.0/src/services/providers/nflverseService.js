@@ -133,7 +133,7 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
         lastError = new Error(`HTTP ${r.status}`);
       } else {
         value = { rows: parseCsv(r.text), modified: r.modified || null, real: disk };
-        if (disk) { try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(file, r.text); } catch { /* the copy is a convenience */ } }
+        if (disk) { try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(file, r.text); if (r.modified) writeFileSync(`${file}.modified`, r.modified); } catch { /* the copy is a convenience */ } }
       }
     } catch (error) {
       lastError = error;
@@ -143,7 +143,10 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
     // A failed fetch is NOT an empty result: the last good copy if it is recent, else the failure, said so.
     try {
       const age = disk ? Date.now() - statSync(file).mtimeMs : Infinity;
-      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000), modified: new Date(statSync(file).mtimeMs).toUTCString(), real: true };
+      // The copy's publish time is the one saved with it; without it the practice words are not dated (round 11: the
+      // download time stood in for it).
+      let modified = null; try { modified = readFileSync(`${file}.modified`, 'utf8').trim() || null; } catch { /* not saved */ }
+      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000), modified, real: true };
     } catch { /* no copy */ }
     return { unavailable: true, reason: `Could not reach nflverse for ${asset}_${season}.csv: ${lastError?.message || 'no answer'}` };
   }
@@ -166,7 +169,9 @@ function practiceDays(season, week, entries, day) {
   const out = new Map();
   for (const [k, word] of entries) {
     const key = `${week}|${k}`; const list = store[key] || [];
-    if (word && !list.some((x) => x.day === day)) list.push({ day, practice: word });
+    // A later file for the same report day replaces its word.
+    const at = list.findIndex((x) => x.day === day);
+    if (word && at >= 0) list[at] = { day, practice: word }; else if (word) list.push({ day, practice: word });
     store[key] = list; out.set(k, list);
   }
   try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(path, JSON.stringify(store)); } catch { /* a convenience */ }
@@ -202,10 +207,13 @@ export async function getPracticeReport(teamName, season, week = null, opts = {}
   // Each practice word with the day the league's file that carried it was published, kept across the week's daily files
   // (round 10: the read gave one undated word; on Thursday night it was Wednesday's practice). The file holds one word
   // per player, so the days are the files this machine has read.
-  const fileDay = new Date(file.modified && !Number.isNaN(Date.parse(file.modified)) ? Date.parse(file.modified) : Date.now())
-    .toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
-  // Kept only for the league's real file (a test's stand-in rows never reach the store).
-  const days = file.real ? practiceDays(season, targetWeek, rows.map((r) => [r.gsis_id || r.full_name, PRACTICE_SHORT[r.practice_status] || r.practice_status || null]), fileDay) : new Map();
+  // The report day a file carries: nflverse uploads about 10 AM ET, before that day's practice and the afternoon report, so
+  // a file published before 4 PM ET holds the previous day's report (round 11: Wednesday's words read as Thursday's).
+  const published = file.modified && !Number.isNaN(Date.parse(file.modified)) ? Date.parse(file.modified) : null;
+  const etHour = published ? Number(new Date(published).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })) % 24 : null;
+  const reportDay = published ? new Date(published - (etHour < 16 ? 86_400_000 : 0)).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' }) : null;
+  // Kept only for the league's real file with a known publish time (a test's stand-in rows never reach the store).
+  const days = file.real && reportDay ? practiceDays(season, targetWeek, rows.map((r) => [r.gsis_id || r.full_name, PRACTICE_SHORT[r.practice_status] || r.practice_status || null]), reportDay) : new Map();
   const players = rows.map((r) => ({
     name: r.full_name,
     position: r.position || null,

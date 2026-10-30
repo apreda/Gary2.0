@@ -44,12 +44,36 @@ export const gameDays = () => once('days', async () => {
   return out;
 });
 
+/** PFR's times pressured per quarterback game: "season|week|team|normalized name" -> count (round 11). */
+export const qbPressure = (season) => once(`pressure|${season}`, async () => {
+  const out = new Map();
+  for (const r of await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_pass_${season}.csv`).catch(() => [])) {
+    if (r.times_pressured === '' || r.times_pressured == null) continue;
+    out.set(`${r.season}|${n(r.week)}|${r.team}|${normName(r.pfr_player_name)}`, n(r.times_pressured));
+  }
+  return out;
+});
+
 /** normalized name → [{ week, team, opp, snaps, teamSnaps }] newest first. */
 export const snapCounts = (season) => once(`snaps|${season}`, async () => {
   // `.byPfr`: the same lists by PFR id, for players the stats feed spells differently (aliasByRoster).
   const out = new Map(); out.byPfr = new Map();
   for (const r of await fetchCsv(`${RELEASE_BASE}/snap_counts/snap_counts_${season}.csv`)) {
-    if (r.game_type !== 'REG' || !(n(r.offense_snaps) > 0)) continue;
+    if (r.game_type !== 'REG') continue;
+    // A special-teams-only game is kept apart on the list as `.stOnly` (week -> special-teams snaps), so it reads as a game
+    // he played on special teams, not as one he missed (round 11: Dean Connors read "did not play" on 16 special-teams
+    // snaps a week).
+    if (!(n(r.offense_snaps) > 0)) {
+      if (!(n(r.st_snaps) > 0) && !(n(r.defense_snaps) > 0)) continue;
+      const k0 = normName(r.player);
+      if (!out.has(k0)) out.set(k0, []);
+      if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k0));
+      // A two-way player's all-defense game is kept as `.defOnly` (round 11: Travis Hunter's Week 4, every defensive snap,
+      // read "did not play").
+      if (n(r.defense_snaps) > 0) (out.get(k0).defOnly ||= new Map()).set(n(r.week), n(r.defense_snaps));
+      else (out.get(k0).stOnly ||= new Map()).set(n(r.week), n(r.st_snaps));
+      continue;
+    }
     const k = normName(r.player);
     if (!out.has(k)) out.set(k, []);
     if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k));
@@ -98,7 +122,7 @@ export const defenseByPosition = (season) => once(`def|${season}`, async () => {
     const add = (k, v) => { t[g][k] = (t[g][k] || 0) + v; wk[g][k] = (wk[g][k] || 0) + v; };
     add('targets', n(r.targets)); add('rec', n(r.receptions)); add('recYds', n(r.receiving_yards)); add('recTd', n(r.receiving_tds));
     add('carries', n(r.carries)); add('rushYds', n(r.rushing_yards)); add('rushTd', n(r.rushing_tds));
-    add('passYds', n(r.passing_yards)); add('passTd', n(r.passing_tds)); add('int', n(r.passing_interceptions));
+    add('passYds', n(r.passing_yards)); add('passTd', n(r.passing_tds)); add('int', n(r.passing_interceptions)); add('sacks', n(r.sacks_suffered));
     // Who threw against it that day (round 9: a defense's game against a backup read the same as against a starter).
     if (n(r.attempts) > 0) (wk.passers ||= []).push({ name: r.player_display_name, att: n(r.attempts) });
   }
@@ -115,7 +139,7 @@ export function defenseLine(cur, prev, defense, position, season) {
   // average"; it read "PHI defense against wide receivers, 2026 (5 games): 29 catches on 41 targets, 388 yards, 3 TD").
   const games = cur?.get(defense)?.games;
   if (games?.size) {
-    const bits = (x) => (g === 'QB' ? `${x.passYds || 0} passing yards, ${x.passTd || 0} TD, ${x.int || 0} INT, ${x.rushYds || 0} rushing`
+    const bits = (x) => (g === 'QB' ? `${x.passYds || 0} passing yards, ${x.passTd || 0} TD, ${x.int || 0} INT, ${x.sacks || 0} sacks, ${x.rushYds || 0} rushing`
       : g === 'RB' ? `${x.carries || 0} carries for ${x.rushYds || 0}, ${x.rushTd || 0} TD; ${x.rec || 0} catches for ${x.recYds || 0}, ${x.recTd || 0} TD`
         : `${x.rec || 0} catches on ${x.targets || 0} targets, ${x.recYds || 0} yards, ${x.recTd || 0} TD`);
     // "against", not "vs": the rows carry no site (round 9: road games read as home ones).
@@ -173,12 +197,17 @@ export function weekPassers(rows) {
 // showed one game, Week 7, with nothing to say he had missed Weeks 1 to 6 and was one game back).
 // `passers` (weekPassers) names his team's quarterback each game for a non-passer; `rosterWords` (rosterWeekWords) says
 // why a game he missed was missed.
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null } = {}) {
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
     const bits = [];
-    if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`);
+    if (n(r.special_teams_tds) || n(r.fumble_recovery_tds)) bits.push(`${n(r.special_teams_tds) + n(r.fumble_recovery_tds)} return TD`);
+    // Sacked and pressured too (round 11: a QB's sheet had no pressure, the stat the founder named): sacks from the weekly
+    // row, pressures from PFR's charting (`pressure`: "season|week|team|name" -> times pressured).
+    const pressured = pressure?.get(`${r.season}|${wk}|${r.team}|${normName(r.player_display_name)}`);
+    const qbGame = n(r.attempts) >= 5 || n(r.sacks_suffered) > 0;
+    if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT${qbGame ? `, sacked ${n(r.sacks_suffered)}${pressured != null ? `, pressured ${pressured}` : ''}` : ''}`);
     if (n(r.carries)) bits.push(`${n(r.carries)} carries, ${n(r.rushing_yards)} yards${n(r.rushing_tds) ? `, ${n(r.rushing_tds)} TD` : ''}`);
     const teamTotal = teamTargets?.get(`${r.season}|${r.week}|${r.team}`);
     if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
@@ -207,7 +236,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
         const opp = days.opp?.get(key), site = days.site?.get(key);
         const where = opp ? ` ${site === 'away' ? '@' : 'vs'} ${opp}${site === 'neutral' ? ' at a neutral site' : ''}${defenses?.get(opp) ? ` (${defenses.get(opp)})` : ''}` : '';
         const qbs = passers?.get(`${season}|${Number(w)}|${team}`);
-        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}${where}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : `did not play${why ? ` (${why})` : ''}`}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}` });
+        const st = snaps?.stOnly?.get(Number(w)), def = snaps?.defOnly?.get(Number(w));
+        missed.push({ wk: Number(w), text: `Wk ${Number(w)} ${day(date)}${where}: ${on ? `no touches; ${on.snaps}${on.teamSnaps ? ` of ${on.teamSnaps}` : ''} snaps` : def ? `no offensive snaps (${def} on defense)` : st ? `special teams only (${st} snaps), no offensive snaps` : `did not play${why ? ` (${why})` : ''}`}${qbs?.length ? `; QB ${qbs.join(', ')}` : ''}` });
       }
     }
   }
@@ -273,17 +303,22 @@ export function targetShareLine(rows, totals = null, snapList = null, season = n
  * first ten in the feed's order, reserve players among them, hid this week's names on 24 of 32 clubs; the 49ers' line
  * left out Bosa, McCaffrey, Deebo Samuel and Mike Evans, all questionable).
  */
-export function outAroundLine(injuries, teamFull, name) {
+// `weeksByName` (normName -> his weekly rows) adds the last week each listed player played (round 11: "WR Terry McLaurin
+// (ir)" did not say he had played through Week 6, so the rows he was in and out of read the same). `label` names whose
+// report it is.
+export function outAroundLine(injuries, teamFull, name, { weeksByName = null, label = "his club's report" } = {}) {
   const mine = normName(name);
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
     && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup)/i.test(String(i?.status || '')));
   if (!list.length) return null;
   const rank = (s) => ['out', 'doubtful', 'questionable', 'no game status yet'].findIndex((w) => String(s).toLowerCase().startsWith(w));
-  const word = (i) => `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()})`.trim();
+  const lastWeek = (i) => { if (!weeksByName) return null; const rows = weeksByName.get(normName(`${i.player?.first_name || ''} ${i.player?.last_name || ''}`)) || [];
+    const ws = rows.filter((r) => Number(r.targets) > 0 || Number(r.carries) > 0 || Number(r.attempts) > 0 || Number(r.receptions) > 0).map((r) => Number(r.week)); return ws.length ? Math.max(...ws) : null; };
+  const word = (i) => { const w = lastWeek(i); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()}${w ? `; last played Wk ${w}` : ''})`.trim(); };
   const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
   const reserve = list.filter((i) => rank(i.status) < 0);
-  return [week.length ? `his club's report: ${week.map(word).join(', ')}` : "his club's report: nobody listed this week",
+  return [week.length ? `${label}: ${week.map(word).join(', ')}` : `${label}: nobody listed this week`,
     reserve.length ? `on reserve: ${reserve.map(word).join(', ')}` : null].filter(Boolean).join(' · ');
 }
 

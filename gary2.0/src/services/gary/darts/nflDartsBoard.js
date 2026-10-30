@@ -36,7 +36,9 @@ export async function nflSeasonGames(season) {
     byName.get(key).push({ week: n(r.week), opp: r.opponent_team, team: r.team,
       pass_comp: n(r.completions), pass_att: n(r.attempts), pass_yds: n(r.passing_yards), pass_tds: n(r.passing_tds), ints: n(r.passing_interceptions),
       rush_att: n(r.carries), rush_yds: n(r.rushing_yards), rush_tds: n(r.rushing_tds),
-      receptions: n(r.receptions), targets: n(r.targets), rec_yds: n(r.receiving_yards), rec_tds: n(r.receiving_tds) });
+      receptions: n(r.receptions), targets: n(r.targets), rec_yds: n(r.receiving_yards), rec_tds: n(r.receiving_tds),
+      // Return and fumble-recovery TDs settle an anytime TD too (round 11: Myles Price's punt-return TD was invisible).
+      ret_tds: n(r.special_teams_tds) + n(r.fumble_recovery_tds) });
   }
   for (const games of byName.values()) games.sort((a, b) => b.week - a.week);
   return byName;
@@ -65,6 +67,13 @@ async function seasonLines(season) {
   const [snapFile, roster] = await Promise.all([snapCounts(season).catch(() => null), loadNflverseFile('roster_weekly', season).catch(() => null)]);
   const snaps = snapFile ? aliasByRoster(snapFile, rows, roster && !roster.unavailable ? roster.rows : null) : null;
   for (const [nk, list] of snaps || []) {
+    // Special-teams-only weeks apart (round 11).
+    for (const [w, st] of list?.stOnly || []) {
+      for (const [key, cur] of byKey) if (key.startsWith(`${nk}|`)) (cur.stWeeks ||= new Map()).set(w, st);
+    }
+    for (const [w, def] of list?.defOnly || []) {
+      for (const [key, cur] of byKey) if (key.startsWith(`${nk}|`)) (cur.defWeeks ||= new Map()).set(w, def);
+    }
     for (const s of list || []) {
       if (!(s.snaps > 0)) continue;
       const key = `${nk}|${s.team}`;
@@ -90,6 +99,9 @@ function statText(pos, s, teamWeeks = null, elsewhere = () => null) {
   const weeks = teamWeeks?.length ? teamWeeks.slice(0, 3) : [...(s.weeks || [])].sort((a, b) => b - a).slice(0, 3);
   const last = weeks.map((w) => {
     const r = rows.get(w);
+    const st = s.stWeeks?.get(w), def = s.defWeeks?.get(w);
+    if (def && !r) return `Wk ${w} no offensive snaps (${def} on defense)`;
+    if (st && (!r || !(r.targets || r.carries || r.rec || r.passTd || r.int || r.recYds || r.rushYds))) return `Wk ${w} special teams only (${st} snaps)`;
     if (!r && !s.weeks?.has(w)) { const other = elsewhere(w); return `Wk ${w} ${other ? `with ${other}` : 'did not play'}`; }
     if (!r) return `Wk ${w} no touches`;
     if (pos === 'QB') return `Wk ${w} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds, ${r.rushTd || 0} rush TD`;

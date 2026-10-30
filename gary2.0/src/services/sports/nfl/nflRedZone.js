@@ -140,7 +140,8 @@ function oneGame(t, position) {
 /** "red zone, 2026 by game, newest first: Wk 7 2 carries inside the 20 (...) · Wk 5 ...; none in his other games". This
  * season only. */
 export function redZoneLine(rz, name, season, position) {
-  if (!rz) return null;
+  // Ball carriers and pass catchers only (a kicker's "no red-zone touches" says nothing).
+  if (!rz || (position && !/^(QB|RB|FB|WR|TE)$/i.test(String(position)))) return null;
   const games = (rz.byName.get(`${season}|${normName(name)}`) || []).slice().sort((a, b) => b.week - a.week).map((g) => oneGame(g, position)).filter(Boolean);
   if (!games.length) return `red zone, ${season}: no red-zone touches in any game`;
   return `red zone, ${season} by game, newest first: ${games.join(' · ')}; no red-zone touches in his other games`;
