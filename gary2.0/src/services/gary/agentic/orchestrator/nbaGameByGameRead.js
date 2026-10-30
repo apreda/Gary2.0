@@ -175,11 +175,11 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
       older.length ? `Older games, one line each:\n${older.map((r) => shortGameText(r, team.id)).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
 
-  // Every team's record before tonight, by conference, best first: what any team named anywhere in the read has done
-  // (a count of its games; no averages).
+  // Every team's record before tonight, by conference, alphabetical: what any team named anywhere in the read has done
+  // (a count of its games; no averages, and no standings order: round 9, sorted best first it was a conference place).
   const conf = (c) => teams.filter((t) => t.conference === c && byTeam.has(String(t.id)))
     .map((t) => { const rows = byTeam.get(String(t.id)); const [w, l] = wonLost(rows, t.id).split('-').map(Number); return { t, w, l }; })
-    .sort((a, b) => (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)) || b.w - a.w)
+    .sort((a, b) => String(a.t.abbreviation).localeCompare(String(b.t.abbreviation)))
     .map(({ t, w, l }) => `${t.abbreviation} ${t.name} ${w}-${l}`).join(' · ');
   const standings = `LEAGUE RECORDS BEFORE TONIGHT\nEast: ${conf('East')}\nWest: ${conf('West')}`;
 

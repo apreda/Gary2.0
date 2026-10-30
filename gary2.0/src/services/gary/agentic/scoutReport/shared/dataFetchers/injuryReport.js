@@ -135,7 +135,9 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
     } else if (i.duration === 'SEASON START') {
       durationTag = ' [SEASON OPENER — no regular-season games played yet]';
     } else if (i.duration === 'SEASON-LONG' || i.status === 'Injured Reserve' || i.status === 'IR' || i.status === 'LTIR' || i.status === 'OFS') {
-      durationTag = ` [SEASON-LONG]`;
+      // How many of the team's games the box scores were checked over, when that is all that is known (round 9: "recent
+      // games" for players out every game of the season).
+      durationTag = ` [SEASON-LONG${i.gamesMissedIsMinimum && Number(i.gamesMissed) > 0 ? `: ${Number(i.gamesMissed)}` : ''}]`;
     } else if (i.duration === 'LONG-TERM') {
       durationTag = ` [LONG-TERM${timeInfo}]`;
     } else if (i.duration === 'FRESH') {

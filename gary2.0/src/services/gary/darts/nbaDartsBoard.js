@@ -11,7 +11,8 @@
 // teams sits above. Injuries come from the league's report only, as everywhere else (the stats feed's list was read).
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
-import { teamRecords } from '../../gamebygame/gameRecordStore.js';
+import { teamRecords, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
+import { summariesByTeam, wonLost } from '../../sports/nba/nbaGameRecordText.js';
 import { mainLineBoth, fmtOdds, etClock, etDate, normName } from './dartsCommon.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 
@@ -126,7 +127,12 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     blocks.push(lines.join('\n'));
   }
 
-  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf };
+  // Each past opponent's record now, for the sheets' game rows (round 9: darts carry no read, and a number against a 1-6
+  // team read the same as one against a 6-1 team).
+  const summaries = await seasonSummaries('NBA', season, date).catch(() => null);
+  const byTeam = summaries ? summariesByTeam(summaries) : null;
+  const oppRecord = byTeam ? (teamId) => wonLost(byTeam.get(String(teamId)) || [], teamId) : null;
+  return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf, oppRecord };
 }
 
 // A team's side of tonight's report in a few words: who is out, doubtful or questionable.
@@ -145,8 +151,8 @@ function listedLine(side, report) {
 // The props sheets read the same rows (Oct 29 2026, founder: no season averages; "give Gary the numbers behind the
 // average"): `stat` is one stat or a list of them ('min' leaves the minutes in the row; names as the sheets print them).
 const STAT_WORD = { pts: 'pts', reb: 'reb', ast: 'ast', fg3m: '3PM', pra: 'PRA' };
-export function nbaGameRows(c, records, stats, abbrById) { return gameLines(c, records, stats, abbrById); }
-function gameLines(c, records, stat, abbrById) {
+export function nbaGameRows(c, records, stats, abbrById, oppRecord = null) { return gameLines(c, records, stats, abbrById, oppRecord); }
+function gameLines(c, records, stat, abbrById, oppRecord = null) {
   if (!records) return null;
   const rows = [];
   for (const r of records) {
@@ -155,7 +161,7 @@ function gameLines(c, records, stat, abbrById) {
     const me = (rec.players || []).find((p) => String(p.id) === String(c.playerId));
     const valueOf = (f) => (me ? (f === 'pra' ? me.pts + me.reb + me.ast : me[f]) : null);
     const value = Array.isArray(stat) ? stat.filter((f) => f !== 'min').map((f) => `${one(valueOf(f))} ${STAT_WORD[f] || f}`).join(', ') : valueOf(stat);
-    rows.push({ rec, side, opp: opp?.abbr || abbrById?.get(String(opp?.id)) || opp?.name || '?', me, value, date: r.game_date });
+    rows.push({ rec, side, opp: opp?.abbr || abbrById?.get(String(opp?.id)) || opp?.name || '?', oppId: opp?.id, me, value, date: r.game_date });
   }
   const big = new Set(rows.flatMap((x) => (x.rec.players || []).filter((p) => p.side === x.side && p.min >= 15).map((p) => p.name)));
   return rows.map((x) => {
@@ -164,13 +170,20 @@ function gameLines(c, records, stat, abbrById) {
     const us = x.rec.final?.[x.side], them = x.rec.final?.[x.side === 'home' ? 'away' : 'home'];
     const ot = (x.rec.periods?.length || 0) - 4;
     const score = us != null && them != null ? ` (${us > them ? 'W' : 'L'} ${us}-${them}${ot > 0 ? `, ${ot === 1 ? 'OT' : `${ot} OT`}` : ''})` : '';
-    const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}${score}`;
+    const where = `${shortDay(x.date)} ${x.side === 'home' ? 'vs' : '@'} ${x.opp}${oppRecord && x.oppId != null ? ` (${oppRecord(x.oppId)} now)` : ''}${score}`;
     const outRows = (x.rec.report?.[x.side]?.rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || ''));
     const names = (x.rec.players || []).filter((p) => p.side === x.side).map((p) => p.name);
     const mine = outRows.find((r) => samePlayerIn(c.player, [r.name], names));
-    if (!x.me || !(x.me.min > 0)) return `${where}: did not play${mine ? ` (out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')})` : ''}`;
+    // Why he did not play, from the report at tip: out and why, listed with another status, or not on it (round 9: a
+    // coach's decision read the same as an unlisted absence).
+    const listedAs = !mine ? (x.rec.report?.[x.side]?.rows || []).find((r) => samePlayerIn(c.player, [r.name], names)) : null;
+    const why = mine ? `out: ${String(mine.reason || '').replace(/^Injury\/Illness - /, '')}`
+      : listedAs ? `listed ${String(listedAs.status || '').toLowerCase()}` : !x.rec.report?.[x.side] || x.rec.report[x.side].notOnFile ? 'the injury report not on file' : 'not on the injury report';
+    if (!x.me || !(x.me.min > 0)) return `${where}: did not play (${why})`;
+    // Fouls that cut his minutes (round 9: Giannis's 25 minutes on Oct 24 were six fouls).
+    const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min, ${typeof x.value === 'string' ? x.value : one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
   });
 }
 
@@ -184,8 +197,10 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     if (!mk) continue;
     const head = `${c.player} (${c.team})${c.status ? ` · ${c.status}` : ''} · ${LABEL[kind]} ${mk.line} · over ${fmtOdds(mk.over)} / under ${fmtOdds(mk.under)}`;
     const sheet = [head];
-    const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById);
-    const played = (board.recordsOf?.get(c.teamId) || []).map((r) => (r.record.players || []).find((p) => String(p.id) === String(c.playerId))).filter((p) => p?.min > 0);
+    const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById, board.oppRecord);
+    // His team's last three games, a game he missed said so (round 9: Naji Marshall's "last 3 games" reached back past the
+    // two he had just missed).
+    const lastThree = (board.recordsOf?.get(c.teamId) || []).slice(0, 3).map((r) => (r.record.players || []).find((p) => String(p.id) === String(c.playerId)));
     if (!lines) sheet.push("    This season's games are not on file (the game records did not load).");
     else if (!lines.length) sheet.push('    No games yet this season.');
     else {
@@ -194,8 +209,8 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     // The one-line board Gary picks his sheets from carries his last three games, as MLB's and the NFL's lines carry
     // theirs (Oct 27 2026 darts bug audit: the NBA line was a name and a price, so a full slate's first pick was made
     // from names alone).
-    const recent = played.slice(0, 3).map((p) => one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat]));
-    const line = `${head} · ${recent.length ? `last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
+    const recent = lastThree.map((p) => (p?.min > 0 ? one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat]) : 'did not play'));
+    const line = `${head} · ${recent.length ? `his team's last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
     menu.push({ id, gameId: c.gameId, line, sheet: sheet.join('\n') });
   }
   // The books' order of who matters most: the higher line first.

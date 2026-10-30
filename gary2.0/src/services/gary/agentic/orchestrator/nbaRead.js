@@ -87,7 +87,7 @@ export function injuriesAsReported(desk, { homeTeam = null, awayTeam = null } = 
     }
     const l = raw
       .replace(/ ?\[SEASON OPENER — no regular-season games played yet\]/, '')
-      .replace(/\[SEASON-LONG\]/, '[has not played in any of the team\'s recent games]')
+      .replace(/\[SEASON-LONG(?:: (\d+))?\]/, (m, n) => (n ? `[not in any of the team's last ${n} game${n === '1' ? '' : 's'}]` : '[has not played in any of the team\'s recent games]'))
       // The desk's "Since" date is the last game he played (Oct 29 2026 hunt: "[since Oct 28, 1 days, 0 games missed]" for
       // Meleek Thomas, 20 minutes on Oct 28).
       .replace(/\[(?:FRESH|SHORT-TERM|PRICED IN|LONG-TERM|OUT) — Since ([^(\]]+) \((\d+)d(?:, ([^)]+))?\)\]/, (m, since, days, missed) => `[last played ${since.trim()}, ${days} day${days === '1' ? '' : 's'} ago${missed ? `; ${missed.replace(/missed$/, 'missed since')}` : ''}]`)

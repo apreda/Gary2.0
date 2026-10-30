@@ -167,29 +167,31 @@ async function playedFor(teamId, before) {
 
 // The opponent's Out list, those who had played for it apart from those who had not played in any of its games before
 // this one: the second kind is the team it had been every night, not a short-handed one.
-async function opponentOut(g, team, opp, oppId) {
-  if (!g.datetime) return '      their Out list: not on file (no tip time for the game)';
+// `who` names whose list it is: "their" for the opponent's, the team's own name for its own (round 9: the 76ers' log said
+// "did not play: Joel Embiid" with no reason, while the report at tip had his injury management).
+async function opponentOut(g, team, opp, oppId, who = 'their') {
+  if (!g.datetime) return `      ${who} Out list: not on file (no tip time for the game)`;
   const tip = new Date(g.datetime);
   try {
     const report = await latestOfficialReport({ now: tip, lookbackHours: 6 });
     const side = gameListing(report, reportDate(tip), team, opp)[opp];
     const when = `the ${reportClock(report.postedAt)} ET report`;
-    if (side === 'unfiled') return `      their Out list: not filed by ${when}`;
+    if (side === 'unfiled') return `      ${who} Out list: not filed by ${when}`;
     const out = outRows(side);
     const said = (r) => `${r.name} (${ailment(r.reason)})`;
-    if (!out.length) return `      their Out on ${when}: nobody`;
+    if (!out.length) return `      ${who} Out on ${when}: nobody`;
     const before = await playedFor(oppId, tip).catch(() => null);
-    if (!before) return `      their Out on ${when}: ${out.map(said).join(', ')} (who of them had played for them before: not on file)`;
-    if (!before.n) return `      their Out on ${when}, their first game of the season: ${out.map(said).join(', ')}`;
+    if (!before) return `      ${who} Out on ${when}: ${out.map(said).join(', ')} (who of them had played for them before: not on file)`;
+    if (!before.n) return `      ${who} Out on ${when}, its first game of the season: ${out.map(said).join(', ')}`;
     // The report's names against the box's, which can differ ("Alex Sarr", "Alexandre Sarr").
     const hadPlayed = (r) => Boolean(samePlayerIn(r.name, before.names, [...side.values()].map((x) => x.name)));
     const played = out.filter(hadPlayed);
     const not = out.filter((r) => !hadPlayed(r));
-    const games = before.n === 1 ? 'their one game' : `any of their ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
-    if (!not.length) return `      their Out on ${when}: ${played.map(said).join(', ')}`;
-    return `      their Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;
+    const games = before.n === 1 ? 'its one game' : `any of its ${before.n === PLAYED_FROM_GAMES ? 'last ' : ''}${before.n} games`;
+    if (!not.length) return `      ${who} Out on ${when}: ${played.map(said).join(', ')}`;
+    return `      ${who} Out on ${when}: ${played.length ? `${played.map(said).join(', ')}; and, not in ${games} before this one, ` : `only players not in ${games} before this one: `}${not.map(said).join(', ')}`;
   } catch (e) {
-    return `      their Out list: not on file (${e.message})`;
+    return `      ${who} Out list: not on file (${e.message})`;
   }
 }
 
@@ -325,6 +327,10 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const opp = g.home_team?.id === ts.id ? g.visitor_team : g.home_team;
     return opponentOut(g, team, opp?.full_name, opp?.id);
   }));
+  const ownOuts = await Promise.all(games.slice(0, BOX_GAMES).map((g) => {
+    const opp = g.home_team?.id === ts.id ? g.visitor_team : g.home_team;
+    return opponentOut(g, opp?.full_name, team, ts.id, `${String(team).split(' ').pop()}'`.replace(/([^s])'$/, "$1's"));
+  }));
   // One call per game: a game's lineup rows run about 23, past the feed's 100-row page for five games together.
   const lineups = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaLineups([g.id]).catch(() => [])));
   const startersOf = (rows, teamId) => rows.filter((r) => r.starter && r.team?.id === teamId).map((r) => `${r.player?.first_name} ${r.player?.last_name}`);
@@ -383,7 +389,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const stored = flows.get(String(g.id));
     const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : '      flow: not on file (the game record is not built yet)';
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }
