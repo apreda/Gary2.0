@@ -71,7 +71,10 @@ export function teamStatsFromBoxPage(html) {
   const h = String(html || ''); const i = h.indexOf('Sacks: Total - Yds');
   if (i < 0) return null;
   const tableAt = h.lastIndexOf('<table', i);
-  const heads = [...h.slice(tableAt, tableAt + 4000).matchAll(/<th[^>]*>(.*?)<\/th>/gs)].map((m) => text(m[1]).trim()).filter((x) => x && x !== '-');
+  // The two team columns; the older layout's first header is the label column's own "Statistic" (round 14: its sacks
+  // read swapped for every game on those 17 sites).
+  const heads = [...h.slice(tableAt, tableAt + 4000).matchAll(/<th[^>]*>(.*?)<\/th>/gs)].map((m) => text(m[1]).trim())
+    .filter((x) => x && x !== '-' && !/^(?:team\s+)?stat(?:istic)?s?$|^category$/i.test(x));
   const row = text(h.slice(i, h.indexOf('</tr>', i))).match(/Sacks: Total - Yds\.?\s*(\d+)\s*-\s*(-?\d+)\s+(\d+)\s*-\s*(-?\d+)/);
   if (!row || heads.length < 2) return null;
   return { labels: [decode(heads[0]), decode(heads[1])], sacks: [[Number(row[1]), Number(row[2])], [Number(row[3]), Number(row[4])]] };
@@ -143,7 +146,7 @@ async function readSite(college, season, fetchImpl) {
     const pattern = new RegExp(`/sports/football/stats/${season}/[^"]*/boxscore/\\d+|/boxscore\\.aspx\\?id=\\d+`, 'g');
     return { links: [...new Set(pages.flatMap((page) => String(page || '').match(pattern) || []))] };
   }, { ttlMs: 6 * HOUR }).catch(() => null);
-  const boxes = await Promise.all((links?.links || []).map((path) => cachedResearch(`cfb_official_box_v2:${domain}${path}`, async () => {
+  const boxes = await Promise.all((links?.links || []).map((path) => cachedResearch(`cfb_official_box_v3:${domain}${path}`, async () => {
     const page = await get(`https://${domain}${path}`, fetchImpl);
     const box = page ? startersFromBoxPage(page) : null;
     return box ? { ...box, stats: teamStatsFromBoxPage(page), settled: Date.now() - Date.parse(`${box.date}T12:00:00Z`) > 3 * 24 * HOUR } : { unavailable: true };
@@ -202,7 +205,9 @@ export async function officialSacks(team, games, season, { fetchImpl = fetch } =
       for (const box of (await siteBoxes(school, season, fetchImpl)).filter((b) => b.stats && sameDay(g.date, b.date))) {
         const [a, b] = box.stats.labels;
         const [ma, mb, oa, ob] = [likeness(a, team), likeness(b, team), likeness(a, g.opponent || {}), likeness(b, g.opponent || {})];
-        const k = ma > mb && ob >= oa ? 0 : mb > ma && oa >= ob ? 1 : ma === mb && oa !== ob ? (oa > ob ? 1 : 0) : null;
+        // Each column named for one side: a column that names neither leaves the game unread, never guessed.
+        const k = ma > mb && ob > oa ? 0 : mb > ma && oa > ob ? 1 : (ma > mb && oa === 0 && ob === 0) || (ob > oa && ma === 0 && mb === 0) ? 0
+          : (mb > ma && oa === 0 && ob === 0) || (oa > ob && ma === 0 && mb === 0) ? 1 : null;
         if (k == null || Math.max(ma, mb, oa, ob) === 0) continue;
         out.set(String(g.gameId), { made: box.stats.sacks[k], taken: box.stats.sacks[1 - k] });
         break;

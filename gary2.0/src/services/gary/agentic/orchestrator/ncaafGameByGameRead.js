@@ -13,7 +13,8 @@ import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quar
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
-import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
+import { officialSacks } from '../../../sports/ncaaf/ncaafStarters.js';
+import { espnGameClause, placeHurt, getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
@@ -107,7 +108,10 @@ function playerLines(box, teamId, positions = {}, starters = null) {
 
 async function fullGame(g, season, tonight) {
   const box = await getNcaafGameBox(g.id);
-  const opp = await teamInfo(g.them.id);
+  const [opp, mine] = await Promise.all([teamInfo(g.them.id), teamInfo(g.us.id).catch(() => null)]);
+  // Sacks from the school's official box, the stat crew's count, as the live read has them (round 14: ESPN's totals row
+  // had Arizona's six sacks at Washington State as three).
+  const official = mine && opp ? (await officialSacks({ college: mine.college, abbr: mine.abbr }, [{ gameId: g.id, date: g.date, opponent: { college: opp.college, abbr: opp.abbr } }], season).catch(() => new Map())).get(String(g.id)) : null;
   const head = `${etDay(g.date)} · ${vs(g)} ${g.them.name}${g.neutral ? ' at a neutral site' : ''}${g.venue ? ` (${g.venue})` : ''} · ${result(g)}`;
   if (!box || box.unavailable) return `${head}\n  the box score is not on file (${box?.reason || 'ESPN did not answer'})`;
   const us = box.teams.find((t) => t.id === g.us.id), them = box.teams.find((t) => t.id === g.them.id);
@@ -124,9 +128,17 @@ async function fullGame(g, season, tonight) {
   // The play-by-play's count only when it equals the sacks the other side's players are credited with in the box, as the
   // live read does (round 9: Florida's five sacks at Texas read four, a strip-sack typed as a fumble).
   // The other side's team total where ESPN gives one (round 13: the athletes' credits count a shared sack twice).
-  const boxSacks = (id) => { const other = Object.keys(box.defTotals || {}).find((k) => k !== String(id)); const t = other ? Number(box.defTotals[other]?.sacks) : NaN;
-    return Number.isFinite(t) ? t : (box.players || []).filter((p) => p.teamId !== String(id)).reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0); };
+  // ESPN's totals row and its players' credits split in some games (round 14: each was wrong in a different game); a
+  // split with no official box is said, not picked.
+  const boxSacks = (id) => {
+    if (official) return String(id) === String(g.us.id) ? official.taken[0] : official.made[0];
+    const other = Object.keys(box.defTotals || {}).find((k) => k !== String(id)); const t = other ? Number(box.defTotals[other]?.sacks) : NaN;
+    const credits = (box.players || []).filter((p) => p.teamId !== String(id)).reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0);
+    if (Number.isFinite(t) && (box.players || []).some((p) => p.stats?.defensive) && t !== credits) return null;
+    return Number.isFinite(t) ? t : credits; };
   const sackNote = (id) => { const k = box.sacks === null ? null : box.sacks?.[String(id)]; const credited = boxSacks(id);
+    if (credited == null) return ', sacks in it not on file (ESPN\'s team total and its players\' credits differ)';
+    if (official && (k?.n || 0) !== credited) { const yds = String(id) === String(g.us.id) ? official.taken[1] : official.made[1]; return credited ? `, including ${credited} sack${credited === 1 ? '' : 's'} for -${Math.abs(yds)} yards` : ''; }
     if (box.sacks === null) return ', sacks in it not on file';
     if ((box.players || []).some((p) => p.stats?.defensive) && (k?.n || 0) !== credited) return credited ? `, including ${credited} sack${credited === 1 ? '' : 's'} (their yards not on file)` : '';
     return k?.n ? `, including ${k.n} sack${k.n === 1 ? '' : 's'}${k.unknownYards ? ' (their yards not on file)' : ` for ${k.yards} yards`}` : ''; };
@@ -134,6 +146,7 @@ async function fullGame(g, season, tonight) {
   const secs = (v) => { const m = String(v || '').match(/^(\d+):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const possOk = (() => { const a = secs(us?.totals?.possessionTime), b = secs(them?.totals?.possessionTime); return a != null && b != null && ((us?.quarters?.length || 0) > 4 || Math.abs(a + b - 3600) <= 30); })();
   const totals = (t, short) => { const x = t?.totals; if (!x) return `${short} not on file`; return `${short} ${x.totalYards ?? '?'} yards (${x.rushingYards ?? '?'} rushing on ${x.rushingAttempts ?? '?'}${sackNote(t.id)}, ${x.netPassingYards ?? '?'} passing), ${x.firstDowns ?? '?'} first downs, third down ${x.thirdDownEff ?? '?'}, fourth down ${x.fourthDownEff ?? '?'}, ${x.turnovers ?? '?'} turnovers, penalties ${x.totalPenaltiesYards ?? '?'}, possession ${possOk ? x.possessionTime : "not on file (the source's two times do not add up to 60 minutes)"}`; };
+  await placeHurt(box, [g.us.id, g.them.id]);
   const lines = [head,
     `  by quarter: ${q(us, g.us.short)} · ${q(them, g.them.short)}`,
     `  scoring: ${scores.length ? scores.join('; ') : 'not on file'}`,
@@ -163,10 +176,7 @@ async function fullGame(g, season, tonight) {
   const priorFacts = await Promise.all(prior.map(async (x) => {
     const b = await getNcaafGameBox(x.id).catch(() => null);
     if (!b || b.unavailable) return '';
-    const mine = b.teams.find((t) => t.id === x.us.id)?.totals, theirs = b.teams.find((t) => t.id !== x.us.id)?.totals;
-    const qb = (b.players || []).filter((p) => p.teamId === x.us.id && Number(p.stats?.passing?.passingAttempts) >= 5).sort((a2, b2) => Number(b2.stats.passing.passingAttempts) - Number(a2.stats.passing.passingAttempts)).map((p) => p.name).join(' and ');
-    const units = mine && theirs ? `ran ${mine.rushingYards ?? '?'} on ${mine.rushingAttempts ?? '?'}, passed for ${mine.netPassingYards ?? '?'}; allowed ${theirs.rushingYards ?? '?'} rushing, ${theirs.netPassingYards ?? '?'} passing` : '';
-    return [qb ? `QB ${qb}` : null, units || null].filter(Boolean).join('; ');
+    return espnGameClause(b, x.us.id) || '';
   }));
   lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x, k) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
   return lines.join('\n');

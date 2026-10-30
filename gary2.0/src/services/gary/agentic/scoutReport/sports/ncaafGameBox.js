@@ -128,8 +128,14 @@ export function gameBoxFromSummary(summary, eventId) {
     // BYU 8 just before half read "result not on file").
     const lastReal = String([...(d?.plays || [])].reverse().find((p) => !/timeout|end (?:of )?(?:period|quarter|half|game|regulation)/i.test(String(p?.type?.text || '')))?.type?.text || '');
     const fumbleOnKick = given === 'FUMBLE' && /punt|kickoff/i.test(lastReal);
-    const result = (fumbleOnKick ? (/punt/i.test(lastReal) ? 'PUNT' : 'NO RESULT')
-      : given && given !== 'END OF QUARTER' ? given : fromPlay || kneel || (given === 'END OF QUARTER' || d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
+    // A punt whose text says "blocked by" is a blocked punt, and a safety or touchdown on its last play is how it ended
+    // (round 14: Iowa's blocked punt at Minnesota and Boston College's blocked-punt safety read as ordinary punts).
+    const realPlay = [...(d?.plays || [])].reverse().find((p) => !/timeout|end (?:of )?(?:period|quarter|half|game|regulation)/i.test(String(p?.type?.text || '')));
+    const blockedPunt = given === 'PUNT' && /punt[^.]*\bblocked by\b/i.test(String(realPlay?.text || ''));
+    const scoredOn = given === 'PUNT' && /safety/i.test(lastReal) ? (blockedPunt ? 'BLOCKED PUNT SAFETY' : 'SAFETY')
+      : given === 'PUNT' && /touchdown/i.test(lastReal) ? (blockedPunt ? 'BLOCKED PUNT TD' : 'PUNT TD') : null;
+    const result = (scoredOn || (blockedPunt ? 'BLOCKED PUNT' : null) || (fumbleOnKick ? (/punt/i.test(lastReal) ? 'PUNT' : 'NO RESULT')
+      : given && given !== 'END OF QUARTER' ? given : fromPlay || kneel || (given === 'END OF QUARTER' || d?.plays?.length ? 'NO RESULT' : ''))).toUpperCase();
     // Where it began from ESPN's yard line, counted from the home team's goal line (round 8: Buffalo is "BUFF" but its
     // field says "BUF 25", and every Buffalo and Air Force drive read "began in the other team's half"). A start at the
     // 0 is not a place a drive begins: not on file (ESPN gave Wisconsin four "PSU 0" starts).
@@ -214,7 +220,35 @@ export function gameBoxFromSummary(summary, eventId) {
       }
     }
   });
-  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
+  // Half the stat crews log no injuries (round 14: Iowa's Kamari Moulton, out for the season after the second quarter at
+  // Minnesota, read nowhere). Whether this game's crew logged any, and each passer, ball carrier or target with five or
+  // more touches whose last came in the first half while his team played into the 4th quarter, in a game within 21
+  // points after three quarters (a blowout's rest is not an exit; a third-quarter rotation is too common to read).
+  const injuryText = allPlays.some((p) => /\binjur/i.test(String(p?.text || '')));
+  const touches = new Map(), lastPeriod = new Map();
+  const WHO = "#(\\d{1,2})\\s+([A-Z][\\w'-]*\\.\\s?[A-Z][\\w'-]+)";
+  allPlays.forEach((p, i) => {
+    const t = String(p?.text || ''); const team = String(p?.start?.team?.id ?? ''); const period = Number(p?.period?.number) || 0;
+    if (!team || !period || /^(?:Kickoff|Punt|Field Goal|Extra Point|Timeout|End )/i.test(String(p?.type?.text || ''))) return;
+    lastPeriod.set(team, Math.max(lastPeriod.get(team) || 0, period));
+    const hits = [t.match(new RegExp(`${WHO}\\s+(?:rush|run|pass|scramble)`, 'i')), /\bpass/i.test(t) ? t.match(new RegExp(`\\b(?:to|intended for)\\s+${WHO}`)) : null].filter(Boolean);
+    for (const m of hits) {
+      const who = m[2].replace(/\.\s?/, '.'); const k = `${team}|${m[1]}|${who}`;
+      const x = touches.get(k) || { who, jersey: m[1], teamId: team, n: 0 };
+      touches.set(k, { ...x, n: x.n + 1, period, clock: p?.clock?.displayValue || null, at: i });
+    }
+  });
+  const q3 = (scoring || []).filter((x) => Number(x.period) <= 3).at(-1);
+  const close = !q3 || Math.abs(Number(q3.home) - Number(q3.away)) <= 21;
+  // Only when the plays account for nearly all his touches in the box: crews name players in more than one form, and a
+  // count that misses most of them would date his last touch too early (round 14 build: a QB with 31 passes read 7).
+  const boxTouches = (x) => { const [i, l] = x.who.split('.'); const p = players.find((q) => q.teamId === x.teamId && String(q.jersey ?? '') === x.jersey && String(q.last || '').toLowerCase().startsWith(String(l || '').split(' ')[0].toLowerCase()) && (q.first || '')[0] === i?.[0]);
+    if (!p) return null; const st = (c, k) => Number(p.stats?.[c]?.[k]) || 0; return st('passing', 'passingAttempts') + st('rushing', 'rushingAttempts') + st('receiving', 'receptions'); };
+  const earlyExits = !allPlays.length || !close ? [] : [...touches.values()]
+    .filter((x) => { const b = boxTouches(x); return b != null && x.n >= 0.8 * b; })
+    .filter((x) => x.n >= 5 && x.period <= 2 && (lastPeriod.get(x.teamId) || 0) >= 4 && !hurt.some((h) => h.jersey === x.jersey && h.who === x.who))
+    .sort((a, b) => b.n - a.n);
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, injuryText, earlyExits, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
 }
 
 // Who made a 20+ yard play, from ESPN's words in either form (round 9: 798 of 812 read "?"): "#12 A.Philo pass complete
@@ -243,6 +277,39 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 }
 
 /** ESPN's team totals for one side of a game as the unit lines read them (CFBD's keys; "26/36" as "26-36"), or null. */
+/** A hurt player the box does not place, placed by jersey and name on either team's ESPN roster (round 13; both
+ * systems, round 14). Sets `teamId` on the box's hurt rows it can place. */
+export async function placeHurt(box, teamIds) {
+  if (!(box?.hurt || []).some((h) => !h.teamId)) return;
+  const rosters = await Promise.all(teamIds.map((id) => getNcaafRosterPositions(id).catch(() => null)));
+  for (const h of box.hurt.filter((x) => !x.teamId)) {
+    const [init, last] = String(h.who).split('.'); const want = `${init?.[0] || ''}|${String(last || '').split(' ')[0].toLowerCase()}`;
+    const k = rosters.findIndex((ro) => (ro?.byJersey?.[h.jersey] || []).some((x) => x === want || x.startsWith(want)));
+    if (k >= 0) h.teamId = String(teamIds[k]);
+  }
+}
+
+/** One team's game in a clause, from ESPN's box: who threw most, what it ran (sacks split out, as the team's own lines
+ * count them) and passed for, its sacks taken, and what it allowed with its sacks made (round 13; shared by the live
+ * read's opponent lists and the second system's coming-in lines, round 14). Null when the box has no team totals. */
+export function espnGameClause(box, teamId) {
+  if (!box || box.unavailable) return null;
+  const me = String(teamId), them = (box.teams || []).find((t) => t.id && t.id !== me)?.id;
+  const own = (box.teams || []).find((t) => t.id === me)?.totals, opp = them ? (box.teams || []).find((t) => t.id === them)?.totals : null;
+  if (!own || !opp) return null;
+  const sk = (id) => box.sacks?.[String(id)];
+  const runs = (t, x) => { const att = Number(t.rushingAttempts), yds = Number(t.rushingYards);
+    if (!x?.n || x.unknownYards || !Number.isFinite(att) || !Number.isFinite(yds)) return { yds: t.rushingYards ?? '?', att: t.rushingAttempts ?? '?', split: !x?.n };
+    return { yds: yds - x.yards, att: att - x.n, split: true }; };
+  const qb = (box.players || []).filter((p) => p.teamId === me && Number(p.stats?.passing?.passingAttempts) >= 5)
+    .sort((x, y) => Number(y.stats.passing.passingAttempts) - Number(x.stats.passing.passingAttempts)).map((p) => p.name).join(' and ');
+  const mineR = runs(own, sk(me)), theirR = runs(opp, sk(them));
+  // Sacks the play-by-play could not size stay inside the rushing, and say so.
+  const inside = (r, x) => (!r.split && x?.n ? ` (including ${x.n} sack${x.n === 1 ? '' : 's'})` : '');
+  return `${qb ? `QB ${qb}; ` : ''}ran ${mineR.yds} on ${mineR.att}${inside(mineR, sk(me))}, passed for ${own.netPassingYards ?? '?'}${sk(me)?.n ? `, sacked ${sk(me).n}` : ''}; `
+    + `allowed ${theirR.yds} rushing${inside(theirR, sk(them))}, ${opp.netPassingYards ?? '?'} passing${sk(them)?.n ? `, ${sk(them).n} sack${sk(them).n === 1 ? '' : 's'} made` : ''}`;
+}
+
 export function espnUnitTotals(box, teamId) {
   const t = (box?.teams || []).find((x) => x.id === String(teamId))?.totals;
   if (!t?.completionAttempts) return null;
@@ -289,7 +356,9 @@ export function ncaafFlowLines(box, teamId, names = {}) {
     `scoring: ${box.scoring.length ? box.scoring.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${p.text} (${score(p)})`).join(' · ') : 'none'}`,
     `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · ${possession} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
-    ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`] : []),
+    ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`]
+      : box.injuryText === false && (box.drives || []).length ? ['hurt during the game: not on file (this game\'s play-by-play logs no injuries)'] : []),
+    ...(box.earlyExits?.length ? [`5+ touches, none after the first half while his team played on (play-by-play; why not said): ${box.earlyExits.map((x) => `${name(x.teamId)} ${x.who} (#${x.jersey}, ${x.n} touches, last Q${x.period}${x.clock ? ` ${x.clock}` : ''})`).join(', ')}`] : []),
   ];
 }
 
@@ -297,7 +366,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
-  return cachedResearch(`espn_cfb_box_v21:${eventId}`, async () => {
+  return cachedResearch(`espn_cfb_box_v24:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -459,7 +528,7 @@ export function kindsInWords(kinds) {
 export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 'BLOCKED FG': 'blocked FG', PUNT: 'punt', 'BLOCKED PUNT': 'blocked punt',
   INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', SF: 'safety', 'INT TD': 'interception returned for a TD',
   'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD', 'PUNT TD': 'punt returned for a TD',
-  'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
+  'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED PUNT SAFETY': 'blocked punt for a safety', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
   'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file' };
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
 /** A team's kickoff and punt returns in one game from the box (round 10: the return game was in neither read): "returns:

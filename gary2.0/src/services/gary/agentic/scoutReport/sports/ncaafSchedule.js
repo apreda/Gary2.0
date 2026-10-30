@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, ncaafRedZone, ncaafReturns } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey, officialSacks } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -423,9 +423,11 @@ async function playerGames(sides, boxes) {
           return `${k} ${mine.filter((f) => f.made).length}-of-${mine.length} (${split(mine)})`;
         }).join(', ') : null;
         // Punting from the box's punting group, as the second system and the NFL read have it (round 13).
-        const punts = (box.players || []).filter((p) => p.teamId === String(teamId) && Number(p.stats?.punting?.punts) > 0)
+        // ESPN's "Team" row is no punter (round 14: a blocked punt read "Team 1 punt for 0 yds"); blocked punts from the drives.
+        const blocked = (box.drives || []).filter((x) => x.teamId === String(teamId) && /^BLOCKED PUNT/.test(String(x.result || ''))).length;
+        const punts = (box.players || []).filter((p) => p.teamId === String(teamId) && Number(p.stats?.punting?.punts) > 0 && !/^\s*team\s*$/i.test(String(p.name || '')))
           .map((p) => `${p.name} ${p.stats.punting.punts} punt${Number(p.stats.punting.punts) === 1 ? '' : 's'} for ${p.stats.punting.puntYards ?? '?'} yds, ${p.stats.punting.puntsInside20 || 0} inside the 20`).join('; ');
-        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks'}${punts ? `; punting: ${punts}` : '; no punts'}`;
+        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks'}${punts ? `; punting: ${punts}${blocked ? `; ${blocked} blocked` : ''}` : blocked ? `; punting: ${blocked} blocked` : '; no punts'}`;
       };
       // How the drives ended, and the ones that began in the other team's half with how they ended.
       const driveLine = (teamId) => {
@@ -444,7 +446,9 @@ async function playerGames(sides, boxes) {
       if (oppId) {
         const passers = playerGameRows(box, oppId, r.gameId, positions).filter((x) => Number(x.passing_attempts) >= 5)
           .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
-        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds`).join('; '));
+        // With his runs, sacks inside them as college counts them (round 14: Louisiana's Lunch Winfield ran for 91 of the
+        // 146 USC allowed, and the read gave his passing only).
+        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds${Number(x.rushing_attempts) ? `; ${x.rushing_attempts} runs for ${x.rushing_yards} (sacks included)` : ''}`).join('; '));
       }
       if (oppId) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
@@ -453,15 +457,7 @@ async function playerGames(sides, boxes) {
         const ret = (id) => ncaafReturns(box, id);
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}${ret(found.teamId) ? `\n      returns: ${ret(found.teamId)} · opponent: ${ret(oppId)}` : ''}`);
         // The game's flow (ncaafFlowLines; Oct 29 2026, founder: who got ahead, how and when).
-        // A hurt player the box does not place, placed by jersey and name on either team's ESPN roster (round 13).
-        if ((box.hurt || []).some((h) => !h.teamId)) {
-          const rosters = await Promise.all([found.teamId, oppId].map((id) => getNcaafRosterPositions(id).catch(() => null)));
-          for (const h of box.hurt.filter((x) => !x.teamId)) {
-            const [init, last] = String(h.who).split('.'); const want = `${init?.[0] || ''}|${String(last || '').split(' ')[0].toLowerCase()}`;
-            const k = rosters.findIndex((ro) => (ro?.byJersey?.[h.jersey] || []).some((x) => x === want || x.startsWith(want)));
-            if (k >= 0) h.teamId = String([found.teamId, oppId][k]);
-          }
-        }
+        await placeHurt(box, [found.teamId, oppId]);
         const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: s.team, [oppId]: r.opponent || 'opponent' });
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
@@ -798,7 +794,10 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const label = await opponentContext({ teams, resultLists: sides.map((s) => s.results), season, cutoff: game?.commence_time, leagueGames, unitsOf,
     known: new Map([[Number(home.id), record(sides[0].results)], [Number(away.id), record(sides[1].results)]]) });
 
-  const weeks = [...new Set(sides.flatMap((s) => s.results.map((r) => Number(r.week))).filter((w) => Number.isFinite(w) && w > 0 && w < 900))];
+  // Through the latest week the league has played, not only these two teams' (round 14: with both off last week, the
+  // opponents' games this week read "units not on file").
+  const leagueWeeks = (Array.isArray(leagueGames) ? leagueGames : leagueGames?.rows || leagueGames?.games || []).filter((g) => g?.startDate && (!game?.commence_time || Date.parse(g.startDate) < Date.parse(game.commence_time)) && String(g.seasonType || 'regular') === 'regular').map((g) => Number(g.week));
+  const weeks = [...new Set([...sides.flatMap((s) => s.results.map((r) => Number(r.week))), ...(leagueWeeks.length ? [Math.max(...leagueWeeks)] : [])].filter((w) => Number.isFinite(w) && w > 0 && w < 900))];
   const noBoxes = { find: () => null, lines: () => ['      units: the per-game unit lines are not available for this game'] };
   const [weather, boxes] = await Promise.all([weatherLine(site, game), teamBoxBuilder(season, weeks).catch(() => noBoxes)]);
   // The opponent's game against this team is the row itself, with its own unit lines (round 13: CFBD's numbers for that
@@ -815,15 +814,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   unitsOf.fn = (teamName, r) => {
     if (ourNames.has(String(r.opponent || '').toLowerCase())) return null;
     const f = boxes.find(teamName, r); const b = f?.game?.id != null ? wanted.get(String(f.game.id)) : null;
-    if (!b || b.unavailable) return 'units not on file';
-    const me = String(f.teamId), them = (b.teams || []).find((t) => t.id && t.id !== me)?.id;
-    const own = (b.teams || []).find((t) => t.id === me)?.totals, opp = them ? (b.teams || []).find((t) => t.id === them)?.totals : null;
-    if (!own || !opp) return 'units not on file';
-    const runs = (t, sk) => { const att = Number(t.rushingAttempts), yds = Number(t.rushingYards); if (!sk?.n || sk.unknownYards || !Number.isFinite(att) || !Number.isFinite(yds)) return `${t.rushingYards ?? '?'} on ${t.rushingAttempts ?? '?'}`; return `${yds - sk.yards} on ${att - sk.n}`; };
-    const sk = (id) => b.sacks?.[String(id)];
-    const qb = (b.players || []).filter((p) => p.teamId === me && Number(p.stats?.passing?.passingAttempts) >= 5).sort((x, y) => Number(y.stats.passing.passingAttempts) - Number(x.stats.passing.passingAttempts)).map((p) => p.name).join(' and ');
-    const sacked = (x) => (x?.n ? `, sacked ${x.n}` : '');
-    return `${qb ? `QB ${qb}; ` : ''}ran ${runs(own, sk(me))}, passed for ${own.netPassingYards ?? '?'}${sacked(sk(me))}; allowed ${runs(opp, sk(them)).replace(/ on .*/, '')} rushing, ${opp.netPassingYards ?? '?'} passing${sk(them)?.n ? `, ${sk(them).n} sacks made` : ''}`;
+    return (f && espnGameClause(b, f.teamId)) || 'units not on file';
   };
   // The player lines and the scoring plays, from ESPN's box of each game the team box found.
   const played = await playerGames(sides, boxes).catch((e) => {
