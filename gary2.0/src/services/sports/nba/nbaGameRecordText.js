@@ -71,9 +71,15 @@ function flowText(rec, us) {
 // Technicals, flagrants and ejections, as the full game text says them (round 11: the live log never said Tari Eason was
 // ejected in the first quarter of a game he played 3 minutes in).
 const incidentsText = (rec) => (rec.incidents?.length ? `technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}` : null);
+// Players with 15+ minutes who last left the floor before the 4th quarter and never came back (round 12: Cooper Flagg's
+// 17 minutes, out for good before half, read as an ordinary night).
+const goneEarly = (rec) => {
+  const list = (rec.players || []).filter((p) => p.min >= 15 && rec.lastOff?.[p.name] && rec.lastOff[p.name].clock !== 'end' && rec.lastOff[p.name].period <= 3);
+  return list.length ? `played 15+ minutes and did not return after the 3rd quarter: ${list.map((p) => `${rec[p.side].short} ${p.name} (${Math.round(p.min)} min; last left in the ${periodName(rec.lastOff[p.name].period)} with ${rec.lastOff[p.name].clock} left)`).join(', ')}` : null;
+};
 export function flowFacts(rec, teamId) {
   const flow = flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
-  return incidentsText(rec) ? `${flow}; ${incidentsText(rec)}` : flow;
+  return [flow, incidentsText(rec), goneEarly(rec)].filter(Boolean).join('; ');
 }
 
 /** An older game's people and boxes from one team's side, for the live log (loop 3, Oct 29 2026: its ten older games

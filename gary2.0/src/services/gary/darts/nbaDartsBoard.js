@@ -95,6 +95,16 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const lines = [head.join(' · ')];
     if (pricesFailed) lines.push("  players' prices not on file (the props feed did not load)");
     lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report)}`).join(' · ')}`);
+    // Each team's last five games with their scores, so a sheet is read against tonight's opponent too (round 12: NBA
+    // darts carried nothing about the other team).
+    for (const t of [away, home]) {
+      const recs = recordsOf.get(String(t.id));
+      if (!recs) { lines.push(`  ${t.abbreviation} games: not on file (the game records did not load)`); continue; }
+      const last = recs.slice(0, 5).map((r) => { const side = String(r.record.home?.id) === String(t.id) ? 'home' : 'away', other = side === 'home' ? 'away' : 'home';
+        const a = r.record.final?.[side], b = r.record.final?.[other], ot = (r.record.periods?.length || 0) > 4;
+        return `${a > b ? 'W' : 'L'} ${a}-${b}${ot ? ' (OT)' : ''} ${side === 'home' ? 'vs' : '@'} ${r.record[other]?.abbr || r.record[other]?.name || '?'}`; });
+      lines.push(`  ${t.abbreviation} last ${last.length} games, newest first: ${last.join(', ') || 'none yet'}`);
+    }
     // The report rides in each game's block, the part of the board Gary's ask carries (Oct 29 2026 hunt: it sat only in
     // board.text, which no ask reads).
     frames.push({ gameId: String(g.id), matchup, homeFull: home.full_name, awayFull: away.full_name, commence: g.datetime, block: lines.join('\n') });
@@ -183,12 +193,15 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     // Fouls that cut his minutes (round 9: Giannis's 25 minutes on Oct 24 were six fouls).
     const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
+    // A teammate who started and played under 15 minutes (round 12: Jalen Duren's 10-minute exit read as a full game around
+    // him), the rule the live read uses.
+    const shortStarters = (x.rec.players || []).filter((p) => p.side === x.side && p.starter && p.min > 0 && p.min < 15 && String(p.id) !== String(c.playerId)).map((p) => `${p.name} started, played ${Math.round(p.min)} min`);
     // The attempts behind the stat (round 11: "3" threes read the same on 3 of 10 as on 3 of 4).
     const fields = Array.isArray(stat) ? stat : [stat];
     const m = x.me, shots = m.fga == null ? null
       : fields.some((f) => f === 'pts' || f === 'pra') ? `${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
         : fields.includes('fg3m') ? `${m.fg3m}-${m.fg3a} 3PT` : null;
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}`;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
   });
 }
 
@@ -205,7 +218,8 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     const lines = gameLines(c, board.recordsOf?.get(c.teamId), m.stat, board.abbrById, board.oppRecord);
     // His team's last three games, a game he missed said so (round 9: Naji Marshall's "last 3 games" reached back past the
     // two he had just missed).
-    const lastThree = (board.recordsOf?.get(c.teamId) || []).slice(0, 3).map((r) => (r.record.players || []).find((p) => String(p.id) === String(c.playerId)));
+    const teamRecs = board.recordsOf?.get(c.teamId);
+    const lastThree = (teamRecs || []).slice(0, 3).map((r) => (r.record.players || []).find((p) => String(p.id) === String(c.playerId)));
     if (!lines) sheet.push("    This season's games are not on file (the game records did not load).");
     else if (!lines.length) sheet.push('    No games yet this season.');
     else {
@@ -215,7 +229,8 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     // theirs (Oct 27 2026 darts bug audit: the NBA line was a name and a price, so a full slate's first pick was made
     // from names alone).
     const recent = lastThree.map((p) => (p?.min > 0 ? one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat]) : 'did not play'));
-    const line = `${head} · ${recent.length ? `his team's last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
+    // A failed load is not a team with no games (round 12).
+    const line = `${head} · ${!teamRecs ? "this season's games not on file (the game records did not load)" : recent.length ? `his team's last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
     menu.push({ id, gameId: c.gameId, line, sheet: sheet.join('\n') });
   }
   // The books' order of who matters most: the higher line first.

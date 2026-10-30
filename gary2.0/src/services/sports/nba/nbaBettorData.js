@@ -11,8 +11,8 @@ import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../.
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
-import { recordsById } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, olderGameFacts } from './nbaGameRecordText.js';
+import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
+import { flowFacts, olderGameFacts, summariesByTeam } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -377,6 +377,17 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // Each game's flow from its stored record (Oct 29 2026, founder: the game as it went, not only how it ended).
   const flows = new Map(((await recordsById('NBA', games.slice(0, GAMES_SHOWN).map((g) => g.id)).catch(() => [])) || [])
     .map((r) => [String(r.game_id), r.record]));
+  // Each opponent's other games with their scores, newest first, as the NFL and college logs give them (round 12: "(1-4
+  // now)" alone; points allowed could not be read against who scored them).
+  const asOfDay = new Date(before).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const byTeamSummaries = await seasonSummaries('NBA', season, asOfDay).then(summariesByTeam).catch(() => null);
+  const otherGames = (teamId, gameId) => {
+    if (!byTeamSummaries) return null;
+    const list = (byTeamSummaries.get(String(teamId)) || []).filter((r) => String(r.game_id) !== String(gameId)).slice().reverse();
+    return list.map((r) => { const mine = String(r.summary.home.id) === String(teamId) ? 'home' : 'away', theirs = mine === 'home' ? 'away' : 'home';
+      const a = r.summary[mine].score, b = r.summary[theirs].score;
+      return `${a > b ? 'W' : 'L'} ${a}-${b}${r.summary.ot ? ' (OT)' : ''} ${mine === 'home' ? 'vs' : '@'} ${r.summary[theirs].abbr || r.summary[theirs].name}`; }).join(', ');
+  };
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
@@ -384,7 +395,8 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     // The opponent's record now, and when this game is the only one it has played (Oct 23 2026 data audit: "0-1 now"
     // read as a weak team when the one loss was this game).
     const o = league[opp];
-    const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : ''})` : '';
+    const others = otherGames(home ? g.visitor_team?.id : g.home_team?.id, g.id);
+    const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : ''})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;

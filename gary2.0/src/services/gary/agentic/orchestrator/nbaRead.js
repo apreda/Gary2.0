@@ -624,7 +624,16 @@ function withoutOrphans(lines, drop) {
         }
       }
       if (ANAPHOR.test(lines[i]) && !listy(i)) { const p = prevIdx(i); if (p >= 0 && drop[p] && !heading(p)) set(i); }
-      if (heading(i)) { let k = i + 1, kept = false; while (k < lines.length && !heading(k)) { if (!blank(k) && !drop[k]) { kept = true; break; } k += 1; } if (!kept) set(i); }
+      // A bold heading straight over another (a team's name over its "Current storylines") owns everything to the next
+      // such parent heading, its own subheadings included (round 12: the Kings' storylines read under the Pelicans' name
+      // when the team heading went for having no line before its first subheading).
+      if (heading(i)) {
+        const parentAt = (k) => heading(k) && nextIdx(k) >= 0 && heading(nextIdx(k));
+        const parent = parentAt(i);
+        let k = i + 1, kept = false;
+        while (k < lines.length && !(parent ? parentAt(k) : heading(k))) { if (!blank(k) && !drop[k] && !heading(k)) { kept = true; break; } k += 1; }
+        if (!kept) set(i);
+      }
     }
   }
   return drop;
