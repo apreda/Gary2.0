@@ -100,9 +100,16 @@ export function gameBoxFromSummary(summary, eventId) {
   // only plays were penalties with no snap is not a possession.
   const LAST_PLAY = [[/blocked punt/i, 'BLOCKED PUNT'], [/punt/i, 'PUNT'], [/blocked field goal/i, 'BLOCKED FG'], [/field goal (?:good|made)/i, 'FG'],
     [/field goal|missed/i, 'MISSED FG'], [/interception/i, 'INT'], [/fumble/i, 'FUMBLE'], [/safety/i, 'SAFETY'], [/touchdown/i, 'TD'], [/end of (?:half|period|2nd)/i, 'END OF HALF'], [/end of game/i, 'END OF GAME']];
+  // A snap is a play the drive's own team ran from scrimmage: not a timeout, a period's end, a kick, a punt, a foul alone or
+  // a try after a TD (round 10: the other team's timeouts, measured from its side, counted as trips inside the 20).
+  const NOT_SNAP = /timeout|end (?:of )?(?:period|quarter|half|game|regulation)|kickoff|punt|penalty|extra point|two.?point|2pt|coin toss/i;
+  const snapsOf = (d) => (d?.plays || []).filter((p) => !NOT_SNAP.test(String(p?.type?.text || ''))
+    && (p?.start?.team?.id == null || String(p.start.team.id) === String(d?.team?.id ?? '')));
   const drives = (summary?.drives?.previous || []).filter((d) => {
     const plays = d?.plays || [];
-    return d?.result || d?.displayResult || !plays.length || !plays.every((p) => /penalty/i.test(String(p?.type?.text || '')));
+    // A kick the other team fumbled, or a foul alone, is not a possession of the team ESPN names (round 10: Charleston
+    // Southern's kickoff fumble read as a Clemson drive ending in a lost fumble).
+    return !plays.length || snapsOf(d).length > 0;
   }).map((d) => {
     const at = String(d?.start?.text || '').match(/^([A-Za-z&]+)\s+(\d+)$/);
     const lastPlay = (d?.plays || []).at(-1), lastType = String(lastPlay?.type?.text || '');
@@ -113,16 +120,25 @@ export function gameBoxFromSummary(summary, eventId) {
     // drives at Wisconsin, a punt among them, read "ended a half").
     const given = String(d?.result || d?.displayResult || '').toUpperCase();
     const fromPlay = LAST_PLAY.find(([re]) => re.test(lastType))?.[1];
-    const result = (given && given !== 'END OF QUARTER' ? given : fromPlay || kneel || (given === 'END OF QUARTER' || d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
+    // A fumble ESPN hangs on a punt or kickoff row was the other team's (a muff), or on a game's-end row is no result.
+    const fumbleOnKick = given === 'FUMBLE' && /punt|kickoff|end (?:of )?(?:game|period|half|regulation)/i.test(lastType);
+    const result = (fumbleOnKick ? (/punt/i.test(lastType) ? 'PUNT' : 'NO RESULT')
+      : given && given !== 'END OF QUARTER' ? given : fromPlay || kneel || (given === 'END OF QUARTER' || d?.plays?.length ? 'NO RESULT' : '')).toUpperCase();
     // Where it began from ESPN's yard line, counted from the home team's goal line (round 8: Buffalo is "BUFF" but its
     // field says "BUF 25", and every Buffalo and Air Force drive read "began in the other team's half"). A start at the
     // 0 is not a place a drive begins: not on file (ESPN gave Wisconsin four "PSU 0" starts).
     const yl = Number(d?.start?.yardLine), home = teams.find((t) => t.homeAway === 'home')?.id;
     const own = Number.isFinite(yl) && yl > 0 && yl < 100 ? (String(d?.team?.id ?? '') === home ? yl : 100 - yl) : null;
-    const oppHalf = own != null ? own > 50 : Boolean(at && Number(at[2]) > 0 && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50);
-    // Inside the other team's 20 on any snap of the drive (round 9: the college reads had no red-zone trips; the NFL's do).
-    const inside20 = (d?.plays || []).some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20 && !/kickoff|punt|penalty/i.test(String(p?.type?.text || '')); });
-    return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20 };
+    // Where its first snap was, when it has one: a kickoff moved by a foul leaves ESPN's drive start at the kicking team's
+    // 35 (round 10: Texas State's drive from its own 38 read "began in the other team's half").
+    const snaps = snapsOf(d), first = Number(snaps[0]?.start?.yardsToEndzone);
+    const oppHalf = Number.isFinite(first) && first > 0 && first < 100 ? first < 50
+      : own != null ? own > 50 : Boolean(at && Number(at[2]) > 0 && at[1] !== d?.team?.abbreviation && Number(at[2]) < 50);
+    // Inside the other team's 20 on any of its snaps (round 9: the college reads had no red-zone trips; the NFL's do).
+    const inside20 = snaps.some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20; });
+    // An overtime possession starts at the 25 by rule (round 10: Miami's two overtime TDs read as short fields).
+    const ot = Number(d?.start?.period?.number ?? d?.plays?.[0]?.period?.number) > 4;
+    return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20, ot };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
   // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
@@ -134,11 +150,13 @@ export function gameBoxFromSummary(summary, eventId) {
     for (const play of drive?.plays || []) {
       // A sack whatever ESPN types the play: strip-sacks are "Fumble Recovery (Own)", some are "Penalty" with the foul
       // declined (round 9: Florida's five sacks of Arch Manning read four). A play wiped out by an accepted foul is none.
-      const type = String(play?.type?.text || '').trim(), said = String(play?.text || '');
+      // The final ruling only: a sack that replay overturned is told after "(Original Play:" (round 10: Pitt at Boston
+      // College counted one).
+      const type = String(play?.type?.text || '').trim(), said = String(play?.text || '').split(/\(Original Play/i)[0];
       const isSack = /^sack$/i.test(type) || (/\bsacked\b/i.test(said) && !/no play/i.test(said) && (!/^penalty$/i.test(type) || /declined/i.test(said)));
       if (!sacks || !isSack) continue;
       const teamId = String(play?.start?.team?.id ?? drive?.team?.id ?? '');
-      const m = String(play?.text || '').match(/loss of (\d+) yards?/i);
+      const m = said.match(/loss of (\d+) yards?/i) || said.match(/sacked by [^,]*? for -(\d+) y(?:ar)?ds?/i);
       if (!m) { sacks = null; continue; }
       const s = sacks[teamId] || (sacks[teamId] = { n: 0, yards: 0 });
       s.n += 1; s.yards -= Number(m[1]);
@@ -225,8 +243,8 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 /** One final game's box (cached); { unavailable, reason } when ESPN does not answer or the game is not final. */
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
-  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns.
-  return cachedResearch(`espn_cfb_box_v16:${eventId}`, async () => {
+  // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
+  return cachedResearch(`espn_cfb_box_v17:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -389,6 +407,20 @@ export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 
   'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
   'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file' };
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
+/** A team's kickoff and punt returns in one game from the box (round 10: the return game was in neither read): "returns:
+ * 3 kickoff returns for 71 (long 38), 2 punt returns for 45 (long 31, 1 TD)". Null when the box has no return groups. */
+export function ncaafReturns(box, teamId) {
+  const mine = (box?.players || []).filter((p) => p.teamId === String(teamId));
+  if (!(box?.players || []).some((p) => p.stats?.kickReturns || p.stats?.puntReturns)) return null;
+  const sum = (group, k) => mine.reduce((a, p) => a + (Number(p.stats?.[group]?.[k]) || 0), 0);
+  const long = (group, k) => Math.max(...mine.filter((p) => p.stats?.[group]).map((p) => Number(p.stats[group][k]) || 0));
+  const one = (group, n, yds, lg, td, word) => { const c = sum(group, n); if (!c) return null; const t = sum(group, td);
+    return `${c} ${word} return${c === 1 ? '' : 's'} for ${sum(group, yds)} (long ${long(group, lg)}${t ? `, ${t} TD` : ''})`; };
+  const parts = [one('kickReturns', 'kickReturns', 'kickReturnYards', 'longKickReturn', 'kickReturnTouchdowns', 'kickoff'),
+    one('puntReturns', 'puntReturns', 'puntReturnYards', 'longPuntReturn', 'puntReturnTouchdowns', 'punt')].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'no returns';
+}
+
 /** A team's red-zone trips in one game and how many ended in a touchdown (round 9, Oct 29 2026: the college reads had
  * none; the NFL's drive line does). Null when the drives carry no snap positions (an older cached box). */
 export function ncaafRedZone(drives) {

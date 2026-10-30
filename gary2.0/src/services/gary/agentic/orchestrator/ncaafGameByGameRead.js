@@ -13,7 +13,7 @@ import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quar
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { findEspnCollegeEvent } from '../../../providers/espnCollegeService.js';
 import { ncaafSeason } from '../../../../utils/dateUtils.js';
-import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone } from '../scoutReport/sports/ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, ncaafDriveTally, ncaafFlowLines, ncaafRedZone, ncaafReturns } from '../scoutReport/sports/ncaafGameBox.js';
 import { teamStarters, startersAmong } from '../../../sports/ncaaf/ncaafStarters.js';
 
 export const NCAAF_WINDOW = 6;
@@ -114,7 +114,11 @@ async function fullGame(g, season, tonight) {
   const q = (t, name) => `${name} ${!t?.quarters?.length ? 'not on file' : `${t.quarters.slice(0, 4).join('-')}${t.quarters.length > 4 ? `, overtime ${t.quarters.slice(4).join('-')}` : ''}`}`;
   // Overtime has no clock (Oct 29 2026 hunt: "5th 0:00").
   const scores = (box.scoring || []).map((p) => `${p.period ? (p.period > 4 ? `${ord(p.period - 4)} overtime` : `${ord(p.period)}${p.clock ? ` ${p.clock}` : ''}`) : ''} ${p.teamId === g.us.id ? g.us.short : p.teamId === g.them.id ? g.them.short : ''}: ${p.text} (${g.us.short} ${g.home ? p.home : p.away}, ${g.them.short} ${g.home ? p.away : p.home})`.trim());
-  const drives = (id, short) => { const ds = (box.drives || []).filter((d) => d.teamId === id); if (!ds.length) return `${short} not on file`; const rz = ncaafRedZone(ds); return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})${rz ? `, ${rz}` : ''}`; };
+  const drives = (id, short) => { const all = (box.drives || []).filter((d) => d.teamId === id); if (!all.length) return `${short} not on file`;
+    // Overtime possessions apart, from the 25 by rule (round 10).
+    const ds = all.filter((d) => !d.ot), ot = all.filter((d) => d.ot); const rz = ncaafRedZone(ds);
+    return `${short} ${ds.length} (${ncaafDriveTally(ds.map((d) => d.result || 'other'))})${rz ? `, ${rz}` : ''}${ot.length ? `; ${ot.length} overtime possession${ot.length === 1 ? '' : 's'} (${ncaafDriveTally(ot.map((d) => d.result || 'other'))})` : ''}`; };
+  const returns = (id, short) => `${short} ${ncaafReturns(box, id) ?? 'not on file'}`;
   // College counts sacks as runs: the sacks and the yards they lost are said inside the rushing (Oct 29 2026 hunt: Baylor's
   // "122 rushing on 35" held two sacks for -19; the live read already separates them).
   // The play-by-play's count only when it equals the sacks the other side's players are credited with in the box, as the
@@ -131,6 +135,7 @@ async function fullGame(g, season, tonight) {
     // The largest leads, lead changes, hurries and plays of 20+ (ncaafFlowLines; Oct 29 2026, founder).
     ...(ncaafFlowLines(box, g.us.id, { [g.us.id]: g.us.short, [g.them.id]: g.them.short }) || []).slice(1).map((l) => `  ${l}`),
     `  drives: ${drives(g.us.id, g.us.short)} · ${drives(g.them.id, g.them.short)}`,
+    `  returns: ${returns(g.us.id, g.us.short)} · ${returns(g.them.id, g.them.short)}`,
     `  team: ${totals(us, g.us.short)} · ${totals(them, g.them.short)}`];
   const [usInfo, themInfo] = await Promise.all([teamInfo(g.us.id), opp]);
   const lineups = await Promise.all([[usInfo, themInfo], [themInfo, usInfo]].map(([a, b]) => (a?.college
@@ -148,7 +153,7 @@ async function fullGame(g, season, tonight) {
   // The opponent coming in: its division, its record before this game and its games, its record before tonight.
   const oppGames = await finishedGames(g.them.id, season, tonight);
   const prior = oppGames.filter((x) => Date.parse(x.date) < Date.parse(g.date));
-  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
+  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${x.neutral ? ' (neutral site)' : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
   return lines.join('\n');
 }
 

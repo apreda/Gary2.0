@@ -34,7 +34,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, ncaafRedZone } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, ncaafRedZone, ncaafReturns } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -425,10 +425,11 @@ async function playerGames(sides, boxes) {
         if (!ds.length) return null;
         const counted = ds.filter((d) => !/^END OF/.test(d.result));
         const tally = (list) => ncaafDriveTally(list.map((d) => d.result));
-        const short = counted.filter((d) => d.oppHalf);
+        // Overtime possessions start at the 25 by rule: named apart, not short fields (round 10).
+        const ot = counted.filter((d) => d.ot), short = counted.filter((d) => d.oppHalf && !d.ot);
         const ended = ds.length - counted.length;
-        const rz = ncaafRedZone(ds);
-        return `${counted.length} drives (${tally(counted)}${ended ? `; ${ended} more ended a half` : ''})${rz ? `; ${rz}` : ''}${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}`;
+        const rz = ncaafRedZone(ds.filter((d) => !d.ot));
+        return `${counted.length - ot.length} drives (${tally(counted.filter((d) => !d.ot))}${ended ? `; ${ended} more ended a half` : ''})${rz ? `; ${rz}` : ''}${short.length ? `, ${short.length} began in the other team's half (${tally(short)})` : ''}${ot.length ? `; ${ot.length} overtime possession${ot.length === 1 ? '' : 's'} from the 25 (${tally(ot)})` : ''}`;
       };
       // Who played quarterback for the opponent that day, everyone with five or more passes (Oct 24 2026: a win over a
       // team playing its backup is not a win over the team; the NFL's line has said so since Oct 23).
@@ -440,7 +441,9 @@ async function playerGames(sides, boxes) {
       if (oppId) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
         const mineD = driveLine(found.teamId), theirsD = driveLine(oppId);
-        if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}`);
+        // Each side's kickoff and punt returns (round 10: the return game was in neither read).
+        const ret = (id) => ncaafReturns(box, id);
+        if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}${ret(found.teamId) ? `\n      returns: ${ret(found.teamId)} · opponent: ${ret(oppId)}` : ''}`);
         // The game's flow (ncaafFlowLines; Oct 29 2026, founder: who got ahead, how and when).
         const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: s.team, [oppId]: r.opponent || 'opponent' });
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
