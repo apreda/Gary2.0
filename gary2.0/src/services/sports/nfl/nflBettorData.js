@@ -441,9 +441,16 @@ function lineupChanges(d, code, gs) {
     // Who played his spot that game: the same position group, half the snaps or more, not back from his own absence, and
     // either under half but on the field in the missing player's last game or never a regular before (rounds 10-11:
     // Justin Jefferson, back from his own missed game, read as Jordan Addison's fill-in).
-    const inPlace = (id) => { const lastWith = prior.slice().reverse().find((e) => of(e, id) >= 0.5);
+    // A starter of his own up to that game is not a fill-in, and neither is a rotation player at about his usual share:
+    // a fill-in rose by a quarter of the snaps or more (round 15: Will Campbell, the left tackle, 37% the day he was hurt
+    // in Week 5, and DeMario Douglas at his usual 46-65%, read as Vera-Tucker's and Doubs's fill-ins).
+    const inPlace = (id) => { const lw = prior.findLastIndex((e) => of(e, id) >= 0.5); const lastWith = lw >= 0 ? prior[lw] : null;
+      const incumbent = (p) => { const recent = prior.slice(0, lw + 1).filter((e) => onHand(e, p)).slice(-3); return recent.length > 0 && recent.filter((e) => of(e, p) >= 0.6).length >= Math.ceil(recent.length / 2); };
+      // Nor one out hurt that day, on reserve or inactive on the report, back in his own role since (round 16 build: A.J.
+      // Brown, on IR for Weeks 2-5, read as Doubs's fill-in).
+      const outHurt = (e, p) => onReserve(e, p) || (statusAt(e, p)?.status === 'INA' && d.onReport && !healthyScratch(e, p));
       return players.filter((p) => p !== id && GROUP(posOf(p)) === GROUP(posOf(id)) && of(g, p) >= 0.5 && !back.includes(p)
-        && ((lastWith && of(lastWith, p) > 0 && of(lastWith, p) < 0.5) || prior.every((e) => of(e, p) < 0.5)))
+        && (lastWith ? of(lastWith, p) < 0.5 && of(g, p) - of(lastWith, p) >= 0.25 && !incumbent(p) && !outHurt(lastWith, p) : prior.every((e) => of(e, p) < 0.5)))
         .map((p) => `${name.get(p).name} ${Math.round(100 * of(g, p))}%`); };
     const parts = [
       missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}, ${why(g, id)}${inPlace(id).length ? `; at ${GROUP(posOf(id))} that day: ${inPlace(id).join(', ')}` : ''})`)}` : null,
@@ -980,8 +987,13 @@ export async function rosterMoves(d, homeTeam, awayTeam, before) {
     // When an arrival joined: the first week on this team's weekly roster (practice squad aside), or after its last game.
     const joinedWeek = (r) => { const ws = (d.rosterWeekly || []).filter((x) => x.team === code && x.pfr_id && x.pfr_id === r.pfr_player_id && String(x.status).toUpperCase() !== 'DEV').map((x) => n(x.week)); return ws.length ? Math.min(...ws) : null; };
     const everHere = new Set(rows.filter((r) => r.team === code).map((r) => r.pfr_player_id || r.player));
+    // A waiver claim ESPN's roster has not added yet is on the club's weekly roster for the coming week (round 15: the
+    // Dolphins' Christian Haynes, claimed from Seattle on Oct 28, 52-69% of its snaps, was named nowhere).
+    const newest = Math.max(0, ...(d.rosterWeekly || []).filter((x) => x.team === code).map((x) => n(x.week)));
+    const coming = newest > last ? (d.rosterWeekly || []).filter((x) => x.team === code && n(x.week) === newest && ['ACT', 'INA', 'RES'].includes(String(x.status || '').toUpperCase())) : [];
+    const onComing = (r) => coming.some((x) => (x.pfr_id ? x.pfr_id === r.pfr_player_id : qbKey(x.full_name).join('') === qbKey(r.player).join('')));
     const fresh = new Map();
-    for (const r of rows.filter((x) => x.team !== code && share(x) >= 0.25 && joined(now, x) && !everHere.has(x.pfr_player_id || x.player))) {
+    for (const r of rows.filter((x) => x.team !== code && share(x) >= 0.25 && (joined(now, x) || onComing(x)) && !everHere.has(x.pfr_player_id || x.player))) {
       const e = fresh.get(r.player) || { r, weeks: [], shares: [] }; e.weeks.push(n(r.week)); e.shares.push(Math.round(share(r) * 100)); fresh.set(r.player, e);
     }
     const arrived = [...fresh.values()].map(({ r, weeks: ws, shares }) => { const j = joinedWeek(r); return `${r.player} (${r.position}, with ${teamName(r.team)} this season: ${Math.min(...shares)}-${Math.max(...shares)}% of snaps in Wk ${Math.min(...ws)}-${Math.max(...ws)}; ${j ? `on its roster since Wk ${j}` : last ? `joined after its Wk ${last} game` : 'joined since'})`; });
