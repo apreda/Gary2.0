@@ -93,6 +93,15 @@ export function nextListed(byTeam, teamId, date, name) {
   const hit = rows.find((x) => x.status !== 'Available' && !/g league - two-way/i.test(x.reason || '') && samePlayerIn(name, [x.name]) === x.name);
   return hit ? `${hit.status} for the next game, ${etDay(n.game_date)}: ${String(hit.reason || 'reason not on file').replace(/^Injury\/Illness - /, '')}` : null;
 }
+/** When a player last left the floor, from a stored game ("last left in the 2nd quarter with 3:19 left"); null when the
+ * game is not stored, he has no exit on file, or he sat at a quarter's end that the record did not follow to the second. */
+export function lastLeft(rec, name) {
+  const k = rec?.lastOff ? samePlayerIn(name, Object.keys(rec.lastOff)) : null;
+  const o = k ? rec.lastOff[k] : null;
+  if (!o) return null;
+  if (o.clock === 'end') return (rec.wholeMinuteQuarters || []).some((x) => x > o.period) ? null : `on the floor to the end of the ${periodName(o.period)}`;
+  return `last left in the ${periodName(o.period)} with ${clockWord(o.clock)} left`;
+}
 const goneEarly = (rec, byTeam = null) => {
   const followedAfter = (q) => !(rec.wholeMinuteQuarters || []).some((x) => x > q);
   const list = (rec.players || []).filter((p) => { const o = rec.lastOff?.[p.name]; return p.min >= 15 && o && o.period <= 3 && (o.clock !== 'end' || followedAfter(o.period)); });

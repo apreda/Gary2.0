@@ -253,10 +253,10 @@ function teamHead(desk, ratings, team, ts) {
   const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
 }
-async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null, meetingData = null) {
+async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null, meetingData = null, meetingWith = null) {
   const h = teamHead(desk, ratings, team, ts);
   if (!h.head) return h.text;
-  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts, meetingUnder, meetingData }).catch(() => `${h.head}: games not on file.`);
+  const log = await gameByGame(team, ratings[RATINGS_MISSING] ? {} : ratings, asOf, { head: h.head, data: ts, meetingUnder, meetingData, meetingWith }).catch(() => `${h.head}: games not on file.`);
   return h.rated ? log.replace(/^(.*)\n/, `$1\n  ${h.rated}\n`) : log;
 }
 
@@ -391,8 +391,9 @@ export function newsFacts(seasons, names, league = []) {
       if (!box) return;
       const game = ts.games[i]?.id;
       teamRows.push(box.totals, box.opponent.totals);
-      for (const p of box) add(p.name, ts.team, { ...p, game, opp: box.opponent.fullName }, true);
-      for (const p of box.opponent) add(p.name, box.opponent.fullName, { ...p, game, opp: box.fullName || ts.team }, false);
+      const date = ts.games[i]?.date ? String(ts.games[i].date).slice(0, 10) : null;
+      for (const p of box) add(p.name, ts.team, { ...p, game, date, opp: box.opponent.fullName }, true);
+      for (const p of box.opponent) add(p.name, box.opponent.fullName, { ...p, game, date, opp: box.fullName || ts.team }, false);
     });
   }
   for (const [team, list] of names) for (const n of list) add(n, team, null, false);
@@ -525,6 +526,14 @@ function uncheckedNumbers(line, facts) {
     for (const m of sentence.matchAll(STAT)) {
       // "five of nine threes": nine is the attempts, checked with the pair above (round 10).
       if (/\b\S+[- ](?:of|for)[- ]$/i.test(sentence.slice(0, m.index))) continue;
+      // Each number of a list before the stat word is a claim too (round 17: "9, 10, 8 and 11 assists in the four games
+      // since the opener" kept the 8, a 4-assist game, because only the 11 was checked).
+      const listed = sentence.slice(0, m.index).match(new RegExp(`((?:${N},\\s+)+(?:${N},?\\s+)?(?:and|or)\\s+)$`, 'i'));
+      if (listed) {
+        const owner = ownerAt(m.index - listed[0].length);
+        const key = STAT_KEYS.find(([w]) => w === m[2].toLowerCase())[1];
+        if (owner && !owner.team) for (const v of listed[1].match(new RegExp(N, 'gi')) || []) if (!groupOk(facts, owner.members, key, numOf(v), false)) bad.push(`${v} ${m[2]}`);
+      }
       const after = sentence.slice(m.index + m[0].length);
       const perGame = /^\s*(?:per game|a game|a night)\b/i.test(after);
       if (!perGame && PART_OF_GAME.test(after)) continue;
@@ -549,6 +558,12 @@ function uncheckedNumbers(line, facts) {
     // points in New York, while Cleveland's supporting group includes Tyson's shooting").
     const playedToo = groups.some((g) => (g.team ? facts.here.has(sentence.slice(g.at, g.end)) && !facts.zeroWords.includes(sentence.slice(g.at, g.end))
       : g.members.some((names) => names.some((n) => { const t = facts.players.get(n)?.team; return facts.tonight.has(t) && !facts.zero.has(t); }))));
+    // "Has not played this season" against his box rows (round 17: Oscar Tshiebwe, 14 minutes on Oct 28, read "has not
+    // played this season" in the news).
+    for (const m of sentence.matchAll(/\b(?:has not|hasn['’]t|has yet to|is yet to) (?:played|appeared|play|appear)(?: in)?(?: a (?:game|minute))?(?: this season| yet)\b|\byet to make (?:his|her) (?:season |NBA )?debut\b/gi)) {
+      const owner = ownerAt(m.index);
+      if (owner && !owner.team && owner.members.some((names) => names.some((n) => rowsOf(facts, n).some((r) => r.min > 0)))) bad.push(m[0]);
+    }
     // "Fouled out" against the box's fouls, game by game when the sentence names the opponents (Oct 29 2026 hunt: "He
     // fouled out against Minnesota and Charlotte"; he had 5 fouls against Minnesota).
     for (const m of sentence.matchAll(/\bfoul(?:ed|s)? out\b/gi)) {
@@ -556,7 +571,12 @@ function uncheckedNumbers(line, facts) {
       if (!owner || owner.team) continue;
       const named = [...facts.teamWords].filter((w) => new RegExp(`\\b${esc(w)}\\b`).test(sentence.slice(m.index)));
       const vs = (r, w) => plain(String(r.opp || '')).includes(w);
-      const ok = owner.members.every((names) => (named.length
+      // Or game by game on the dates it names (round 17: "Antetokounmpo fouled out on Oct. 21 and Oct. 24"; 5 fouls on Oct. 21).
+      const days = [...sentence.slice(m.index).matchAll(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.? (\d{1,2})\b/g)]
+        .map((d) => { const mo = MONTHS[d[1].toLowerCase()]; return `${mo >= 8 ? nbaSeason() : nbaSeason() + 1}-${String(mo + 1).padStart(2, '0')}-${d[2].padStart(2, '0')}`; });
+      const ok = owner.members.every((names) => (days.length
+        ? days.every((day) => claimOk(facts, names, (r) => r.date === day && r.pf >= 6) || !names.some((n) => rowsOf(facts, n).some((r) => r.date === day)))
+        : named.length
         ? named.every((w) => claimOk(facts, names, (r) => vs(r, w) && r.pf >= 6) || !names.some((n) => rowsOf(facts, n).some((r) => vs(r, w))))
         : claimOk(facts, names, (r) => r.pf >= 6)));
       if (!ok) bad.push(m[0]);
@@ -685,6 +705,10 @@ const SEARCH_NOTE = /\bper search summary\b|\bpage inaccessible\b|\bsearch snipp
 // A season average or per-game rate (round 10: "Avdija leads the team at 22.3 points, 7.0 rebounds and 6.3 assists per
 // game", and two of them wrong); the log carries every game.
 const AVERAGE = /\baverag(?:e|es|ed|ing)\b[^.]*\d|\d+(?:\.\d+)?\s+(?:points|rebounds|assists|steals|blocks|threes|three-pointers|minutes|turnovers)\s+(?:per game|a game|a night|per contest)\b/i;
+// A team's place in its conference or the league (round 17: "ESPN has Charlotte sixth in the East", "Minnesota (3-2) is
+// 8th"); after a few games it is mostly the feed's tie order, and each team's record is in its own heading.
+const ORD = '(?:\\d{1,2}(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|last)';
+const PLACE = new RegExp(`\\b${ORD}(?: place)? in the (?:East|West|Eastern Conference|Western Conference|conference|league|NBA|standings)\\b|\\b(?:is|are|sits?|ranks?|stands?) (?:tied for )?${ORD}(?: place)?\\s*(?:[.,;]|$)`, 'i');
 // A minutes limit or plan is tonight's news, not an average (round 13: "limit them to around 30 minutes a game").
 const MINUTES_PLAN = /\b(?:restrict\w*|limit\w*|cap(?:ped|s)?|minutes (?:restriction|limit)|managed|ramp\w*)\b/i;
 // Month abbreviations do not end a sentence for these tests ("No Oct. 29 update was found").
@@ -693,8 +717,11 @@ const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g
 // reported", "This is the latest item found", "None. The official pregame report remains the final word", "... at the
 // cutoff".
 const SEARCH_NOTE_2 = /^(?:Nothing (?:has been|was|is) reported|No\b[^.]*\b(?:was|were|has been|have been|is|are) reported\b|This (?:is|was) the latest item found|None\.?\s*$|None\.? (?:The official|Nothing)|The official (?:pregame )?(?:injury )?report remains the final word|.*\bat the cutoff\b)/i;
+// And more (round 17): pages that would not open or load, "as of research time", a headline cut off or not tied to this
+// game, "None found", "Nothing from ..." and the search's handling of a page's embedded instruction.
+const SEARCH_NOTE_3 = /\bcould not (?:be )?(?:opened|open|loaded|load|accessed|access|tied|confirmed? from an opened)\b|\bwould(?:n['’]t| not) load\b|\bas of research time\b|\bwas cut off\b|^None found\b|^Nothing (?:new )?from\b|\bembedded instruction\b|\bwas not relied on\b|^As of \d{1,2}:\d{2}\b[^.]*\bno (?:update|news|report)s?\b|^No\b[^.]*\b(?:account|update|report|statement)s? (?:was|were) confirmed\b/i;
 const emptyNews = (raw) => { const s = unAbbrev(raw); return SEARCH_NOTE_2.test(s.replace(/^\W*\*\*[^*]+:\*\*\s*/, '').replace(/^\W+/, '')) || NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
-  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)); };
+  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || SEARCH_NOTE_3.test(s.replace(/^[^\w*]+/, '')) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)) || PLACE.test(s); };
 function withoutEmptyNews(text) {
   // A bullet that leaves takes its deeper-indented sub-bullets with it (round 11: "He had a 14-point, 10-rebound game"
   // was left under Jrue Holiday when Robert Williams III's line went).
@@ -717,6 +744,10 @@ function keepLine(l) {
   }
   const lead = l.match(/^(\s*(?:[-*•]\s+)?(?:\*\*[^*]+\*\*[:.]?\s*)?)/)[1];
   const body = withoutSentences(l.slice(lead.length), emptyNews);
+  // A bold label that is itself the search's note ("**No Friday update found:**", "**No game-day updates yet:**") goes, and
+  // its line goes with it when nothing but notes follow (round 17).
+  const label = (lead.match(/\*\*([^*]+)\*\*/) || [])[1];
+  if (label && /^(?:No|Nothing|None)\b/i.test(label) && emptyNews(label.replace(/[:.]\s*$/, '')) && l.slice(lead.length).trim()) return body.trim() ? lead.replace(/\*\*[^*]+\*\*[:.]?\s*/, '') + body : null;
   return body.trim() || !l.slice(lead.length).trim() ? lead + body : null;
 }
 
@@ -730,7 +761,14 @@ export function newsForGary(desk, { facts = null, start = null, asOf = new Date(
   // TV and radio listings carry nothing about the game (round 16: "WUAB, Rock Entertainment Sports Network and DAZN, with
   // radio coverage on WTAM 1100").
   const broadcast = (l) => /^\s*(?:[-•*]\s*)?\*\*(?:TV|Radio|Broadcast|Television|Streaming)[^*]*:?\*\*/i.test(l) || /\b(?:listings? include|radio coverage|broadcast on|televised on)\b/i.test(l);
-  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || broadcast(l) || Boolean(facts && uncheckedNumbers(l, facts).length)));
+  // The desk's sourcing note is about its own matching, not the game (round 17: "*Sourcing note: ESPN box scores don't
+  // print a player name on each row ...*").
+  const sourcing = (l) => /^\s*\*?\s*Sourcing note\b/i.test(l);
+  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || broadcast(l) || sourcing(l) || Boolean(facts && uncheckedNumbers(l, facts).length)));
+  // A TV or radio bullet's deeper sub-bullets are its listings and go with it (round 17: "WPLG Local 10", "DAZN in Indiana"
+  // and the radio stations were left under the bullet above it).
+  const indent = (l) => l.match(/^\s*/)[0].length;
+  lines.forEach((l, k) => { if (!broadcast(l) || !/^\s*[-•*]\s/.test(l)) return; for (let j = k + 1; j < lines.length && lines[j].trim() && indent(lines[j]) > indent(l); j++) drop[j] = true; });
   for (const k of startersTables(lines, desk)) drop[k] = true;
   withoutOrphans(lines, drop);
   return lines.filter((_, k) => !drop[k]).filter((p, k, a) => p.trim() || (k > 0 && a[k - 1].trim())).join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -778,7 +816,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const tip = tipOf(desk, asOf);
   const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam, seasons[1]),
-    gameLog(desk, ratings, awayTeam, asOf, seasons[1]),
+    gameLog(desk, ratings, awayTeam, asOf, seasons[1], null, null, { team: homeTeam, data: seasons[0] }),
     injurySection(desk, { homeTeam, awayTeam }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
     availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons }),

@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { flowFacts, lastLeft, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -124,12 +124,17 @@ function scoringLine(rows, teams, official = null) {
   const both = teams.map((t, i) => side(t, official ? [official.us, official.them][i] : null));
   return `      scoring: ${both.every(Boolean) ? both.join(' · ') : 'not on file'}`;
 }
-function whoPlayed(box, others, out, starters, scoring, official, ownOut = '') {
+// Case and accents apart (round 17: the box's "Sergio De Larrea" read "did not play (not Out on the report)" under the
+// report's "Sergio de Larrea (Right Knee Sprain)").
+const fold = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// `sideThere`: the meeting's other row prints that team's own minutes line, which carries every one of its 15+ minute
+// players with more numbers (round 17: the "theirs with 15+ minutes" line repeated it, 400-500 characters a read).
+function whoPlayed(box, others, out, starters, scoring, official, ownOut = '', sideThere = false) {
   if (!box) return ['      who played: box score not on file', scoring, out].filter(Boolean).join('\n');
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
   // Not one the row's own Out line already names with his reason (round 16: Curry, Green and Podziemski twice a row).
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
-    .filter((nm) => !played.some((p) => p.name === nm) && !String(ownOut || '').includes(nm));
+    .filter((nm) => !played.some((p) => p.name === nm) && !fold(ownOut).includes(fold(nm)));
   // Everyone who played, the first eight with points, rebounds, assists, turnovers and shooting; the opponent's players
   // with 15+ minutes and their points (the top five left out a starter at 24 minutes; Oct 23 2026 audit). Rebounds,
   // assists and turnovers reached Gary only through the news until Oct 27 2026 ("16 Cunningham turnovers", Towns' 14
@@ -147,7 +152,7 @@ function whoPlayed(box, others, out, starters, scoring, official, ownOut = '') {
     `      started: ${starters?.length ? starters.join(', ') : 'not on file'}`,
     `      minutes: ${played.slice(0, 8).map((p) => `${p.name} ${p.min} (${[`${p.pts} pts`, `${p.reb} reb`, `${p.ast} ast`, `${p.turnover} TO`, shooting(p), fouls(p)].filter(Boolean).join(', ')})`).join(', ')}${rest.length ? `; also ${rest.join(', ')}` : ''}`,
     missed.length ? `      did not play${ownOut && !/not on file|not filed/.test(ownOut) ? ' (not Out on the report)' : ''}: ${missed.join(', ')}` : null,
-    theirs.length ? `      theirs with 15+ minutes: ${theirs.join(', ')}` : null,
+    theirs.length && !sideThere ? `      theirs with 15+ minutes: ${theirs.join(', ')}` : null,
     out].filter(Boolean).join('\n');
 }
 
@@ -329,7 +334,8 @@ export async function nextGameLine(team, tip, season = nbaSeason()) {
 
 // `meetingUnder`: tonight's opponent, whose log is printed first; a game against it is printed there in full and here as its
 // score with a pointer (round 16: a meeting read twice, and Grimes's 3-5 threes in it read twice in two forms).
-export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data, meetingUnder = null, meetingData = null } = {}) {
+// `meetingWith`: tonight's opponent and its season, for the list printed first (its meeting row is the full one).
+export async function gameByGame(team, league, before = new Date(), { season = nbaSeason(), head = team, data, meetingUnder = null, meetingData = null, meetingWith = null } = {}) {
   const ts = data === undefined ? await teamSeason(team, before, season) : data;
   if (!ts) return `${head}: games not on file.`;
   const { games, boxes } = ts;
@@ -357,11 +363,13 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     return [...short(box, starters[i], box.team, ts.id), ...short(box.opponent, startersOf(lineups[i], oppId), box.opponent.team, oppId)];
   });
   // With how each was listed for his team's next game, once the stored summaries are loaded (round 15).
-  const earlyLine = (i, g) => {
+  // With when he last left the floor, from the stored game (round 17: Naz Reid's 13 minutes, gone for good with 3:19 left in
+  // the 2nd quarter, read as short minutes only).
+  const earlyLine = (i, g, rec = null) => {
     const list = early[i];
     if (!list?.length) return null;
     const day = new Date(g.datetime || `${g.date}T16:00:00Z`).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    return `      started and played under 15 minutes: ${list.map(({ p, team: t, teamId }) => { const w = nextListed(byTeamSummaries, teamId, day, p.name); return `${p.name} (${t}, ${p.min} min${w ? `; ${w}` : ''})`; }).join(', ')}`;
+    return `      started and played under 15 minutes: ${list.map(({ p, team: t, teamId }) => { const w = nextListed(byTeamSummaries, teamId, day, p.name); const o = lastLeft(rec, p.name); return `${p.name} (${t}, ${p.min} min${o ? `; ${o}` : ''}${w ? `; ${w}` : ''})`; }).join(', ')}`;
   };
   // Each team's rest that night (Oct 28 2026 data check: Detroit's win at Philadelphia read without the 76ers on the
   // second night of a back-to-back). Days off since each one's previous game this season.
@@ -433,7 +441,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
       && (meetingData?.games || []).slice(0, BOX_GAMES).some((x) => String(x.id) === String(g.id));
     if (fullThere && i < BOX_GAMES) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above; the ${team} side of it:\n${whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), null, starters[i], null, officials[i], ownOuts[i]).split('\n').filter((l) => /^\s+(?:started|minutes|did not play)/.test(l)).join('\n')}`;
     if (fullThere) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above`;
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i]), earlyLine(i, g)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
+    const sideThere = Boolean(meetingWith) && String(opp).split(' ').pop() === String(meetingWith.team).split(' ').pop()
+      && (meetingWith.data?.games || []).slice(0, BOX_GAMES).some((x) => String(x.id) === String(g.id));
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i], sideThere), earlyLine(i, g, stored)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }
