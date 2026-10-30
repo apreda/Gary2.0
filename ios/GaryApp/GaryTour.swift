@@ -126,6 +126,11 @@ enum GaryTour {
         case "recelebrate":
             CelebratedWins.clearAll()
             post(verb, arg)
+        case "garymood":
+            // "garymood GaryFire" previews Gary's reaction to a night on Home; "garymood off" restores it.
+            #if DEBUG
+            UserDefaults.standard.set(arg == "off" ? "" : arg, forKey: "garyMoodPreview")
+            #endif
         case "cashrail":
             // "cashrail demo" / "cashrail off" — the Cash Rail card replays the
             // approved mock's game in the marquee slot (CashRailDemo.swift).

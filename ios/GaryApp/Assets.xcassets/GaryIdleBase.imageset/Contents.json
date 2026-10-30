@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "gary-base.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
