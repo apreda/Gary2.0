@@ -97,7 +97,9 @@ export function boxSides(box, teamId) {
 const boxLine = (side, official) => {
   const t = official || side.totals;
   const src = official ? '' : " (players' rows summed; the official box not on file)";
-  return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.oreb} offensive rebounds, ${t.turnover} turnovers${official?.teamTurnovers ? ` (${official.teamTurnovers} team)` : ''}, ${t.pf} fouls${src}`;
+  // Total rebounds, assists, steals and blocks too (round 10: Houston's 52-35 edge on the glass read as an even game).
+  const more = [t.reb != null ? `${t.reb} rebounds (${t.oreb} offensive)` : `${t.oreb} offensive rebounds`, t.ast != null ? `${t.ast} assists` : null, t.stl != null ? `${t.stl} steals` : null, t.blk != null ? `${t.blk} blocks` : null].filter(Boolean).join(', ');
+  return `${side.team} ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${more}, ${t.turnover} turnovers${official?.teamTurnovers ? ` (${official.teamTurnovers} team)` : ''}, ${t.pf} fouls${src}`;
 };
 const shooting = (p) => [p.fga ? `${p.fgm}-${p.fga} FG` : null, p.fg3a ? `${p.fg3m}-${p.fg3a} 3PT` : null].filter(Boolean).join(', ');
 // Where each team's points came from, its players' rows in BDL's advanced box summed (Oct 27 2026, founder GO: the reads

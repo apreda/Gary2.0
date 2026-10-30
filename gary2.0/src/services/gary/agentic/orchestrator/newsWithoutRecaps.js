@@ -28,9 +28,23 @@ export function newsWithoutRecaps(news, finals) {
   // tables, 21 rows, under MEM@POR's news; the log has those boxes, official).
   const boxTable = (l) => /^\s*\|/.test(l) && /\|\s*players?\s*\|/i.test(l)
     && (l.match(/\|\s*(?:min(?:utes)?|p(?:oin)?ts|reb(?:ounds)?|ast|assists)\s*(?=\|)/gi) || []).length >= 2;
-  const out = []; let skip = false; let table = false;
+  // A recap section runs to the next markdown heading of its level or higher; a bold line inside it does not end it, and a
+  // bold line that gives a game (a date and a final score) drops what is under it (round 10: Portland's four games lost
+  // their bold headers and their bullets read as one game's).
+  const level = (l) => (l.match(/^\s*(#{1,6})\s/)?.[1].length ?? 7);
+  const gameHeader = (l) => /^\s*\*\*[^*]+\*\*\s*$/.test(l) && (isFinal(l) || /\b[A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? \d{2,3}, [A-Z][\w.'’]+(?: [A-Z][\w.'’]+)? \d{2,3}\b/.test(l));
+  const out = []; let skip = false; let skipLevel = 7; let underGame = false; let table = false;
   for (const item of items) {
-    if (heading(item[0])) { skip = recapHeading(item[0]); if (skip) continue; }
+    if (heading(item[0])) {
+      const lv = level(item[0]);
+      if (skip && lv === 7 && skipLevel < 7) continue;
+      if (skip && lv > skipLevel) continue;
+      if (gameHeader(item[0])) { underGame = true; continue; }
+      underGame = false;
+      skip = recapHeading(item[0]); skipLevel = lv;
+      if (skip) continue;
+    }
+    if (underGame) continue;
     if (boxTable(item[0])) {
       table = true;
       while (out.length && !out[out.length - 1].trim()) out.pop();
@@ -44,10 +58,10 @@ export function newsWithoutRecaps(news, finals) {
   }
   // Headings left with nothing under them, down to the next heading of the same or a higher level (Oct 29 2026 hunt:
   // "## Atlanta Hawks" went with its "### Last game" subsection, and two unnamed "### Current storylines" were left).
-  const level = (l) => (l.match(/^\s*(#{1,6})\s/)?.[1].length ?? 7);
+  // A bold title over bold subheadings is not empty (round 10): only a markdown heading closes a section.
   const kept = out.filter((l, i) => {
     if (!heading(l)) return true;
-    for (const x of out.slice(i + 1)) { if (!x.trim()) continue; if (heading(x)) { if (level(x) <= level(l)) return false; continue; } return true; }
+    for (const x of out.slice(i + 1)) { if (!x.trim()) continue; if (heading(x)) { if (level(x) < 7 && level(x) <= level(l)) return false; continue; } return true; }
     return false;
   });
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();

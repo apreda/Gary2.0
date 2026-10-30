@@ -310,7 +310,7 @@ const plain = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g
 // it isn't this one. Departures from last season's roster, last season's awards and "last spring" are last season too
 // (Oct 23 2026 data audit: Gary's Spurs and Nuggets reads leaned on "with Lu Dort and Isaiah Joe having departed"); a
 // player who leaves a game is this season.
-const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious[- ]seasons?\b|\bprior[- ]seasons?\b|\ba year ago\b|\bpreseasons?\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star (?:selections?|appearances?)\b|\bAll-Defensive\b|\bAll-Rookie\b|\bof the Year\b|\bsummer league\b|\bscrimmages?\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b|\bdepart(?:ed|s|ure|ures)\b(?! (?:from )?(?:the |that |\w+'s )?(?:game|contest)\b| (?:in|during|early in|late in) the (?:first|second|third|fourth) (?:quarter|half)\b| with (?:an? )?(?:\w+ ){0,2}(?:injury|soreness|sprain|strain|cramps?)\b)(?<!\b(?:injury|soreness|sprain|strain|cramps?|game|quarter|half) and depart(?:ed|s|ure|ures))|\bleft (?:\S+ ){0,3}in free agency\b|\b(?:traded|dealt) away\b|\blast (?:spring|summer)\b|\breturns (?:its|their|all of its|all of their) (?:top|entire|core|starting)\b/i;
+const PAST_SEASON = /\blast[- ]season\b|\blast year\b|\bprevious[- ]seasons?\b|\bprior[- ]seasons?\b|\ba year ago\b|\bpreseasons?\b|\bexhibitions?\b|\bpower rankings?\b|\bconference finals\b|\bAll-NBA\b|\bAll-Star (?:selections?|appearances?)\b|\bAll-Defensive\b|\bAll-Rookie\b|\bof the Year\b|\bsummer league\b|\bscrimmages?\b|\bintrasquad\b|\btraining camp\b|\bplayoffs?\b|\bdefending champion|\brookie season\b|\bMVP\b|\bpostseason\b|\bhaving departed\b|\b(?:offseason|summer|free-agent|free agency) departures?\b|\bdepart(?:ed|s|ure|ures)\b(?= (?:in|during|via) (?:free agency|the offseason|the summer)\b| (?:from )?the (?:team|roster|franchise|organization)\b| (?:to|for) (?!the locker)[A-Z])|\bleft (?:\S+ ){0,3}in free agency\b|\b(?:traded|dealt) away\b|\blast (?:spring|summer)\b|\breturns (?:its|their|all of its|all of their) (?:top|entire|core|starting)\b/i;
 const pastSeasonLabel = (x, season) => [...String(x).matchAll(/\b(20\d\d)[-–](\d\d)\b/g)].some((m) => Number(m[1]) < season);
 // A rate from a game or two (Oct 23 2026 audit: "84.7 points per 100 possessions during Embiid's 33 minutes").
 const SHORT_RATE = /per 100 possessions|offensive rating|defensive rating|net rating|true shooting|effective field goal/i;
@@ -492,7 +492,9 @@ function uncheckedNumbers(line, facts) {
     const he = /\b(?:he|his|him)\b/i.test(sentence) ? carry : null;
     // A team named as where or whom a game was against ("26 points and six assists at Sacramento") is not the stat's
     // owner when a player is named before it (Oct 29 2026 hunt: Avdija's correct line left the news).
-    const place = (g) => g.team && /\b(?:at|against|vs\.?|versus|in|over|to|from|beat|beating)\s+(?:the\s+)?$/i.test(sentence.slice(0, g.at));
+    // A team named just before "game", "loss" or "win" is the opponent too ("his seven-point Memphis game"; round 10).
+    const place = (g) => g.team && (/\b(?:at|against|vs\.?|versus|in|over|to|from|beat|beating)\s+(?:the\s+)?$/i.test(sentence.slice(0, g.at))
+      || /^\s*(?:game|loss|win|matchup|contest)\b/i.test(sentence.slice(g.end)));
     const ownerAt = (i) => {
       const before = [...groups].reverse().filter((x) => x.end <= i);
       const g = before.find((x) => !place(x) || !before.some((y) => !y.team && y.end <= x.at)) || null;
@@ -521,6 +523,8 @@ function uncheckedNumbers(line, facts) {
       if (!ok) bad.push(m[0]);
     }
     for (const m of sentence.matchAll(STAT)) {
+      // "five of nine threes": nine is the attempts, checked with the pair above (round 10).
+      if (/\b\S+[- ](?:of|for)[- ]$/i.test(sentence.slice(0, m.index))) continue;
       const after = sentence.slice(m.index + m[0].length);
       const perGame = /^\s*(?:per game|a game|a night)\b/i.test(after);
       if (!perGame && PART_OF_GAME.test(after)) continue;
@@ -641,7 +645,16 @@ const FILING = /\b(?:official|league|injury)\b[^.]*\b(?:PDF|submissions?|report|
 const TWO_WAY = /\bG League two-way\b|\btwo-way (?:G League )?(?:availability|assignment|duty)\b|\btwo-way\s*\/\s*G League\b|\bG League\s*\/\s*two-way\b/i;
 const SEARCH_EMPTY = /^(?:No|Neither)\b.*\b(?:cutoff|supplied (?:material|reporting))\b|^As of the (?:research )?cutoff\b.*\bno verified\b|^This report (?:reflects|covers)\b|\bfound no (?:such )?(?:announcement|statement|update|report)s?\b/i;
 const ASKED = /\b(?:as requested|in the request|the request(?:ed)? (?:list|format))\b/i;
-const emptyNews = (s) => NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s);
+// The search describing itself in other words (round 10: "per search summary", "page inaccessible, search snippet only",
+// "None have reported", "There was no verified announcement", "No Memphis DNP list was available").
+const SEARCH_NOTE = /\bper search summary\b|\bpage inaccessible\b|\bsearch snippets?\b|\bcould not be (?:established|verified|confirmed)\b|\breports? reviewed\b|\bunverified\b|^There (?:was|were) no\b[^.]*\b(?:announcements?|updates?|reports?|statements?|reporting)\b|^None (?:have|has) (?:reported|said)\b|^No \w+ DNP list was available\b|\bsupplied\b[^.]{0,40}\breporting\b/i;
+// A season average or per-game rate (round 10: "Avdija leads the team at 22.3 points, 7.0 rebounds and 6.3 assists per
+// game", and two of them wrong); the log carries every game.
+const AVERAGE = /\baverag(?:e|es|ed|ing)\b[^.]*\d|\d+(?:\.\d+)?\s+(?:points|rebounds|assists|steals|blocks|threes|three-pointers|minutes|turnovers)\s+(?:per game|a game|a night|per contest)\b/i;
+// Month abbreviations do not end a sentence for these tests ("No Oct. 29 update was found").
+const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g, '$1');
+const emptyNews = (raw) => { const s = unAbbrev(raw); return NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
+  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || AVERAGE.test(s); };
 function withoutEmptyNews(text) {
   return String(text || '').split('\n').map((l) => {
     if (/^\s*\|/.test(l)) {
