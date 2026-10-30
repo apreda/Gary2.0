@@ -1107,18 +1107,21 @@ export async function buildNflScoutReport(game, options = {}) {
         const hurt = [p.injury, p.secondary].filter(Boolean).filter((v, i, a) => a.findIndex((x) => x.toLowerCase() === v.toLowerCase()) === i).join(', ');
         // The practice word is the latest one the league's file holds, which can trail the feed's dated note by a day
         // (round 8: Kelce read "practice: Full" beside "limited in Thursday's practice"); it says so.
-        const said = `${p.game_status || 'game statuses not issued yet'}${hurt ? ` (${hurt})` : ''}${p.practiceDays?.length ? `; practice by report day: ${p.practiceDays.map((x) => `${x.day} ${x.practice}`).join(' · ')}` : p.practice ? `; practice, the latest day in the league's file: ${p.practice}` : ''}`;
+        // The status is the row's own (in its heading), said once (round 16: three or four times a row).
+        const said = `${hurt ? hurt.toLowerCase() : 'injury not given'}${p.practiceDays?.length ? `; practice by report day: ${p.practiceDays.map((x) => `${x.day} ${x.practice}`).join(' · ')}` : p.practice ? `; practice, the latest day in the league's file: ${p.practice}` : ''}`;
         const listed = findListed(first, rest.join(' '));
         if (listed) {
           if (p.game_status) { listed.status = p.game_status; listed.officialStatus = true; }
           if (p.gsis_id) listed.gsis_id = p.gsis_id;
           // The feed's comment when it says more than a status word (Oct 29 2026 hunt: "... practice: Limited. questionable").
-          const feedNote = /^\s*(?:questionable|doubtful|out|probable|active)\.?\s*$/i.test(String(listed.comment || '')) ? '' : listed.comment || '';
-          listed.comment = `Official injury report, Wk ${report.week}: ${said}. ${feedNote}`.trim();
+          // Without the reporter's credit ("..., Wes Hodkiewicz of the Packers' official site reports"; round 16).
+          const feedNote = /^\s*(?:questionable|doubtful|out|probable|active)\.?\s*$/i.test(String(listed.comment || '')) ? ''
+            : String(listed.comment || '').replace(/,\s*[A-Z][^,]*?\s+(?:of|from)\s+[^,]*?\s+reports?\.?\s*$/, '.').replace(/\s+(?:according to|per)\s+[A-Z][^.]*\.\s*$/, '.');
+          listed.comment = `Official report, Wk ${report.week}: ${said}. ${feedNote}`.trim();
           continue;
         }
         list.push({ player: { first_name: first, last_name: rest.join(' '), position: p.position || null }, status: p.game_status || 'No game status yet',
-          comment: `Official injury report, Wk ${report.week}: ${said}.`,
+          comment: `Official report, Wk ${report.week}: ${said}.`,
           freshness: 'FRESH', noteCurrent: true, source: 'NFL official report', gsis_id: p.gsis_id || null });
       }
     }

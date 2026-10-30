@@ -18,12 +18,14 @@ describe('NFL opening-night injury and recent-form evidence', () => {
       const text = formatInjuryReport('Home', 'Away', { home: [{ name: 'Listed Player', status,
         comment: 'Original complete practice report.', ...timing }], away: [] }, 'americanfootball_nfl');
       expect(text).toContain(`(${status})`);
-      expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE' : '[DOUBTFUL');
+      // The full word is said once, in the heading; an abbreviation is spelled out in the bracket (round 16).
+      expect(text).toContain(status === 'Q' ? '[QUESTIONABLE' : status === 'D' ? '[DOUBTFUL' : `(${status})`);
       expect(text).toContain('Original complete practice report.');
       expect(text).not.toContain('[OUT');
       // The age of the latest report is not on the row (Oct 4 2026): the NFL
       // re-lists every injured player weekly, so every row read FRESH.
-      expect(text).toContain(status === 'Q' || status === 'Questionable' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
+      if (status.length === 1) expect(text).toContain(status === 'Q' ? '[QUESTIONABLE]' : '[DOUBTFUL]');
+      else expect(text).not.toContain(`[${status.toUpperCase()}`);
       expect(text).not.toMatch(/FRESH|STALE|Reported /);
       expect(text).not.toContain('report date unavailable');
     }
@@ -38,13 +40,13 @@ describe('NFL opening-night injury and recent-form evidence', () => {
       { name: 'Reserve Player', status: 'IR-R', freshness: 'STALE', daysSinceReport: 20, reportDateStr: 'Aug 19' },
       { name: 'Unknown Player', status: null, freshness: 'UNKNOWN', daysSinceReport: null },
     ], away: [] }, 'NFL');
-    expect(text).toContain('[OUT; did not play the last game (Wk 3); last played Wk 2]');
-    expect(text).toContain('[OUT; did not play the last 2 games (Wk 2, Wk 3); last played Wk 1]');
-    expect(text).toContain('[QUESTIONABLE; played in the last game (Wk 3)]');
-    expect(text).toContain('[IR-R]');
+    expect(text).toContain('(Out) [did not play the last game (Wk 3); last played Wk 2]');
+    expect(text).toContain('(Out) [did not play the last 2 games (Wk 2, Wk 3); last played Wk 1]');
+    expect(text).toContain('(Questionable) [played in the last game (Wk 3)]');
+    expect(text).toContain('(IR-R)');
     expect(text).not.toMatch(/PRICED IN|NEW THIS WEEK/);
     expect(text).not.toMatch(/FRESH|STALE|Reported /);
-    expect(text).toContain('Unknown Player (Unknown) [UNKNOWN]');
+    expect(text).toContain('Unknown Player (Unknown)');
     expect(text).not.toContain('[SEASON-LONG]');
     expect(text).not.toContain('ESTABLISHED ABSENCES');
     expect(text.match(/Out Player/g)).toHaveLength(1);

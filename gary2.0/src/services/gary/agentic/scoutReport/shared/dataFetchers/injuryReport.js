@@ -77,6 +77,7 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 
     // Build duration tag with ACTUAL DATE, days, and games missed for Gary to see clearly
     let durationTag = '';
+    let nflSaid = false;   // an NFL row whose bracket was left empty on purpose (round 16)
     const days = i.daysSinceReport;
     const reportDate = i.reportDateStr; // e.g., "Jan 8"
 
@@ -128,7 +129,12 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
         ? `; did not play the last ${p.missed === 1 ? 'game' : `${p.missed} games`} (${p.missedWeeks.map((w) => `Wk ${w}`).join(', ')}); last played Wk ${p.lastPlayedWeek}${share}`
         : p.lastShare != null && p.lastShare < 10 ? `; on the field for ${p.lastShare}% of snaps in the last game (Wk ${p.lastPlayedWeek}${before})`
         : `; played in the last game (Wk ${p.lastPlayedWeek}${share})`;
-      durationTag = `${oldNote} [${status}${played}]`;
+      // The status in the bracket only when this week's note and the feed disagree; the row's heading has it, and before the
+      // game statuses come out the feed's word is a placeholder (round 16: the status three or four times a row).
+      const sameWord = String(shownStatus || '').trim().toUpperCase() === status;
+      const said = (reconciled.feed && !reconciled.pending) || (!reconciled.feed && !sameWord) ? `${status}${played}` : played.replace(/^;\s*/, '');
+      durationTag = said ? `${oldNote} [${said}]` : oldNote;
+      nflSaid = true;
     } else if (i.status?.toUpperCase() === 'GTD') {
       const durationContext = days ? ` - was out ${days}d` : '';
       durationTag = ` [GTD${durationContext}]`;
@@ -150,18 +156,18 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
       durationTag = ` [OUT${timeInfo}]`;
     }
 
-    if (!durationTag && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || i.status === 'OFS' ||
+    if (!durationTag && !nflSaid && (i.status === 'IR' || i.status === 'Injured Reserve' || i.status === 'LTIR' || i.status === 'OFS' ||
         (i.description && i.description.toLowerCase().includes('injured reserve')))) {
       durationTag = ' [Out For Season]';
     }
 
     // Probable = expected to play (~75%+ chance). NOT out — do not label as OUT.
-    if (!durationTag && (i.status === 'Prob' || i.status === 'Probable')) {
+    if (!durationTag && !nflSaid && (i.status === 'Prob' || i.status === 'Probable')) {
       durationTag = ' [Probable — Expected to Play]';
     }
 
     // Fallback: no duration info resolved
-    if (!durationTag && !reportDate && days === null) {
+    if (!durationTag && !nflSaid && !reportDate && days === null) {
       durationTag = ' [OUT - duration unknown]';
     }
 

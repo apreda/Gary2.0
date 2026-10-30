@@ -16,7 +16,7 @@ import { homedir } from 'node:os';
 import { nflSystemPrompt, nflGameMessage, nflCardMessage, NFL_FORMAT_ONLY } from './nflKnowledge.js';
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { withoutBettingLines, footballNews } from './ncaafRead.js';
-import { loadBettorData, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate, rosterMoves, nextUp } from '../../../sports/nfl/nflBettorData.js';
+import { loadBettorData, codeOf, strength, gameByGame, notOnReport, skillPlayers, quarterbacks, deskStarter, spot, etDate, rosterMoves, nextUp } from '../../../sports/nfl/nflBettorData.js';
 import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
@@ -54,7 +54,7 @@ export function injuriesAsReported(desk) {
 }
 
 /** The game as Gary reads it. `asOf` cuts every fact: games before its ET date. */
-export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null } = {}) {
+export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, gameDate, asOf = new Date(), season = nflSeason(), book = null, forProps = false } = {}) {
   const before = etDate(asOf);
   // The spread he bets, said once in the header; not the line's path, the opener, the total or the moneylines (founder,
   // Oct 23 2026: the market is other people's opinions, and Gary reads the game; see nflKnowledge.js).
@@ -71,6 +71,8 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
   // back); each team's season game by game; the players the ball goes to; the schedule, travel and weather. Headings
   // name the data, never what to make of it (Oct 23 2026 section review: "WHO THE OFFENSE RUNS THROUGH" and "THE
   // SITUATION" went the way of "HOW GOOD THEY ARE").
+  // One memory for both teams' lists (round 16): each opponent's other games once, tonight's two teams' games bare.
+  const read = { shown: new Map(), tonight: new Set([codeOf(homeTeam), codeOf(awayTeam)]) };
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
@@ -79,8 +81,9 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
     ["ROSTER MOVES", await rosterMoves(data, homeTeam, awayTeam, before)],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
-    ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", `${gameByGame(data, awayTeam, before)}\n\n${gameByGame(data, homeTeam, before)}`],
-    ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season and in each of its last three games, quarterbacks aside)",
+    ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", `${gameByGame(data, awayTeam, before, { read })}\n\n${gameByGame(data, homeTeam, before, { meetingUnder: awayTeam, read })}`],
+    // The props message leaves this out: its sheets carry each board player's games (round 16).
+    forProps ? null : ["CARRIES AND TARGETS, GAME BY GAME (each team's top two in carries and top four in targets this season and in each of its last three games, quarterbacks aside)",
       `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'))}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'))}`],
     ['SCHEDULE, TRAVEL AND WEATHER', situation],
   ];
