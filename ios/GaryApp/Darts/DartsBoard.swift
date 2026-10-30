@@ -891,7 +891,7 @@ struct DartWheel: View {
                 darts(cx: cx, cy: cy, r: r, k: k, plateX: colX)
                     .accessibilityHidden(true)
 
-                WheelRows(wheel: wheel, items: items, rowHeight: Self.rowHeight, height: h, width: colW, reduceMotion: reduceMotion)
+                WheelRows(wheel: wheel, items: items, rowHeight: Self.rowHeight, height: h, width: colW)
                     .frame(width: colW, height: h)
                     .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.14),
                                                  .init(color: .black, location: 0.86), .init(color: .clear, location: 1)],
@@ -1082,8 +1082,8 @@ private struct WheelBadge: View {
     }
 }
 
-/// The rows on the wheel, redrawn as it turns. Rows away from the middle
-/// tip back and fade like the far side of a drum.
+/// The rows on the wheel, redrawn as it turns: flat rows sliding past the
+/// glass, fading out at the wheel's top and bottom.
 private struct WheelRows: View {
     /// A row's top rule hides while it crosses the glass.
     static func hairShows(_ d: Double, _ rowHeight: CGFloat) -> Double {
@@ -1096,7 +1096,6 @@ private struct WheelRows: View {
     let rowHeight: CGFloat
     let height: CGFloat
     let width: CGFloat
-    let reduceMotion: Bool
 
     var body: some View {
         let p = wheel.pos
@@ -1112,8 +1111,9 @@ private struct WheelRows: View {
                     .overlay(alignment: .top) {
                         Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10).opacity(Self.hairShows(d, rowHeight))
                     }
-                    .rotation3DEffect(.degrees(reduceMotion ? 0 : -d * 15), axis: (x: 1, y: 0, z: 0), anchor: .center, perspective: 0.45)
-                    .opacity(a <= 1 ? 1 - 0.38 * a : max(0, 0.62 - 0.22 * (a - 1)))
+                    // Flat, as in the mock (founder, Oct 30 2026: the drum
+                    // was "a bit too rounded"); rows off the glass dim.
+                    .opacity(1 - 0.38 * min(a, 1))
                     .position(x: width / 2, y: height / 2 + CGFloat(d) * rowHeight)
             }
         }
