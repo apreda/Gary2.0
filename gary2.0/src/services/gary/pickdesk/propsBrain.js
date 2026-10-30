@@ -247,11 +247,18 @@ export function selectPrimaryMarkets(marketRows, { isFunLane = isHrType } = {}) 
       const u = propOddsService.isOddsTakeable(c.under_odds, c.prop_type);
       return o && u ? 0 : (o || u) ? 1 : 2;
     };
+    // In a split market, the middle of the books' lines (round 11: the most balanced merged price was always FanDuel's
+    // line, low, high or in the middle), the same rule the darts use (dartsCommon consensusLine).
+    // Only where the rows carry their book counts (the live odds); rows without them keep the balance rule.
+    const counted = twoSided.some((c) => c.book_count != null);
+    const weighted = counted ? twoSided.flatMap((c) => Array(c.book_count || 1).fill(Number(c.line))).sort((x, y) => x - y) : [];
+    const middle = weighted.length ? weighted[Math.floor((weighted.length - 1) / 2)] : null;
     const ranked = twoSided.slice().sort((a, b) => {
       const at = tier(a), bt = tier(b);
       if (at !== bt) return at - bt;
-      // The line most books post first; the balance of merged best prices only breaks ties (round 10).
+      // The line most books post first; then the middle of the books' lines; the balance of merged best prices last.
       if ((b.book_count || 1) !== (a.book_count || 1)) return (b.book_count || 1) - (a.book_count || 1);
+      if (middle != null && Math.abs(Number(a.line) - middle) !== Math.abs(Number(b.line) - middle)) return Math.abs(Number(a.line) - middle) - Math.abs(Number(b.line) - middle);
       const aBal = Math.abs((impliedProb(a.over_odds) ?? 1) - (impliedProb(a.under_odds) ?? 1));
       const bBal = Math.abs((impliedProb(b.over_odds) ?? 1) - (impliedProb(b.under_odds) ?? 1));
       if (aBal !== bBal) return aBal - bBal;

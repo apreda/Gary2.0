@@ -287,7 +287,7 @@ export const propOddsService = {
             for (const prop of transformedProps) {
               const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
               if (!booksAt.has(key)) booksAt.set(key, new Set());
-              if (prop.vendor) booksAt.get(key).add(prop.vendor);
+              if (prop.vendor && prop.under_odds != null) booksAt.get(key).add(prop.vendor);   // over/unders only, not ladder rungs (round 11)
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
@@ -404,7 +404,7 @@ export const propOddsService = {
             for (const prop of transformedProps) {
               const key = `${prop.player_id}_${prop.prop_type}_${prop.line}`;
               if (!booksAt.has(key)) booksAt.set(key, new Set());
-              if (prop.vendor) booksAt.get(key).add(prop.vendor);
+              if (prop.vendor && prop.under_odds != null) booksAt.get(key).add(prop.vendor);   // over/unders only, not ladder rungs (round 11)
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {
@@ -522,7 +522,7 @@ export const propOddsService = {
             for (const prop of transformedProps) {
               const key = `${prop.player}_${prop.prop_type}_${prop.line}`;
               if (!booksAt.has(key)) booksAt.set(key, new Set());
-              if (prop.vendor) booksAt.get(key).add(prop.vendor);
+              if (prop.vendor && prop.under_odds != null) booksAt.get(key).add(prop.vendor);   // over/unders only, not ladder rungs (round 11)
               if (!grouped[key]) {
                 grouped[key] = { ...prop };
               } else {

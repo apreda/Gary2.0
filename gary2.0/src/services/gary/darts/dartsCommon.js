@@ -156,16 +156,30 @@ function mainLineRows(rows, propType) {
   return ou.filter((r) => perBook.get(`${r.vendor}|${r.player_id}`) === 1);
 }
 
+/** The market's line: the one most books post, and in a split market the middle of the books' lines (round 11: the
+ * darts took DraftKings' line even when it stood alone; the props board uses the same rule). */
+export function consensusLine(lines) {
+  const ls = lines.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!ls.length) return null;
+  const count = new Map(); for (const l of ls) count.set(l, (count.get(l) || 0) + 1);
+  const top = Math.max(...count.values()); const tied = [...count].filter(([, c]) => c === top).map(([l]) => l);
+  if (tied.length === 1) return tied[0];
+  const middle = ls[Math.floor((ls.length - 1) / 2)];
+  return tied.sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b)[0];
+}
+
 /**
- * The main two-sided line of a market with both prices, from the first book
- * in BOOK_ORDER that posts both. Returns { line, over, under, book } or null.
+ * The main two-sided line of a market with both prices: the consensus line, priced by the first book in BOOK_ORDER
+ * that posts it. Returns { line, over, under, book } or null.
  */
 export function mainLineBoth(rows, propType) {
   const ou = mainLineRows(rows, propType).filter((r) =>
     Number.isFinite(Number(r.market?.over_odds)) && Number.isFinite(Number(r.market?.under_odds)));
   if (!ou.length) return null;
-  ou.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
-  const r = ou[0];
+  const line = consensusLine(ou.map((r) => r.line_value));
+  const at = ou.filter((r) => Number(r.line_value) === line);
+  at.sort((a, b) => bookRank(a.vendor) - bookRank(b.vendor));
+  const r = at[0];
   return { line: Number(r.line_value), over: Number(r.market.over_odds), under: Number(r.market.under_odds), book: r.vendor };
 }
 
@@ -194,7 +208,10 @@ export function etMinutes(ms = Date.now()) {
  * name-keyed weekly maps keep these positions only.
  */
 export const NFL_SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'FB']);
-export const isNflSkillRow = (row) => NFL_SKILL_POSITIONS.has(String(row?.position || '').toUpperCase());
+// A skill row by its position, or by what it holds: a two-way player listed at corner who caught passes counts (round 11:
+// Travis Hunter's catches and touchdown read "no touches").
+export const isNflSkillRow = (row) => NFL_SKILL_POSITIONS.has(String(row?.position || '').toUpperCase())
+  || Number(row?.targets) > 0 || Number(row?.carries) > 0 || Number(row?.receptions) > 0;
 
 export function normName(name) {
   return String(name || '')
