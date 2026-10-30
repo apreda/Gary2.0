@@ -660,10 +660,12 @@ const SEARCH_NOTE = /\bper search summary\b|\bpage inaccessible\b|\bsearch snipp
 // A season average or per-game rate (round 10: "Avdija leads the team at 22.3 points, 7.0 rebounds and 6.3 assists per
 // game", and two of them wrong); the log carries every game.
 const AVERAGE = /\baverag(?:e|es|ed|ing)\b[^.]*\d|\d+(?:\.\d+)?\s+(?:points|rebounds|assists|steals|blocks|threes|three-pointers|minutes|turnovers)\s+(?:per game|a game|a night|per contest)\b/i;
+// A minutes limit or plan is tonight's news, not an average (round 13: "limit them to around 30 minutes a game").
+const MINUTES_PLAN = /\b(?:restrict\w*|limit\w*|cap(?:ped|s)?|minutes (?:restriction|limit)|managed|ramp\w*)\b/i;
 // Month abbreviations do not end a sentence for these tests ("No Oct. 29 update was found").
 const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g, '$1');
 const emptyNews = (raw) => { const s = unAbbrev(raw); return NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
-  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || AVERAGE.test(s); };
+  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)); };
 function withoutEmptyNews(text) {
   // A bullet that leaves takes its deeper-indented sub-bullets with it (round 11: "He had a 14-point, 10-rebound game"
   // was left under Jrue Holiday when Robert Williams III's line went).

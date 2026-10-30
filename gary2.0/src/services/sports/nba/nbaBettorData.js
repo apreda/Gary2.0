@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, olderGameFacts, summariesByTeam } from './nbaGameRecordText.js';
+import { flowFacts, olderGameFacts, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -77,7 +77,10 @@ const totalsOf = (rows) => Object.fromEntries(COUNTS.map((k) => [k, rows.reduce(
 /** The BDL box score for a game, found among its date's boxes. */
 async function boxOf(g, teamId) {
   const date = String(g.date || g.datetime || '').slice(0, 10);
-  const boxes = await ballDontLieService.getNbaBoxScores(date, 24 * 60).catch(() => null);
+  // A day's boxes are kept a day only once its games are long over; within 18 hours of the tip, a short keep, so a box
+  // read mid-game never freezes into the stored record (round 13).
+  const settled = Date.now() - Date.parse(g.datetime || `${date}T23:00:00Z`) > 18 * 3_600_000;
+  const boxes = await ballDontLieService.getNbaBoxScores(date, settled ? 24 * 60 : 20).catch(() => null);
   const opp = g.home_team?.id === teamId ? g.visitor_team?.id : g.home_team?.id;
   return (boxes || []).find((b) => b.id === g.id)
     || (boxes || []).find((b) => [b.home_team?.id, b.visitor_team?.id].includes(teamId) && [b.home_team?.id, b.visitor_team?.id].includes(opp))
@@ -375,7 +378,9 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     return o ? (g.home_team?.id === ts.id ? { us: o.home, them: o.away } : { us: o.away, them: o.home }) : null;
   }));
   // Each game's flow from its stored record (Oct 29 2026, founder: the game as it went, not only how it ended).
-  const flows = new Map(((await recordsById('NBA', games.slice(0, GAMES_SHOWN).map((g) => g.id)).catch(() => [])) || [])
+  // A failed read of the stored records is said, not read as records not built (round 13).
+  let recordsFailed = null;
+  const flows = new Map(((await recordsById('NBA', games.slice(0, GAMES_SHOWN).map((g) => g.id)).catch((e) => { recordsFailed = e.message; return []; })) || [])
     .map((r) => [String(r.game_id), r.record]));
   // Each opponent's other games with their scores, newest first, as the NFL and college logs give them (round 12: "(1-4
   // now)" alone; points allowed could not be read against who scored them).
@@ -395,13 +400,19 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     // The opponent's record now, and when this game is the only one it has played (Oct 23 2026 data audit: "0-1 now"
     // read as a weak team when the one loss was this game).
     const o = league[opp];
-    const others = otherGames(home ? g.visitor_team?.id : g.home_team?.id, g.id);
-    const rec = o ? ` (${o.w}-${o.l} now${o.gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : ''})` : '';
+    const oppId = home ? g.visitor_team?.id : g.home_team?.id;
+    const others = otherGames(oppId, g.id);
+    // The record from the same stored games as the list, so the two agree after a late game (round 13: Memphis read 4-0
+    // from the cached standings beside five games in its list).
+    const oppGames = byTeamSummaries?.get(String(oppId));
+    const wl = oppGames ? wonLost(oppGames, oppId) : o ? `${o.w}-${o.l}` : null;
+    const gp = oppGames ? oppGames.length : o?.gp;
+    const rec = wl ? ` (${wl} now${gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : byTeamSummaries ? '' : '; their other games: not on file'})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
     const stored = flows.get(String(g.id));
-    const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : '      flow: not on file (the game record is not built yet)';
+    const flow = stored ? `      flow: ${flowFacts(stored, ts.id)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;
     return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i]), early[i]].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
