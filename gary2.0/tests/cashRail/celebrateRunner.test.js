@@ -50,6 +50,7 @@ describe('runCelebrations', () => {
     f.db.boards = async () => [{ ...board, hits: [...board.hits, big] }];
     await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 1 });
     expect(f.writes.claims.map(c => c.play_key)).toEqual(['77@3169']);
+    expect(f.writes.claims[0].market).toBe('Receptions 7+');
   });
 
   it('reuses a team backdrop that already exists', async () => {

@@ -9,6 +9,13 @@
  */
 import { celebrationPlays, pickDance, DANCES, danceUniqueFrames, posePrompt, bgSpec, TEAM_LOOKS } from './celebrations.js';
 
+/** A ladder is named by its top cashed rung, as the card names it ("Receptions 7+"). */
+function ladderMarket(hit) {
+  const top = hit.rungs?.at(-1)?.label;
+  if (!top) return hit.market;
+  return top.startsWith('O ') ? `${hit.market} over ${top.slice(2)}` : `${hit.market} ${top}`;
+}
+
 /** @returns {Promise<number>} celebrations drawn this pass */
 export async function runCelebrations({ db, bdl, art, store, limit = 2, log = () => {} }) {
   let drawn = 0;
@@ -26,7 +33,7 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
       const dance = DANCES.find(d => d.id === pickDance(p.playKey));
       const row = {
         league: board.league, game_id: board.game_id, play_key: p.playKey, hit_key: p.hit.key,
-        who: p.hit.who, market: p.hit.market, price: p.hit.price, when_label: p.hit.when, play: p.hit.play,
+        who: p.hit.who, market: ladderMarket(p.hit), price: p.hit.price, when_label: p.hit.when, play: p.hit.play,
         kind: p.kind, dance: dance.id, team, number,
       };
       if (!(await db.claim(row))) continue;
