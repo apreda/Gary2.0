@@ -49,6 +49,8 @@ struct CashRailBoard: Codable, Equatable {
     let elapsed_s: Int
     let clock: String?
     let hits: [CashRailHit]
+    /// The favorite and its frozen line ("GB -3.5").
+    var spread: String? = nil
 }
 
 extension CashRailBoard {
@@ -99,12 +101,12 @@ enum CashRailFormat {
 
     /// "GB −2.5 · GARY PACKERS −2.5": the spread off the board (the total when
     /// there is no spread), then Gary's pick. Nil when there is neither.
-    static func marketLine(oddsLine: String?, pickLine: String?) -> String? {
+    static func marketLine(oddsLine: String?, pickLine: String?, spread boardSpread: String? = nil) -> String? {
         let parts = (oddsLine ?? "").components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
         let spread = parts.first { $0.uppercased().hasPrefix("RL ") }.map { String($0.dropFirst(3)) }
         let total = parts.first { $0.uppercased().hasPrefix("O/U") }
         var out: [String] = []
-        if let market = spread ?? total { out.append(market) }
+        if let market = spread ?? boardSpread ?? total { out.append(market) }
         if let pick = pickLine?.trimmingCharacters(in: .whitespaces), !pick.isEmpty { out.append("GARY \(pick)") }
         guard !out.isEmpty else { return nil }
         return out.joined(separator: " · ").uppercased().replacingOccurrences(of: "-", with: "\u{2212}")

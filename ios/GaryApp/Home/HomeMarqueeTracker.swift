@@ -167,7 +167,7 @@ struct HomeMarqueeTracker: View {
                          homeName: names.count > 1 ? names[1] : "",
                          awayAbbr: e.live?.away_abbr, homeAbbr: e.live?.home_abbr,
                          awayScore: e.live?.away_score, homeScore: e.live?.home_score,
-                         marketLine: CashRailFormat.marketLine(oddsLine: e.oddsLine, pickLine: e.pickLine),
+                         marketLine: CashRailFormat.marketLine(oddsLine: e.oddsLine, pickLine: e.pickLine, spread: board?.spread),
                          clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
                          board: board,
                          onOpenGame: { onOpenGame(e.matchupFull, e.league) })

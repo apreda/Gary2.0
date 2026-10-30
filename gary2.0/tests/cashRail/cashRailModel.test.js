@@ -73,6 +73,13 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
     expect(r).toEqual(['GB −2.5 · GARY PACKERS −2.5', 'GB −2.5', 'O/U 46.5 · GARY OVER 46.5', 'nil']);
   });
 
+  it('falls back to the board\'s frozen spread when the slate row has none', () => {
+    const r = swiftJSON(`out([
+  CashRailFormat.marketLine(oddsLine: "O/U 46.5", pickLine: "Packers -3.5", spread: "GB -3.5") ?? "nil",
+  CashRailFormat.marketLine(oddsLine: "RL GB -2.5", pickLine: nil, spread: "GB -3.5") ?? "nil"])`);
+    expect(r).toEqual(['GB −3.5 · GARY PACKERS −3.5', 'GB −2.5']);
+  });
+
   it('an empty board has no hero and counts nothing', () => {
     const r = swiftJSON(`let e = CashRailBoard(league: "NFL", game_id: "1", status: "live", possession: nil, situation: nil, elapsed_s: 0, clock: nil, hits: [])
 out([e.hero == nil, e.ranked.isEmpty, e.cashedCount == 0])`);

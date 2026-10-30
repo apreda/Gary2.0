@@ -74,9 +74,13 @@ export async function runPass({ now = new Date(), date, db, bdl, log = () => {} 
     const markets = snap ? freezeBoard(snap.props, snap.game_odds).markets : [];
     const gary = garyPickMarket(await db.garyPickRow(g), g);
     if (gary && snap && !markets.some(m => m.key === gary.market.key)) markets.push(gary.market);
+    // The favorite and its frozen line ("GB -3.5"), for the line under the team names.
+    const homeSpread = markets.find(m => m.propType === 'game_spread_home');
+    const spread = !homeSpread ? null : homeSpread.line <= 0
+      ? `${g.home_team?.abbreviation} ${homeSpread.line}` : `${g.visitor_team?.abbreviation} ${-homeSpread.line}`;
     const plays = await bdl.plays(gameId);
     const out = settleNfl({ markets, plays: plays ?? [], game: g, players: snap?.players ?? {}, garyPick: gary?.garyPick ?? null });
-    await db.upsertBoard({ league: 'NFL', game_id: id, date, ...out, prices_frozen_at: snap?.captured_at ?? null, updated_at: now.toISOString() });
+    await db.upsertBoard({ league: 'NFL', game_id: id, date, ...out, spread, prices_frozen_at: snap?.captured_at ?? null, updated_at: now.toISOString() });
     done.boards++;
     log(`board ${id}: ${out.status} ${out.clock} · ${out.hits.length} hits`);
   }

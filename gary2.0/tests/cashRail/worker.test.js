@@ -67,6 +67,14 @@ describe('Cash Rail worker pass', () => {
     expect(b).toMatchObject({ status: 'final', prices_frozen_at: snap.captured_at });
   });
 
+  it('writes the frozen spread (favorite and line) onto the board', async () => {
+    const odds = [{ vendor: 'a', spread_home_value: '-3.5', spread_home_odds: -110, spread_away_value: '3.5', spread_away_odds: -110 }];
+    const snap = { captured_at: at(-5).toISOString(), props, game_odds: odds, players: {} };
+    const f = fakes({ status_state: 'in', snapshots: [snap] });
+    await runPass({ now: at(30), date: 'd', db: f.db, bdl: f.bdl });
+    expect(f.writes.boards[0].spread).toBe('CHI -3.5');
+  });
+
   it('settles a final game once more and then leaves it alone', async () => {
     const f = fakes({ status_state: 'final', board: { status: 'final' } });
     expect(await runPass({ now: at(300), date: 'd', db: f.db, bdl: f.bdl })).toEqual({ snapshots: 0, boards: 0 });

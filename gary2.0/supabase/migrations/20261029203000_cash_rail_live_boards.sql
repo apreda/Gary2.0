@@ -39,3 +39,6 @@ create policy live_boards_read on public.live_boards for select to anon, authent
 
 -- Player names for every prop in the snapshot (BDL prop rows carry ids only).
 alter table public.live_board_prices add column if not exists players jsonb not null default '{}'::jsonb;
+
+-- The favorite and its frozen line ("GB -3.5") for the line under the team names.
+alter table public.live_boards add column if not exists spread text;
