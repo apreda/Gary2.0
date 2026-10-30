@@ -8,6 +8,9 @@ enum GaryLifePlan {
         let name: String
         let good: Double
         let bad: Double
+        /// A bit that lands once (founder, Oct 30 2026: "break the 4th wall just once"): at most once a day,
+        /// never the first thing he does when Home opens.
+        var rare = false
     }
 
     /// Every clip he has, by the bundled file's name.
@@ -18,11 +21,14 @@ enum GaryLifePlan {
         Clip(name: "gary-pencil", good: 1, bad: 2),
         Clip(name: "gary-cash", good: 3, bad: 0.5),
         Clip(name: "gary-chuckle", good: 3, bad: 0.5),
+        // He flashes his phone at you: a ticket that cashed.
+        Clip(name: "gary-phone", good: 2, bad: 1, rare: true),
     ]
 
     /// The next clip: never one of the last two he played (when there are others to play), weighted by last
-    /// night's face. `roll` is a number in 0..<1.
-    static func next(from clips: [Clip], recent: [String], mood: String?, roll: Double) -> String? {
+    /// night's face; a rare clip only when `rareAllowed`. `roll` is a number in 0..<1.
+    static func next(from clips: [Clip], recent: [String], mood: String?, roll: Double, rareAllowed: Bool = false) -> String? {
+        let clips = clips.filter { rareAllowed || !$0.rare }
         let fresh = Set(recent.suffix(min(2, max(0, clips.count - 1))))
         let pool = clips.filter { !fresh.contains($0.name) }
         guard !pool.isEmpty else { return nil }
@@ -35,6 +41,12 @@ enum GaryLifePlan {
             left -= w
         }
         return pool.last?.name
+    }
+
+    /// A rare clip may come up: not as the first thing he does, and not twice in a day (`today` and
+    /// `lastRareDay` are the same kind of day string).
+    static func rareAllowed(first: Bool, lastRareDay: String?, today: String) -> Bool {
+        !first && lastRareDay != today
     }
 
     /// Seconds he stands before the next clip: a short beat when Home opens, a few seconds after that.

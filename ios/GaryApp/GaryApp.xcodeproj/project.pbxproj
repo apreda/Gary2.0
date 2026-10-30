@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0295F82266DFFA606C3514C0 /* gary-phone.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */; };
 		EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */; };
 		7C62D7D8209CC4D7C6DB0926 /* gary-cash.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 068D0E196F90F07B75676E34 /* gary-cash.mp4 */; };
 		DF023D29CCF6BCC9FE44B5AE /* gary-pencil.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */; };
@@ -180,6 +181,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-phone.mp4"; sourceTree = "<group>"; };
 		3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-chuckle.mp4"; sourceTree = "<group>"; };
 		068D0E196F90F07B75676E34 /* gary-cash.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-cash.mp4"; sourceTree = "<group>"; };
 		C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-pencil.mp4"; sourceTree = "<group>"; };
@@ -505,6 +507,7 @@
 		A9B7A0DCD1996F4BF6D28171 /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */,
 				3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */,
 				068D0E196F90F07B75676E34 /* gary-cash.mp4 */,
 				C2BB1BB2D7E516B93DA54F2F /* gary-pencil.mp4 */,
@@ -702,6 +705,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
+				0295F82266DFFA606C3514C0 /* gary-phone.mp4 in Resources */,
 				EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */,
 				7C62D7D8209CC4D7C6DB0926 /* gary-cash.mp4 in Resources */,
 				DF023D29CCF6BCC9FE44B5AE /* gary-pencil.mp4 in Resources */,
@@ -942,7 +946,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1001;
+				CURRENT_PROJECT_VERSION = 1002;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1029,7 +1033,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1001;
+				CURRENT_PROJECT_VERSION = 1002;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = SFBTX6KPLM;
 				ENABLE_NS_ASSERTIONS = NO;

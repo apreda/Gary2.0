@@ -580,6 +580,8 @@ final class GaryLife: ObservableObject {
     private var recent: [String] = []
 
     private static let handOverTime = 0.45
+    /// The day he last played a rare clip.
+    private static let rareDayKey = "garyRareClipDay"
 
     init() {
         for p in players {
@@ -623,7 +625,12 @@ final class GaryLife: ObservableObject {
         }
         var first = true
         while !Task.isCancelled {
-            var pick = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1))
+            // The fourth-wall phone is a once-a-day bit, never the first thing he does.
+            let today = SupabaseAPI.todayEST()
+            let rare = GaryLifePlan.rareAllowed(first: first, lastRareDay: UserDefaults.standard.string(forKey: Self.rareDayKey),
+                                                today: today)
+            var pick = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1),
+                                         rareAllowed: rare)
             #if DEBUG
             // Tour verb `garyclip <name>` plays that clip every time, to check it.
             if let forced = UserDefaults.standard.string(forKey: "garyClipPreview"), !forced.isEmpty { pick = forced }
@@ -664,6 +671,7 @@ final class GaryLife: ObservableObject {
             playing = false
             lastClipEnd = Date()
             recent = Array((recent + [name]).suffix(2))
+            if clips.first(where: { $0.name == name })?.rare == true { UserDefaults.standard.set(today, forKey: Self.rareDayKey) }
         }
     }
 

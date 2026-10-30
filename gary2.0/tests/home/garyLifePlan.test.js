@@ -31,6 +31,19 @@ out([GaryLifePlan.next(from: clips, recent: [], mood: "GaryFire", roll: 0.85) ??
     expect(r).toEqual(['cigar', 'paper', 'cigar']);
   });
 
+  it('a rare clip (the fourth-wall phone) only comes up when allowed, and then like any other', () => {
+    const r = swiftJSON(`
+let clips = [C(name: "a", good: 1, bad: 1), C(name: "phone", good: 1, bad: 1, rare: true)]
+let rolls = stride(from: 0.0, to: 1.0, by: 0.05).map { $0 }
+out([Set(rolls.compactMap { GaryLifePlan.next(from: clips, recent: [], mood: nil, roll: $0, rareAllowed: false) }).sorted(),
+     Set(rolls.compactMap { GaryLifePlan.next(from: clips, recent: [], mood: nil, roll: $0, rareAllowed: true) }).sorted(),
+     [GaryLifePlan.rareAllowed(first: true, lastRareDay: nil, today: "2026-10-30"),
+      GaryLifePlan.rareAllowed(first: false, lastRareDay: nil, today: "2026-10-30"),
+      GaryLifePlan.rareAllowed(first: false, lastRareDay: "2026-10-30", today: "2026-10-30"),
+      GaryLifePlan.rareAllowed(first: false, lastRareDay: "2026-10-29", today: "2026-10-30")]])`);
+    expect(r).toEqual([['a'], ['a', 'phone'], [false, true, false, true]]);
+  });
+
   it('stands a beat on arrival, then a few seconds between clips', () => {
     const r = swiftJSON(`out([GaryLifePlan.stand(first: true, roll: 0), GaryLifePlan.stand(first: true, roll: 0.999),
      GaryLifePlan.stand(first: false, roll: 0), GaryLifePlan.stand(first: false, roll: 0.999)])`);
