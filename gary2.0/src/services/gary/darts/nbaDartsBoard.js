@@ -183,7 +183,12 @@ function gameLines(c, records, stat, abbrById, oppRecord = null) {
     // Fouls that cut his minutes (round 9: Giannis's 25 minutes on Oct 24 were six fouls).
     const fouls = x.me.pf >= 6 ? ', fouled out' : x.me.pf === 5 ? ', 5 fouls' : '';
     const without = outRows.filter((r) => r !== mine && [...big].some((n) => samePlayerIn(n, [r.name], names))).map((r) => r.name);
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${without.length ? ` · without ${without.join(', ')}` : ''}`;
+    // The attempts behind the stat (round 11: "3" threes read the same on 3 of 10 as on 3 of 4).
+    const fields = Array.isArray(stat) ? stat : [stat];
+    const m = x.me, shots = m.fga == null ? null
+      : fields.some((f) => f === 'pts' || f === 'pra') ? `${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
+        : fields.includes('fg3m') ? `${m.fg3m}-${m.fg3a} 3PT` : null;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}`;
   });
 }
 

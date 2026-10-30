@@ -68,8 +68,12 @@ function flowText(rec, us) {
 /** A stored game's flow from one team's side, without the quarters (the live log prints its own): after three, with
  * 5:00 left, the largest leads, lead changes and ties, and each side's biggest run (Oct 29 2026, founder: "who got
  * ahead, how ... being close the whole game"; the live system's game lines had the quarters only). */
+// Technicals, flagrants and ejections, as the full game text says them (round 11: the live log never said Tari Eason was
+// ejected in the first quarter of a game he played 3 minutes in).
+const incidentsText = (rec) => (rec.incidents?.length ? `technicals, flagrants and ejections: ${rec.incidents.map((x) => `${x.text} (${periodName(x.period)})`).join('; ')}` : null);
 export function flowFacts(rec, teamId) {
-  return flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
+  const flow = flowText(rec, String(rec.home?.id) === String(teamId) ? 'home' : 'away').replace(/^by quarter: [^;]*; /, '');
+  return incidentsText(rec) ? `${flow}; ${incidentsText(rec)}` : flow;
 }
 
 /** An older game's people and boxes from one team's side, for the live log (loop 3, Oct 29 2026: its ten older games

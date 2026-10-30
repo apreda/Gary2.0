@@ -570,7 +570,7 @@ function uncheckedNumbers(line, facts) {
 }
 
 // The news's own table of the projected starters repeats WHO IS PLAYING (Oct 23 2026: every rebuilt story had both).
-const POSITION_CELL = /^(?:point guard|shooting guard|small forward|power forward|center|guard|forward|position|pg|sg|sf|pf|c|g|f)$/i;
+const POSITION_CELL = /^(?:point guard|shooting guard|small forward|power forward|center|guard|forward|wing|big|position|pg|sg|sf|pf|c|g|f)$/i;
 function startersTables(lines, desk) {
   const last = (n) => plain(n).toLowerCase().replace(/\s*\([a-z]{1,2}\)$/, '').replace(/,?\s+(?:jr|sr|ii|iii|iv)\.?$/, '').trim().split(' ').pop();
   const starters = new Set(sectionOf(desk, 'STARTING LINEUPS').split('\n')
@@ -647,7 +647,7 @@ const SEARCH_EMPTY = /^(?:No|Neither)\b.*\b(?:cutoff|supplied (?:material|report
 const ASKED = /\b(?:as requested|in the request|the request(?:ed)? (?:list|format))\b/i;
 // The search describing itself in other words (round 10: "per search summary", "page inaccessible, search snippet only",
 // "None have reported", "There was no verified announcement", "No Memphis DNP list was available").
-const SEARCH_NOTE = /\bper search summary\b|\bpage inaccessible\b|\bsearch snippets?\b|\bcould not be (?:established|verified|confirmed)\b|\breports? reviewed\b|\bunverified\b|^There (?:was|were) no\b[^.]*\b(?:announcements?|updates?|reports?|statements?|reporting)\b|^None (?:have|has) (?:reported|said)\b|^No \w+ DNP list was available\b|\bsupplied\b[^.]{0,40}\breporting\b/i;
+const SEARCH_NOTE = /\bper search summary\b|\bpage inaccessible\b|\bsearch snippets?\b|\bcould not be (?:established|verified|confirmed)\b|\breports? reviewed\b|\bunverified\b|^There (?:was|were) (?:also )?no\b[^.]*\b(?:announcements?|updates?|reports?|statements?|reporting)\b|\bdesignations are omitted\b|\bwithout repeating (?:their|the) official designations\b|\bdisplayed no publication time\b|\bparticipation reporting appears below\b|\bunresolved players identified\b|^None (?:have|has) (?:reported|said)\b|^No \w+ DNP list was available\b|\bsupplied\b[^.]{0,40}\breporting\b/i;
 // A season average or per-game rate (round 10: "Avdija leads the team at 22.3 points, 7.0 rebounds and 6.3 assists per
 // game", and two of them wrong); the log carries every game.
 const AVERAGE = /\baverag(?:e|es|ed|ing)\b[^.]*\d|\d+(?:\.\d+)?\s+(?:points|rebounds|assists|steals|blocks|threes|three-pointers|minutes|turnovers)\s+(?:per game|a game|a night|per contest)\b/i;
@@ -656,17 +656,28 @@ const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g
 const emptyNews = (raw) => { const s = unAbbrev(raw); return NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
   || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || AVERAGE.test(s); };
 function withoutEmptyNews(text) {
+  // A bullet that leaves takes its deeper-indented sub-bullets with it (round 11: "He had a 14-point, 10-rebound game"
+  // was left under Jrue Holiday when Robert Williams III's line went).
+  let dropUnder = null;
+  const indent = (l) => l.match(/^\s*/)[0].length;
   return String(text || '').split('\n').map((l) => {
-    if (/^\s*\|/.test(l)) {
-      const cells = l.split('|');
-      if (cells.length < 4 || /^\s*:?-{2,}/.test(cells[1] || '')) return l;
-      const rest = cells.slice(2, -1).map((c) => withoutSentences(c.trim(), emptyNews));
-      return rest.every((c) => !c.trim()) ? null : [cells[0], cells[1], ...rest.map((c) => ` ${c} `), cells[cells.length - 1]].join('|');
-    }
-    const lead = l.match(/^(\s*(?:[-*•]\s+)?(?:\*\*[^*]+\*\*[:.]?\s*)?)/)[1];
-    const body = withoutSentences(l.slice(lead.length), emptyNews);
-    return body.trim() || !l.slice(lead.length).trim() ? lead + body : null;
+    if (dropUnder != null) { if (l.trim() && indent(l) > dropUnder) return null; dropUnder = null; }
+    const kept = keepLine(l);
+    if (kept === null && /^\s*[-*•]\s/.test(l)) dropUnder = indent(l);
+    return kept;
   }).filter((l) => l !== null).join('\n');
+}
+// One news line with its empty sentences out (a table row cell by cell), or null when nothing is left.
+function keepLine(l) {
+  if (/^\s*\|/.test(l)) {
+    const cells = l.split('|');
+    if (cells.length < 4 || /^\s*:?-{2,}/.test(cells[1] || '')) return l;
+    const rest = cells.slice(2, -1).map((c) => withoutSentences(c.trim(), emptyNews));
+    return rest.every((c) => !c.trim()) ? null : [cells[0], cells[1], ...rest.map((c) => ` ${c} `), cells[cells.length - 1]].join('|');
+  }
+  const lead = l.match(/^(\s*(?:[-*•]\s+)?(?:\*\*[^*]+\*\*[:.]?\s*)?)/)[1];
+  const body = withoutSentences(l.slice(lead.length), emptyNews);
+  return body.trim() || !l.slice(lead.length).trim() ? lead + body : null;
 }
 
 /** The news Gary reads (see above). `facts` is newsFacts' check list; `start` the first game date of the two teams. */
