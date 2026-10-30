@@ -26,14 +26,35 @@ enum HomeBoardLeague: String, CaseIterable, Hashable {
         }
     }
 
-    /// ALL leads whenever the day has games; then sports with games on this
-    /// slate, football, then basketball, then baseball; inactive sports stay
-    /// tappable and YOU stays last.
-    static func ordered(available: Set<HomeBoardLeague>) -> [HomeBoardLeague] {
+    /// ALL leads whenever the day has games; then sports with games on this slate, football, then basketball,
+    /// then baseball; YOU stays last. A sport out of season has no tab (founder, Oct 29 2026: "we can drop MLB
+    /// til next season only sports in season need to have it"): a sport is in season with games today or on the
+    /// next slate, and football also through the days between its games.
+    static func ordered(available: Set<HomeBoardLeague>, upcoming: Set<HomeBoardLeague> = []) -> [HomeBoardLeague] {
         let sports: [HomeBoardLeague] = [.nfl, .ncaaf, .nba, .mlb]
+        let inSeason = sports.filter { available.contains($0) || upcoming.contains($0) || footballWeeks($0) }
         return (available.contains(.all) ? [.all] : [])
-            + sports.filter { available.contains($0) }
-            + sports.filter { !available.contains($0) }
+            + inSeason.filter { available.contains($0) }
+            + inSeason.filter { !available.contains($0) }
             + (available.contains(.you) ? [.you] : [])
+    }
+
+    /// The leagues on the next slate's board.
+    static func upcoming(_ board: TomorrowBoard?) -> Set<HomeBoardLeague> {
+        Set((board?.board ?? []).compactMap { HomeBoardLeague(rawValue: ($0.league ?? "").uppercased()) })
+    }
+
+    /// Football plays once a week, so its tab stays up between game days through the season: the NFL from
+    /// September through the Super Bowl, college from late August through its title game.
+    private static func footballWeeks(_ league: HomeBoardLeague, now: Date = Date()) -> Bool {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        let c = cal.dateComponents([.month, .day], from: now)
+        let md = (c.month ?? 1) * 100 + (c.day ?? 1)
+        switch league {
+        case .nfl: return md >= 901 || md <= 215
+        case .ncaaf: return md >= 820 || md <= 120
+        default: return false
+        }
     }
 }

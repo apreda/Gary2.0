@@ -1904,9 +1904,13 @@ struct HomeView: View {
         // Before any tap, open ALL (Sep 24 2026), else the first sport with
         // games on this slate.
         let selected: HomeBoardLeague = {
-            if userPickedBoardLeague && selectedHomeBoardLeague != .you { return selectedHomeBoardLeague }
+            let tabs = HomeBoardLeague.ordered(available: available, upcoming: HomeBoardLeague.upcoming(tomorrowBoard))
+            // A tab picked earlier that has since gone (a sport out of season) falls back like a fresh open.
+            if userPickedBoardLeague && selectedHomeBoardLeague != .you && tabs.contains(selectedHomeBoardLeague) {
+                return selectedHomeBoardLeague
+            }
             if selectedHomeBoardLeague == .you && available.contains(.you) { return .you }
-            return HomeBoardLeague.ordered(available: available).first ?? .mlb
+            return tabs.first ?? .nfl
         }()
 
         if !rows.isEmpty || !youRows.isEmpty {

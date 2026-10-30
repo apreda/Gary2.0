@@ -91,8 +91,12 @@ style guide; everything else follows his current request.
   card" and "Share the story" under it. The pick card is no longer the tap.
 - **Under the board: Tonight on X.** The Wire's moment and injury lines are
   gone (Adam, Oct 29 2026: "people get that kind of information elsewhere").
-  In their place, X's own embeds of real people's takes on tonight's games,
-  betting voices and talking heads, never a company or a news bulletin, as a
-  slow slideshow (7 seconds a post, swipeable). Accounts live in
-  `x_wire_accounts`; the x-wire function reads their new posts every 20
-  minutes with Gary's X keys, under a daily read cap.
+  In their place, real people's takes on tonight's games, betting voices and
+  talking heads, never a company or a news bulletin, drawn by the app in X's
+  layout on Gary's dark card (X's embeds were too big, X-blue and laggy), as a
+  slow slideshow (7 seconds a post, swipeable, each card its post's height).
+  Accounts live in `x_wire_accounts`; the x-wire function runs one X search
+  per pass for only their posts naming tonight's teams. Budget (Adam, Oct 29
+  2026: "5 dollar a month or 9 max"): 50 post reads a day, 1,500 a month.
+- **Board tabs are sports in season only** (Adam, Oct 29 2026: "drop MLB til
+  next season"): games today or on the next slate, football between weeks.

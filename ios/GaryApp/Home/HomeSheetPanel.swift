@@ -38,7 +38,7 @@ struct HomeSheetPanel<YouScorecard: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(HomeBoardLeague.ordered(available: available), id: \.self) { league in
+                ForEach(HomeBoardLeague.ordered(available: available, upcoming: HomeBoardLeague.upcoming(tomorrowBoard)), id: \.self) { league in
                     // The YOU tab exists only when the user has bets down
                     // today — an empty personal slate never renders a dead tab.
                     // MLB/NFL are ALWAYS tappable (founder, Aug 24): a

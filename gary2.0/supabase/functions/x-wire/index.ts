@@ -2,19 +2,22 @@ import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 // TONIGHT ON X (founder, Oct 29 2026): real people's takes on tonight's games for Home's slideshow, "the reaction
-// from the influencers plus the talking heads on TV, but no ESPN, no companies". Reads the chosen accounts' NEW
-// posts with Gary's X keys (paid per post read, so since_id and a daily cap), keeps the ones that name a game on
-// the slate and read as a take, not news or a promotion, and stores them for get_x_wire. The app embeds each post
-// with X's own widget.
+// from the influencers plus the talking heads on TV, but no ESPN, no companies". X bills every post read, and the
+// founder's ceiling is "5 dollar a month or 9 max", so a pass is one recent search per handful of accounts that
+// asks only for their posts naming tonight's teams; nothing else is read or paid for. It keeps the ones that read
+// as a take (not news, a promotion or politics) and stores what the app draws: clean text and the first photo.
 //
 //   POST {}                                   one pass (the 20-minute cron)
-//   POST {"resolve": ["handle", ...]}         look the accounts up and add them (paid per user read)
-//   POST {"lookback": 8}                      one pass over the last N hours instead of only new posts
+//   POST {"resolve": ["handle", ...]}         look the accounts up: name, picture, check ($0.01 a person)
+//   POST {"hydrate": true}                    re-read today's stored posts that lack text or media
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-/** Post reads a day before the function stops for the day ($0.005 each at X's pay-per-use rate). */
-const DAILY_POST_CAP = 600;
+/** Post reads before the function stops ($0.005 each at X's pay-per-use rate): $0.25 a day, $7.50 a month. */
+const DAILY_POST_CAP = 50;
+const MONTHLY_POST_CAP = 1500;
+/** Accounts per search, so each query stays inside X's 512-character limit with tonight's teams. */
+const ACCOUNTS_PER_QUERY = 8;
 
 async function hmacSha1(key: Uint8Array<ArrayBuffer>, message: string): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
@@ -120,12 +123,13 @@ async function slateGames(date: string): Promise<Game[]> {
   });
 }
 
-async function bumpReads(day: string, posts: number, users: number, pass: boolean) {
-  const cur: any[] = await db(`x_wire_reads?select=posts,users,passes&day=eq.${day}`);
-  const row = cur?.[0] ?? { posts: 0, users: 0, passes: 0 };
+async function bumpReads(day: string, posts: number, users: number, pass: boolean, sinceId?: string | null) {
+  const cur: any[] = await db(`x_wire_reads?select=posts,users,passes,since_id&day=eq.${day}`);
+  const row = cur?.[0] ?? { posts: 0, users: 0, passes: 0, since_id: null };
   await db("x_wire_reads", {
     method: "POST", headers: { Prefer: "resolution=merge-duplicates" },
-    body: JSON.stringify({ day, posts: row.posts + posts, users: row.users + users, passes: row.passes + (pass ? 1 : 0) }),
+    body: JSON.stringify({ day, posts: row.posts + posts, users: row.users + users, passes: row.passes + (pass ? 1 : 0),
+                           since_id: sinceId ?? row.since_id }),
   });
 }
 
@@ -134,7 +138,7 @@ async function resolve(handles: string[]) {
   const found: any[] = [];
   const missing: any[] = [];
   for (let i = 0; i < handles.length; i += 100) {
-    const r = await xGet(url, { usernames: handles.slice(i, i + 100).join(","), "user.fields": "public_metrics,description,verified,name" });
+    const r = await xGet(url, { usernames: handles.slice(i, i + 100).join(","), "user.fields": "public_metrics,description,verified,verified_type,name,profile_image_url" });
     if (!r.ok) return { ok: false, status: r.status, error: r.body };
     found.push(...(r.body.data ?? []));
     missing.push(...(r.body.errors ?? []).map((e: any) => e.value ?? e.detail));
@@ -145,6 +149,8 @@ async function resolve(handles: string[]) {
       body: JSON.stringify(found.map((u) => ({
         username: u.username, user_id: u.id, name: u.name, followers: u.public_metrics?.followers_count ?? 0,
         description: u.description ?? null, resolved_at: new Date().toISOString(),
+        avatar_url: u.profile_image_url ? String(u.profile_image_url).replace("_normal.", "_400x400.") : null,
+        verified_type: u.verified_type ?? (u.verified ? "blue" : null),
       }))),
     });
   }
@@ -152,55 +158,148 @@ async function resolve(handles: string[]) {
   return { ok: true, found: found.map((u) => ({ username: u.username, name: u.name, followers: u.public_metrics?.followers_count, description: u.description })), missing };
 }
 
-async function pass(lookback?: number) {
+/** The post as the app shows it: entities decoded, the photo's own link dropped, other links shown as written. */
+function cleanText(p: any): string {
+  let text = String(p.note_tweet?.text ?? p.text ?? "");
+  for (const u of (p.entities?.urls ?? []) as any[]) {
+    const isMedia = typeof u.media_key === "string" || /\/(photo|video)\/\d+$/.test(String(u.expanded_url ?? ""));
+    // A link reads as its site ("actionnetwork.com"): X's display_url ends in "…", and the app never shows one.
+    let site = "";
+    try { site = new URL(String(u.expanded_url ?? u.url)).hostname.replace(/^www\./, ""); } catch { site = ""; }
+    text = text.split(u.url).join(isMedia ? "" : site);
+  }
+  return text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/[ \t]+\n/g, "\n").trim();
+}
+
+function firstMedia(p: any, media: Map<string, any>): any {
+  const key = (p.attachments?.media_keys ?? [])[0];
+  const m = key ? media.get(key) : null;
+  if (!m) return null;
+  const url = m.type === "photo" ? m.url : m.preview_image_url;
+  return url ? { type: m.type, url, width: m.width ?? null, height: m.height ?? null } : null;
+}
+
+const POST_FIELDS = {
+  "tweet.fields": "created_at,public_metrics,lang,entities,attachments,note_tweet,author_id",
+  expansions: "attachments.media_keys",
+  "media.fields": "type,url,preview_image_url,width,height",
+};
+
+/** Keep a post when it names a game and reads as a take; nil otherwise. */
+function keepPost(p: any, username: string, day: string, games: Game[], media: Map<string, any>): any | null {
+  const raw = String(p.text ?? "");
+  if (p.lang && p.lang !== "en") return null;
+  if (NEWS.test(raw) || PROMO.test(raw) || POLITICS.test(raw)) return null;
+  const text = cleanText(p);
+  // A post that runs past a phone screen is an essay, not a take on the game.
+  if (text.length < 25 || text.length > 300) return null;
+  const hits = games.filter((g) => g.terms.some((t) => mentions(text, t)));
+  if (!hits.length) return null;
+  const g = hits.find((h) => h.big) ?? hits[0];
+  return {
+    id: p.id, username, posted_at: p.created_at, slate_date: day, league: g.league, matchup: g.matchup, big_game: g.big,
+    likes: p.public_metrics?.like_count ?? 0, reposts: p.public_metrics?.retweet_count ?? 0,
+    replies: p.public_metrics?.reply_count ?? 0, text: raw, display_text: text, media: firstMedia(p, media),
+  };
+}
+
+async function readsSoFar(day: string): Promise<{ today: number; month: number; since_id: string | null }> {
+  const month = day.slice(0, 7);
+  const rows: any[] = await db(`x_wire_reads?select=day,posts,since_id&day=gte.${month}-01&day=lte.${day}`);
+  const today = rows.find((r) => r.day === day);
+  return { today: today?.posts ?? 0, month: rows.reduce((n, r) => n + (r.posts ?? 0), 0), since_id: today?.since_id ?? null };
+}
+
+async function pass() {
   const day = slateDay();
   const { hour } = etParts();
   // Takes on the night's games come from late morning to the last final; nothing is read overnight.
   if (hour >= 2 && hour < 11) return { ok: true, skipped: "overnight" };
-  const reads: any[] = await db(`x_wire_reads?select=posts&day=eq.${day}`);
-  if ((reads?.[0]?.posts ?? 0) >= DAILY_POST_CAP) return { ok: true, skipped: "daily cap" };
+  const spent = await readsSoFar(day);
+  if (spent.today >= DAILY_POST_CAP || spent.month >= MONTHLY_POST_CAP) return { ok: true, skipped: "budget", spent };
 
   const games = await slateGames(day);
   if (!games.length) return { ok: true, skipped: "no games" };
-  const accounts: any[] = await db("x_wire_accounts?select=username,user_id,since_id&active=eq.true&user_id=not.is.null");
-
-  let read = 0;
+  // The search names tonight's teams by nickname, big games first, inside the query limit.
+  const nicknames: string[] = [];
+  for (const g of [...games.filter((g) => g.big), ...games.filter((g) => !g.big)]) {
+    for (const t of g.terms.filter((t) => !t.anyCase)) if (!nicknames.includes(t.term)) nicknames.push(t.term);
+  }
+  const accounts: any[] = await db("x_wire_accounts?select=username&active=eq.true&user_id=not.is.null&order=followers.desc");
+  const url = "https://api.x.com/2/tweets/search/recent";
+  let read = 0, newest = spent.since_id;
   const keep: any[] = [];
   const errors: any[] = [];
-  for (const a of accounts) {
-    const url = `https://api.x.com/2/users/${a.user_id}/tweets`;
+  for (let i = 0; i < accounts.length; i += ACCOUNTS_PER_QUERY) {
+    if (spent.today + read >= DAILY_POST_CAP) break;
+    const from = accounts.slice(i, i + ACCOUNTS_PER_QUERY).map((a) => `from:${a.username}`).join(" OR ");
+    const tail = " -is:retweet -is:reply lang:en";
+    const teams: string[] = [];
+    for (const n of nicknames) {
+      const term = n.includes(" ") ? `"${n}"` : n;
+      if (`(${from}) (${[...teams, term].join(" OR ")})${tail}`.length > 500) break;
+      teams.push(term);
+    }
     const params: Record<string, string> = {
-      max_results: "10", exclude: "replies,retweets", "tweet.fields": "created_at,public_metrics,lang",
+      query: `(${from}) (${teams.join(" OR ")})${tail}`,
+      max_results: "10", ...POST_FIELDS,
     };
-    if (a.since_id && !lookback) params.since_id = a.since_id;
-    else params.start_time = new Date(Date.now() - Math.min(lookback ?? 3, 12) * 3600_000).toISOString();
+    if (spent.since_id) params.since_id = spent.since_id;
+    else params.start_time = new Date(Date.now() - 3 * 3600_000).toISOString();
     const r = await xGet(url, params);
-    if (!r.ok) { errors.push({ username: a.username, status: r.status, error: r.body?.title ?? r.body }); continue; }
+    if (!r.ok) { errors.push({ status: r.status, error: r.body?.title ?? r.body }); continue; }
     const posts: any[] = r.body.data ?? [];
     read += posts.length;
-    if (r.body.meta?.newest_id) {
-      await db(`x_wire_accounts?username=eq.${encodeURIComponent(a.username)}`, { method: "PATCH", body: JSON.stringify({ since_id: r.body.meta.newest_id }) });
-    }
+    const media = new Map(((r.body.includes?.media ?? []) as any[]).map((m) => [m.media_key, m]));
+    const byId = new Map(((r.body.includes?.users ?? []) as any[]).map((u) => [u.id, u.username]));
+    const handles = new Map(accounts.map((a) => [String(a.username).toLowerCase(), a.username]));
     for (const p of posts) {
-      const text = String(p.text ?? "");
-      if (p.lang && p.lang !== "en") continue;
-      if (NEWS.test(text) || PROMO.test(text) || POLITICS.test(text)) continue;
-      if (text.replace(/https?:\/\/\S+/g, "").trim().length < 25) continue;
-      const hits = games.filter((g) => g.terms.some((t) => mentions(text, t)));
-      if (!hits.length) continue;
-      const g = hits.find((h) => h.big) ?? hits[0];
-      keep.push({
-        id: p.id, username: a.username, posted_at: p.created_at, slate_date: day, league: g.league, matchup: g.matchup,
-        big_game: g.big, likes: p.public_metrics?.like_count ?? 0, reposts: p.public_metrics?.retweet_count ?? 0, text,
-      });
+      // The author is whichever from: the post answered; X returns author_id, matched back through the account table.
+      const author = byId.get(p.author_id) ?? (await authorFor(p.author_id));
+      const username = author ? handles.get(String(author).toLowerCase()) : null;
+      if (!username) continue;
+      const k = keepPost(p, username, day, games, media);
+      if (k) keep.push(k);
+      if (!newest || BigInt(p.id) > BigInt(newest)) newest = p.id;
     }
-    if (read >= DAILY_POST_CAP) break;
   }
   if (keep.length) {
     await db("x_wire_posts", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(keep) });
   }
-  await bumpReads(day, read, 0, true);
-  return { ok: true, day, accounts: accounts.length, read, kept: keep.length, errors };
+  await bumpReads(day, read, 0, true, newest);
+  return { ok: true, day, read, kept: keep.length, errors, spent: { today: spent.today + read, month: spent.month + read } };
+}
+
+const authorCache = new Map<string, string | null>();
+/** author_id → username from our own account table (no paid user read). */
+async function authorFor(id: string): Promise<string | null> {
+  if (authorCache.has(id)) return authorCache.get(id)!;
+  const rows: any[] = await db(`x_wire_accounts?select=username&user_id=eq.${encodeURIComponent(id)}`);
+  const u = rows?.[0]?.username ?? null;
+  authorCache.set(id, u);
+  return u;
+}
+
+/** Re-read today's stored posts that the app cannot draw yet (written before text and media were kept). */
+async function hydrate() {
+  const day = slateDay();
+  const rows: any[] = await db(`x_wire_posts?select=id,username&slate_date=eq.${day}&display_text=is.null`);
+  if (!rows.length) return { ok: true, hydrated: 0 };
+  const games = await slateGames(day);
+  const r = await xGet("https://api.x.com/2/tweets", { ids: rows.slice(0, 100).map((x) => x.id).join(","), ...POST_FIELDS });
+  if (!r.ok) return { ok: false, status: r.status, error: r.body };
+  const media = new Map(((r.body.includes?.media ?? []) as any[]).map((m) => [m.media_key, m]));
+  const owner = new Map(rows.map((x) => [x.id, x.username]));
+  const keep: any[] = [];
+  const drop: string[] = [];
+  for (const p of (r.body.data ?? []) as any[]) {
+    const k = keepPost(p, owner.get(p.id), day, games, media);
+    if (k) keep.push(k); else drop.push(p.id);
+  }
+  if (keep.length) await db("x_wire_posts", { method: "POST", headers: { Prefer: "resolution=merge-duplicates" }, body: JSON.stringify(keep) });
+  if (drop.length) await db(`x_wire_posts?id=in.(${drop.join(",")})`, { method: "DELETE" });
+  await bumpReads(day, (r.body.data ?? []).length, 0, false);
+  return { ok: true, hydrated: keep.length, dropped: drop.length };
 }
 
 Deno.serve(async (req: Request) => {
@@ -210,7 +309,8 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json().catch(() => ({}));
     if (Array.isArray(body?.resolve)) return Response.json(await resolve(body.resolve.map(String)));
-    return Response.json(await pass(Number(body?.lookback) || undefined));
+    if (body?.hydrate) return Response.json(await hydrate());
+    return Response.json(await pass());
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
   }

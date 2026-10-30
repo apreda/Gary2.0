@@ -1,79 +1,87 @@
 import SwiftUI
-import WebKit
 
 /// One post in tonight's slideshow (get_x_wire).
 struct XWirePost: Decodable, Identifiable, Equatable {
+    struct Media: Decodable, Equatable {
+        let type: String
+        let url: String
+        let width: Int?
+        let height: Int?
+    }
     let id: String
     let username: String
     let name: String?
+    let avatar_url: String?
+    let verified_type: String?
+    let text: String
+    let media: Media?
     let league: String?
     let matchup: String?
     let big_game: Bool?
+    let posted_at: String?
 }
 
 /// TONIGHT ON X (founder, Oct 29 2026): under the board, where the Wire's injury and moment lines were ("people
 /// get that kind of information elsewhere"), real people's takes on tonight's games: betting voices and the
-/// talking heads, never a company or a news bulletin. Each post is X's own embed, so it reads as X pulled into
-/// the app. A slow slideshow: seven seconds a post, the bars filling as it plays; a swipe moves it by hand and
-/// holding it still pauses it. No posts yet, no section.
+/// talking heads, never a company or a news bulletin. The app draws each post in X's own layout on Gary's dark
+/// card (X's embeds were "massive size wise", wore X's blue and lagged in and out), every card one height so the
+/// show never jumps. A slow slideshow: seven seconds a post, the bars filling as it plays; a swipe moves it by
+/// hand and a finger on it holds it. A tap opens the post in X. No posts yet, no section.
 struct HomeXWire: View {
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var posts: [XWirePost] = []
-    /// Embeds X could not draw (deleted, protected, offline) drop out of the show.
-    @State private var failed: Set<String> = []
-    @State private var heights: [String: CGFloat] = [:]
     @State private var index = 0
     @State private var progress: CGFloat = 0
     @State private var holding = false
+    @State private var pageWidth: CGFloat = 0
+    /// Each card's height at the page's width; the show takes the one on screen.
+    @State private var heights: [String: CGFloat] = [:]
 
     private static let dwell: Double = 7
-    private var shown: [XWirePost] { posts.filter { !failed.contains($0.id) } }
 
     var body: some View {
-        let shown = self.shown
         // A stack that is always there, so the loader below runs before there is anything to show.
         VStack(spacing: 0) {
             Color.clear.frame(height: 0)
-            if !shown.isEmpty {
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pageWidth = $0 }
+            if !posts.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    header(count: shown.count)
-                    GeometryReader { geo in
-                        TabView(selection: $index) {
-                            ForEach(Array(shown.enumerated()), id: \.element.id) { i, post in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    XEmbedView(postID: post.id, width: geo.size.width,
-                                               onHeight: { h in heights[post.id] = h },
-                                               onFail: { failed.insert(post.id) })
-                                        .frame(height: heights[post.id] ?? 260, alignment: .top)
-                                    if let game = gameLine(post) {
-                                        Text(game)
-                                            .font(GaryFonts.kicker(10, .heavy)).tracking(1.4)
-                                            .foregroundStyle(GaryColors.gold.opacity(0.85))
-                                            .fitsOneLine()
-                                    }
-                                }
+                    header(count: posts.count)
+                    TabView(selection: $index) {
+                        ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
+                            XPostCard(post: post)
                                 .frame(maxHeight: .infinity, alignment: .top)
                                 .tag(i)
-                            }
                         }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
                     }
-                    // The show is as tall as the post on screen, easing as the next one slides in.
-                    .frame(height: (shown.indices.contains(index) ? heights[shown[index].id] : nil).map { $0 + 26 } ?? 286)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: index)
-                    .animation(.easeOut(duration: 0.25), value: heights)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    // The show is as tall as the post on screen and eases to the next one's height as it slides in.
+                    .frame(height: max(posts.indices.contains(index) ? heights[posts[index].id] ?? 160 : 160, 120))
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: index)
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in if !holding { holding = true } }
                             .onEnded { _ in holding = false }
                     )
+                    // Every card measured at the page's width, off screen.
+                    .background(alignment: .top) {
+                        ZStack(alignment: .top) {
+                            ForEach(posts) { post in
+                                XPostCard(post: post, measuring: true)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heights[post.id] = $0 }
+                            }
+                        }
+                        .frame(width: max(pageWidth - 2 * GaryLayout.gutter, 1))
+                        .hidden()
+                    }
                 }
                 .pageGutter()
-                .task(id: AdvanceKey(index: index, count: shown.count, holding: holding,
+                .task(id: AdvanceKey(index: index, count: posts.count, holding: holding,
                                      live: activePage && scenePhase == .active)) {
-                    await advance(count: shown.count)
+                    await advance(count: posts.count)
                 }
             }
         }
@@ -82,7 +90,7 @@ struct HomeXWire: View {
             while !Task.isCancelled {
                 if let fresh = await SupabaseAPI.fetchXWire(date: SupabaseAPI.todayEST()), fresh != posts {
                     posts = fresh
-                    if index >= max(shown.count, 1) { index = 0 }
+                    if index >= max(fresh.count, 1) { index = 0 }
                 }
                 do { try await Task.sleep(for: .seconds(300)) } catch { break }
             }
@@ -127,13 +135,131 @@ struct HomeXWire: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Tonight on X")
     }
+}
+
+/// A post in X's own layout on Gary's card: picture, name and check, handle and age, the X mark, the words with
+/// mentions and links in X's blue, one photo or video still at a set height, and the game it is about.
+struct XPostCard: View {
+    let post: XWirePost
+    /// The invisible copy that sizes the show: no images to load, same shapes.
+    var measuring = false
+    @Environment(\.openURL) private var openURL
+
+    private static let xBlue = Color(hex: "#1D9BF0")
+    private static let xGray = Color(hex: "#8B98A5")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                picture(post.avatar_url).frame(width: 42, height: 42).clipShape(Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(post.name ?? post.username)
+                            .font(.system(size: 15, weight: .bold)).foregroundStyle(GaryColors.warmWhite)
+                            .fitsOneLine()
+                        if let check = checkColor {
+                            Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundStyle(check)
+                        }
+                    }
+                    Text("@\(post.username) · \(age)")
+                        .font(.system(size: 14)).foregroundStyle(Self.xGray)
+                        .fitsOneLine()
+                }
+                Spacer(minLength: 6)
+                XMark().fill(GaryColors.warmWhite).frame(width: 17, height: 17)
+            }
+            Text(styled)
+                .font(.system(size: 15.5))
+                .foregroundStyle(GaryColors.warmWhite)
+                .fixedSize(horizontal: false, vertical: true)
+            if let media = post.media {
+                picture(media.url)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 168)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.white.opacity(0.1)))
+                    .overlay {
+                        if media.type != "photo" {
+                            Image(systemName: "play.fill").font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 52, height: 52).background(Circle().fill(Self.xBlue))
+                        }
+                    }
+            }
+            Spacer(minLength: 0)
+            if let game = gameLine {
+                Text(game)
+                    .font(GaryFonts.kicker(10, .heavy)).tracking(1.4)
+                    .foregroundStyle(GaryColors.gold.opacity(0.85))
+                    .fitsOneLine()
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(LabInk.plate))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            if let url = URL(string: "https://x.com/\(post.username)/status/\(post.id)") { openURL(url) }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens the post in X")
+    }
+
+    @ViewBuilder private func picture(_ url: String?) -> some View {
+        if measuring || url == nil {
+            Color.white.opacity(0.06)
+        } else {
+            AsyncImage(url: URL(string: url!)) { phase in
+                if let image = phase.image { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
+            }
+        }
+    }
+
+    /// X's check colors: blue for a person, gold for an organization, gray for government.
+    private var checkColor: Color? {
+        switch post.verified_type {
+        case "blue": return Self.xBlue
+        case "business": return Color(hex: "#E2B719")
+        case "government": return Self.xGray
+        default: return nil
+        }
+    }
+
+    /// "12m", "2h", the way X stamps a post's age.
+    private var age: String {
+        guard let date = post.posted_at.flatMap(parseISO8601) else { return "" }
+        let s = max(0, Date().timeIntervalSince(date))
+        if s < 3600 { return "\(max(1, Int(s / 60)))m" }
+        if s < 86_400 { return "\(Int(s / 3600))h" }
+        return "\(Int(s / 86_400))d"
+    }
+
+    /// The words as written, a shortened link shown as its site ("actionnetwork.com"), never with X's "…".
+    private var words: String {
+        post.text.replacingOccurrences(of: #"\b([\w-]+(\.[\w-]+)*\.[a-z]{2,})/\S*…"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: "…", with: "")
+    }
+
+    /// The words, with @mentions, #tags and links in X's blue.
+    private var styled: AttributedString {
+        let text = words
+        var out = AttributedString(text)
+        let ns = text as NSString
+        guard let re = try? NSRegularExpression(pattern: #"(@\w{1,15}|#\w+|\b[\w.-]+\.(com|net|org|io|ai|co|tv|us)(/\S*)?)"#) else { return out }
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            guard let r = Range(m.range, in: text), let ar = Range(r, in: out) else { continue }
+            out[ar].foregroundColor = Self.xBlue
+        }
+        return out
+    }
 
     /// "PANTHERS @ PACKERS" under the post.
-    private func gameLine(_ p: XWirePost) -> String? {
-        guard let m = p.matchup else { return nil }
+    private var gameLine: String? {
+        guard let m = post.matchup else { return nil }
         let sides = m.components(separatedBy: " @ ")
         guard sides.count == 2 else { return m.uppercased() }
-        return "\(Formatters.shortTeamName(sides[0], league: p.league)) @ \(Formatters.shortTeamName(sides[1], league: p.league))".uppercased()
+        return "\(Formatters.shortTeamName(sides[0], league: post.league)) @ \(Formatters.shortTeamName(sides[1], league: post.league))".uppercased()
     }
 }
 
@@ -149,102 +275,5 @@ private struct XMark: Shape {
         path.move(to: p(17.8, 20)); path.addLine(to: p(19.5, 20)); path.addLine(to: p(6.3, 3.9)); path.addLine(to: p(4.5, 3.9))
         path.closeSubpath()
         return path
-    }
-}
-
-/// One post as X draws it: X's own widget (dark, no tracking), in a web view that never scrolls on its own, so
-/// the slideshow owns the swipe. Its height comes back from the page; a link inside opens in X or Safari.
-struct XEmbedView: UIViewRepresentable {
-    let postID: String
-    let width: CGFloat
-    let onHeight: (CGFloat) -> Void
-    let onFail: () -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(onHeight: onHeight, onFail: onFail) }
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()
-        config.allowsInlineMediaPlayback = true
-        config.userContentController.add(context.coordinator, name: "embed")
-        let web = WKWebView(frame: .zero, configuration: config)
-        web.isOpaque = false
-        web.backgroundColor = .clear
-        web.scrollView.backgroundColor = .clear
-        web.scrollView.isScrollEnabled = false
-        web.scrollView.bounces = false
-        web.navigationDelegate = context.coordinator
-        web.uiDelegate = context.coordinator
-        web.loadHTMLString(Self.page(postID: postID, width: width), baseURL: URL(string: "https://betwithgary.ai"))
-        context.coordinator.startTimeout()
-        return web
-    }
-
-    func updateUIView(_ web: WKWebView, context: Context) {}
-
-    static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
-        web.configuration.userContentController.removeScriptMessageHandler(forName: "embed")
-    }
-
-    private static func page(postID: String, width: CGFloat) -> String {
-        let id = postID.filter(\.isNumber)
-        let w = Int(min(max(width, 250), 550))
-        return """
-        <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-        <style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}#t>div,#t iframe{margin:0!important}</style>
-        </head><body><div id="t"></div>
-        <script>
-        window.twttr=(function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],t=window.twttr||{};if(d.getElementById(id))return t;js=d.createElement(s);js.id=id;js.src="https://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);t._e=[];t.ready=function(f){t._e.push(f);};return t;}(document,"script","twitter-wjs"));
-        function report(){var h=document.getElementById('t').getBoundingClientRect().height;if(h>40)webkit.messageHandlers.embed.postMessage({h:h});}
-        twttr.ready(function(t){t.widgets.createTweet("\(id)",document.getElementById('t'),{theme:'dark',dnt:true,conversation:'none',width:\(w)}).then(function(el){
-          if(!el){webkit.messageHandlers.embed.postMessage({fail:true});return;}
-          report();new ResizeObserver(report).observe(document.getElementById('t'));
-        });});
-        </script></body></html>
-        """
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
-        let onHeight: (CGFloat) -> Void
-        let onFail: () -> Void
-        private var drawn = false
-        init(onHeight: @escaping (CGFloat) -> Void, onFail: @escaping () -> Void) {
-            self.onHeight = onHeight; self.onFail = onFail
-        }
-
-        /// X's widget gets twelve seconds to draw the post; after that it is dropped from the show.
-        func startTimeout() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 12) { [weak self] in
-                guard let self, !self.drawn else { return }
-                self.onFail()
-            }
-        }
-
-        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = message.body as? [String: Any] else { return }
-            if body["fail"] != nil { onFail(); return }
-            if let h = body["h"] as? Double, h > 40 {
-                drawn = true
-                onHeight(ceil(h))
-            }
-        }
-
-        // The page itself loads from our string; the widget's own frames load from X. A tap that leaves the post
-        // (the author, the post, a link in it) goes to X or Safari, never inside this little view.
-        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if action.navigationType == .linkActivated, let url = action.request.url {
-                UIApplication.shared.open(url)
-                decisionHandler(.cancel)
-                return
-            }
-            decisionHandler(.allow)
-        }
-
-        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
-                     for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            if let url = action.request.url { UIApplication.shared.open(url) }
-            return nil
-        }
     }
 }
