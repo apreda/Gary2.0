@@ -44,7 +44,9 @@ const bdl = {
     const out = {};
     for (let i = 0; i < ids.length; i += 50) {
       const q = ids.slice(i, i + 50).map(x => `player_ids[]=${x}`).join('&');
-      for (const p of await bdlAll(`/nfl/v1/players?${q}`)) out[p.id] = `${p.first_name} ${p.last_name}`.trim();
+      for (const p of await bdlAll(`/nfl/v1/players?${q}`)) {
+        out[p.id] = { name: `${p.first_name} ${p.last_name}`.trim(), number: p.jersey_number ?? null, team: p.team?.abbreviation ?? null };
+      }
     }
     return out;
   },

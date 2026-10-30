@@ -38,6 +38,14 @@ describe('Cash Rail worker pass', () => {
     expect(f.writes.snapshots[0]).toMatchObject({ league: 'NFL', game_id: String(game.id), props, players: { 465: "D'Andre Swift" } });
   });
 
+  it('keeps each player\'s jersey number and team with the snapshot, for the celebrations', async () => {
+    const f = fakes();
+    f.bdl.players = async () => ({ 465: { name: "D'Andre Swift", number: '4', team: 'CHI' } });
+    await runPass({ now: at(-30), date: 'd', db: f.db, bdl: f.bdl });
+    expect(f.writes.snapshots[0].players).toEqual({ 465: "D'Andre Swift" });
+    expect(f.writes.snapshots[0].roster).toEqual({ 465: { number: '4', team: 'CHI' } });
+  });
+
   it('skips a snapshot taken less than five minutes ago, and games more than an hour out', async () => {
     const recent = fakes({ snapshots: [{ captured_at: at(-32).toISOString() }] });
     expect(await runPass({ now: at(-30), date: 'd', db: recent.db, bdl: recent.bdl })).toEqual({ snapshots: 0, boards: 0 });

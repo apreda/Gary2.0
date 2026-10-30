@@ -61,8 +61,15 @@ export async function runPass({ now = new Date(), date, db, bdl, log = () => {} 
       const props = await bdl.props(gameId);
       if (!props?.length) continue;
       const gameOdds = await bdl.gameOdds(gameId);
-      const players = await bdl.players([...new Set(props.map(r => r.player_id).filter(x => x != null))]);
-      await db.insertSnapshot({ league: 'NFL', game_id: id, kickoff: g.date, captured_at: now.toISOString(), props, game_odds: gameOdds ?? [], players });
+      // Names for the board; jersey number and team for the celebrations.
+      const people = await bdl.players([...new Set(props.map(r => r.player_id).filter(x => x != null))]);
+      const players = {}, roster = {};
+      for (const [pid, p] of Object.entries(people ?? {})) {
+        if (typeof p === 'string') { players[pid] = p; continue; }
+        players[pid] = p.name;
+        roster[pid] = { number: p.number, team: p.team };
+      }
+      await db.insertSnapshot({ league: 'NFL', game_id: id, kickoff: g.date, captured_at: now.toISOString(), props, game_odds: gameOdds ?? [], players, roster });
       done.snapshots++;
       log(`snapshot ${id}: ${props.length} props`);
       continue;
