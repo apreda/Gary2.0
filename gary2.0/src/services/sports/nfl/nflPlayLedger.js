@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 19;
+const LEDGER_SCHEMA = 20;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -562,6 +562,11 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         const who = g(col); const team = g('posteam');
         if (who && team) { const k = `${team}|${who}`; const x = (game.lastPlay ||= {})[k] || { n: 0 }; game.lastPlay[k] = { n: x.n + 1, q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null }; }
       }
+      // Any play whose text names him ("1-R.Odunze"), a play wiped out by a foul or a kick return too (round 15: Rome
+      // Odunze's roughing-the-passer "No Play" in Q3 and an onside kick in Q4 came after the "last" the columns gave).
+      for (const m of text.matchAll(/(?<![\w-])\d{1,2}-([A-Z][\w'-]*\.\s?[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))?)/g)) {
+        (game.lastNamed ||= {})[m[1].replace(/\.\s/, '.')] = { q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null };
+      }
       if (g('posteam')) { const q = num(g('qtr')); (game.teamLastQ ||= {})[g('posteam')] = Math.max(game.teamLastQ[g('posteam')] || 0, q || 0); }
       // "LAC-99-J.Caldwell was injured during the play": club, jersey, name (a spaced surname too: "G.Van Roten").
       for (const m of text.matchAll(/\b([A-Z]{2,3})-(?:(\d{1,2})-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))*) was injured during the play/g)) {
@@ -776,7 +781,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
       lead: g.flow.lead, lead_changes: g.flow.changes } : null;
     const hurt = (g.hurt || []).map(({ team, who, q, clock, later }) => ({ team, who, q, clock, later }));
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, teamLastQ: g.teamLastQ || {} };
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ || {} };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

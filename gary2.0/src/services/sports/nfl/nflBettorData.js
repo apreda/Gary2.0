@@ -25,8 +25,12 @@ export const etDate = (when = new Date()) => new Date(when).toLocaleDateString('
 
 /** Everything the desk reads, loaded once per call. Unavailable files leave their sections out, said so. */
 // A receiver's drops in one game from PFR's receiving charting (round 14: A.J. Brown's three drops in a 3-of-10 day).
-const dropsOf = (d, r) => { if (!d.recAdv) return 0; if (!d.dropMap) { d.dropMap = new Map(); for (const x of d.recAdv) d.dropMap.set(`${x.game_id}|${retireKey(x.pfr_player_name)}`, n(x.receiving_drop)); }
-  return d.dropMap.get(`${r.game_id}|${retireKey(r.player_display_name)}`) || 0; };
+// By PFR id through the weekly roster first, then by name (round 15: "Zonovan Knight" is the weekly stats' Bam Knight).
+const dropsOf = (d, r) => { if (!d.recAdv) return 0;
+  if (!d.dropMap) { d.dropMap = new Map(); const pfrOf = new Map((d.rosterWeekly || []).filter((x) => x.gsis_id && x.pfr_id).map((x) => [x.gsis_id, x.pfr_id]));
+    d.dropPfr = pfrOf; for (const x of d.recAdv) { d.dropMap.set(`${x.game_id}|${retireKey(x.pfr_player_name)}`, n(x.receiving_drop)); d.dropMap.set(`${x.game_id}|pfr:${x.pfr_player_id}`, n(x.receiving_drop)); } }
+  const pfr = d.dropPfr.get(r.player_id);
+  return (pfr ? d.dropMap.get(`${r.game_id}|pfr:${pfr}`) : null) ?? d.dropMap.get(`${r.game_id}|${retireKey(r.player_display_name)}`) ?? 0; };
 
 // Retirements from ESPN's team transactions, "TEAM|namekey" -> 'YYYY-MM-DD' (round 14: Lane Johnson retired Oct 6 and
 // read for weeks as a regular who missed games; neither the weekly roster nor ESPN's roster says so). Null on a failure.
@@ -348,6 +352,8 @@ function lineupChanges(d, code, gs) {
   const pfrOfGsis = new Map();
   for (const r of d.rosterWeekly || []) if (r.team === code && r.gsis_id && r.pfr_id) pfrOfGsis.set(r.gsis_id, r.pfr_id);
   const gsisOf = new Map([...pfrOfGsis].map(([gsis, pfr]) => [pfr, gsis]));
+  const gsisByKey = new Map();
+  for (const r of d.rosterWeekly || []) if (r.team === code && r.gsis_id) for (const k of keys(r.full_name)) if (!gsisByKey.has(k)) gsisByKey.set(k, r.gsis_id);
   const byName = new Map();
   for (const id of players) for (const k of keys(name.get(id).name)) if (!byName.has(k)) byName.set(k, id);
   const snapIdOf = (r) => { const viaRoster = pfrOfGsis.get(r.player_id); if (viaRoster && name.has(viaRoster)) return viaRoster; return keys(r.player_display_name).map((k) => byName.get(k)).find(Boolean) || null; };
@@ -374,7 +380,10 @@ function lineupChanges(d, code, gs) {
     const activeBench = (e, id) => statusAt(e, id)?.status === 'ACT' && of(e, id) < 0.25;
     // An inactive week off that week's injury report is a healthy scratch, a bench week too (round 11: Alontae Taylor,
     // scratched then active without a snap, read "missed Wk 6-7").
-    const healthyScratch = (e, id) => statusAt(e, id)?.status === 'INA' && d.onReport && gsisOf.has(id) && !d.onReport.has(`${Number(e.week)}|${gsisOf.get(id)}`);
+    // By name on the club's weekly roster when the snap file's id has no GSIS link (round 15: no offensive lineman's
+    // roster row carries a PFR id, so Jake Majors, scratched healthy the day Kendall returned, read as a missing regular).
+    const gsisFor = (id) => gsisOf.get(id) || keysOf(id).map((k) => gsisByKey.get(k)).find(Boolean) || null;
+    const healthyScratch = (e, id) => statusAt(e, id)?.status === 'INA' && d.onReport && Boolean(gsisFor(id)) && !d.onReport.has(`${Number(e.week)}|${gsisFor(id)}`);
     const benchWeek = (e, id) => activeBench(e, id) || healthyScratch(e, id);
     const benched = (id) => i > 0 && benchWeek(g, id) && benchWeek(gs[i - 1], id);
     const skill = skillRegulars(prior);
@@ -549,7 +558,15 @@ export function notOnReport(d, team, before, reportText = '') {
   // injury report" under "Pat Surtain II", listed).
   const variants = rosterNames(d, c);
   const back = (changes.missing?.names || []).filter((p) => !variants(p.name).some((k) => k && text.includes(k)));
-  if (!back.length) return null;
+  // A regular on a reserve, suspended or exempt list in the last game who is active on the coming week's roster and on no
+  // report (round 15: Montez Sweat, back from a two-week suspension, read nowhere for the coming game).
+  const lastGame = gs.at(-1);
+  const rosterWeeks = (d.rosterWeekly || []).filter((r) => r.team === c).map((r) => n(r.week));
+  const nextWeek = rosterWeeks.length ? Math.max(...rosterWeeks) : 0;
+  const activeNow = (nm) => nextWeek > n(lastGame.week) && (d.rosterWeekly || []).some((r) => r.team === c && n(r.week) === nextWeek && String(r.status).toUpperCase() === 'ACT' && variants(nm).includes(sameKey(r.full_name)));
+  const returning = (changes.absent?.get(lastGame.g.game_id) || []).filter((a) => /suspend|IR|reserve|exempt|PUP|non-football/i.test(a.why || '')
+    && !back.some((b) => b.name === a.name) && !variants(a.name).some((k) => k && text.includes(k)) && activeNow(a.name));
+  if (!back.length && !returning.length) return null;
   // How he missed it, as the game log says it (Oct 24 2026: "missed Wk 6" for a safety who played special teams only).
   // How many straight games he has been without, so a month away does not read as one missed week (Oct 29 2026 hunt:
   // Lane Johnson, retired Oct 6 and still on both rosters, read "missed Wk 7").
@@ -559,7 +576,8 @@ export function notOnReport(d, team, before, reportText = '') {
   const missed = (p) => { const k = straight(p); const ws = gs.slice(-Math.max(k, 1)).map((x) => [x.week, whyIn(p, x)]);
     const why = ws.every(([, w]) => w === ws[0][1]) ? (ws[0][1] ? ` (${ws[0][1]})` : '') : ` (${ws.map(([w, y]) => `Wk ${w} ${y || 'did not play'}`).join(', ')})`;
     return k > 1 ? `missed Wk ${gs.at(-k).week}-${gs.at(-1).week}, ${k} straight games${why}` : `missed Wk ${gs.at(-1).week}${why}`; };
-  return `${team}: ${back.map((p) => `${p.name} (${p.pos}, ${p.limited ? `left early or limited Wk ${gs.at(-1).week}` : p.why === 'special teams only' ? `special teams only Wk ${gs.at(-1).week}` : missed(p)})`).join(', ')}`;
+  return `${team}: ${[...back.map((p) => `${p.name} (${p.pos}, ${p.limited ? `left early or limited Wk ${gs.at(-1).week}` : p.why === 'special teams only' ? `special teams only Wk ${gs.at(-1).week}` : missed(p)})`),
+    ...returning.map((a) => `${a.name} (${a.pos}, back from the ${a.why} list: ${missed(a)}; active on the Wk ${nextWeek} roster, not on this week's report)`)].join(', ')}`;
 }
 const sameKey = (x) => qbKey(x).join('');
 // Every name a team's player goes by in the weekly roster (full name, first and last, the name he plays under) and the
@@ -1039,21 +1057,25 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
     // A backup on a reserve list, inactive or released is not the one who steps in (round 12: ESPN still listed the
     // Jets' Marcelino McCrary-Ball, on IR since Week 3); the next name is.
     const OFFLIST = { RES: 'on a reserve list', INA: 'inactive', EXE: "on the commissioner's exempt list", CUT: 'released', DEV: 'on the practice squad' };
-    // Judged on this week's report and on the club's last game, not the week ahead's roster row (round 14: the Jets' Joseph
-    // Ossai, DNP all week and inactive the last two games, read as the next man up).
-    const lastWeek = Math.max(0, ...teamGames(d, code, d.season, before).map((x) => n(x.week)));
+    // This week's report first (round 14: the Jets' Joseph Ossai, DNP all week, read as the next man up), then this week's
+    // roster row: a move since the last game counts (round 15: Dameon Pierce, put on IR Wednesday, read as Saquon
+    // Barkley's backup, and Jaydon Blue, promoted the same day, was skipped). Inactive last game alone is not unavailable:
+    // a player practicing this week is back.
     const onReport = (a) => (report?.players || []).find((p) => depthKey(p.name) === depthKey(a.name));
     const unavailable = (a) => {
       const rep = onReport(a);
       if (rep && (/out|doubtful/i.test(rep.game_status || '') || rep.practice === 'DNP')) return `on this week's report (${rep.game_status ? String(rep.game_status).toLowerCase() : 'practice DNP'}${rep.injury ? `, ${String(rep.injury).toLowerCase()}` : ''})`;
-      const rows = rosterOf(a); const r = rows.find((x) => n(x.week) === lastWeek) || rows[0];
-      return r && r.team === code ? OFFLIST[String(r.status || '').toUpperCase()] || null : null;
+      const r = rosterOf(a)[0];
+      const st = String(r?.status || '').toUpperCase();
+      return r && r.team === code && st !== 'INA' ? OFFLIST[st] || null : null;
     };
     const seen = new Set();
     for (const p of listed) {
-      const spot = depth.find(([, names]) => names[0] && key(names[0].name) === key(p.name) && names[1]);
+      const spot = depth.find(([, names]) => names[0] && key(names[0].name) === key(p.name));
       if (!spot || seen.has(p.name)) continue;
       seen.add(p.name);
+      // A spot with no second name is said (round 15: the Titans' punter, on the report, went without a line).
+      if (!spot[1][1]) { lines.push(`${team}: ${p.name} (${spot[0].toUpperCase()}; ${p.game_status || `practice ${p.practice}`}) → no backup listed at his spot on ESPN's chart`); continue; }
       const skipped = [];
       let next = null;
       for (const a of spot[1].slice(1)) { const why = unavailable(a); if (!why) { next = a; break; } skipped.push(`${a.name} ${why}`); }

@@ -70,11 +70,18 @@ export const qbPressure = (season) => once(`pressure|${season}`, async () => {
 
 /** Each receiver's drops in each game (PFR's receiving charting), "season|week|TEAM|name" -> drops (round 14: A.J.
  * Brown's three drops in a 3-of-10 day were nowhere). Null when the file did not load. */
-export const receiverDrops = (season) => once(`drops|${season}`, async () => {
+// Also by GSIS id through the weekly roster's PFR ids (`roster`), for players the two files spell apart (round 15: PFR's
+// "Zonovan Knight" is the weekly stats' Bam Knight).
+export const receiverDrops = (season, roster = null) => once(`drops|${season}|${roster ? 'r' : ''}`, async () => {
   const rows = await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_rec_${season}.csv`).catch(() => null);
   if (!rows) return null;
+  const gsisOfPfr = new Map((roster || []).filter((r) => r.pfr_id && r.gsis_id).map((r) => [r.pfr_id, r.gsis_id]));
   const out = new Map();
-  for (const r of rows) if (r.receiving_drop !== '' && r.receiving_drop != null) out.set(`${r.season}|${n(r.week)}|${r.team}|${normName(r.pfr_player_name)}`, n(r.receiving_drop));
+  for (const r of rows) {
+    if (r.receiving_drop === '' || r.receiving_drop == null) continue;
+    out.set(`${r.season}|${n(r.week)}|${r.team}|${normName(r.pfr_player_name)}`, n(r.receiving_drop));
+    const gsis = gsisOfPfr.get(r.pfr_player_id); if (gsis) out.set(`${r.season}|${n(r.week)}|${gsis}`, n(r.receiving_drop));
+  }
   return out;
 });
 
@@ -250,7 +257,9 @@ export function defenseLine(cur, prev, defense, position, season) {
 // `.active` holds the weeks he was on the active roster, and `.report` that week's report status and injury from the
 // league's injury file (round 14: Ladd McConkey's Week 5, active and questionable with a foot, read a bare "did not play").
 export function rosterWeekWords(roster, injuries = null) {
-  const out = new Map(); out.active = new Set(); out.report = new Map();
+  const out = new Map(); out.active = new Set(); out.report = new Map(); out.team = roster?.length ? new Map() : null;
+  out.weeks = new Set((roster || []).map((r) => Number(r.week)));
+  for (const r of roster || []) if (r.gsis_id) out.team.set(`${r.gsis_id}|${Number(r.week)}`, r.team);
   for (const r of roster || []) if (r.gsis_id && String(r.status).toUpperCase() === 'ACT') out.active.add(`${r.gsis_id}|${Number(r.week)}`);
   for (const r of injuries || []) {
     if (!r.gsis_id || String(r.game_type || 'REG') !== 'REG') continue;
@@ -301,7 +310,7 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT${qbGame ? `, sacked ${n(r.sacks_suffered)}${pressured != null ? `, pressured ${pressured}` : ''}` : ''}`);
     if (n(r.carries)) bits.push(`${n(r.carries)} carries, ${n(r.rushing_yards)} yards${n(r.rushing_tds) ? `, ${n(r.rushing_tds)} TD` : ''}`);
     const teamTotal = teamTargets?.get(`${r.season}|${r.week}|${r.team}`);
-    const dropped = drops?.get(`${r.season}|${wk}|${r.team}|${normName(r.player_display_name)}`);
+    const dropped = drops?.get(`${r.season}|${wk}|${r.player_id}`) ?? drops?.get(`${r.season}|${wk}|${r.team}|${normName(r.player_display_name)}`);
     if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}${dropped ? `, ${dropped} drop${dropped === 1 ? '' : 's'}` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
@@ -319,7 +328,9 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     // his usual (round 14: Ladd McConkey's last play at Q1 7:21, no "was injured" line, read like a quiet game).
     const lp = !h && plays?.get(`${wk}|${r.team}`);
     if (lp) {
-      const mine = Object.entries(lp.lastPlay || {}).find(([k]) => { const [, who] = k.split('|'); const [i, l] = String(who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); })?.[1];
+      const hit = Object.entries(lp.lastPlay || {}).find(([k]) => { const [, who] = k.split('|'); const [i, l] = String(who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); });
+      // The last play naming him at all (a foul's "No Play", a kick return) over his last touch (round 15).
+      const mine = hit ? (lp.lastNamed?.[hit[0].split('|')[1]] || hit[1]) : null;
       const shareOf = (x) => (x?.teamSnaps ? x.snaps / x.teamSnaps : null);
       const others = snaps.filter((x) => x.week !== wk).map(shareOf).filter((v) => v != null).sort((a, b) => a - b);
       const usual = others.length ? others[Math.floor(others.length / 2)] : null, today = shareOf(snaps.find((x) => x.week === wk));
@@ -339,6 +350,13 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
         const on = snaps.find((x) => x.week === Number(w) && x.snaps > 0);
         const wk0 = `${gsis}|${Number(w)}`;
+        // A week he was on another club's roster, or on none, is that club's week, not this club's game (round 15: Audric
+        // Estime's practice-squad weeks elsewhere read as Browns games with Deshaun Watson at QB).
+        const club = gsis && rosterWords?.team ? rosterWords.team.get(wk0) : undefined;
+        if (rosterWords?.team && gsis && rosterWords.weeks?.has(Number(w)) && club !== team) {
+          missed.push({ wk: Number(w), text: `Wk ${Number(w)}: ${club ? `with ${club}${rosterWords.get(wk0) ? ` (${rosterWords.get(wk0)})` : ''}` : 'not on an NFL roster that week'}` });
+          continue;
+        }
         const why = gsis ? rosterWords?.get(wk0) || (rosterWords?.active?.has(wk0) ? `active${rosterWords.report?.get(wk0) ? `; on that week's report: ${rosterWords.report.get(wk0)}` : ''}` : null) : null;
         // The game as a played line has it: where, against whom, that defense and his team's quarterback (round 8: "Wk 6
         // Oct 18: no touches; 33 of 46 snaps" lost the opponent, the site, the defense and the passer).
@@ -421,7 +439,8 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
   const mine = normName(name);
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
-    && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup)/i.test(String(i?.status || '')));
+    // Suspended and non-football-injury lists too (round 15: BDL's "Reserve-Sus" and "NFI-R" rows reached neither list).
+    && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup|reserve-sus|suspen|nfi)/i.test(String(i?.status || '')));
   if (!list.length) return null;
   const rank = (s) => ['out', 'doubtful', 'questionable', 'no game status yet'].findIndex((w) => String(s).toLowerCase().startsWith(w));
   // His last game with this club: any stat row or any snap, offense, defense or special teams (round 12: a blocker hurt
@@ -440,7 +459,8 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
     const days = r.practiceDays?.length ? r.practiceDays.map((d) => `${String(d.day).split(',')[0]} ${d.practice}`).join(', ') : r.practice;
     return [hurt, days ? `practice ${days}` : null].filter(Boolean).join('; ');
   };
-  const word = (i) => { const w = lastWeek(i); const d = detail(i.report); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${d ? `${d}; ` : ''}${String(i.status).toLowerCase()}${w ? `; last played Wk ${w}` : ''})`.trim(); };
+  const statusWord = (st) => { const t = String(st || '').toLowerCase(); return /^reserve-sus|^suspen/.test(t) ? 'suspended' : /^nfi/.test(t) ? 'non-football injury list' : t; };
+  const word = (i) => { const w = lastWeek(i); const d = detail(i.report); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${d ? `${d}; ` : ''}${statusWord(i.status)}${w ? `; last played Wk ${w}` : ''})`.trim(); };
   const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
   const reserve = list.filter((i) => rank(i.status) < 0);
   return [week.length ? `${label}: ${week.map(word).join(', ')}` : `${label}: nobody listed this week`,

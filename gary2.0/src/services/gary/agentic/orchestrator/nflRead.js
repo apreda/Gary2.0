@@ -47,7 +47,9 @@ export function backOffReport(data, desk, awayTeam, homeTeam, before) {
 // section's heading (Oct 23 2026 section review).
 export function injuriesAsReported(desk) {
   return sectionOf(desk, 'INJURY REPORT').split('\n')
-    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE|^NFL INJURY REPORT$|^─+$/.test(l))
+    // A player on the practice squad's injured list is not on the club's report (round 15: the Bengals' Josh Kattus read
+    // "Out" in the game reads; round 14 took him off the dart and prop reports).
+    .filter((l) => !/already in the spread|^Each row shows the reported status|^TODAY'S DATE|^NFL INJURY REPORT$|^─+$/.test(l) && !/practice[- ]squad injured(?: reserve)? list/i.test(l))
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
