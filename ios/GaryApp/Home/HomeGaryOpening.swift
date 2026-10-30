@@ -489,9 +489,9 @@ struct GaryIdleFigure: View {
 
     private func figure(at date: Date) -> some View {
         let t = date.timeIntervalSinceReferenceDate
-        let clip = life.clipShown(at: date)
-        // The breath and the sway, eased out before a clip and back in after it, so the hand-off is exact.
-        let calm = life.stanceMotion(at: date)
+        // The breath and the sway, eased out before a clip and back in after it. They move whichever layer is
+        // showing, as one piece, so nothing shifts when the layers hand over.
+        let calm = reduceMotion ? 0 : life.stanceMotion(at: date)
         let breath = 1 + 0.009 * calm * sin(2 * .pi * t / 3.4)
         let sway = 0.7 * calm * sin(2 * .pi * t / 6.3)
         return GeometryReader { geo in
@@ -501,26 +501,34 @@ struct GaryIdleFigure: View {
             let r = Self.clipStance
             let vw = s.width / r.width, vh = s.height / r.height
             ZStack(alignment: .topLeading) {
-                Image("GaryIdleBase")
+                // Until the first clip is up (and on Reduce Motion): a clip's own first frame, cut out the same
+                // way and laid exactly where the clips lie, so handing over to the video changes nothing.
+                Image("GaryStanceClip")
                     .resizable()
-                    .frame(width: s.width, height: s.height)
-                    .rotationEffect(.degrees(sway), anchor: .bottom)
-                    .scaleEffect(x: 2 - breath, y: breath, anchor: .bottom)
-                    .opacity(1 - clip)
-                    .position(x: left + s.width / 2, y: floor - s.height / 2)
-                if !reduceMotion && clip < 1 {
-                    smoke(from: CGPoint(x: left + Self.stanceSmoke.x * s.width, y: floor - s.height + Self.stanceSmoke.y * s.height),
-                          t: t, strength: 1 - clip)
-                }
-                // Always mounted, so the next clip's first frame is up before it shows. Its smoke fades out
-                // over the top before it reaches the scoreboard.
-                GaryClipView(player: life.player)
                     .frame(width: vw, height: vh)
                     .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
                                          startPoint: .top, endPoint: .bottom))
-                    .opacity(clip)
+                    .opacity(life.opacity(of: -1, at: date))
                     .position(x: left - r.minX * vw + vw / 2, y: floor - s.height - r.minY * vh + vh / 2)
+                // Two clip layers that take turns, both always mounted, so the next clip's first frame is up
+                // before it shows. Their smoke fades out over the top before it reaches the scoreboard.
+                ForEach(0..<2, id: \.self) { i in
+                    GaryClipView(player: life.players[i], output: life.outputs[i])
+                        .frame(width: vw, height: vh)
+                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
+                                             startPoint: .top, endPoint: .bottom))
+                        .opacity(life.opacity(of: i, at: date))
+                        .zIndex(life.depth(of: i))
+                        .position(x: left - r.minX * vw + vw / 2, y: floor - s.height - r.minY * vh + vh / 2)
+                }
+                if !reduceMotion && calm > 0 {
+                    smoke(from: CGPoint(x: left + Self.stanceSmoke.x * s.width, y: floor - s.height + Self.stanceSmoke.y * s.height),
+                          t: t, strength: calm)
+                        .zIndex(3)
+                }
             }
+            .rotationEffect(.degrees(sway), anchor: .bottom)
+            .scaleEffect(x: 2 - breath, y: breath, anchor: .bottom)
         }
     }
 
@@ -546,53 +554,71 @@ struct GaryIdleFigure: View {
     }
 }
 
-/// Gary's days between the labels: a stand of a few seconds, a clip, a stand, another clip. The next clip is
-/// loaded at the start of each stand, so its first frame (the stance) is waiting when the stand ends.
-/// `live()` runs inside the figure's task, so leaving Home ends it.
+/// Gary's days between the labels: a stand of a few seconds, a clip, a stand, another clip. Once the first
+/// clip is up he is always a video frame, never the drawing, so a clip starting is the same frame starting to
+/// move (founder, Oct 30 2026: "a little jump or hint that it's changing videos"). Two players take turns: while
+/// he stands, the next clip loads in the hidden one and its first frame (the stance) dissolves in over the last
+/// clip's last frame (the stance too). `live()` runs inside the figure's task, so leaving Home ends it.
 @MainActor
 final class GaryLife: ObservableObject {
     /// The plan's clips that shipped in this build.
     private let clips = GaryLifePlan.clips.filter { Bundle.main.url(forResource: $0.name, withExtension: "mp4") != nil }
 
-    let player = AVPlayer()
+    let players = [AVPlayer(), AVPlayer()]
+    /// Each player's frames, attached to every item before it loads so its first frame is never missed.
+    let outputs = (0..<2).map { _ in
+        AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+    }
     var mood: String?
-    @Published private(set) var clipStart: Date?
-    @Published private(set) var clipEnd: Date?
+    /// The layer showing: 0 or 1, or -1 for the drawing before the first clip is up.
+    @Published private(set) var front = -1
+    /// A hand-over in progress: the next layer fading in over the one showing.
+    @Published private(set) var handOver: (from: Int, to: Int, start: Date)?
+    @Published private(set) var playing = false
     private var standEnd: Date?
     private var lastClipEnd: Date?
     private var recent: [String] = []
 
-    private static let fadeIn = 0.3, fadeOut = 0.35
+    private static let handOverTime = 0.45
 
     init() {
-        player.isMuted = true
-        player.actionAtItemEnd = .pause
-        player.preventsDisplaySleepDuringVideoPlayback = false
+        for p in players {
+            p.isMuted = true
+            p.actionAtItemEnd = .pause
+            p.preventsDisplaySleepDuringVideoPlayback = false
+        }
     }
 
-    /// How much of the clip shows: 0 in his stance, 1 while a clip plays.
-    func clipShown(at now: Date) -> Double {
-        guard let start = clipStart else { return 0 }
-        var v = Self.smooth(now.timeIntervalSince(start) / Self.fadeIn)
-        if let end = clipEnd { v *= 1 - Self.smooth(now.timeIntervalSince(end) / Self.fadeOut) }
-        return v
+    /// A layer's opacity: the next one fades in on top while the one under it stays whole, so the figure
+    /// never thins out mid-way.
+    func opacity(of layer: Int, at now: Date) -> Double {
+        if let h = handOver {
+            if layer == h.to { return Self.smooth(now.timeIntervalSince(h.start) / Self.handOverTime) }
+            if layer == h.from { return 1 }
+            return 0
+        }
+        return layer == front ? 1 : 0
+    }
+
+    func depth(of layer: Int) -> Double {
+        handOver?.to == layer ? 2 : layer == front ? 1 : 0
     }
 
     /// How much the stance breathes and sways: none during a clip, easing back after one and out before the next.
     func stanceMotion(at now: Date) -> Double {
-        if clipStart != nil && clipEnd == nil { return 0 }
+        if playing { return 0 }
         var v = 1.0
         if let end = lastClipEnd { v = min(v, Self.smooth(now.timeIntervalSince(end) / 1.2)) }
         if let next = standEnd { v = min(v, Self.smooth(next.timeIntervalSince(now) / 0.8)) }
         return v
     }
 
-    /// His days, until the task is cancelled; then back to the still stance.
+    /// His days, until the task is cancelled.
     func live() async {
         defer {
-            player.pause()
-            clipStart = nil
-            clipEnd = nil
+            for p in players { p.pause() }
+            playing = false
+            handOver = nil
             standEnd = nil
         }
         var first = true
@@ -603,35 +629,40 @@ final class GaryLife: ObservableObject {
             if let forced = UserDefaults.standard.string(forKey: "garyClipPreview"), !forced.isEmpty { pick = forced }
             #endif
             guard let name = pick, let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
+            let next = front == 0 ? 1 : 0
             let item = AVPlayerItem(url: url)
-            player.replaceCurrentItem(with: item)
+            item.add(outputs[next])
+            players[next].replaceCurrentItem(with: item)
             let stand = GaryLifePlan.stand(first: first, roll: Double.random(in: 0..<1))
             first = false
-            standEnd = Date().addingTimeInterval(stand)
-            try? await Task.sleep(nanoseconds: UInt64(stand * 1e9))
+            let began = Date()
+            standEnd = began.addingTimeInterval(stand)
             while item.status == .unknown && !Task.isCancelled { try? await Task.sleep(nanoseconds: 50_000_000) }
             guard !Task.isCancelled, item.status == .readyToPlay else { return }
+            _ = await players[next].seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+            // A beat for its first frame to draw, then the hand-over, early in the stand while he's still.
+            let wait = max(0.15, min(stand * 0.35, 1.2) - Date().timeIntervalSince(began))
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+            guard !Task.isCancelled else { return }
+            handOver = (front, next, Date())
+            try? await Task.sleep(nanoseconds: UInt64(Self.handOverTime * 1e9))
+            guard !Task.isCancelled else { return }
+            front = next
+            handOver = nil
+            if let end = standEnd, end > Date() { try? await Task.sleep(nanoseconds: UInt64(end.timeIntervalSinceNow * 1e9)) }
+            guard !Task.isCancelled else { return }
+            // Played to its own last frame (the stance again) by the player's clock, and held there.
             let length = item.duration.seconds.isFinite ? item.duration.seconds : 8
             standEnd = nil
-            clipEnd = nil
-            // The still fades into the clip's first frame before it moves: both are the stance.
-            clipStart = Date()
-            try? await Task.sleep(nanoseconds: UInt64(Self.fadeIn * 1e9))
-            guard !Task.isCancelled else { return }
-            player.play()
-            // Played to its own last frame (the stance again) by the player's clock, so a slow start or a
-            // dropped frame never cuts a move short; then the still takes over from that frame.
+            playing = true
+            players[front].play()
             let until = Date().addingTimeInterval(length + 3)
-            while !Task.isCancelled, Date() < until, player.currentTime().seconds < length - 0.05 {
+            while !Task.isCancelled, Date() < until, players[front].currentTime().seconds < length - 0.05 {
                 try? await Task.sleep(nanoseconds: 30_000_000)
             }
             guard !Task.isCancelled else { return }
-            clipEnd = Date()
-            try? await Task.sleep(nanoseconds: UInt64(Self.fadeOut * 1e9))
-            guard !Task.isCancelled else { return }
+            playing = false
             lastClipEnd = Date()
-            clipStart = nil
-            clipEnd = nil
             recent = Array((recent + [name]).suffix(2))
         }
     }
@@ -642,17 +673,16 @@ final class GaryLife: ObservableObject {
 }
 
 /// A clip with its see-through kept. Each clip is one plain video, the picture over its alpha (a video's own
-/// alpha doesn't show in the simulator or on every device), put back together here every frame.
+/// alpha doesn't show in the simulator or on every device), put back together here every frame. A paused
+/// player keeps its last frame up.
 private struct GaryClipView: UIViewRepresentable {
     let player: AVPlayer
+    let output: AVPlayerItemVideoOutput
 
     final class ClipView: UIView {
         private static let context = CIContext(options: [.cacheIntermediates: false])
-        private let output = AVPlayerItemVideoOutput(pixelBufferAttributes:
-            [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
         private var link: CADisplayLink?
-        private weak var item: AVPlayerItem?
-        weak var player: AVPlayer?
+        var output: AVPlayerItemVideoOutput?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -666,12 +696,7 @@ private struct GaryClipView: UIViewRepresentable {
         }
 
         @objc private func tick() {
-            guard let current = player?.currentItem else { return }
-            if current !== item {
-                item?.remove(output)
-                current.add(output)
-                item = current
-            }
+            guard let output else { return }
             let t = output.itemTime(forHostTime: CACurrentMediaTime())
             guard output.hasNewPixelBuffer(forItemTime: t),
                   let buffer = output.copyPixelBuffer(forItemTime: t, itemTimeForDisplay: nil) else { return }
@@ -695,12 +720,12 @@ private struct GaryClipView: UIViewRepresentable {
         v.backgroundColor = .clear
         v.isUserInteractionEnabled = false
         v.layer.contentsGravity = .resize
-        v.player = player
+        v.output = output
         return v
     }
 
     func updateUIView(_ v: ClipView, context: Context) {
-        v.player = player
+        v.output = output
     }
 }
 
