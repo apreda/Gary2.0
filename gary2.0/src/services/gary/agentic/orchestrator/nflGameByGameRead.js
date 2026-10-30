@@ -35,11 +35,13 @@ export async function buildNflGameByGameStory(desk, { homeTeam, awayTeam, gameDa
   const awayGames = nflTeamGames(data, awayTeam, before), homeGames = nflTeamGames(data, homeTeam, before);
   const meetings = awayGames.filter((x) => x.opp === home);
   const meetingIds = new Set(meetings.map((x) => x.g.game_id));
+  // One memory for the whole read: an opponent's earlier games are listed once (round 17).
+  const read = { shown: new Map() };
   const teamPart = (team, code, games) => {
     if (!games.length) return `${team.toUpperCase()}: no games yet this season`;
     const w = games.filter((x) => x.won).length, t = games.filter((x) => x.tied).length;
     const newest = games.slice().reverse();
-    const full = newest.slice(0, NFL_WINDOW).map((x) => (meetingIds.has(x.g.game_id) ? `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}: in this season's meetings above` : nflGameFull(data, x, code, before)));
+    const full = newest.slice(0, NFL_WINDOW).map((x) => (meetingIds.has(x.g.game_id) ? `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}: in this season's meetings above` : nflGameFull(data, x, code, before, read)));
     const older = newest.slice(NFL_WINDOW);
     return [`${team.toUpperCase()}: ${w}-${games.length - w - t}${t ? `-${t}` : ''}${games.length > NFL_WINDOW ? `; the last ${NFL_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
       // A meeting past the window points to the meetings too (Oct 29 2026 hunt, round 7: the Eagles' Week 1 game with
@@ -48,7 +50,7 @@ export async function buildNflGameByGameStory(desk, { homeTeam, awayTeam, gameDa
   };
   const story = [[header, spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonight,
     `LEAGUE RECORDS BEFORE TONIGHT\n${nflLeagueRecords(data, before)}`,
-    meetings.length ? `THIS SEASON'S MEETINGS (${meetings.length}), shown from the ${awayTeam.split(' ').pop()}' side\n${meetings.map((x) => nflGameFull(data, x, away, before)).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
+    meetings.length ? `THIS SEASON'S MEETINGS (${meetings.length}), shown from the ${awayTeam.split(' ').pop()}' side\n${meetings.map((x) => nflGameFull(data, x, away, before, read)).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
     teamPart(awayTeam, away, awayGames), teamPart(homeTeam, home, homeGames)].join('\n\n');
   const finals = new Set([...awayGames, ...homeGames].map((x) => `${x.pf}-${x.pa}`));
   return { line: lineOf(desk), story, news: newsWithoutRecaps(news, finals) };

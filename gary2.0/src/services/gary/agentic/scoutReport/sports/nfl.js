@@ -1054,6 +1054,10 @@ export async function buildNflScoutReport(game, options = {}) {
   // only this game's week counts. Its game status wins over the feed's row and the feed's note for a player both list
   // (Oct 23 2026 data audit: Sills read "QUESTIONABLE per this week's note; the feed still reads IR-R" with the
   // official report saying Out); the feed's note stays as text.
+  // The feed's comments without the reporter's credit ("..., Aric DiLalla of the team's official site reports"), on every
+  // row: round 16 dropped it only where a row met the official report, and IR rows off the report kept it (round 17).
+  const withoutCredit = (c) => String(c || '').replace(/,\s*[A-Z][^,]*?\s+(?:of|from)\s+[^,]*?\s+reports?\.?\s*$/, '.').replace(/\s+(?:according to|per)\s+[A-Z][^.]*\.\s*$/, '.');
+  for (const side of ['home', 'away']) for (const i of (Array.isArray(injuries?.[side]) ? injuries[side] : [])) if (i.comment) i.comment = withoutCredit(i.comment);
   if (injuries && injuries.sourceOk !== false && !scheduleWeek) {
     (injuries.notOnFile ||= []).push(`Official injury report: not on file (the schedule did not give this game's week); the statuses below are the injury feed's.`);
   }
@@ -1095,7 +1099,11 @@ export async function buildNflScoutReport(game, options = {}) {
       const designated = report.players.some((r) => r.game_status);
       // Until then a feed's weekly word is its placeholder too (Oct 29 2026 hunt: on Thursday nine Eagles read Questionable
       // for Sunday, Omenihu's under a note from Oct 20); nflAvailability.js says the statuses are not issued yet.
-      if (!designated) for (const i of list) i.statusesPending = true;
+      // Once the final report is due the feed's word is the team's own Friday status, and the league's file can trail it by
+      // most of a day (round 17: at 5 PM Friday the Eagles' five Outs read "No game status yet"; the file had Thursday's
+      // report only). Said so, as when the team is not in the file.
+      if (!designated && finalReportNotDue(game.commence_time)) for (const i of list) i.statusesPending = true;
+      else if (!designated) (injuries.notOnFile ||= []).push(`Official injury report, Wk ${report.week}, ${team}: the league's file has this week's practice days but not the final game statuses yet; the statuses below are the injury feed's.`);
       for (const raw of report.players) {
         const [first, ...rest] = String(raw.name || '').trim().split(/\s+/);
         if (!first) continue;
@@ -1116,7 +1124,7 @@ export async function buildNflScoutReport(game, options = {}) {
           // The feed's comment when it says more than a status word (Oct 29 2026 hunt: "... practice: Limited. questionable").
           // Without the reporter's credit ("..., Wes Hodkiewicz of the Packers' official site reports"; round 16).
           const feedNote = /^\s*(?:questionable|doubtful|out|probable|active)\.?\s*$/i.test(String(listed.comment || '')) ? ''
-            : String(listed.comment || '').replace(/,\s*[A-Z][^,]*?\s+(?:of|from)\s+[^,]*?\s+reports?\.?\s*$/, '.').replace(/\s+(?:according to|per)\s+[A-Z][^.]*\.\s*$/, '.');
+            : withoutCredit(listed.comment);
           listed.comment = `Official report, Wk ${report.week}: ${said}. ${feedNote}`.trim();
           continue;
         }
