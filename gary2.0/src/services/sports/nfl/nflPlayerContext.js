@@ -16,7 +16,8 @@ const day = (d) => { const [, m, dd] = String(d || '').split('-').map(Number); r
 // rest of the process); the next call asks again.
 const memo = new Map();
 const once = (key, fn) => {
-  if (!memo.has(key)) memo.set(key, fn().catch(() => null).then((v) => { if (v == null) memo.delete(key); return v; }));
+  // A result marked `retry` (a part of it failed) is used once and asked for again next time (round 14).
+  if (!memo.has(key)) memo.set(key, fn().catch(() => null).then((v) => { if (v == null || v.retry) memo.delete(key); return v; }));
   return memo.get(key);
 };
 
@@ -25,8 +26,13 @@ const once = (key, fn) => {
 export const weeklyRows = (season) => once(`week|${season}`, async () => {
   const url = `${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`;
   const rows = (await fetchCsv(url).catch(() => fetchCsv(url))).filter((r) => r.season_type === 'REG');
-  const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => []);
-  return (await withOfficialBox(rows, schedule, season).catch(() => null))?.rows ?? rows;
+  // Without the schedule or the official box, nflverse's own counts are used this once and the official ones asked for
+  // again on the next call (round 14: a failed schedule download kept nflverse's counts for the whole run).
+  const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => null);
+  const official = schedule ? (await withOfficialBox(rows, schedule, season).catch(() => null))?.rows : null;
+  if (official) return official;
+  rows.retry = true; rows.officialMissing = true;
+  return rows;
 });
 
 /** "season|week|TEAM" → game date, from the nflverse schedule; `.site` has where the team played it ("vs", "@" or
@@ -52,10 +58,23 @@ export const gameDays = () => once('days', async () => {
 /** PFR's times pressured per quarterback game: "season|week|team|normalized name" -> count (round 11). */
 export const qbPressure = (season) => once(`pressure|${season}`, async () => {
   const out = new Map();
-  for (const r of await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_pass_${season}.csv`).catch(() => [])) {
+  // A failed download is null, so it is asked for again (round 14: it was kept as an empty map, and pressure dropped).
+  const rows = await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_pass_${season}.csv`).catch(() => null);
+  if (!rows) return null;
+  for (const r of rows) {
     if (r.times_pressured === '' || r.times_pressured == null) continue;
     out.set(`${r.season}|${n(r.week)}|${r.team}|${normName(r.pfr_player_name)}`, n(r.times_pressured));
   }
+  return out;
+});
+
+/** Each receiver's drops in each game (PFR's receiving charting), "season|week|TEAM|name" -> drops (round 14: A.J.
+ * Brown's three drops in a 3-of-10 day were nowhere). Null when the file did not load. */
+export const receiverDrops = (season) => once(`drops|${season}`, async () => {
+  const rows = await fetchCsv(`${RELEASE_BASE}/pfr_advstats/advstats_week_rec_${season}.csv`).catch(() => null);
+  if (!rows) return null;
+  const out = new Map();
+  for (const r of rows) if (r.receiving_drop !== '' && r.receiving_drop != null) out.set(`${r.season}|${n(r.week)}|${r.team}|${normName(r.pfr_player_name)}`, n(r.receiving_drop));
   return out;
 });
 
@@ -132,6 +151,16 @@ export function regularsOut(snaps, roster) {
         // A quarterback only when he has started the most of its games so far, ties to the latest start (round 13: the
         // Falcons' Cooper Rush, benched after two starts, read as missing behind Michael Penix).
         if (before[0].pos === 'QB' && (why === 'no offensive snaps' || qbOf(team, w) !== pfr)) continue;
+        // Nor one whose starts all came while this week's starter was inactive or on a reserve list: he was the fill-in
+        // (round 14: Rush's two starts came with Michael Penix Jr. out, and Penix's first games back read "without Rush").
+        if (before[0].pos === 'QB') {
+          const now = snaps.rows.filter((r) => r.team === team && r.pos === 'QB' && r.week === w && r.pct >= 0.5).sort((a, b) => b.pct - a.pct)[0];
+          const starts = before.filter((r) => r.pct >= 0.5).map((r) => r.week);
+          // ...and who has not started since that starter came back (Washington's Jayden Daniels, back in Week 5, was the
+          // starter: his Weeks 3-4 stay "without").
+          const startedSince = mine.some((r) => r.week > w && r.pct >= 0.5);
+          if (now && now.pfr !== pfr && starts.length && !startedSince && starts.every((x) => ['INA', 'RES'].includes(String(rosterRow.get(`${now.pfr}|${x}`)?.status || '').toUpperCase()))) continue;
+        }
         const k = `${w}|${team}`;
         out.set(k, [...(out.get(k) || []), { name: mine[0].name, pos: mine[0].pos, why, share: before.reduce((a, r) => a + r.pct, 0) / before.length }]);
       }
@@ -218,8 +247,17 @@ export function defenseLine(cur, prev, defense, position, season) {
 /** Each player's roster word for a week ("inactive", "injured reserve", "commissioner's exempt list"), keyed
  * "GSIS id|week", from the weekly roster (Oct 29 2026 hunt, round 7: Josh Jacobs' sheet read "did not play" for the six
  * weeks he was on the exempt list, Lamar Jackson's for three weeks inactive). */
-export function rosterWeekWords(roster) {
-  const out = new Map();
+// `.active` holds the weeks he was on the active roster, and `.report` that week's report status and injury from the
+// league's injury file (round 14: Ladd McConkey's Week 5, active and questionable with a foot, read a bare "did not play").
+export function rosterWeekWords(roster, injuries = null) {
+  const out = new Map(); out.active = new Set(); out.report = new Map();
+  for (const r of roster || []) if (r.gsis_id && String(r.status).toUpperCase() === 'ACT') out.active.add(`${r.gsis_id}|${Number(r.week)}`);
+  for (const r of injuries || []) {
+    if (!r.gsis_id || String(r.game_type || 'REG') !== 'REG') continue;
+    const words = [r.report_status ? String(r.report_status).toLowerCase() : null, r.report_primary_injury ? String(r.report_primary_injury).toLowerCase() : null,
+      r.practice_status ? (/did not/i.test(r.practice_status) ? 'did not practice' : /limited/i.test(r.practice_status) ? 'limited in practice' : /full/i.test(r.practice_status) ? 'full practice' : String(r.practice_status).toLowerCase()) : null].filter(Boolean);
+    if (words.length) out.report.set(`${r.gsis_id}|${Number(r.week)}`, words.join(', '));
+  }
   for (const r of roster || []) {
     const w = r.status === 'INA' ? 'inactive' : r.status === 'EXE' ? "commissioner's exempt list"
       : r.status === 'RES' ? (/^R(?:01|48)$/.test(String(r.status_description_abbr || '')) ? 'injured reserve' : 'on a reserve list')
@@ -250,7 +288,7 @@ export function weekPassers(rows) {
 // why a game he missed was missed.
 // `hurt`: the play ledger's in-game injuries, "week|team" -> [{ who: "A.Jones", q, clock, later }] (round 13: a game he
 // left hurt read like a dud game).
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null } = {}) {
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null, plays = null, drops = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
@@ -263,7 +301,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     if (n(r.attempts)) bits.push(`${n(r.completions)} of ${n(r.attempts)} passing, ${n(r.passing_yards)} yards, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT${qbGame ? `, sacked ${n(r.sacks_suffered)}${pressured != null ? `, pressured ${pressured}` : ''}` : ''}`);
     if (n(r.carries)) bits.push(`${n(r.carries)} carries, ${n(r.rushing_yards)} yards${n(r.rushing_tds) ? `, ${n(r.rushing_tds)} TD` : ''}`);
     const teamTotal = teamTargets?.get(`${r.season}|${r.week}|${r.team}`);
-    if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}`);
+    const dropped = drops?.get(`${r.season}|${wk}|${r.team}|${normName(r.player_display_name)}`);
+    if (n(r.targets) || n(r.receptions)) bits.push(`${n(r.targets)} targets${teamTotal ? ` (of the team's ${teamTotal})` : ''}, ${n(r.receptions)} catches, ${n(r.receiving_yards)} yards${n(r.receiving_tds) ? `, ${n(r.receiving_tds)} TD` : ''}${dropped ? `, ${dropped} drop${dropped === 1 ? '' : 's'}` : ''}`);
     const s = snaps.find((x) => x.week === wk);
     if (s) bits.push(`${s.snaps}${s.teamSnaps ? ` of ${s.teamSnaps}` : ''} snaps`);
     // The week's quarterbacks unless he is one of them (round 9: a receiver's trick-play pass hid the week's QB).
@@ -276,6 +315,16 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const parts = String(r.player_display_name || '').replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV)$/i, '').split(/\s+/);
     const h = (hurt?.get(`${wk}|${r.team}`) || []).find((e) => { const [i, l] = String(e.who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); });
     if (h) bits.push(`hurt in Q${h.q}${h.clock ? ` (${h.clock})` : ''}, ${h.later ? 'on a later play' : 'not on a later play'}`);
+    // His last play before the 4th quarter in a game his club played into it, on a day his snap share fell under 60% of
+    // his usual (round 14: Ladd McConkey's last play at Q1 7:21, no "was injured" line, read like a quiet game).
+    const lp = !h && plays?.get(`${wk}|${r.team}`);
+    if (lp) {
+      const mine = Object.entries(lp.lastPlay || {}).find(([k]) => { const [, who] = k.split('|'); const [i, l] = String(who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); })?.[1];
+      const shareOf = (x) => (x?.teamSnaps ? x.snaps / x.teamSnaps : null);
+      const others = snaps.filter((x) => x.week !== wk).map(shareOf).filter((v) => v != null).sort((a, b) => a - b);
+      const usual = others.length ? others[Math.floor(others.length / 2)] : null, today = shareOf(snaps.find((x) => x.week === wk));
+      if (mine && mine.q < 4 && (lp.teamLastQ?.[r.team] || 0) >= 4 && usual != null && today != null && today < 0.6 * usual) bits.push(`last on a play in Q${mine.q}${mine.clock ? ` (${mine.clock})` : ''}`);
+    }
     const gone = (without?.get(`${wk}|${r.team}`) || []).filter((x) => normName(x.name) !== normName(r.player_display_name)).slice(0, 3);
     if (gone.length) bits.push(`without ${gone.map((x) => `${x.name} (${x.pos}, ${x.why})`).join(', ')}`);
     return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}${result ? `, ${result}` : ''}: ${bits.join('; ') || 'no touches'}`;
@@ -289,7 +338,8 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
       const [s, w, t] = key.split('|');
       if (Number(s) === Number(season) && t === team && Number(w) <= 18 && date && date < end && !played.some((p) => p.wk === Number(w))) {
         const on = snaps.find((x) => x.week === Number(w) && x.snaps > 0);
-        const why = gsis ? rosterWords?.get(`${gsis}|${Number(w)}`) : null;
+        const wk0 = `${gsis}|${Number(w)}`;
+        const why = gsis ? rosterWords?.get(wk0) || (rosterWords?.active?.has(wk0) ? `active${rosterWords.report?.get(wk0) ? `; on that week's report: ${rosterWords.report.get(wk0)}` : ''}` : null) : null;
         // The game as a played line has it: where, against whom, that defense and his team's quarterback (round 8: "Wk 6
         // Oct 18: no touches; 33 of 46 snaps" lost the opponent, the site, the defense and the passer).
         const opp = days.opp?.get(key), site = days.site?.get(key);
@@ -384,7 +434,13 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
       ...[...(snaps?.get(nm)?.stOnly?.keys() || []), ...(snaps?.get(nm)?.defOnly?.keys() || [])].filter((k) => !club || k.endsWith(`|${club}`)).map((k) => Number(k.split('|')[0]))];
     return ws.length ? Math.max(...ws) : null;
   };
-  const word = (i) => { const w = lastWeek(i); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${String(i.status).toLowerCase()}${w ? `; last played Wk ${w}` : ''})`.trim(); };
+  const detail = (r) => {
+    if (!r) return '';
+    const hurt = [r.injury, r.secondary].filter(Boolean).map((x) => String(x).toLowerCase()).join(', ');
+    const days = r.practiceDays?.length ? r.practiceDays.map((d) => `${String(d.day).split(',')[0]} ${d.practice}`).join(', ') : r.practice;
+    return [hurt, days ? `practice ${days}` : null].filter(Boolean).join('; ');
+  };
+  const word = (i) => { const w = lastWeek(i); const d = detail(i.report); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${d ? `${d}; ` : ''}${String(i.status).toLowerCase()}${w ? `; last played Wk ${w}` : ''})`.trim(); };
   const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
   const reserve = list.filter((i) => rank(i.status) < 0);
   return [week.length ? `${label}: ${week.map(word).join(', ')}` : `${label}: nobody listed this week`,
@@ -397,9 +453,13 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
  * for a player both list; a report player the feed lacks is added; before the week's statuses are issued (the final
  * report), a feed's weekly word reads "no game status yet". `reports`: [{ team: full name, report }].
  */
-export function withOfficialReport(injuries, reports) {
-  const rows = [...(injuries || [])];
+// `roster` (the weekly roster's rows): a feed row for a player on the practice squad in the roster's latest week is not
+// the club's report (round 14: the Vikings' practice-squad injured list read "out" at the head of their report).
+export function withOfficialReport(injuries, reports, roster = null) {
   const full = (i) => normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`);
+  const latest = Math.max(0, ...(roster || []).map((r) => Number(r.week) || 0));
+  const practiceSquad = new Set((roster || []).filter((r) => Number(r.week) === latest && String(r.status).toUpperCase() === 'DEV').map((r) => normName(r.full_name)));
+  const rows = (injuries || []).filter((i) => !practiceSquad.has(full(i)));
   for (const { team, report, pending = false } of reports || []) {
     // A report not filed yet, before the final report is due: the feed's weekly word is its placeholder (round 8).
     if (!report?.players?.length) {
@@ -418,10 +478,12 @@ export function withOfficialReport(injuries, reports) {
     for (const r of report.players) {
       const k = lastOf(r.name);
       const listed = byName.get(normName(r.name)) || (k && feedLast.get(k)?.length === 1 && reportLast.get(k) === 1 ? feedLast.get(k)[0] : null);
-      if (listed) { if (r.game_status) rows[rows.indexOf(listed)] = { ...listed, status: r.game_status }; continue; }
-      if (!r.game_status) continue;
+      // The report's injury and practice days ride with the row (round 13: the frames gave a status only), and before the
+      // game statuses are filed every player on the report is listed, not only the feed's (Mahomes and Andrews were missing).
+      if (listed) { rows[rows.indexOf(listed)] = { ...listed, ...(r.game_status ? { status: r.game_status } : {}), report: r }; continue; }
+      if (!r.game_status && designated) continue;
       const [first, ...rest] = String(r.name || '').trim().split(/\s+/);
-      rows.push({ player: { first_name: first, last_name: rest.join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: r.game_status });
+      rows.push({ player: { first_name: first, last_name: rest.join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: r.game_status || 'no game status yet', report: r });
     }
     if (!designated) {
       for (let k = 0; k < rows.length; k++) {
