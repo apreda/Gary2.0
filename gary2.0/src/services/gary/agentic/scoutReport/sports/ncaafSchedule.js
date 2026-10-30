@@ -425,12 +425,15 @@ async function playerGames(sides, boxes) {
           const mine = tries.filter((f) => (f.kicker || 'kicker not named') === k);
           return `${k} ${mine.filter((f) => f.made).length}-of-${mine.length} (${split(mine)})`;
         }).join(', ') : null;
+        // Who kicked the extra points, now that the scoring lines no longer credit each one (round 16).
+        const xpRows = rs.filter((x) => Number(x.extra_point_attempts) > 0);
+        const xpBy = xpRows.map((x) => `${String(x.player.first_name || '').charAt(0)}.${x.player.last_name}${xpRows.length > 1 ? ` ${x.extra_points_made}-of-${x.extra_point_attempts}` : ''}`).join(', ');
         // Punting from the box's punting group, as the second system and the NFL read have it (round 13).
         // ESPN's "Team" row is no punter (round 14: a blocked punt read "Team 1 punt for 0 yds"); blocked punts from the drives.
         const blocked = (box.drives || []).filter((x) => x.teamId === String(teamId) && /^BLOCKED PUNT/.test(String(x.result || ''))).length;
         const punts = (box.players || []).filter((p) => p.teamId === String(teamId) && Number(p.stats?.punting?.punts) > 0 && !/^\s*team\s*$/i.test(String(p.name || '')))
           .map((p) => `${p.name} ${p.stats.punting.punts} punt${Number(p.stats.punting.punts) === 1 ? '' : 's'} for ${p.stats.punting.puntYards ?? '?'} yds, ${p.stats.punting.puntsInside20 || 0} inside the 20`).join('; ');
-        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}` : 'no kicks'}${punts ? `; punting: ${punts}${blocked ? `; ${blocked} blocked` : ''}` : blocked ? `; punting: ${blocked} blocked` : '; no punts'}`;
+        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}${xpBy ? ` (${xpBy})` : ''}` : 'no kicks'}${punts ? `; punting: ${punts}${blocked ? `; ${blocked} blocked` : ''}` : blocked ? `; punting: ${blocked} blocked` : '; no punts'}`;
       };
       // How the drives ended, and the ones that began in the other team's half with how they ended.
       const driveLine = (teamId) => {
