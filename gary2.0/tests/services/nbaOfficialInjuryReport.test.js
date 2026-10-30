@@ -62,5 +62,7 @@ describe('the NBA official injury report reader', () => {
     expect(asked).toHaveLength(4);
     const blocked = () => ({ status: 403, ok: false });
     await expect(latestOfficialReport({ lookbackHours: 1, fetchImpl: blocked })).rejects.toThrow('blocked (403)');
+    const s3Missing = () => ({ status: 403, ok: false, text: async () => '<Error><Code>AccessDenied</Code></Error>' });
+    await expect(latestOfficialReport({ lookbackHours: 1, fetchImpl: s3Missing })).rejects.toThrow('No official NBA injury report');
   });
 });

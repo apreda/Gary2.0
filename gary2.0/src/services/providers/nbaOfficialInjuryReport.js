@@ -109,11 +109,17 @@ async function reportAtSlot(t, fetchImpl = fetch) {
   // probes): stop at once instead of asking for every quarter hour of the day and a half. On the current quarter hour
   // it is the report not posted yet (Oct 28 2026: the 6:00 PM report answered 403 at 6:00:20 and was there at 6:00:26,
   // and every NBA read that started on the half hour failed), so the search steps back to the one before.
+  // S3's own AccessDenied answer is a key that does not exist: a quarter hour the league skipped (round 16, Oct 30 2026:
+  // nothing posted after 6:00 AM, every slot answered S3's 403, and every NBA read failed instead of reading the 6:00 AM
+  // report). The search steps back over it; any other 403 is still a block.
+  let skipped = false;
   if (response?.status === 403) {
     if (Date.now() - t < SLOT_MS) return { url, missing: true };
-    throw new Error('Official NBA injury report blocked (403) by the CDN');
+    const body = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+    skipped = /<Code>AccessDenied<\/Code>/.test(body) || /amazons3/i.test(response.headers?.get?.('server') || '');
+    if (!skipped) throw new Error('Official NBA injury report blocked (403) by the CDN');
   }
-  const value = response?.ok
+  const value = response?.ok && !skipped
     ? { url, postedAt: new Date(t).toISOString(), ...parseOfficialReport(await pdfToText(Buffer.from(await response.arrayBuffer()))) }
     : { url, missing: true };
   if (cacheOn() && (!value.missing || Date.now() - t > HOUR_MS)) {
