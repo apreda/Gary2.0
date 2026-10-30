@@ -560,7 +560,7 @@ final class GaryLife: ObservableObject {
     private var lastClipEnd: Date?
     private var recent: [String] = []
 
-    private static let fadeIn = 0.25, fadeOut = 0.3
+    private static let fadeIn = 0.3, fadeOut = 0.35
 
     init() {
         player.isMuted = true
@@ -608,10 +608,17 @@ final class GaryLife: ObservableObject {
             let length = item.duration.seconds.isFinite ? item.duration.seconds : 8
             standEnd = nil
             clipEnd = nil
+            // The still fades into the clip's first frame before it moves: both are the stance.
             clipStart = Date()
+            try? await Task.sleep(nanoseconds: UInt64(Self.fadeIn * 1e9))
+            guard !Task.isCancelled else { return }
             player.play()
-            // Back to the still stance over the clip's last moment, which is the stance again.
-            try? await Task.sleep(nanoseconds: UInt64(max(0, length - Self.fadeOut) * 1e9))
+            // Played to its own last frame (the stance again) by the player's clock, so a slow start or a
+            // dropped frame never cuts a move short; then the still takes over from that frame.
+            let until = Date().addingTimeInterval(length + 3)
+            while !Task.isCancelled, Date() < until, player.currentTime().seconds < length - 0.05 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
             guard !Task.isCancelled else { return }
             clipEnd = Date()
             try? await Task.sleep(nanoseconds: UInt64(Self.fadeOut * 1e9))

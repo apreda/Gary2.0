@@ -81,10 +81,11 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
     expect(r).toEqual(['THURSDAY NIGHT FOOTBALL', 'SUNDAY NIGHT FOOTBALL', 'MONDAY NIGHT FOOTBALL', 'NFL', 'NFL']);
   });
 
-  it('turns NFL and NBA big games into the scoreboard, and bills the NBA as the NBA', () => {
+  it('turns NFL, NBA and college big games into the scoreboard, and bills each by name', () => {
     const r = swiftJSON(`out([CashRailFormat.hasScoreboard("NFL"), CashRailFormat.hasScoreboard("nba"), CashRailFormat.hasScoreboard("NCAAF"),
-     CashRailFormat.hasScoreboard(nil), CashRailFormat.billing(league: "NBA", commence: nil)])`);
-    expect(r).toEqual([true, true, false, false, 'NBA']);
+     CashRailFormat.hasScoreboard("NHL"), CashRailFormat.hasScoreboard(nil), CashRailFormat.billing(league: "NBA", commence: nil),
+     CashRailFormat.billing(league: "NCAAF", commence: nil)])`);
+    expect(r).toEqual([true, true, true, false, false, 'NBA', 'COLLEGE FOOTBALL']);
   });
 
   it('puts the spread and Gary\'s pick under the team names', () => {

@@ -154,7 +154,7 @@ struct HomeMarqueeTracker: View {
         if let hero, isCashRail(hero) { cashRailBody(hero) } else { classicBody }
     }
 
-    /// The live big game (NFL, NBA): the Cash Rail card, the other big games' ribbon under it.
+    /// The live big game (NFL, NBA, college): the Cash Rail card, the other big games' ribbon under it.
     @ViewBuilder private func cashRailBody(_ e: Entry) -> some View {
         let names = e.title.components(separatedBy: " @ ")
         let gameID = e.live?.game_id ?? ""

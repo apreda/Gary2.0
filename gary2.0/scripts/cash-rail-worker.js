@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Cash Rail worker (Oct 29 2026): keeps live_boards current for today's NFL
- * games and, since Oct 30, the NBA's big games (the ones on Home). One run = 4 passes 15 seconds apart, then exit; launchd
+ * games and, since Oct 30, the NBA's and college football's big games (the
+ * ones on Home). One run = 4 passes 15 seconds apart, then exit; launchd
  * (com.gary2.cash-rail) starts it every minute, so a board is never more than
  * ~15 seconds behind BDL's plays. The pass itself lives in
  * src/services/cashRail/worker.js.
@@ -53,6 +54,14 @@ const BDL = {
     playersPath: q => `/v1/players?${q}`,
     plays: async id => bdlAll(`/nba/v1/plays?game_id=${id}`),
   },
+  NCAAF: {
+    game: async id => (await bdlGet(`/ncaaf/v1/games/${id}`)).data ?? null,
+    props: async id => (await bdlGet(`/ncaaf/v1/odds/player_props?game_id=${id}`)).data ?? [],
+    gameOdds: async id => (await bdlGet(`/ncaaf/v1/odds?game_ids[]=${id}`)).data ?? [],
+    playersPath: q => `/ncaaf/v1/players?${q}`,
+    plays: async id => bdlAll(`/ncaaf/v1/plays?game_id=${id}`),
+    stats: async id => bdlAll(`/ncaaf/v1/player_stats?game_ids[]=${id}`),
+  },
 };
 const bdlFor = league => ({
   ...BDL[league],
@@ -88,7 +97,7 @@ const db = {
   frozenSnapshot: async (league, id, kickoff) => must(await supabase.from('live_board_prices').select('captured_at,props,game_odds,players')
     .eq('league', league).eq('game_id', id).lte('captured_at', kickoff).order('captured_at', { ascending: false }).limit(1))[0] ?? null,
   insertSnapshot: async row => { must(await supabase.from('live_board_prices').insert(row)); },
-  getBoard: async (league, id) => must(await supabase.from('live_boards').select('status').eq('league', league).eq('game_id', id).maybeSingle()),
+  getBoard: async (league, id) => must(await supabase.from('live_boards').select('status,hits').eq('league', league).eq('game_id', id).maybeSingle()),
   upsertBoard: async row => { must(await supabase.from('live_boards').upsert(row, { onConflict: 'league,game_id' })); },
   // Gary's props (prop_picks, by the game's ET date) and darts on this game.
   garyBets: async (id, g) => {

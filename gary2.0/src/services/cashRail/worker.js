@@ -1,7 +1,7 @@
 /**
  * Cash Rail worker pass (Oct 29 2026; every sport with a settlement engine
  * since Oct 30). For each game it watches (every NFL game on the slate; the
- * NBA's big games):
+ * NBA's and college football's big games):
  * in the hour before kickoff, snapshot the pregame props + game odds every
  * 5 minutes (BDL drops them after the game); once the game starts, freeze the
  * last pre-kickoff snapshot, settle every play, and upsert the game's
@@ -11,6 +11,7 @@
 import { freezeBoard, settleableType } from './prices.js';
 import { settleNfl } from './settle.js';
 import { nbaSettleable, settleNba } from './settleNba.js';
+import { ncaafSettleable, settleNcaaf } from './settleNcaaf.js';
 import { garyBets } from './garyBets.js';
 
 const SNAPSHOT_EVERY_MS = 5 * 60_000;
@@ -19,6 +20,8 @@ const SNAPSHOT_EVERY_MS = 5 * 60_000;
 export const SPORTS = {
   NFL: { settle: settleNfl, settleable: settleableType, start: g => g.date },
   NBA: { settle: settleNba, settleable: nbaSettleable, start: g => g.datetime ?? g.date },
+  // College plays name players only in text: its player bets settle off the live box score.
+  NCAAF: { settle: settleNcaaf, settleable: ncaafSettleable, start: g => g.date, boxScore: true },
 };
 const SNAPSHOT_WINDOW_MIN = 60;
 
@@ -102,7 +105,9 @@ export async function runPass({ league = 'NFL', now = new Date(), date, db, bdl,
     const spread = !homeSpread ? null : homeSpread.line <= 0
       ? `${g.home_team?.abbreviation} ${homeSpread.line}` : `${g.visitor_team?.abbreviation} ${-homeSpread.line}`;
     const plays = await bdl.plays(gameId);
-    const out = sport.settle({ markets, plays: plays ?? [], game: g, players: snap?.players ?? {}, garyPick: gary?.garyPick ?? null });
+    const stats = sport.boxScore ? await bdl.stats(gameId) : null;
+    const out = sport.settle({ markets, plays: plays ?? [], stats: stats ?? [], prior: board?.hits ?? [], game: g,
+      players: snap?.players ?? {}, garyPick: gary?.garyPick ?? null });
     // Gary's own pick, props and darts on an NFL game, for the strip under the scoreboard.
     const mine = league === 'NFL' && db.garyBets ? await db.garyBets(id, g) : null;
     const gary_bets = league === 'NFL'

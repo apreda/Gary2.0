@@ -88,12 +88,13 @@ enum CashRailFormat {
     }
 
     /// The leagues whose big games turn into the scoreboard once they start (the backend settles these).
-    static let scoreboardLeagues: Set<String> = ["NFL", "NBA"]
+    static let scoreboardLeagues: Set<String> = ["NFL", "NBA", "NCAAF"]
     static func hasScoreboard(_ league: String?) -> Bool { scoreboardLeagues.contains((league ?? "").uppercased()) }
 
     /// The line over the card: the NFL's night games by name, every other game as the league.
     static func billing(league: String?, commence: Date?) -> String {
         let lg = (league ?? "").uppercased()
+        if lg == "NCAAF" { return "COLLEGE FOOTBALL" }
         guard lg == "NFL", let commence else { return lg.isEmpty ? "NFL" : lg }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York")!

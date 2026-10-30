@@ -10,7 +10,7 @@
  */
 import { gameLineHits } from './gameLines.js';
 
-const MARKET_NAMES = {
+export const MARKET_NAMES = {
   receiving_yards: 'Rec yards', rushing_yards: 'Rush yards', passing_yards: 'Pass yards',
   rushing_receiving_yards: 'Rush + rec yards', receptions: 'Receptions', passing_tds: 'Pass TDs',
   passing_completions: 'Completions', passing_attempts: 'Pass attempts', rushing_attempts: 'Rush attempts',
@@ -100,7 +100,7 @@ function tdText(p) {
   return p.short_text || 'Touchdown';
 }
 
-function tdMarketName(line, window) {
+export function tdMarketName(line, window) {
   const n = Number(line);
   const base = n <= 1 ? 'Anytime TD' : `${n}+ TDs`;
   return window ? `${base} · ${WINDOW_LABEL[window]}` : base;

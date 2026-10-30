@@ -160,3 +160,30 @@ describe('Cash Rail worker pass, NBA', () => {
     expect(board.gary_bets).toBeNull();
   });
 });
+
+describe('Cash Rail worker pass, college', () => {
+  const cf = JSON.parse(readFileSync(new URL('../fixtures/cashRail/sdsu-csu-ncaaf.json', import.meta.url), 'utf8'));
+  const KICK = cf.game.date;
+  const props = [{ game_id: cf.game.id, player_id: 54448, vendor: 'betmgm', prop_type: 'anytime_td', line_value: '0.5', market: { type: 'milestone', odds: 120 } }];
+  it('settles off the box score and keeps each bet\'s first-seen time from the board before', async () => {
+    const writes = [];
+    const priorHit = { key: '54448|anytime_td|1', when: 'Q1 3:19', elapsed: 701 };
+    const db = {
+      listGameIds: async () => [cf.game.id],
+      lastSnapshot: async () => null,
+      frozenSnapshot: async () => ({ captured_at: KICK, props, game_odds: [], players: { 54448: 'Durell Robinson' } }),
+      insertSnapshot: async () => {},
+      getBoard: async () => ({ status: 'live', hits: [priorHit] }),
+      upsertBoard: async (row) => { writes.push(row); },
+      garyPickRow: async () => null,
+    };
+    const bdl = {
+      game: async () => ({ ...cf.game, status_state: 'in', period: 3, time: '4:00' }),
+      plays: async () => cf.plays,
+      stats: async () => cf.stats,
+    };
+    await runPass({ league: 'NCAAF', now: new Date(new Date(KICK).getTime() + 120 * 60_000), date: 'd', db, bdl });
+    expect(writes[0]).toMatchObject({ league: 'NCAAF', status: 'live', clock: 'Q3 4:00' });
+    expect(writes[0].hits.find(h => h.key === '54448|anytime_td|1')).toMatchObject({ who: 'Durell Robinson', when: 'Q1 3:19' });
+  });
+});
