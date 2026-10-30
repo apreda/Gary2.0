@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 16;
+const LEDGER_SCHEMA = 18;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -549,10 +549,16 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     // round 11).
     {
       const text = String(g('desc') || '');
-      for (const h of game.hurt || []) if (!h.later && text.includes(h.who)) h.later = true;
-      // "LAC-99-J.Caldwell was injured during the play": club, jersey, name.
-      for (const m of text.matchAll(/\b([A-Z]{2,3})-(?:\d{1,2}-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:Jr\.|Sr\.|II|III|IV))?) was injured during the play/g)) {
-        (game.hurt ||= []).push({ team: m[1], who: m[2], q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, later: false });
+      // A later play names him by jersey and name ("22-C.Woods"), never by a name inside another's (round 13: C.Woodson).
+      for (const h of game.hurt || []) if (!h.later && h.tag && new RegExp(`(?<!\\d)${h.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w'])`).test(text)) h.later = true;
+      // Ejections: "PENALTY on SF-57-D.Greenlaw, Disqualification" (round 13: a starter thrown out read as an ordinary
+      // game).
+      for (const m of text.matchAll(/(?:PENALTY|Penalty) on ([A-Z]{2,3})-(?:\d{1,2}-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))*), Disqualification/g)) {
+        (game.ejected ||= []).push({ team: m[1], who: m[2], q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null });
+      }
+      // "LAC-99-J.Caldwell was injured during the play": club, jersey, name (a spaced surname too: "G.Van Roten").
+      for (const m of text.matchAll(/\b([A-Z]{2,3})-(?:(\d{1,2})-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))*) was injured during the play/g)) {
+        (game.hurt ||= []).push({ team: m[1], who: m[3], tag: m[2] ? `${m[2]}-${m[3]}` : m[3], q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, later: false });
       }
     }
     // THE GAME'S FLOW (Oct 29 2026, founder: "who got ahead, how, when did the team go up 14 versus being close the
@@ -763,7 +769,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
       lead: g.flow.lead, lead_changes: g.flow.changes } : null;
     const hurt = (g.hurt || []).map(({ team, who, q, clock, later }) => ({ team, who, q, clock, later }));
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt };
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [] };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

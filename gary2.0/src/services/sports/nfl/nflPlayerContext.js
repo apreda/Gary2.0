@@ -86,6 +86,7 @@ export const snapCounts = (season) => once(`snaps|${season}`, async () => {
     if (r.pfr_player_id && !out.byPfr.has(r.pfr_player_id)) out.byPfr.set(r.pfr_player_id, out.get(k));
     const pct = n(r.offense_pct);
     out.get(k).push({ week: n(r.week), team: r.team, opp: r.opponent, snaps: n(r.offense_snaps), teamSnaps: pct > 0 ? Math.round(n(r.offense_snaps) / pct) : null });
+    (out.rows ||= []).push({ name: r.player, pfr: r.pfr_player_id, pos: r.position, team: r.team, week: n(r.week), pct });
     // One count per team game (Oct 29 2026 hunt, round 7: worked back from each player's rounded share, one Panthers game
     // read 79, 78 and 77 team snaps on one sheet): the share of the player with the most snaps, 100% for a full game.
     const tk = `${r.team}|${n(r.week)}`, top = out.teamTop?.get(tk);
@@ -98,6 +99,47 @@ export const snapCounts = (season) => once(`snaps|${season}`, async () => {
   }
   return out;
 });
+
+/** Each club's offensive regulars (QB, RB, FB, WR, TE with half or more of the snaps in at least half of the games he
+ * played for it before that week; a quarterback only when he has started the most of its games and did not dress) who had
+ * no offensive snap in one of its games while on its roster that week, "week|team" -> [{ name, pos, why }] (round 13:
+ * Rashod Bateman's 9 targets in Wk 2 came with Zay Flowers out, and the dart row never said so). */
+export function regularsOut(snaps, roster) {
+  const out = new Map();
+  if (!snaps?.rows?.length || !roster?.length) return out;
+  const words = rosterWeekWords(roster);
+  const rosterRow = new Map(roster.filter((r) => r.pfr_id).map((r) => [`${r.pfr_id}|${Number(r.week)}`, r]));
+  const teamWeeks = new Map();
+  for (const key of snaps.teamTop?.keys() || []) { const [t, w] = key.split('|'); teamWeeks.set(t, [...(teamWeeks.get(t) || []), Number(w)]); }
+  const byPlayer = new Map();
+  for (const r of snaps.rows) if (r.pfr && /^(QB|RB|FB|WR|TE)$/.test(r.pos)) byPlayer.set(r.pfr, [...(byPlayer.get(r.pfr) || []), r]);
+  const qbOf = (team, w) => {
+    const starts = new Map();
+    for (const r of snaps.rows) if (r.team === team && r.pos === 'QB' && r.week < w && r.pct >= 0.5) { const x = starts.get(r.pfr) || { n: 0, last: 0 }; starts.set(r.pfr, { n: x.n + 1, last: Math.max(x.last, r.week) }); }
+    return [...starts].sort((a, b) => b[1].n - a[1].n || b[1].last - a[1].last)[0]?.[0] ?? null;
+  };
+  for (const [pfr, list] of byPlayer) {
+    for (const team of new Set(list.map((r) => r.team))) {
+      const mine = list.filter((r) => r.team === team);
+      for (const w of teamWeeks.get(team) || []) {
+        if (mine.some((r) => r.week === w)) continue;
+        const before = mine.filter((r) => r.week < w).sort((a, b) => b.week - a.week);
+        if (!before.length || before.filter((r) => r.pct >= 0.5).length * 2 < before.length) continue;
+        const ro = rosterRow.get(`${pfr}|${w}`);
+        if (!ro || ro.team !== team) continue;
+        const why = words.get(`${ro.gsis_id}|${w}`) || 'no offensive snaps';
+        if (/released|traded|retired|practice squad/.test(why)) continue;
+        // A quarterback only when he has started the most of its games so far, ties to the latest start (round 13: the
+        // Falcons' Cooper Rush, benched after two starts, read as missing behind Michael Penix).
+        if (before[0].pos === 'QB' && (why === 'no offensive snaps' || qbOf(team, w) !== pfr)) continue;
+        const k = `${w}|${team}`;
+        out.set(k, [...(out.get(k) || []), { name: mine[0].name, pos: mine[0].pos, why, share: before.reduce((a, r) => a + r.pct, 0) / before.length }]);
+      }
+    }
+  }
+  for (const list of out.values()) list.sort((a, b) => b.share - a.share);
+  return out;
+}
 
 /** Adds each weekly stats row's spelling to `snaps` through the weekly roster's GSIS-to-PFR ids (Oct 29 2026 hunt: the
  * stats feed's Kenny Gainwell is the snap file's Kenneth Gainwell, and his prop sheet read no snaps). */
@@ -206,7 +248,9 @@ export function weekPassers(rows) {
 // showed one game, Week 7, with nothing to say he had missed Weeks 1 to 6 and was one game back).
 // `passers` (weekPassers) names his team's quarterback each game for a non-passer; `rosterWords` (rosterWeekWords) says
 // why a game he missed was missed.
-export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null } = {}) {
+// `hurt`: the play ledger's in-game injuries, "week|team" -> [{ who: "A.Jones", q, clock, later }] (round 13: a game he
+// left hurt read like a dud game).
+export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses = null, teamTargets = null, today = null, passers = null, rosterWords = null, pressure = null, hurt = null, without = null } = {}) {
   const line = (r) => {
     const wk = n(r.week);
     const date = days?.get(`${season}|${wk}|${r.team}`); const site = days?.site?.get(`${season}|${wk}|${r.team}`);
@@ -229,6 +273,11 @@ export function nflGameLog(rows, { season, days, snaps = [], limit = 8, defenses
     const faced = defenses?.get(r.opponent_team);
     const where = site === 'away' ? `@ ${r.opponent_team}` : `vs ${r.opponent_team}${site === 'neutral' ? ' at a neutral site' : ''}`;
     const result = days?.result?.get(`${season}|${wk}|${r.team}`);
+    const parts = String(r.player_display_name || '').replace(/\s+(?:Jr\.?|Sr\.?|II|III|IV)$/i, '').split(/\s+/);
+    const h = (hurt?.get(`${wk}|${r.team}`) || []).find((e) => { const [i, l] = String(e.who).split('.'); return l && parts.length > 1 && l.toLowerCase() === parts.at(-1).toLowerCase() && parts[0].toLowerCase().startsWith(String(i).toLowerCase()); });
+    if (h) bits.push(`hurt in Q${h.q}${h.clock ? ` (${h.clock})` : ''}, ${h.later ? 'on a later play' : 'not on a later play'}`);
+    const gone = (without?.get(`${wk}|${r.team}`) || []).filter((x) => normName(x.name) !== normName(r.player_display_name)).slice(0, 3);
+    if (gone.length) bits.push(`without ${gone.map((x) => `${x.name} (${x.pos}, ${x.why})`).join(', ')}`);
     return `Wk ${wk}${date ? ` ${day(date)}` : ''} ${where}${faced ? ` (${faced})` : ''}${result ? `, ${result}` : ''}: ${bits.join('; ') || 'no touches'}`;
   };
   const played = (rows || []).map((r) => ({ wk: n(r.week), text: line(r) }));

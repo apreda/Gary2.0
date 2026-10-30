@@ -197,8 +197,9 @@ function opponentThatDay(d, before, x) {
   const others = games.filter((g) => g.g.game_id !== x.g.game_id).slice().reverse()
     // Each of its games with what it did on the ground and through the air, and what it allowed (round 12, the Packers
     // read: Dallas's 48 rushing against Green Bay was Dallas's usual output; only scores were shown).
-    .map((g) => { const u = g.off && g.def ? `; ran ${g.off.rushing} on ${g.off.carries}, passed for ${Math.round(g.off.yards - g.off.rushing)}; allowed ${g.def.rushing} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing` : '';
-      return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa} ${versus(g, g.opp, true)}${g.passers?.length || u ? ` (${g.passers?.length ? qbsText(g.passers, g.startedQb, true) : 'QB not on file'}${u})` : ''}`; });
+    // With its sacks and turnovers both ways too (round 13: a pass rush's sacks could not be read against the lines it faced).
+    .map((g) => { const u = g.off && g.def ? `; ran ${g.off.rushing} on ${g.off.carries}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${g.def.rushing} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sacks made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '';
+      return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}${g.passers?.length || u ? ` (${g.passers?.length ? qbsText(g.passers, g.startedQb, true) : 'QB not on file'}${u})` : ''}`; });
   return `${record(games)} now${qbThat}; ${others.length ? `their other games, newest first: ${others.join(', ')}` : 'no other games yet'}`;
 }
 /** The defense a player faced, for the prop sheets: its record now and the points it allowed in each of its games,
@@ -400,7 +401,11 @@ function lineupChanges(d, code, gs) {
       departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos}${offWord(g, id) ? `, ${offWord(g, id)}` : ''})`)}` : null,
       reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos}, ${reserveWord(g, id)})`)}` : null,
       back.length ? `back: ${list(back, (id) => label(g, id, true))}` : null,
-      fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => label(g, id, true, prior.length && prior.every((e) => onReserve(e, id)) ? `, off ${statusAt(gs[i - 1], id)?.status === 'EXE' ? "the commissioner's exempt list" : 'reserve'}` : ''))}` : null,
+      // One who played for another club this season says so (round 13: the Ravens' Cam Jurgens, acquired from
+      // Philadelphia, read like a backup's first big game).
+      fresh.length ? `first game at 25%+ of snaps: ${list(fresh, (id) => { const elsewhere = (d.snaps || []).filter((r) => r.pfr_player_id === id && r.team !== code && n(r.week) < n(g.week) && Math.max(n(r.offense_pct), n(r.defense_pct)) >= 0.25);
+        const from = elsewhere.length ? `; with ${elsewhere[0].team} this season, Wk ${Math.min(...elsewhere.map((r) => n(r.week)))}-${Math.max(...elsewhere.map((r) => n(r.week)))}` : '';
+        return label(g, id, true, `${prior.length && prior.every((e) => onReserve(e, id)) ? `, off ${statusAt(gs[i - 1], id)?.status === 'EXE' ? "the commissioner's exempt list" : 'reserve'}` : ''}${from}`); })}` : null,
     ].filter(Boolean);
     out.set(g.g.game_id, parts.join(' · '));
     out.missing = { names: [...missing, ...limited].map((id) => ({ name: name.get(id).name, pos: name.get(id).pos, limited: limited.includes(id), why: missing.includes(id) ? why(g, id) : null })) };
@@ -632,14 +637,20 @@ function pressureLine(d, x, code) {
 // tackles showed only beside defenders thrown at, and yards before and after contact nowhere): each side's carries,
 // yards before and after contact, broken tackles, and its defense's missed tackles with who missed most.
 function contactLine(d, x, code) {
-  if (!d.rushCharting || !d.pressure) return null;
+  if (!d.rushCharting) return null;
   const run = (team) => { const rs = d.rushCharting.get(`${x.g.game_id}|${team}`) || []; if (!rs.length) return null;
     const sum = (k) => rs.reduce((a, r) => a + n(r[k]), 0);
     return `${sum('carries')} carries, ${sum('rushing_yards_before_contact')} yds before contact, ${sum('rushing_yards_after_contact')} after, ${sum('rushing_broken_tackles') + sum('receiving_broken_tackles')} broken tackles`; };
-  const missed = (team) => { const rs = (d.pressure.rushers.get(`${x.g.game_id}|${team}`) || []).filter((r) => n(r.def_missed_tackles) > 0).sort((a, b) => n(b.def_missed_tackles) - n(a.def_missed_tackles));
+  // A defense with no defender charted for a missed tackle while the other side's runners broke some was not charted
+  // (round 13: the Titans' defense read "0 missed tackles" four straight weeks; PFR left those games at zero).
+  const broke = (team) => (d.rushCharting.get(`${x.g.game_id}|${team}`) || []).reduce((a, r) => a + n(r.rushing_broken_tackles) + n(r.receiving_broken_tackles), 0);
+  const missed = (team) => { const all = d.pressure?.rushers.get(`${x.g.game_id}|${team}`) || [];
+    const rs = all.filter((r) => n(r.def_missed_tackles) > 0).sort((a, b) => n(b.def_missed_tackles) - n(a.def_missed_tackles));
     const total = rs.reduce((a, r) => a + n(r.def_missed_tackles), 0);
+    const other = team === code ? x.opp : code;
+    if (!all.length || (total === 0 && broke(other) > 0)) return 'missed tackles not charted for this game';
     return `${total} missed tackles${rs.length ? ` (${rs.slice(0, 3).map((r) => `${r.pfr_player_name} ${n(r.def_missed_tackles)}`).join(', ')})` : ''}`; };
-  const side = (team) => `${nickname(team)} ${run(team) || 'run charting not on file'}; its defense ${missed(team)}`;
+  const side = (team) => `${nickname(team)} ${run(team) || 'run charting not on file'}; its defense ${/not charted/.test(missed(team)) ? missed(team) : `${missed(team)}`}`;
   return `contact and tackling: ${side(code)} · ${side(x.opp)}`;
 }
 
@@ -736,9 +747,11 @@ const kicks = (k) => [k.fgAtt ? `FG ${k.kickers?.length ? `${k.kickers.join(' an
 function hurtLine(x, code) {
   const h = x.ledger?.hurt;
   if (!x.ledger || !Array.isArray(h)) return null;
-  if (!h.length) return 'hurt during the game (play-by-play): nobody';
+  const ej = x.ledger.ejected || [];
+  const ejected = ej.length ? ` · ejected: ${ej.map((e) => `${nickname(e.team)} ${e.who} (Q${e.q}${e.clock ? ` ${e.clock}` : ''})`).join(', ')}` : '';
+  if (!h.length) return `hurt during the game (play-by-play): nobody${ejected}`;
   const one = (e) => `${nickname(e.team)} ${e.who} (Q${e.q}${e.clock ? ` ${e.clock}` : ''}; ${e.later ? 'on a later play' : 'not on a later play'})`;
-  return `hurt during the game (play-by-play): ${[...h.filter((e) => e.team === code), ...h.filter((e) => e.team !== code)].map(one).join(', ')}`;
+  return `hurt during the game (play-by-play): ${[...h.filter((e) => e.team === code), ...h.filter((e) => e.team !== code)].map(one).join(', ')}${ejected}`;
 }
 
 // Special teams game by game for both sides (round 10, founder: special teams; the read had only unnamed 40+ returns):
@@ -752,7 +765,10 @@ function specialTeamsLine(d, x, code) {
     const mine = rows.filter((r) => r.team === c);
     const ret = mine.filter((r) => n(r.kickoff_returns) || n(r.punt_returns)).map((r) => `${r.player_display_name} ${[n(r.kickoff_returns) ? `${n(r.kickoff_returns)} kickoff return${n(r.kickoff_returns) === 1 ? '' : 's'} for ${n(r.kickoff_return_yards)}` : null, n(r.punt_returns) ? `${n(r.punt_returns)} punt return${n(r.punt_returns) === 1 ? '' : 's'} for ${n(r.punt_return_yards)}` : null].filter(Boolean).join(', ')}`);
     const blocks = mine.flatMap((r) => [['def_punt_blocks', 'punt'], ['def_fg_blocks', 'field goal'], ['def_pat_blocks', 'extra point']].filter(([k]) => n(r[k])).map(([k, w]) => `${r.player_display_name} blocked a ${w}`));
-    return `${nickname(c)} ${punting}; returns ${rows.length ? ret.join('; ') || 'none' : 'not on file'}${blocks.length ? `; ${blocks.join(', ')}` : ''}`;
+    // Fumbles lost on kicks and punts, and onside kicks recovered (round 13: counted in the turnovers, never said).
+    const stLost = n(L?.special_teams_fumbles_lost), onside = n(L?.onside_recoveries);
+    const stTurn = [stLost ? `${stLost} return fumble${stLost === 1 ? '' : 's'} lost` : null, onside ? `${onside} onside kick${onside === 1 ? '' : 's'} recovered` : null].filter(Boolean).join(', ');
+    return `${nickname(c)} ${punting}; returns ${rows.length ? ret.join('; ') || 'none' : 'not on file'}${blocks.length ? `; ${blocks.join(', ')}` : ''}${stTurn ? `; ${stTurn}` : ''}`;
   };
   return `special teams: ${side(code)} · ${side(x.opp)}`;
 }
@@ -910,6 +926,8 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
     const week = (d.schedule || []).filter((r) => r.season === String(d.season) && (r.home_team === code || r.away_team === code) && String(r.gameday) >= before)
       .sort((a, b) => String(a.gameday).localeCompare(String(b.gameday)))[0]?.week;
     const report = week ? await getPracticeReport(team, d.season, Number(week)).catch(() => null) : null;
+    // A report not in the file, or not read, is said, never read as nobody listed (round 13).
+    if (!report?.players) { lines.push(`${team}: the official report is not on file, so the next man up is not listed`); continue; }
     // A game status, or a missed practice (limited alone usually plays).
     const listed = (report?.players || []).filter((p) => /out|doubtful|questionable/i.test(p.game_status || '') || p.practice === 'DNP');
     if (!listed.length) continue;
@@ -922,10 +940,19 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
     // all season, read as the next man up).
     const rosterOf = (a) => { const byId = a.id ? rosterBy(a.id) : []; return byId.length ? byId
       : (d.rosterWeekly || []).filter((r) => r.team === code && key(r.full_name) === key(a.name)).sort((x, y) => n(y.week) - n(x.week)); };
+    // Every one of the club's games, a week without a snap said why from the weekly roster (round 13: a backup's three
+    // inactive weeks dropped out and he read as the next man up).
+    const WHY = { INA: 'inactive', RES: 'reserve list', DEV: 'practice squad', EXE: 'exempt list', CUT: 'released' };
     const snaps = (a) => {
-      const pfr = rosterOf(a).find((r) => r.pfr_id)?.pfr_id || null;
-      const rows = (d.snaps || []).filter((r) => n(r.week) > 0 && (pfr ? r.pfr_player_id === pfr : r.team === code && key(r.player) === key(a.name))).sort((x, y) => n(y.week) - n(x.week));
-      return rows.length ? `snaps by game, newest first: ${rows.map((r) => `Wk ${r.week} ${Math.round(100 * Math.max(n(r.offense_pct), n(r.defense_pct)))}%${r.team !== code ? ` (with ${r.team})` : ''}`).join(', ')}` : 'no snaps on offense or defense this season';
+      const roster = rosterOf(a); const pfr = roster.find((r) => r.pfr_id)?.pfr_id || null;
+      const rows = (d.snaps || []).filter((r) => n(r.week) > 0 && (pfr ? r.pfr_player_id === pfr : r.team === code && key(r.player) === key(a.name)));
+      const weeks = teamGames(d, code, d.season, before).map((x) => n(x.week)).sort((x, y) => y - x);
+      if (!weeks.length) return 'no games yet';
+      const cell = (w) => { const r = rows.find((x) => n(x.week) === w && x.team === code) || rows.find((x) => n(x.week) === w);
+        if (r) { const p = Math.max(n(r.offense_pct), n(r.defense_pct)); return `Wk ${w} ${p > 0 ? `${Math.round(100 * p)}%` : `special teams only`}${r.team !== code ? ` (with ${r.team})` : ''}`; }
+        const st = roster.find((x) => n(x.week) === w); const word = st ? (st.team !== code ? `with ${st.team}` : WHY[String(st.status).toUpperCase()] || 'active, no snap') : 'not on the roster';
+        return `Wk ${w} ${word}`; };
+      return `by game, newest first: ${weeks.map(cell).join(', ')}`;
     };
     // A backup on a reserve list, inactive or released is not the one who steps in (round 12: ESPN still listed the
     // Jets' Marcelino McCrary-Ball, on IR since Week 3); the next name is.
@@ -1205,8 +1232,8 @@ export function nflGameFull(d, x, code, before) {
   // The opponent coming in: its record before this game and its games before it, then its record before tonight.
   const prior = oppGames.filter((g) => g.date < x.date);
   // With what it ran and passed for and allowed in each (round 12: as on the live read's opponent lines).
-  const units = (g) => (g.off && g.def ? `; ran ${g.off.rushing} on ${g.off.carries}, passed for ${Math.round(g.off.yards - g.off.rushing)}; allowed ${g.def.rushing} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing` : '');
-  const res = (g) => `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa} ${versus(g, nickname(g.opp), true)}${g.passers?.length || units(g) ? ` (${g.passers?.length ? `QB ${qbsText(g.passers, g.startedQb)}` : 'QB not on file'}${units(g)})` : ''}`;
+  const units = (g) => (g.off && g.def ? `; ran ${g.off.rushing} on ${g.off.carries}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${g.def.rushing} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sacks made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '');
+  const res = (g) => `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, nickname(g.opp), true)}${g.passers?.length || units(g) ? ` (${g.passers?.length ? `QB ${qbsText(g.passers, g.startedQb)}` : 'QB not on file'}${units(g)})` : ''}`;
   lines.push(`  ${teamName(o)} coming in: ${record(prior)}${prior.length ? `; ${prior.map(res).join('; ')}` : ' (their first game)'} · ${record(oppGames)} before tonight`);
   return lines.filter(Boolean).join('\n');
 }
