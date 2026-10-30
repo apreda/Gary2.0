@@ -38,6 +38,10 @@ struct HomeXWire: View {
     @State private var pageWidth: CGFloat = 0
     /// Each card's height at the page's width; the show takes the one on screen.
     @State private var heights: [String: CGFloat] = [:]
+    /// Which way the last move went, so the next card comes in from that side.
+    @State private var forward = true
+    /// A finger pulling the card sideways, before it lets go.
+    @State private var dragX: CGFloat = 0
 
     private static let dwell: Double = 7
 
@@ -49,21 +53,34 @@ struct HomeXWire: View {
             if !posts.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     header(count: posts.count)
-                    TabView(selection: $index) {
-                        ForEach(Array(posts.enumerated()), id: \.element.id) { i, post in
-                            XPostCard(post: post)
-                                .frame(maxHeight: .infinity, alignment: .top)
-                                .tag(i)
+                    // One card at a time: the next slides in as the last slides out, and the frame eases to the
+                    // new card's height in the same motion, so a tall post and a short one never snap (founder,
+                    // Oct 29 2026: "when the tweets are different sizes there is a harsh like transition").
+                    ZStack(alignment: .top) {
+                        if posts.indices.contains(index) {
+                            XPostCard(post: posts[index])
+                                .id(posts[index].id)
+                                .transition(cardTransition)
                         }
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    // The show is as tall as the post on screen and eases to the next one's height as it slides in.
-                    .frame(height: max(posts.indices.contains(index) ? heights[posts[index].id] ?? 160 : 160, 120))
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: index)
+                    .frame(height: max(posts.indices.contains(index) ? heights[posts[index].id] ?? 160 : 160, 120), alignment: .top)
+                    .offset(x: dragX)
+                    .clipped()
+                    .contentShape(Rectangle())
+                    // A finger on the show holds it; pulled sideways and let go, it moves a card that way.
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in if !holding { holding = true } }
-                            .onEnded { _ in holding = false }
+                            .onChanged { v in
+                                if !holding { holding = true }
+                                let dx = v.translation.width
+                                if abs(dx) > 8, abs(dx) > abs(v.translation.height) { dragX = dx * 0.5 }
+                            }
+                            .onEnded { v in
+                                holding = false
+                                let dx = v.translation.width
+                                withAnimation(Self.slide) { dragX = 0 }
+                                if posts.count > 1, abs(dx) > 50, abs(dx) > abs(v.translation.height) { step(dx < 0 ? 1 : -1) }
+                            }
                     )
                     // Every card measured at the page's width, off screen.
                     .background(alignment: .top) {
@@ -106,7 +123,22 @@ struct HomeXWire: View {
         guard count > 1, !holding, activePage, scenePhase == .active else { return }
         withAnimation(.linear(duration: Self.dwell)) { progress = 1 }
         do { try await Task.sleep(for: .seconds(Self.dwell)) } catch { return }
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.8)) { index = (index + 1) % count }
+        step(1)
+    }
+
+    /// The slow ease every move shares, the height's and the slide's.
+    private static let slide = Animation.easeInOut(duration: 0.75)
+
+    private var cardTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        return .asymmetric(insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+                           removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity))
+    }
+
+    private func step(_ by: Int) {
+        guard posts.count > 1 else { return }
+        forward = by > 0
+        withAnimation(Self.slide) { index = (index + by + posts.count) % posts.count }
     }
 
     private func header(count: Int) -> some View {
