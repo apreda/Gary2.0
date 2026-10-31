@@ -19,6 +19,8 @@ export interface VoiceOptions {
   speed: number;
   events: VoiceEvents;
   socket?: (url: string) => WebSocket;
+  /** PCM sample rate: 48 kHz for apps that play it, 24 kHz for builds that only know 24. */
+  rate?: number;
 }
 
 /** What the handler needs from a voice, whichever company speaks it. */
@@ -69,7 +71,7 @@ export class GaryVoice implements Speaker {
       voice: { id: this.opts.voiceId },
       language: "en",
       context_id: this.contextId,
-      output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: VOICE_SAMPLE_RATE },
+      output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: this.opts.rate ?? VOICE_SAMPLE_RATE },
       add_timestamps: true,
       continue: more,
       max_buffer_delay_ms: 400,
@@ -86,7 +88,7 @@ export class GaryVoice implements Speaker {
     if (!this.offsets.has(ctx)) this.offsets.set(ctx, this.seconds);
     const offset = this.offsets.get(ctx)!;
     if (m.type === "chunk" && typeof m.data === "string") {
-      this.seconds += (m.data.length * 3 / 4) / 2 / VOICE_SAMPLE_RATE;
+      this.seconds += (m.data.length * 3 / 4) / 2 / (this.opts.rate ?? VOICE_SAMPLE_RATE);
       this.opts.events.audio(m.data);
     } else if (m.type === "timestamps" && m.word_timestamps) {
       const w = m.word_timestamps;
@@ -160,7 +162,7 @@ export class ElevenVoice implements Speaker {
 
   constructor(private opts: VoiceOptions) {
     const url = `wss://api.elevenlabs.io/v1/text-to-dialogue/stream-input?model_id=${encodeURIComponent(opts.model)}` +
-      `&output_format=pcm_${VOICE_SAMPLE_RATE}&sync_alignment=true`;
+      `&output_format=pcm_${opts.rate ?? VOICE_SAMPLE_RATE}&sync_alignment=true`;
     this.ws = (opts.socket ?? ((u) => new WebSocket(u)))(url);
     this.ready = new Promise((resolve, reject) => {
       this.ws.onopen = () => {
@@ -190,7 +192,7 @@ export class ElevenVoice implements Speaker {
     try { m = JSON.parse(raw); } catch { return; }
     if (typeof m.audio === "string" && m.audio) {
       const start = this.seconds;
-      this.seconds += (m.audio.length * 3 / 4) / 2 / VOICE_SAMPLE_RATE;
+      this.seconds += (m.audio.length * 3 / 4) / 2 / (this.opts.rate ?? VOICE_SAMPLE_RATE);
       this.opts.events.audio(m.audio);
       const a = m.alignment;
       if (a && Array.isArray(a.chars)) {

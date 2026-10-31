@@ -1,7 +1,7 @@
 // gary-voice: someone asks Gary a question out loud on Home; he answers in his own voice.
 //
-// POST { question, history?, date?, install? }  ->  NDJSON stream, one event per line:
-//   {"t":"start","rate":24000}            raw 16-bit mono PCM follows at this rate
+// POST { question, history?, date?, install?, hq? }  ->  NDJSON stream, one event per line:
+//   {"t":"start","rate":48000}            raw 16-bit mono PCM follows at this rate (48 kHz with hq, else 24 kHz)
 //   {"t":"text","s":"..."}                his words as he writes them
 //   {"t":"audio","b":"<base64 pcm>"}      his voice, in order
 //   {"t":"words","w":[...],"s":[...],"e":[...]}  word timings (seconds from the start of his audio)
@@ -117,8 +117,10 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         const send = (o: unknown) => { if (open) { try { controller.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { open = false; } } };
         let voiceDone!: () => void;
         const voiceFinished = new Promise<void>((r) => (voiceDone = r));
+        // New builds play 48 kHz (crisper); older ones only 24 kHz.
+        const rate = body.hq === true ? 48000 : VOICE_SAMPLE_RATE;
         const options: VoiceOptions = {
-          apiKey, voiceId,
+          apiKey, voiceId, rate,
           model: eleven ? admitted.eleven_model || "eleven_v4_turbo" : admitted.tts_model || "sonic-3.6",
           speed: Number(admitted.speed) || 1,
           events: {
@@ -129,7 +131,7 @@ export function createVoiceHandler(cfg: VoiceConfig) {
           },
         };
         const voice: Speaker = eleven ? new ElevenVoice(options) : new GaryVoice(options);
-        send({ t: "start", rate: VOICE_SAMPLE_RATE });
+        send({ t: "start", rate });
 
         let answer = "", error: string | null = null, tools: string[] = [];
         let usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };

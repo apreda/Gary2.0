@@ -102,7 +102,7 @@ import SwiftUI
         phase = .thinking
         wordStarts = []
         streamEnded = false
-        let body: [String: Any] = ["question": q, "history": Array(history), "date": SupabaseAPI.todayEST(), "install": Self.install]
+        let body: [String: Any] = ["question": q, "history": Array(history), "date": SupabaseAPI.todayEST(), "install": Self.install, "hq": true]
         asking = Task { [weak self] in await self?.stream(body) }
     }
 
@@ -133,6 +133,8 @@ import SwiftUI
                       let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let kind = event["t"] as? String else { continue }
                 switch kind {
+                case "start":
+                    if let rate = event["rate"] as? Double { voice.prepare(rate: rate) }
                 case "text":
                     if let s = event["s"] as? String, let i = turns.indices.last { turns[i].text += s }
                 case "audio":
@@ -354,7 +356,8 @@ enum GaryAudio {
 final class GaryVoicePlayer {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
-    private let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
+    /// The stream's rate: 48 kHz from the server for this build (crisper), 24 kHz from older servers.
+    private var format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
     private let lock = NSLock()
     private var pending = 0
     private var scheduled = 0.0
@@ -391,7 +394,7 @@ final class GaryVoicePlayer {
             }
         }
         levels.append((scheduled, min(1, sqrt(sum / Float(frames)) * 5)))
-        scheduled += Double(frames) / 24_000
+        scheduled += Double(frames) / format.sampleRate
         if !engine.isRunning { try? engine.start() }
         lock.lock(); pending += 1; lock.unlock()
         node.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
@@ -399,6 +402,16 @@ final class GaryVoicePlayer {
             self.lock.lock(); self.pending -= 1; self.lock.unlock()
         }
         if !playing { node.play(); playing = true }
+    }
+
+    /// Match the player to the rate the answer streams at, before its first audio.
+    func prepare(rate: Double) {
+        guard rate > 0, rate != format.sampleRate,
+              let f = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false) else { return }
+        stop()
+        engine.disconnectNodeOutput(node)
+        format = f
+        engine.connect(node, to: engine.mainMixerNode, format: f)
     }
 
     func level(at t: Double) -> Float {
