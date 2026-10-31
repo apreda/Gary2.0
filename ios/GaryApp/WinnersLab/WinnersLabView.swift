@@ -973,24 +973,21 @@ struct WinnersLabView: View {
     @ViewBuilder private func streakCard(_ ticket: LabBoardTicket) -> some View {
         if keeps(ticket) && inSport(ticket.league) {
             VStack(alignment: .leading, spacing: 8) {
-                if activeSport == nil { sectionHead("FREE PICK", note: nil) }
                 module(Group(key: "streak-\(ticket.candidateID)", lead: ticket, riders: []),
-                       sealable: true, streak: streak?.current ?? 0,
-                       streakPending: !isSettled(ticket))
+                       sealable: true, streak: streak?.current ?? 0, streakBest: streak?.best ?? 0)
             }
             .id("streak-\(ticket.candidateID)")
         }
     }
 
-    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakPending: Bool = false) -> some View {
+    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakBest: Int = 0) -> some View {
         // A scratched play is no longer a play: it never unveils as one.
         let sealed = sealable && !unveiled.contains(group.lead.candidateID) && !group.lead.scratched
         return LabPlayModule(group: LabPlayModule.Model(
             lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
             streak: streak,
-            streakRecent: streak == nil ? [] : (self.streak?.recent ?? []),
-            streakPending: streakPending,
+            streakBest: streakBest,
             celebrate: revealing == group.lead.candidateID,
             onOpen: { ticket in
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
@@ -1068,12 +1065,11 @@ struct LabPlayModule: View {
         let riderStates: [WinnersLabView.ModuleState]
     }
     let group: Model
-    /// The streak pick's run; nil on every other play.
+    /// The streak pick's run; nil on every other play. The streak pick is
+    /// the free pick and wears the pack's foil (founder, Oct 30 2026, A2).
     var streak: Int? = nil
-    /// The streak's last decided results, oldest first ("W" / "L").
-    var streakRecent: [String] = []
-    /// The streak pick is today's and its game hasn't been graded.
-    var streakPending: Bool = false
+    /// Gary's longest run of streak-pick wins.
+    var streakBest: Int = 0
     /// Opening in place right now (REVEAL ALL): gold flies off the tear.
     var celebrate: Bool = false
     let onOpen: (LabBoardTicket) -> Void
@@ -1096,12 +1092,12 @@ struct LabPlayModule: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let streak { freePickStrip(streak) }
             // A sealed play gives away nothing (founder, Sep 22 2026: "it
             // shouldn't even say the game until unveiled"). The wrapper wears
             // the league, the clock and the money; the teams arrive with the
             // rip. An open play names itself.
             HStack(spacing: 8) {
-                if let streak { StreakForm(count: streak, recent: streakRecent, pending: streakPending) }
                 Text(group.lead.league).font(GaryFonts.display(13)).tracking(1.4).foregroundStyle(GaryColors.gold)
                 if !group.sealed {
                     // Every league reads short ("Colts @ Commanders", schools
@@ -1114,7 +1110,7 @@ struct LabPlayModule: View {
                 Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
             }
             .frame(height: headRow)
-            .padding(.horizontal, 16).padding(.top, 13)
+            .padding(.horizontal, 16).padding(.top, streak == nil ? 13 : 17)
 
             // Opened in place, the wrapper slides up off the ticket and the
             // ticket settles in under it.
@@ -1133,20 +1129,74 @@ struct LabPlayModule: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .labPlate(radius: 14, edge: group.sealed ? GaryColors.gold.opacity(0.4) : LabInk.hair)
+        .background { if streak != nil { freePickFoil } }
+        .labPlate(radius: 14, edge: streak != nil ? GaryColors.gold.opacity(0.5) : group.sealed ? GaryColors.gold.opacity(0.4) : LabInk.hair)
+        .shadow(color: .black.opacity(streak != nil ? 0.45 : 0), radius: 13, y: 12)
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onTapGesture { onOpen(group.lead) }
         .onLongPressGesture(minimumDuration: 0.6) { onReseal() }
+    }
+
+    /// The free pick's tear strip: Gary's mark, FREE PICK, and the streak the
+    /// pick rides on, closed by the pack's dashed line.
+    private func freePickStrip(_ run: Int) -> some View {
+        HStack(spacing: 10) {
+            Image(GaryBrand.mark).resizable().scaledToFit()
+                .frame(width: 26, height: 26)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .shadow(color: .black.opacity(0.6), radius: 4, y: 3)
+            Text("FREE PICK").font(GaryFonts.display(21)).tracking(1.6).foregroundStyle(Color(hex: "#F2D27A"))
+                .fixedSize()
+            Spacer(minLength: 6)
+            HStack(spacing: 0) {
+                Text("STREAK \(run)").foregroundStyle(run > 0 ? GaryColors.win : LabInk.dim)
+                if streakBest > 0 { Text(" \u{00B7} BEST \(streakBest)").foregroundStyle(LabInk.dim) }
+            }
+            .font(GaryFonts.display(15)).tracking(1.2)
+            .fixedSize()
+        }
+        .padding(.leading, 14).padding(.trailing, 16)
+        .frame(height: 40)
+        .overlay(alignment: .bottom) {
+            DashedLine().stroke(GaryColors.gold.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                .frame(height: 1).padding(.horizontal, 12)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Free pick. Streak \(run)\(streakBest > 0 ? ", best \(streakBest)" : "")")
+    }
+
+    /// The pack's foil over the whole free pick card, its tear strip a
+    /// little lighter.
+    private var freePickFoil: some View {
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        return ZStack(alignment: .top) {
+            shape.fill(LinearGradient(stops: [.init(color: Color(hex: "#0D0C0B"), location: 0), .init(color: Color(hex: "#2A2416"), location: 0.26),
+                                              .init(color: Color(hex: "#0F0E0C"), location: 0.5), .init(color: Color(hex: "#3A3018"), location: 0.76),
+                                              .init(color: Color(hex: "#0D0C0B"), location: 1)],
+                                      startPoint: UnitPoint(x: 0, y: 0.2), endPoint: UnitPoint(x: 1, y: 0.8)))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: "#1B1712"), Color(hex: "#3A3018"), Color(hex: "#1B1712")], startPoint: .leading, endPoint: .trailing))
+                .frame(height: 50)
+                .offset(y: -10)
+        }
+        .clipShape(shape)
     }
 
     /// The wrapper: a sealed pack in the slot the ticket takes once it is
     /// ripped (founder, Sep 22 2026: "have you ever seen a present?"). The
     /// league and the clock ride the top row; the pack itself says nothing
     /// about the game, the money or the play. Those arrive with the rip.
-    private var sealedBody: some View {
-        LabPack(word: "OPEN")
-            .frame(height: cardBody)
-            .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
+    @ViewBuilder private var sealedBody: some View {
+        if streak != nil {
+            Text("OPEN").font(GaryFonts.display(22)).tracking(3).foregroundStyle(GaryColors.warmGold)
+                .frame(maxWidth: .infinity)
+                .frame(height: cardBody)
+                .padding(.top, 8).padding(.bottom, 12)
+        } else {
+            LabPack(word: "OPEN")
+                .frame(height: cardBody)
+                .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 12)
+        }
     }
 
     private var openBody: some View {
@@ -1256,33 +1306,6 @@ struct LabPlayModule: View {
                 LabCountdown(commence: commence)
             }
         }
-    }
-}
-
-/// THE STREAK MARK: a form guide (founder, Sep 24 2026, choosing it from
-/// the mocks over the flame). Five boxes, oldest on the left: the decided
-/// results as W and L, today's pick in gold while it waits, and dashed blanks
-/// for the days still to fill, the way the pick card shows a box to fill.
-/// No count beside it (founder, Sep 24 2026: "we don't actually need the 1
-/// there"); the boxes say it.
-struct StreakForm: View {
-    let count: Int
-    /// "W" / "L", oldest first (get_streak's `recent`).
-    let recent: [String]
-    /// Today's streak pick, still waiting on its game: a gold box after the results.
-    var pending: Bool = false
-    private static let slots = 5
-
-    var body: some View {
-        let decided = recent.suffix(pending ? Self.slots - 1 : Self.slots).map { $0 == "W" ? StreakBox.Kind.win : .loss }
-        let filled = decided + (pending ? [.pending] : [])
-        let boxes = filled + Array(repeating: StreakBox.Kind.blank, count: max(0, Self.slots - filled.count))
-        HStack(spacing: 2) {
-            ForEach(Array(boxes.enumerated()), id: \.offset) { StreakBox(kind: $0.element) }
-        }
-        .fixedSize()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel((count == 1 ? "Streak pick, 1 straight win" : "Streak pick, \(count) straight wins") + (pending ? ", today's pick pending" : ""))
     }
 }
 
