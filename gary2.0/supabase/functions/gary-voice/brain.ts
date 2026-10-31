@@ -2,7 +2,7 @@
 // streaming so the voice starts on his first sentence. The rules and the day's picks sit in a cached prefix
 // shared by everyone asking that day; the scoreboard and the question come after it.
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
-import { addDays, type Board, type Db, dayName, readBoard } from "./notebook.ts";
+import { addDays, type Board, type Db, dayName, etDay, nflWeek, readBoard, tally } from "./notebook.ts";
 
 export const GARY_MODEL = "claude-opus-5-5";
 
@@ -26,7 +26,7 @@ What you can and can't say
 - If they ask about something that has nothing to do with sports or betting, give a short friendly answer and steer back to the games.
 - If they ask, you're an AI.
 
-Lookups: you have tools for another day's picks and results, the full write-up behind one pick, a team's recent games, and your record over a stretch. Use one only when the notebook doesn't already answer the question; the listener is waiting on you.`;
+Lookups: you have tools for another day's picks and results, the full write-up behind one pick, a team's recent games, and your record over a stretch. Use one only when the notebook doesn't already answer the question; the listener is waiting on you. Before a lookup, say at most a few natural words ("Let me check my book.") and nothing else; never read dates out to yourself.`;
 
 const TOOLS = [
   {
@@ -72,17 +72,23 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     if (!YMD.test(input.date)) throw new Error("date must be YYYY-MM-DD");
     if (input.date < "2026-08-01") return "That's before this season. You only talk about this season.";
     const date = input.date;
-    const [daily, props, darts, parlay, games, propResults] = await Promise.all([
+    const [daily, props, darts, parlay, games, nflGames, propResults, week] = await Promise.all([
       db.get(`daily_picks?date=eq.${date}&select=picks`).catch(() => null),
-      db.get(`prop_picks?date=eq.${date}&select=picks`).catch(() => null),
+      db.get(`prop_picks?date=eq.${date}&select=picks&order=id`).catch(() => null),
       db.rpc("get_darts", { p_date: date }).catch(() => null),
       db.rpc("get_parlay", { p_date: date }).catch(() => null),
       db.get(`game_results?game_date=eq.${date}&select=pick_text,result,final_score`).catch(() => null),
+      db.get(`nfl_results?game_date=eq.${date}&select=pick_text,result,final_score`).catch(() => null),
       db.get(`prop_results?game_date=eq.${date}&select=pick_text,result,actual_value`).catch(() => null),
+      nflWeek(db, date).catch(() => []),
     ]);
-    const result = (text: string, rows: any[] | null) => rows?.find((r) => r.pick_text === text);
+    const graded = [...(games ?? []), ...(nflGames ?? [])];
+    const result = (text: string, _rows: any[] | null) => graded.find((r) => r.pick_text === text);
     const out: string[] = [`${dayName(date)}:`];
-    const gp = (daily?.[0]?.picks ?? []) as any[];
+    if (graded.length || propResults?.length) {
+      out.push(`Record that day: game picks ${graded.length ? `${tally(graded)} (${graded.length} graded)` : "none graded"}; props ${propResults?.length ? `${tally(propResults)} (${propResults.length} graded)` : "none graded"}.`);
+    }
+    const gp = [...((daily?.[0]?.picks ?? []) as any[]), ...week.filter((p: any) => etDay(p.commence_time) === date).map((p: any) => ({ ...p, league: p.league ?? "NFL" }))];
     out.push(gp.length ? "Game picks:\n" + gp.map((p) => {
       const r = result(p.pick, games);
       return `- ${p.league} ${p.awayTeam} at ${p.homeTeam}: ${p.pick}${r ? ` (${String(r.result).toUpperCase()}${r.final_score ? `, ${r.final_score}` : ""})` : ""}. ${p.brief?.summary ?? ""}`;
@@ -98,11 +104,12 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     if (!YMD.test(input.date)) throw new Error("date must be YYYY-MM-DD");
     const needle = String(input.name ?? "").toLowerCase().trim();
     if (needle.length < 3) throw new Error("name too short");
-    const [daily, props] = await Promise.all([
+    const [daily, props, week] = await Promise.all([
       db.get(`daily_picks?date=eq.${input.date}&select=picks`).catch(() => null),
-      db.get(`prop_picks?date=eq.${input.date}&select=picks`).catch(() => null),
+      db.get(`prop_picks?date=eq.${input.date}&select=picks&order=id`).catch(() => null),
+      nflWeek(db, input.date).catch(() => []),
     ]);
-    const games = (daily?.[0]?.picks ?? []) as any[];
+    const games = [...((daily?.[0]?.picks ?? []) as any[]), ...week.filter((p: any) => etDay(p.commence_time) === input.date)];
     const g = games.find((p) => `${p.pick} ${p.awayTeam} ${p.homeTeam}`.toLowerCase().includes(needle));
     if (g) return clip(`${g.pick} (${g.awayTeam} at ${g.homeTeam})\n${g.game_read || g.rationale || "No write-up stored."}`, 9000);
     const p = (props ?? []).flatMap((r: any) => r.picks ?? []).find((x: any) => `${x.player} ${x.team} ${x.matchup}`.toLowerCase().includes(needle));
@@ -119,14 +126,13 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     const days = Math.max(1, Math.min(60, Number(input.days) || 7));
     const since = addDays(slate, -days);
     const league = typeof input.league === "string" && input.league ? `&league=eq.${encodeURIComponent(input.league.toUpperCase())}` : "";
-    const [games, props] = await Promise.all([
-      db.get(`game_results?game_date=gte.${since}&game_date=lt.${slate}${league}&select=league,result`),
+    const wantNfl = !league || /NFL/i.test(String(input.league));
+    const [nonNfl, nfl, props] = await Promise.all([
+      /NFL/i.test(String(input.league ?? "")) ? Promise.resolve([]) : db.get(`game_results?game_date=gte.${since}&game_date=lt.${slate}${league}&select=league,result`),
+      wantNfl ? db.get(`nfl_results?game_date=gte.${since}&game_date=lt.${slate}&select=result`) : Promise.resolve([]),
       league ? Promise.resolve([]) : db.get(`prop_results?game_date=gte.${since}&game_date=lt.${slate}&select=result`),
     ]);
-    const tally = (rows: any[]) => {
-      const w = rows.filter((r) => r.result === "won").length, l = rows.filter((r) => r.result === "lost").length, p = rows.filter((r) => r.result === "push").length;
-      return `${w}-${l}${p ? `-${p}` : ""}`;
-    };
+    const games = [...(nonNfl ?? []), ...(nfl ?? []).map((r: any) => ({ ...r, league: "NFL" }))];
     const by = new Map<string, any[]>();
     for (const r of games ?? []) by.set(r.league, [...(by.get(r.league) ?? []), r]);
     return `Last ${days} days. Game picks: ${tally(games ?? [])} (${[...by].map(([k, v]) => `${k} ${tally(v)}`).join(", ") || "none"}).${league ? "" : ` Props: ${tally(props ?? [])}.`}`;
@@ -146,7 +152,7 @@ export interface BrainResult {
 /** Ask Gary. `onText` receives his words as they're written. */
 export async function ask(opts: {
   apiKey: string; db: Db; slate: string; board: Board; scoreboard: string; history: Turn[]; question: string;
-  onText: (delta: string) => void; signal?: AbortSignal; model?: string;
+  onText: (delta: string) => void; onLookup?: () => void; signal?: AbortSignal; model?: string;
 }): Promise<BrainResult> {
   const client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 1, timeout: 60_000 });
   const system = [
@@ -189,6 +195,7 @@ export async function ask(opts: {
     const calls = (message.content ?? []).filter((b: any) => b.type === "tool_use");
     if (message.stop_reason !== "tool_use" || !calls.length) break;
     messages.push({ role: "assistant", content: message.content });
+    opts.onLookup?.();
     const results = await Promise.all(calls.map(async (c: any) => {
       tools.push(c.name);
       try {

@@ -37,11 +37,32 @@ const safe = async <T>(p: Promise<T>): Promise<T | null> => { try { return await
 
 const ET = "America/New_York";
 
+/** "6-6" from graded rows, so he never has to count. */
+export function tally(rows: any[]): string {
+  const n = (r: string) => rows.filter((x) => x.result === r).length;
+  const p = n("push");
+  return `${n("won")}-${n("lost")}${p ? `-${p}` : ""}`;
+}
+
 /** The app's slate day: the ET date, held until 5 AM. */
 export function slateDate(now = new Date()): string {
   const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: ET, hour: "numeric", hourCycle: "h23" }).format(now));
   const d = hour < 5 ? new Date(now.getTime() - 6 * 3600_000) : now;
   return new Intl.DateTimeFormat("en-CA", { timeZone: ET }).format(d);
+}
+
+/** The ET calendar day a game starts on. */
+export function etDay(iso: unknown): string | null {
+  if (typeof iso !== "string") return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : new Intl.DateTimeFormat("en-CA", { timeZone: ET }).format(d);
+}
+
+/** The NFL week's stored picks (weekly_nfl_picks, week starting Tuesday) for the week holding `date`. */
+export async function nflWeek(db: Db, date: string): Promise<any[]> {
+  const row = (await db.get(`weekly_nfl_picks?week_start=lte.${date}&order=week_start.desc&limit=1&select=week_start,picks`))?.[0];
+  if (!row) return [];
+  return Array.isArray(row.picks) ? row.picks : (row.picks?.picks ?? []);
 }
 
 export function addDays(ymd: string, n: number): string {
@@ -82,12 +103,12 @@ const propWords = (prop: unknown) => String(prop ?? "").replace(/_/g, " ").repla
 export interface Board { date: string; text: string; names: string[]; games: number; questions: string[] }
 
 export async function readBoard(db: Db, date: string): Promise<Board> {
-  const [daily, props, darts, parlay, nflWeek] = await Promise.all([
+  const [daily, props, darts, parlay, week] = await Promise.all([
     safe(db.get(`daily_picks?date=eq.${date}&select=picks`)),
     safe(db.get(`prop_picks?date=eq.${date}&select=picks&order=id`)),
     safe(db.rpc("get_darts", { p_date: date })),
     safe(db.rpc("get_parlay", { p_date: date })),
-    safe(db.get(`weekly_nfl_picks?week_start=lte.${date}&order=week_start.desc&limit=1&select=week_start,picks`)),
+    safe(nflWeek(db, date)),
   ]);
   return renderBoard({
     date,
@@ -95,17 +116,8 @@ export async function readBoard(db: Db, date: string): Promise<Board> {
     props: (props ?? []).flatMap((r: any) => r.picks ?? []),
     darts: (darts?.today ?? []) as any[],
     parlay,
-    nfl: nflPicks(nflWeek?.[0], date),
-  });
-}
-
-/** This NFL week's picks that play today or later (the week's Thursday game is a result by Friday). */
-function nflPicks(row: any, date: string): any[] {
-  if (!row) return [];
-  const list = Array.isArray(row.picks) ? row.picks : (row.picks?.picks ?? []);
-  return list.filter((p: any) => {
-    const day = p.commence_time ? slateDate(new Date(new Date(p.commence_time).getTime() + 5 * 3600_000)) : null;
-    return !day || day >= date;
+    // This NFL week's picks that play on this slate or later (Thursday's is a result by Friday).
+    nfl: (week ?? []).filter((p: any) => (etDay(p.commence_time) ?? date) >= date),
   });
 }
 
@@ -117,7 +129,8 @@ export function renderBoard(b: { date: string; games: any[]; props: any[]; darts
 
   const gamePick = (p: any, i: number) => {
     addTeams(p.awayTeam, p.homeTeam);
-    const when = p.time ? `${p.time} ET` : etTime(p.commence_time);
+    const day = etDay(p.commence_time);
+    const when = [day && day !== b.date ? dayName(day) : null, p.time ? `${p.time} ET` : etTime(p.commence_time)].filter(Boolean).join(", ");
     const lines = [
       `### ${i + 1}. ${p.league ?? ""}: ${p.awayTeam ?? "?"} at ${p.homeTeam ?? "?"}${when ? `, ${when}` : ""}${p.venue ? ` (${p.venue})` : ""}`,
       `Your pick: ${p.pick}`,
@@ -138,7 +151,7 @@ export function renderBoard(b: { date: string; games: any[]; props: any[]; darts
   out.push(b.games.length ? b.games.map(gamePick).join("\n\n") : "None posted yet for this day.");
 
   if (b.nfl.length) {
-    out.push(`## YOUR NFL PICKS FOR THE REST OF THIS WEEK`);
+    out.push(`## YOUR NFL PICKS FROM ${dayName(b.date).toUpperCase()} THROUGH THE REST OF THIS NFL WEEK (each says its day)`);
     out.push(b.nfl.map(gamePick).join("\n\n"));
   }
 
@@ -175,9 +188,10 @@ export function renderBoard(b: { date: string; games: any[]; props: any[]; darts
 export async function readScoreboard(db: Db, date: string, now = new Date()): Promise<string> {
   const yesterday = addDays(date, -1);
   const since = addDays(date, -30);
-  const [live, gradedGames, gradedProps, darts, parlay, streak, winners, bankroll, recentGames, recentProps] = await Promise.all([
+  const [live, gradedGames, gradedNfl, gradedProps, darts, parlay, streak, winners, bankroll, recentGames, recentNfl, recentProps] = await Promise.all([
     safe(db.get(`live_scores?date=eq.${date}&select=league,away_abbr,home_abbr,away_score,home_score,status,detail`)),
     safe(db.get(`game_results?game_date=in.(${yesterday},${date})&select=game_date,league,pick_text,matchup,result,final_score&order=game_date`)),
+    safe(db.get(`nfl_results?game_date=in.(${yesterday},${date})&select=game_date,pick_text,matchup,result,final_score&order=game_date`)),
     safe(db.get(`prop_results?game_date=in.(${yesterday},${date})&select=game_date,player_name,pick_text,result,actual_value,line_value&order=game_date`)),
     safe(db.rpc("get_darts", { p_date: date })),
     safe(db.rpc("get_parlay", { p_date: date })),
@@ -185,9 +199,14 @@ export async function readScoreboard(db: Db, date: string, now = new Date()): Pr
     safe(db.userRpc("get_winners_board", { p_date: date })),
     safe(db.userRpc("get_gary_bankroll", {})),
     safe(db.get(`game_results?game_date=gte.${since}&game_date=lt.${date}&select=game_date,league,result`)),
+    safe(db.get(`nfl_results?game_date=gte.${since}&game_date=lt.${date}&select=game_date,result`)),
     safe(db.get(`prop_results?game_date=gte.${since}&game_date=lt.${date}&select=game_date,result`)),
   ]);
-  return renderScoreboard({ date, now, live, gradedGames, gradedProps, darts, parlay, streak, winners, bankroll, recentGames, recentProps });
+  const nfl = (rows: any[] | null) => (rows ?? []).map((r) => ({ ...r, league: "NFL" }));
+  return renderScoreboard({
+    date, now, live, gradedGames: [...(gradedGames ?? []), ...nfl(gradedNfl)], gradedProps, darts, parlay, streak, winners, bankroll,
+    recentGames: [...(recentGames ?? []), ...nfl(recentNfl)], recentProps,
+  });
 }
 
 export function renderScoreboard(s: {
@@ -210,8 +229,8 @@ export function renderScoreboard(s: {
     const g = results(s.gradedGames, day), p = results(s.gradedProps, day);
     if (!g.length && !p.length) continue;
     out.push(`## ${label}`);
-    if (g.length) out.push(`Game picks:\n${g.map(gameLine).join("\n")}`);
-    if (p.length) out.push(`Props:\n${p.map(propLine).join("\n")}`);
+    if (g.length) out.push(`Game picks, ${tally(g)}:\n${g.map(gameLine).join("\n")}`);
+    if (p.length) out.push(`Props, ${tally(p)}:\n${p.map(propLine).join("\n")}`);
   }
 
   const dartsToday = (s.darts?.today ?? []).filter((d: any) => !d.scratched && d.result);

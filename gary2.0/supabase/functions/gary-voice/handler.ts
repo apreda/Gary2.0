@@ -135,6 +135,11 @@ export function createVoiceHandler(cfg: VoiceConfig) {
             const result = await ask({
               apiKey: cfg.anthropicKey, db, slate: date, board, scoreboard, history, question,
               onText: (d) => { send({ t: "text", s: d }); said(chunker.push(d)); },
+              onLookup: () => {
+                const rest = chunker.flush();
+                if (rest) voice.say(rest).catch(() => {});
+                voice.pause().catch(() => {});
+              },
               signal: gone.signal,
             });
             usage = result.usage; tools = result.tools; answer = result.answer;

@@ -24,7 +24,14 @@ export interface VoiceOptions {
 export class GaryVoice {
   private ws: WebSocket;
   private ready: Promise<void>;
+  // One context per stretch of speech. A lookup pauses him for seconds, long enough for Cartesia to let a
+  // context go, so the line before a lookup is finished and the answer after it starts a new one.
   private contextId = crypto.randomUUID();
+  private spokeInContext = false;
+  private open = new Set<string>();
+  private offsets = new Map<string, number>();
+  private seconds = 0;
+  private ending = false;
   private finished = false;
   private closed = false;
   chars = 0;
@@ -46,6 +53,7 @@ export class GaryVoice {
   }
 
   private request(transcript: string, more: boolean) {
+    if (more || this.spokeInContext) this.open.add(this.contextId);
     return JSON.stringify({
       model_id: this.opts.model,
       transcript,
@@ -64,14 +72,25 @@ export class GaryVoice {
     if (typeof raw !== "string") return;
     let m: any;
     try { m = JSON.parse(raw); } catch { return; }
-    if (m.type === "chunk" && typeof m.data === "string") this.opts.events.audio(m.data);
-    else if (m.type === "timestamps" && m.word_timestamps) {
+    const ctx = String(m.context_id ?? this.contextId);
+    // Each context's clock starts at zero; his audio is one line, so its words are placed after what came before.
+    if (!this.offsets.has(ctx)) this.offsets.set(ctx, this.seconds);
+    const offset = this.offsets.get(ctx)!;
+    if (m.type === "chunk" && typeof m.data === "string") {
+      this.seconds += (m.data.length * 3 / 4) / 2 / VOICE_SAMPLE_RATE;
+      this.opts.events.audio(m.data);
+    } else if (m.type === "timestamps" && m.word_timestamps) {
       const w = m.word_timestamps;
-      if (Array.isArray(w.words) && w.words.length) this.opts.events.words(w.words, w.start ?? [], w.end ?? []);
+      if (Array.isArray(w.words) && w.words.length) {
+        this.opts.events.words(w.words, (w.start ?? []).map((t: number) => t + offset), (w.end ?? []).map((t: number) => t + offset));
+      }
     } else if (m.type === "done") {
-      this.finished = true;
-      this.opts.events.done();
-      this.close();
+      this.open.delete(ctx);
+      if (this.ending && this.open.size === 0) {
+        this.finished = true;
+        this.opts.events.done();
+        this.close();
+      }
     } else if (m.type === "error") {
       this.finished = true;
       this.opts.events.error(String(m.message ?? m.title ?? m.error ?? "voice error"));
@@ -85,13 +104,29 @@ export class GaryVoice {
     await this.ready;
     this.chars += text.length;
     this.ws.send(this.request(text, true));
+    this.spokeInContext = true;
+  }
+
+  /** He's stopping to look something up: finish what he's said so far; what follows starts fresh. */
+  async pause() {
+    if (this.closed || !this.spokeInContext) return;
+    await this.ready;
+    this.ws.send(this.request("", false));
+    this.contextId = crypto.randomUUID();
+    this.spokeInContext = false;
   }
 
   /** No more text is coming: finish the line. */
   async finish() {
     if (this.closed) return;
     await this.ready;
-    this.ws.send(this.request("", false));
+    this.ending = true;
+    if (this.spokeInContext) this.ws.send(this.request("", false));
+    if (this.open.size === 0) {
+      this.finished = true;
+      this.opts.events.done();
+      this.close();
+    }
   }
 
   close() {

@@ -98,6 +98,8 @@ struct GaryTalkRoom: View {
                         .position(x: w / 2, y: top + gh + 2)
                 }
                 GaryIdleFigure(mood: nil, height: gh, active: true, lives: false)
+                    // He leans into what he's saying, a hair, with his voice.
+                    .scaleEffect(talk.phase == .speaking ? 1 + CGFloat(talk.level) * 0.018 : 1, anchor: .bottom)
                     .frame(width: gw + 60, height: gh + 30)
                     .position(x: w / 2, y: top - 30 + (gh + 30) / 2)
                 if !started {
