@@ -205,11 +205,16 @@ struct HomeView: View {
     /// on, how the night went once it's all played, and how last night went before today's picks are out.
     private var talkQuestion: String {
         let now = Date()
+        let zones = Dictionary(sheetRows.compactMap { r in r.gameID.map { ($0, r.zone) } }, uniquingKeysWith: { a, _ in a })
         var live: String?
         for pick in todayPicks where !pick.isScratched {
             guard let team = GaryTalk.teamWord(pick.pick) else { continue }
-            guard let start = GaryTalk.date(pick.commence_time), start <= now else { return "Why the \(team)?" }
-            if live == nil, now.timeIntervalSince(start) < 3 * 3600 { live = team }
+            // The board's own state when it has the game; the clock when it doesn't.
+            let zone = pick.game_id.flatMap { zones[$0] }
+            let start = GaryTalk.date(pick.commence_time)
+            if zone == .upcoming || (zone == nil && (start.map { $0 > now } ?? true)) { return "Why the \(team)?" }
+            let playing = zone.map { $0 == .live || $0 == .interrupted } ?? (start.map { now.timeIntervalSince($0) < 3 * 3600 } ?? false)
+            if live == nil, playing { live = team }
         }
         if let live { return "How are the \(live) doing?" }
         return todayPicks.isEmpty ? GaryTalk.lastNight : GaryTalk.howDidItGo(now)

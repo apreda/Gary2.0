@@ -51,7 +51,7 @@ struct HomeGaryOpening: View {
 
     static let height: CGFloat = 408
     /// The ASK GARY label's top: under last night's, clear of the darts prompt at his pocket.
-    private static let askY: CGFloat = 104
+    private static let askY: CGFloat = 100
     private static let garyHeight: CGFloat = 344
     private static let garyTop: CGFloat = 28
 
@@ -335,24 +335,24 @@ struct HomeGaryOpening: View {
         seenRaw = list.suffix(60).joined(separator: "|")
     }
 
-    /// A question on two lines, broken where the halves come out closest in length.
-    static func twoLines(_ q: String) -> [String] {
-        let words: [String] = q.split(separator: " ").map(String.init)
-        guard words.count > 1 else { return [q] }
-        var best = 1
-        var bestGap = Int.max
-        for cut in 1..<words.count {
-            let a: Int = words[..<cut].joined(separator: " ").count
-            let b: Int = words[cut...].joined(separator: " ").count
-            if abs(a - b) < bestGap { bestGap = abs(a - b); best = cut }
+    /// A question in lines that hold the diagram's 21 pt across a label's width (about 12 letters), at most
+    /// three, so no line shrinks.
+    static func labelLines(_ q: String) -> [String] {
+        var lines: [String] = []
+        for word in q.split(separator: " ").map(String.init) {
+            if let last = lines.last, last.count + 1 + word.count <= 12 || lines.count == 3 {
+                lines[lines.count - 1] = last + " " + word
+            } else {
+                lines.append(word)
+            }
         }
-        return [words[..<best].joined(separator: " "), words[best...].joined(separator: " ")]
+        return lines
     }
 
-    /// ASK GARY at his mouth: the question in his diagram's display type, two lines.
+    /// ASK GARY at his mouth: the question in his diagram's display type.
     private func askLabel(_ q: String) -> some View {
         let isNew = !talkSeen
-        let lines = Self.twoLines(q.uppercased())
+        let lines = Self.labelLines(q.uppercased())
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 if isNew {
