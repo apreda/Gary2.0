@@ -857,13 +857,13 @@ struct DartWheel: View {
 
     var body: some View {
         GeometryReader { g in
-            // Inside the stage card (mock B): the board in its window at the
-            // card's left edge, the rows at its right.
-            let k = g.size.width / 378
+            // On the page (mocks 6 and 7): the board half off the left wall,
+            // the rows at the right gutter.
+            let k = g.size.width / 402
             let h = g.size.height
-            let cx = 2 * k, cy = h / 2, r = 148 * k
-            let colX = 158 * k
-            let colW = g.size.width - colX - 14
+            let cx = 14 * k, cy = h / 2, r = 150 * k
+            let colX = 172 * k
+            let colW = g.size.width - colX - GaryLayout.gutter
             ZStack(alignment: .topLeading) {
                 // The board, the shipping board's own drawing, half off the left wall.
                 let side = r * 358 / 172
@@ -872,11 +872,18 @@ struct DartWheel: View {
                     .opacity(0.85)
                     .position(x: cx, y: cy)
                     .accessibilityHidden(true)
-                // The gold tile the picked row sits on, lit from its left.
-                DartsLook.goldTileFill(radius: 18)
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(RadialGradient(colors: [DartsLook.goldLabel.opacity(0.28), .clear], center: .leading, startRadius: 0, endRadius: colW * 0.7)))
-                    .frame(width: colW + 8, height: Self.rowHeight + 16)
+                // The lamp hangs a little right of the bull.
+                Color.clear.frame(width: 2 * r, height: 2 * r)
+                    .position(x: cx + 60 * k, y: cy)
+                    .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
+                    .allowsHitTesting(false)
+
+                // The glass the picked row sits in.
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), Color(hex: "#18150F")], startPoint: .top, endPoint: .bottom))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
+                    .frame(width: colW, height: Self.rowHeight + 12)
                     .position(x: colX + colW / 2, y: cy)
                     .accessibilityHidden(true)
 
@@ -908,12 +915,12 @@ struct DartWheel: View {
                 DartWheelInput(rowHeight: Self.rowHeight, jump: jump,
                                onPos: { p in turned(to: p) },
                                onTap: { y in tapped(y: y, height: h) })
-                    .frame(width: colW + 14, height: h)
+                    .frame(width: colW + GaryLayout.gutter, height: h)
                     .offset(x: colX)
                     .accessibilityHidden(true)
             }
         }
-        .frame(height: 380)
+        .frame(height: 406)
         .clipped()
         .onChange(of: kind) { newKind in
             // A tab tap turns the wheel to that category's #1.

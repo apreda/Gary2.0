@@ -638,12 +638,19 @@ struct DartsView: View {
         } else {
             let index = cats.firstIndex { $0.kind == kind } ?? 0
             let current = cats[index]
-            VStack(alignment: .leading, spacing: 0) {
-                // The categories as words, the picked one glowing (mock B).
-                LitTextTabs(items: cats.map(\.title), selected: Binding(
-                    get: { current.title },
-                    set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14)
-                    .padding(.horizontal, 12).padding(.top, 6)
+            // The darts as in mocks 6 and 7 (founder, Oct 30 2026): the tabs as
+            // words on the page and the board on the page, no stage card.
+            VStack(alignment: .leading, spacing: 6) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LabTextTabs(items: cats.map(\.title), selected: Binding(
+                            get: { current.title },
+                            set: { title in withAnimation(.easeOut(duration: 0.2)) { kind = cats.first { $0.title == title }?.kind ?? kind } }), size: 14, idle: DartsInk.idleTab)
+                            .padding(.horizontal, GaryLayout.gutter)
+                    }
+                    // A swipe on the board keeps its tab in view.
+                    .onChange(of: current.title) { title in withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(title, anchor: .center) } }
+                }
                 if thrown.isEmpty {
                     Dartboard(darts: current.rows,
                               throwOnce: league == "MLB" && index == 0 ? "darts.thrown.\(today).\(league)" : nil,
@@ -652,9 +659,10 @@ struct DartsView: View {
                               onTeam: { name, lg in teamCard = TeamCardSel(name: name, league: lg) })
                         // Nothing thrown yet today: glass over the board.
                         .overlay { if thrown.isEmpty { DartboardGlass() } }
+                        .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
                         .id("\(current.kind)-\(throwTake)")
                         .transition(.opacity)
-                        .padding(12)
+                        .pageGutter()
                         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { v in
                             // A clear sideways swipe, not a scroll.
                             guard abs(v.translation.width) > 60, abs(v.translation.width) > abs(v.translation.height) * 1.6 else { return }
@@ -680,10 +688,6 @@ struct DartsView: View {
                         .transition(.opacity)
                 }
             }
-            // The wheel's stage: a lit card, the board in its window (mock B).
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .dartsCard(tint: DartsLook.goldLabel.opacity(0.14), glowAt: UnitPoint(x: 0, y: 0.55),
-                       face: [Color(hex: "#2A2116"), Color(hex: "#16120D")])
         }
     }
 
