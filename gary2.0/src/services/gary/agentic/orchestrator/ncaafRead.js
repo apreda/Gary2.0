@@ -23,6 +23,7 @@ import { parseGaryResponse } from './responseParser.js';
 import { auditPickRationale } from './statAudit.js';
 import { buildSmallDogConversionMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
+import { rosterAndPoll } from './ncaafRosterAndPoll.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
 const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
@@ -356,8 +357,9 @@ export function situation(desk) {
 
 /** The game as Gary reads it: the spread he bets, said once, and the football (founder, Oct 23 2026: not the line's
  * path, the opener, the total or the moneylines; see ncaafKnowledge.js). */
-export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
+export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, asOf = new Date() } = {}) {
   const line = lineOf(desk);
+  const strength = await rosterAndPoll({ awayTeam, homeTeam, asOf });
   // The order (founder, Oct 23 2026): the spread, who plays, each team's season game by game, the players
   // who carry the offense, the situation.
   const parts = [
@@ -368,6 +370,8 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
     ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", gameLog(desk)],
+    // Oct 31 2026: this season's roster talent and AP poll, both teams (ncaafRosterAndPoll.js).
+    ['ROSTER TALENT AND THE AP POLL', strength],
     ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
     ['SCHEDULE, TRAVEL AND WEATHER', situation(desk)],
   ];
@@ -379,6 +383,7 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam } = {}) {
  * situation and the news desk's report. */
 export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gameId, kickoff, asOf = new Date() } = {}) {
   const kick = kickoff ? new Date(kickoff).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+  const strength = await rosterAndPoll({ awayTeam, homeTeam, asOf });
   return [`### ${awayTeam} at ${homeTeam}${kick ? ` · ${kick} ET` : ''}`,
     spreadInWords(lineOf(desk)) || 'The spread is not on file.', '',
     // The availability source lines stay with the report, not the coaches (Oct 29 2026 hunt, round 7: "Availability
@@ -388,6 +393,7 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
     'Quarterbacks and coaches:', quarterbacksAndCoaches(desk).split('\n').filter((l) => !/^Availability source:/.test(l)).join('\n').trim() || quarterbacksAndCoachesText(desk), '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
     'This season:', howGood(desk), '',
+    'Roster talent and the AP poll:', strength, '',
     'Schedule, travel and weather:', situation(desk) || 'Nothing unusual.',
     footballNews(news) ? `\nThe news desk:\n${footballNews(news)}` : ''].join('\n');
 }

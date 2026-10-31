@@ -105,6 +105,16 @@ export function cfbdTeamMatches(cfbdTeam, teamName) {
   return !/^(?:\(|(?:state|tech|a&m|southern|northern|eastern|western|central|atlantic|international|gulf coast)(?:\s|$))/.test(suffix);
 }
 
+/** The 247Sports team talent composite for one season's rosters, every team, one request (Oct 31 2026). */
+export async function getTeamTalent(season, opts = {}) {
+  return bulkGet(`/talent?year=${season}`, `talent_${season}`, opts);
+}
+
+/** One season's polls, every week so far, one request (Oct 31 2026). */
+export async function getRankings(season, opts = {}) {
+  return bulkGet(`/rankings?year=${season}&seasonType=regular`, `rankings_${season}`, opts);
+}
+
 /** SP+ for the whole league, one request. */
 export async function getSpPlus(season, opts = {}) {
   return bulkGet(`/ratings/sp?year=${season}`, `sp_${season}`, opts);
