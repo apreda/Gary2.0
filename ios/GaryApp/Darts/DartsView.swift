@@ -51,10 +51,18 @@ struct DartRow: Decodable, Identifiable {
     let form: DartForm?
     /// hit | miss once graded; nil while it rides.
     let result: String?
+    /// The player's final number once graded (8 assists, 0 first-inning runs).
+    let actual: LabNumber?
     /// Gary's order in the category, 1 his best (the wheel lays the darts out by it).
     let rank: Int?
 
     var isGame: Bool { kind == "first_inning" }
+    /// true for a hit, false for a miss, nil while it rides.
+    var graded: Bool? { result == "hit" ? true : result == "miss" ? false : nil }
+    /// "8": the final number as the board writes it.
+    var actualText: String? {
+        actual?.value.map { $0 == $0.rounded() ? String(Int($0)) : String(format: "%.1f", $0) }
+    }
     /// The two clubs of a first-inning dart ("Blue Jays @ Orioles").
     var gameTeams: (away: String, home: String)? {
         let parts = (matchup ?? player).components(separatedBy: " @ ")

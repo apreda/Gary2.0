@@ -797,13 +797,14 @@ extension View {
 
 // MARK: - The dart wheel
 
-/// The darts on a wheel (founder, Oct 30 2026, mock 4.1 and "make it
-/// scrollable"): the board hangs on the left wall with Gary's darts in it by
-/// his order, his #1 in the bull; the darts' rows turn on a wheel at its
-/// right. The row in the middle is the one picked: its dart lights on the
-/// board and its row sits in the glass. Every category follows the last in
-/// one endless loop, so a hard flick spins through all of them and the tab
-/// above follows the wheel; a slow drag moves it a row at a time.
+/// The darts on a wheel (founder, Oct 30 2026: "make it scrollable"; Oct 31: "do rank the wall and still let it
+/// rotate or move like it does now, just with the design of 4", and 4.5 once the games are in): the board hangs
+/// on the left wall with Gary's darts in it by his order, his #1 in the bull, and the darts' rows turn on a wheel
+/// at its right, every row whole, as on the wall in mock 4. The board shows the category of the row in the
+/// middle. Every category follows the last in one endless loop, so a hard flick spins through all of them and
+/// the tab above follows the wheel; a slow drag moves it a row at a time. A row tapped opens its player. Once
+/// a dart is graded its row shows a check or a cross and the player's final number, a miss dims, and a hit's
+/// dart wears a green ring (mock 4.5).
 struct DartWheel: View {
     struct Item {
         let kind: String
@@ -878,15 +879,6 @@ struct DartWheel: View {
                     .anchorPreference(key: StageLampAnchor.self, value: .bounds) { $0 }
                     .allowsHitTesting(false)
 
-                // The glass the picked row sits in.
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#221D17"), Color(hex: "#18150F")], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.4), radius: 10, y: 8)
-                    .frame(width: colW, height: Self.rowHeight + 12)
-                    .position(x: colX + colW / 2, y: cy)
-                    .accessibilityHidden(true)
-
                 darts(cx: cx, cy: cy, r: r, k: k)
                     .accessibilityHidden(true)
 
@@ -958,11 +950,10 @@ struct DartWheel: View {
         jump = WheelJump(index: index, nonce: jump.nonce + 1, animated: !reduceMotion)
     }
 
-    /// A tap on the picked row opens the player's card (either club's on a
-    /// first-inning dart); a tap on any other row turns it to the middle.
+    /// A tap on a row opens its player's card (either club's on a first-inning dart).
     private func tapped(y: CGFloat, height: CGFloat) {
         let off = Int(((y - height / 2) / Self.rowHeight).rounded())
-        if off == 0 { open(current.dart) } else { go(to: selected + off) }
+        open(item(selected + off).dart)
     }
 
     private func open(_ d: DartRow) {
@@ -983,34 +974,27 @@ struct DartWheel: View {
 
     @ViewBuilder private func darts(cx: CGFloat, cy: CGFloat, r: CGFloat, k: CGFloat) -> some View {
         let cat = items.filter { $0.kind == current.kind }
-        let lit = current.dart.id
         ZStack(alignment: .topLeading) {
             ForEach(Array(cat.enumerated()), id: \.element.dart.id) { n, it in
                 let s = Self.spot(n)
                 let a = s.deg * .pi / 180
                 let tip = CGPoint(x: cx + s.frac * r * CGFloat(sin(a)), y: cy - s.frac * r * CGFloat(cos(a)))
-                let on = it.dart.id == lit
-                let g = (on ? 29 : 25) * k
+                let g = 25 * k
                 let inAir = flying.contains(it.dart.id)
-                if on {
-                    Circle().fill(Color(hex: "#E8D48B").opacity(0.1)).frame(width: 36 * k, height: 36 * k).position(tip)
-                    Circle().stroke(Color(hex: "#E8D48B").opacity(0.75), lineWidth: 1.2).frame(width: 22 * k, height: 22 * k).position(tip)
-                }
                 DartGlyph()
                     .frame(width: g, height: g)
                     .scaleEffect(inAir ? 2.8 : 1, anchor: DartGlyph.tipAnchor)
                     .rotationEffect(.degrees(inAir ? 16 : 0), anchor: DartGlyph.tipAnchor)
                     .offset(x: inAir ? 150 : 0, y: inAir ? 260 : 0)
-                    .opacity(inAir ? 0 : (on ? 1 : 0.42))
+                    .opacity(inAir ? 0 : (it.dart.graded == false ? 0.38 : 1))
                     .position(x: tip.x + 0.45 * g, y: tip.y - 0.45 * g)
-                WheelBadge(rank: it.rank, lit: on, k: k)
-                    .opacity(inAir ? 0 : (on ? 1 : 0.55))
+                WheelBadge(rank: it.rank, graded: it.dart.graded, k: k)
+                    .opacity(inAir ? 0 : 1)
                     .position(x: tip.x + g, y: tip.y - g)
             }
         }
         .id(current.kind)
         .transition(.opacity)
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: lit)
     }
 
     /// The first time today's first board is on screen its darts fly in one
@@ -1035,7 +1019,8 @@ struct DartWheel: View {
         let d = it.dart
         let side = d.isGame ? ((d.bet ?? "over") == "under" ? "NRFI" : "YRFI") : d.lineWords
         let price = d.isScratched ? d.scratchWord.lowercased() : [side, LabFormat.price(d.odds)].compactMap { $0 }.joined(separator: " ")
-        return ["\(it.rank)", d.player, price, d.gameLine].filter { !$0.isEmpty }.joined(separator: ", ")
+        let grade = d.graded.flatMap { hit in d.actualText.map { "\(hit ? "hit" : "missed"), finished with \($0)" } }
+        return ["\(it.rank)", d.player, price, grade ?? d.gameLine].filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -1058,31 +1043,30 @@ struct WheelJump: Equatable {
     let animated: Bool
 }
 
-/// The dart's number on its flights.
+/// The dart's number on its flights: gold, Gary's #1 brightest (mock 4); once graded, a hit's ring goes green
+/// and a miss's goes faint (mock 4.5).
 private struct WheelBadge: View {
     let rank: Int
-    let lit: Bool
+    let graded: Bool?
     let k: CGFloat
     var body: some View {
-        let d = (lit ? 21 : 19) * k
+        let d = 19 * k
+        let ink: Color = graded == false ? GaryColors.warmWhite.opacity(0.5)
+            : graded == true ? GaryColors.warmWhite : (rank == 1 ? GaryColors.gold : GaryColors.warmWhite)
+        let ring: Color = graded == true ? GaryColors.win : graded == false ? GaryColors.warmWhite.opacity(0.22)
+            : GaryColors.gold.opacity(rank == 1 ? 1 : 0.6)
         Text("\(rank)")
-            .font(GaryFonts.display(lit ? 14.5 : 13.5))
-            .foregroundStyle(lit ? Color(hex: "#12100D") : (rank == 1 ? GaryColors.gold : GaryColors.warmWhite))
+            .font(GaryFonts.display(13.5))
+            .foregroundStyle(ink)
             .frame(width: d, height: d)
-            .background(Circle().fill(lit ? GaryColors.gold : Color(hex: "#12100D")))
-            .overlay(Circle().stroke(GaryColors.gold.opacity(lit || rank == 1 ? 1 : 0.6), lineWidth: 1))
+            .background(Circle().fill(graded == true ? Color(hex: "#0F1A11") : Color(hex: "#12100D")))
+            .overlay(Circle().stroke(ring, lineWidth: 1))
     }
 }
 
-/// The rows on the wheel, redrawn as it turns: flat rows sliding past the
-/// glass, fading out at the wheel's top and bottom.
+/// The rows on the wheel, redrawn as it turns: flat rows on the wall, a rule between each, fading out at the
+/// wheel's top and bottom.
 private struct WheelRows: View {
-    /// A row's top rule hides while it crosses the glass.
-    static func hairShows(_ d: Double, _ rowHeight: CGFloat) -> Double {
-        let y = abs(d * Double(rowHeight) - Double(rowHeight) / 2)
-        return min(1, max(0, (y - Double(rowHeight) / 2 - 4) / 8))
-    }
-
     @ObservedObject var wheel: WheelPosition
     let items: [DartWheel.Item]
     let rowHeight: CGFloat
@@ -1097,15 +1081,11 @@ private struct WheelRows: View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(lo...hi), id: \.self) { i in
                 let d = Double(i) - p
-                let a = abs(d)
-                WheelRow(item: items[((i % n) + n) % n], near: max(0, 1 - a))
+                WheelRow(item: items[((i % n) + n) % n])
                     .frame(width: width, height: rowHeight)
                     .overlay(alignment: .top) {
-                        Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10).opacity(Self.hairShows(d, rowHeight))
+                        Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10)
                     }
-                    // Flat, as in the mock (founder, Oct 30 2026: the drum
-                    // was "a bit too rounded"); rows off the glass dim.
-                    .opacity(1 - 0.38 * min(a, 1))
                     .position(x: width / 2, y: height / 2 + CGFloat(d) * rowHeight)
             }
         }
@@ -1113,12 +1093,10 @@ private struct WheelRows: View {
     }
 }
 
-/// One dart's row: Gary's number, the player, the line and the price; the
-/// game and the time show as the row comes into the glass.
+/// One dart's row, as on the wall (mock 4): Gary's number, the player, the line and the price. Graded (mock 4.5):
+/// a check or a cross and the final number beside the player, the line and price smaller under it, a miss dimmed.
 private struct WheelRow: View {
     let item: DartWheel.Item
-    /// 1 in the middle, 0 a row or more away.
-    let near: Double
 
     private var d: DartRow { item.dart }
     private var side: String? {
@@ -1129,18 +1107,31 @@ private struct WheelRow: View {
         guard !d.isGame, d.lineWords != nil else { return nil }
         return (d.bet ?? "over").lowercased() == "under" ? .under : .over
     }
+    /// The final number shows once graded (and only with a number to show).
+    private var grade: Bool? { d.actualText == nil ? nil : d.graded }
 
     var body: some View {
+        let miss = grade == false
         HStack(spacing: 10) {
             Text("\(item.rank)")
                 .font(GaryFonts.display(25))
-                .foregroundStyle(item.rank == 1 || near > 0.5 ? GaryColors.gold : GaryColors.warmWhite.opacity(0.4))
+                .foregroundStyle(grade == true || (grade == nil && item.rank == 1) ? GaryColors.gold : GaryColors.warmWhite.opacity(0.4))
                 .frame(width: 16)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(d.player)
-                    .font(GaryFonts.ui(14.5, .semibold))
-                    .foregroundStyle(d.isScratched ? LabInk.dim : GaryColors.warmWhite)
-                    .fitsOneLine()
+            VStack(alignment: .leading, spacing: grade == nil ? 7 : 6) {
+                HStack(spacing: 6) {
+                    Text(d.player)
+                        .font(GaryFonts.ui(14.5, .semibold))
+                        .foregroundStyle(d.isScratched ? LabInk.dim : GaryColors.warmWhite.opacity(miss ? 0.62 : 1))
+                        .fitsOneLine()
+                    if let grade, let actual = d.actualText {
+                        Spacer(minLength: 4)
+                        GradeMark(hit: grade)
+                        Text(actual)
+                            .font(GaryFonts.display(24))
+                            .foregroundStyle(grade ? GaryColors.win : GaryColors.warmWhite.opacity(0.5))
+                            .monospacedDigit()
+                    }
+                }
                 HStack(alignment: .center, spacing: 6) {
                     if d.isScratched {
                         Text(d.scratchWord).font(GaryFonts.display(15)).tracking(0.5).foregroundStyle(LabInk.dimmer)
@@ -1150,23 +1141,36 @@ private struct WheelRow: View {
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(direction == .over ? GaryColors.win : GaryColors.loss)
                         }
-                        if let side { Text(side).font(GaryFonts.display(16.5)).tracking(0.4).foregroundStyle(GaryColors.silver).fitsOneLine() }
-                        Spacer(minLength: 6)
-                        Text(LabFormat.price(d.odds)).font(GaryFonts.display(20.5)).foregroundStyle(GaryColors.gold).monospacedDigit()
+                        if let side {
+                            Text(side).font(GaryFonts.display(grade == nil ? 16.5 : 15.5)).tracking(0.4)
+                                .foregroundStyle(GaryColors.silver.opacity(miss ? 0.55 : 1)).fitsOneLine()
+                        }
+                        if grade == nil { Spacer(minLength: 6) }
+                        Text(LabFormat.price(d.odds)).font(GaryFonts.display(grade == nil ? 20.5 : 15.5))
+                            .foregroundStyle(GaryColors.gold.opacity(miss ? 0.5 : 1)).monospacedDigit()
                     }
                 }
-                Text(d.isGame ? LabFormat.timeET(d.commence_time) : d.gameLine)
-                    .font(GaryFonts.ui(11.5))
-                    .foregroundStyle(LabInk.dim)
-                    .fitsOneLine()
-                    .opacity(near)
             }
-            // Two lines sit in the middle of the row; the third comes in with the glass.
-            .offset(y: (1 - near) * 9.5)
         }
         .padding(.leading, 10)
         .padding(.trailing, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+/// A graded dart's mark: a green check in a ring for a hit, a faint cross for a miss.
+private struct GradeMark: View {
+    let hit: Bool
+    var body: some View {
+        ZStack {
+            Circle().fill(hit ? GaryColors.win.opacity(0.16) : .clear)
+            Circle().stroke(hit ? GaryColors.win : GaryColors.warmWhite.opacity(0.3), lineWidth: 1)
+            Image(systemName: hit ? "checkmark" : "xmark")
+                .font(.system(size: 7.5, weight: .bold))
+                .foregroundStyle(hit ? GaryColors.win : GaryColors.warmWhite.opacity(0.55))
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
     }
 }
 
