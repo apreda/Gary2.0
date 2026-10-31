@@ -11,7 +11,7 @@
  */
 import { matchupHeader, spreadInWords } from './footballDeskText.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
-import { nbaLineOf, injuriesAsReported, projectedStarters, reportOfDesk, reportDay, tipOf, availableListed } from './nbaRead.js';
+import { nbaLineOf, injuriesAsReported, projectedStarters, reportOfDesk, reportDay, tipOf, availableListed, injuryHeading } from './nbaRead.js';
 import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../../providers/nbaOfficialInjuryReport.js';
 import { ballDontLieService } from '../../../providers/ballDontLieService.js';
 import { findTeam } from '../scoutReport/shared/utilities.js';
@@ -143,7 +143,7 @@ export async function buildNbaGameByGameStory(desk, { homeTeam, awayTeam, asOf =
   const injuries = injuriesAsReported(desk, { homeTeam, awayTeam });
   const available = await availableListed(desk, { homeTeam, awayTeam, tip, asOf });
   const tonightPart = ['TONIGHT',
-    [projectedStarters(desk), injuries ? `Official NBA injury report:\n${injuries}` : 'Official NBA injury report: not on file.', available].filter(Boolean).join('\n\n'),
+    [projectedStarters(desk), injuries ? `${await injuryHeading(desk, { homeTeam, awayTeam, tip, asOf })}\n${injuries}` : 'Official NBA injury report: not on file.', available].filter(Boolean).join('\n\n'),
     '',
     `What is different tonight from the games shown below${listing ? '' : " (tonight's report not on file)"}:`,
     whatsDifferent(away, awayRecs, listing?.[awayTeam]),

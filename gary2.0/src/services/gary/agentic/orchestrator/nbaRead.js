@@ -17,7 +17,7 @@ import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
-import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords } from '../../../sports/nba/nbaBettorData.js';
+import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords, reportClock } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { espnVenue } from '../../../sports/nba/espnNbaGame.js';
@@ -145,9 +145,19 @@ export async function reportOfDesk(desk, { homeTeam, awayTeam, gameDate, asOf })
 // Both came in on Oct 23 to match a line move to the news; with the line's path gone they read as news the number might
 // not hold yet ("If the 1.5 was set while Thompson was still questionable", "I can't see where this line opened"; 22 of
 // 24 reads Oct 24-26 reasoned about what the spread already priced). How long a player has been out stays on his row.
-function injurySection(desk, { homeTeam, awayTeam }) {
+async function injurySection(desk, { homeTeam, awayTeam, tip = null, asOf = new Date() }) {
   const text = injuriesAsReported(desk, { homeTeam, awayTeam });
-  return text ? `Official NBA injury report:\n${text}` : 'Official NBA injury report: not on file.';
+  return text ? `${await injuryHeading(desk, { homeTeam, awayTeam, tip, asOf })}\n${text}` : 'Official NBA injury report: not on file.';
+}
+
+// The league posts its report every 15 minutes on game days. When the newest it has posted is more than two hours old at
+// the pick, the heading says so (round 17: on Oct 30 it posted nothing from 6:00 AM to 4:00 PM, eight statuses changed at
+// 4:00, and Gary read the 6:00 AM list at 2 and 3 PM as current). Only then: any other day the report's clock stays out
+// (Oct 27 2026). The desk reads the newest posted report, so its report is the league's newest at the pick.
+export async function injuryHeading(desk, { homeTeam, awayTeam, tip = null, asOf = new Date() }) {
+  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate: reportDay(tip || asOf), asOf }).catch(() => null);
+  const hours = anchor ? (new Date(asOf).getTime() - new Date(anchor.postedAt).getTime()) / 3_600_000 : 0;
+  return hours > 2 ? `Official NBA injury report, from ${reportClock(anchor.postedAt)} ET (the league has posted none in the ${Math.floor(hours)} hours since):` : 'Official NBA injury report:';
 }
 
 /** The players the league lists Available for tonight, with what they are listed for (Oct 27 2026 data check: Miami read
@@ -818,7 +828,7 @@ function boardGames(ts, league = {}) {
 export async function buildNbaBoardEntry(desk, { homeTeam, awayTeam, gameId, tip = '', asOf = new Date(), ratings = {} } = {}) {
   const tipAt = tipOf(desk, asOf);
   const [injuries, seasons] = await Promise.all([
-    injurySection(desk, { homeTeam, awayTeam }),
+    injurySection(desk, { homeTeam, awayTeam, tip: tipAt, asOf }),
     Promise.all([homeTeam, awayTeam].map((t) => teamSeason(t, asOf).catch(() => null))),
   ]);
   const [back, cup] = await Promise.all([outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip: tipAt, asOf }), tonightCupLine(homeTeam, awayTeam, tipAt).catch(() => null)]);
@@ -843,7 +853,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam, seasons[1]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1], null, null, { team: homeTeam, data: seasons[0] }),
-    injurySection(desk, { homeTeam, awayTeam }),
+    injurySection(desk, { homeTeam, awayTeam, tip, asOf }),
     outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
     availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons }),
     Promise.all([awayTeam, homeTeam].map((t) => nextGameLine(t, tip).catch(() => null))),
