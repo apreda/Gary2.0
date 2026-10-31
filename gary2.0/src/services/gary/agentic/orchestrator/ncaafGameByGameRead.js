@@ -118,7 +118,7 @@ const histories = new Map(), weathers = new Map();
 const reportHistory = (t, date) => { const k = `${t.id}|${date}`; if (!histories.has(k)) histories.set(k, teamReportHistory({ college: t.college, name: t.name }, { date }).catch(() => null)); return histories.get(k); };
 const seasonWeather = (season) => { if (!weathers.has(season)) weathers.set(season, getSeasonWeather(season).catch(() => null)); return weathers.get(season); };
 
-async function fullGame(g, season, tonight) {
+async function fullGame(g, season, tonight, read = null) {
   const box = await getNcaafGameBox(g.id);
   const [opp, mine] = await Promise.all([teamInfo(g.them.id), teamInfo(g.us.id).catch(() => null)]);
   // Sacks from the school's official box, the stat crew's count, as the live read has them (round 14: ESPN's totals row
@@ -210,8 +210,36 @@ async function fullGame(g, season, tonight) {
   // Its games against FCS teams marked, as the live read marks them (round 16: Utah State's loss to Idaho State read as an
   // FBS result).
   const fcs = await Promise.all(prior.map((x) => teamInfo(x.them.id).then((t) => t?.division === 'FCS').catch(() => false)));
-  lines.push(`  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}${prior.length ? `; ${prior.map((x, k) => `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${fcs[k] ? ' (FCS)' : ''}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}`).join('; ')}` : ' (their first game)'} · ${wl(oppGames)} before tonight`);
+  // Its record before tonight is in RECORDS BEFORE TONIGHT (round 18). Each game once per read: one printed under an
+  // earlier row points there, and one that is itself a full row of tonight's teams points to that row (round 18: TCU's
+  // games printed under Baylor's and UCF's rows alike, and its loss at UCF beside UCF's own row), as the live read does.
+  const games = prior.map((x, k) => ({ x, text: `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${fcs[k] ? ' (FCS)' : ''}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}` }));
+  const head2 = `  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}`;
+  if (read) { const token = `\u0000COMING ${g.us.id} ${g.id}\u0000`; read.coming.set(token, { g, head: head2, games }); lines.push(token); }
+  else lines.push(`${head2}${games.length ? `; ${games.map((x) => x.text).join('; ')}` : ' (their first game)'}`);
   return lines.join('\n');
+}
+
+// The coming-in lines of a read in the order they print, each opponent game once (fullGame's tokens).
+function comingInOnce(story, read) {
+  const shown = new Map();
+  return story.replace(/\u0000COMING (\S+) (\S+)\u0000/g, (token) => {
+    const { g, head, games } = read.coming.get(token) || {};
+    if (!g) return '';
+    const here = read.rows.get(String(g.id));
+    const under = new Map(), items = [];
+    for (const { x, text } of games) {
+      const day = etDay(x.date).replace(/^\w+, /, '');
+      const row = here && String(x.id) !== String(g.id) ? read.rows.get(String(x.id)) : null;
+      if (row) { items.push(`${day} ${result(x)} ${vs(x)} ${x.them.short}: ${row.label} ${row.pos < here.pos ? 'above' : 'below'}`); continue; }
+      const k = `${g.them.id}|${x.id}`;
+      if (shown.has(k)) { under.set(shown.get(k), [...(under.get(shown.get(k)) || []), day]); continue; }
+      items.push(text);
+      if (here) shown.set(k, here.label);
+    }
+    const listed = [...[...under].map(([at, days]) => `${days.join(', ')} under ${at} above`), ...items];
+    return `${head}${games.length ? `; ${listed.join('; ')}` : ' (their first game)'}`;
+  });
 }
 
 // The live read's pointer to its own section, bracketed or bare (Oct 29 2026 hunt: the bare form stayed).
@@ -243,6 +271,15 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   // From whichever schedule loaded (round 16: a failed away schedule read 'none before tonight').
   const meetings = awayRaw ? awayGames.filter((g) => g.them.id === homeId) : homeGames.filter((g) => g.them.id === awayId);
   const meetingIds = new Set(meetings.map((g) => g.id));
+  // Each full row's place in the read, for the coming-in lines (comingInOnce).
+  const read = { coming: new Map(), rows: new Map() };
+  {
+    let pos = 0;
+    for (const g of meetings) read.rows.set(String(g.id), { pos: pos++, label: "this season's meetings" });
+    for (const [name, games] of [[awayTeam, awayGames], [homeTeam, homeGames]]) {
+      for (const g of games.slice().reverse().slice(0, NCAAF_WINDOW)) if (!meetingIds.has(g.id)) read.rows.set(String(g.id), { pos: pos++, label: `the ${name}' ${etDay(g.date)} game` });
+    }
+  }
   // An older game says who threw for each side (round 8: Utah State's Sep 5 loss read with no quarterback, McCae
   // Hillstead's start before Grady Brosterhous took over).
   const olderLine = async (g) => {
@@ -257,15 +294,16 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
     if (!raw) return `${name.toUpperCase()}: the season's games are not on file (ESPN did not answer for its schedule)`;
     if (!games.length) return `${name.toUpperCase()}: no games yet this season`;
     const newest = games.slice().reverse();
-    const full = await Promise.all(newest.slice(0, NCAAF_WINDOW).map((g) => (meetingIds.has(g.id) ? `${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.short}: in this season's meetings above` : fullGame(g, yr, tonight))));
+    const full = await Promise.all(newest.slice(0, NCAAF_WINDOW).map((g) => (meetingIds.has(g.id) ? `${etDay(g.date)} ${result(g)} ${vs(g)} ${g.them.short}: in this season's meetings above` : fullGame(g, yr, tonight, read))));
     const older = newest.slice(NCAAF_WINDOW);
     return [`${name.toUpperCase()}: ${wl(games)}${games.length > NCAAF_WINDOW ? `; the last ${NCAAF_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
       full.join('\n\n'), older.length ? `Older games, one line each:\n${(await Promise.all(older.map(olderLine))).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
-  const story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
+  let story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
     `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
-    !awayRaw && !homeRaw ? "THIS SEASON'S MEETINGS: not on file (ESPN did not answer for either team's schedule)" : meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
+    !awayRaw && !homeRaw ? "THIS SEASON'S MEETINGS: not on file (ESPN did not answer for either team's schedule)" : meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight, read)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
     await teamPart(awayTeam, awayGames, awayRaw), await teamPart(homeTeam, homeGames, homeRaw)].join('\n\n');
+  story = comingInOnce(story, read);
   const finals = new Set([...awayGames, ...homeGames].map((g) => `${g.us.score}-${g.them.score}`));
   return { line: lineOf(desk), story, news: newsWithoutRecaps(news, finals) };
 }

@@ -32,7 +32,27 @@ async function getJson(url, fetchImpl) {
 }
 
 /** The parts of one ESPN college summary the desk reads; { unavailable, reason } unless the game is final. */
+// A drive ESPN logs twice, the second copy under new play ids and no result, is one drive (round 18: Oregon State's last
+// possession at Colorado State read as two game-ending drives, its 22- and 23-yard catches twice).
+function withoutRepeatedDrives(summary) {
+  const list = summary?.drives?.previous;
+  if (!Array.isArray(list) || list.length < 2) return summary;
+  // The copy carries no result, the same team, and at least half of the previous drive's plays opening in the same words
+  // (its clocks, tacklers and a few yard counts differ).
+  const keyOf = (p) => `${p?.period?.number}|${String(p?.text || '').replace(/^\(\d{1,2}:\d{2}\)\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 60)}`;
+  const kept = [];
+  for (const d of list) {
+    const prev = kept.at(-1), plays = d?.plays || [];
+    const seen = new Set((prev?.plays || []).map(keyOf));
+    const repeats = plays.filter((p) => seen.has(keyOf(p))).length;
+    if (prev && !d?.result && !d?.displayResult && String(d?.team?.id ?? '') === String(prev?.team?.id ?? '') && plays.length >= 3 && repeats >= plays.length / 2) continue;
+    kept.push(d);
+  }
+  return kept.length === list.length ? summary : { ...summary, drives: { ...summary.drives, previous: kept } };
+}
+
 export function gameBoxFromSummary(summary, eventId) {
+  summary = withoutRepeatedDrives(summary);
   const competition = summary?.header?.competitions?.[0];
   const status = competition?.status?.type;
   if (!(status?.completed === true || /FINAL/i.test(String(status?.name || '')))) return { unavailable: true, reason: `ESPN game ${eventId} is not final` };
@@ -268,7 +288,12 @@ export function gameBoxFromSummary(summary, eventId) {
   // count that misses most of them would date his last touch too early (round 14 build: a QB with 31 passes read 7).
   const boxTouches = (x) => { const [i, l] = x.who.split('.'); const p = players.find((q) => q.teamId === x.teamId && String(q.jersey ?? '') === x.jersey && String(q.last || '').toLowerCase().startsWith(String(l || '').split(' ')[0].toLowerCase()) && (q.first || '')[0] === i?.[0]);
     if (!p) return null; const st = (c, k) => Number(p.stats?.[c]?.[k]) || 0; return st('passing', 'passingAttempts') + st('rushing', 'rushingAttempts') + st('receiving', 'receptions'); };
-  const earlyExits = !allPlays.length || !close ? [] : [...touches.values()]
+  // A game decided after three quarters still names a player who left while it was within one score: no one rests a
+  // starter then (round 18: Colorado State's starting quarterback Hauss Hejny, gone after the 1st quarter at 7-14 of a
+  // 23-41 loss to BYU, was never said).
+  const within = (x) => { const p = allPlays[x.at]; const h = Number(p?.homeScore), a = Number(p?.awayScore); return Number.isFinite(h) && Number.isFinite(a) && Math.abs(h - a) <= 7; };
+  const earlyExits = !allPlays.length ? [] : [...touches.values()]
+    .filter((x) => close || within(x))
     .filter((x) => { const b = boxTouches(x); return b != null && x.n >= 0.8 * b; })
     .filter((x) => x.n >= 5 && (boxTouches(x) || 0) >= 5 && x.period <= 2 && (lastPeriod.get(x.teamId) || 0) >= 4 && !hurt.some((h) => h.jersey === x.jersey && h.who === x.who))
     // Any later play naming him, a return, a fair catch, a tackle or a foul, puts him on the field (round 16: Harbor's
@@ -415,7 +440,8 @@ export function ncaafFlowLines(box, teamId, names = {}) {
 export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } = {}) {
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
-  return cachedResearch(`espn_cfb_box_v26:${eventId}`, async () => {
+  // v27 (round 18): a drive ESPN logs twice is one; early exits judged by the score when the player left.
+  return cachedResearch(`espn_cfb_box_v27:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
