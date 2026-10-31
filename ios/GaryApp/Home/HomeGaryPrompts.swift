@@ -2,11 +2,11 @@ import Foundation
 
 /// One of the three prompts around Gary on Home (founder, Oct 30 2026: "prompting people to look at the Dart
 /// page or the Parlay of the day has arrived and those kinds of things", beside last night, tonight and the
-/// run). Each spot on Gary owns one page: his cigar the parlay of the day, his pocket the darts, his shoe the
+/// run). Each spot on Gary owns one page: his shoulder the parlay of the day, his pocket the darts, his shoe the
 /// picks. `key` names the news and changes when the news does, so a prompt reads as new (green dot, the spot
 /// on Gary pulsing) until it has been seen; a prompt with no key is never news.
 struct GaryPrompt: Equatable {
-    enum Spot: String { case cigar, pocket, shoe }
+    enum Spot: String { case shoulder, pocket, shoe }
     let spot: Spot
     let key: String?
     let kicker: String
@@ -64,30 +64,30 @@ enum GaryPrompts {
                           news: n == 1 ? "A DART\nHIT" : "\(n) DARTS\nHIT", hook: best.odds.map(odds), hookWins: true)
     }
 
-    /// His cigar: the parlay of the day, from the evening it lands until it settles. A miss stays quiet.
+    /// His shoulder: the parlay of the day, from the evening it lands until it settles. A miss stays quiet.
     static func parlay(date: String, today: Parlay?, yesterday: Parlay?) -> GaryPrompt? {
         let name = "PARLAY OF\nTHE DAY"
         guard let p = today else {
             if let y = yesterday, y.result == "won" {
-                return GaryPrompt(spot: .cigar, key: nil, kicker: "LAST NIGHT", newKicker: nil,
+                return GaryPrompt(spot: .shoulder, key: nil, kicker: "LAST NIGHT", newKicker: nil,
                                   news: "THE PARLAY\nHIT", hook: odds(y.odds), hookWins: true)
             }
-            return GaryPrompt(spot: .cigar, key: nil, kicker: "COMING TONIGHT", newKicker: nil,
+            return GaryPrompt(spot: .shoulder, key: nil, kicker: "COMING TONIGHT", newKicker: nil,
                               news: name, hook: nil, hookWins: false)
         }
         switch p.result {
         case "won":
-            return GaryPrompt(spot: .cigar, key: "parlay-won:\(date)", kicker: "IT HIT", newKicker: nil,
+            return GaryPrompt(spot: .shoulder, key: "parlay-won:\(date)", kicker: "IT HIT", newKicker: nil,
                               news: name, hook: odds(p.odds), hookWins: true)
         case "lost":
-            return GaryPrompt(spot: .cigar, key: nil, kicker: "PARLAY", newKicker: nil,
+            return GaryPrompt(spot: .shoulder, key: nil, kicker: "PARLAY", newKicker: nil,
                               news: name, hook: odds(p.odds), hookWins: false)
         default:
             if p.landed > 0 {
-                return GaryPrompt(spot: .cigar, key: "parlay-legs:\(date):\(p.landed)", kicker: "\(p.landed) OF \(p.legs) IN",
+                return GaryPrompt(spot: .shoulder, key: "parlay-legs:\(date):\(p.landed)", kicker: "\(p.landed) OF \(p.legs) IN",
                                   newKicker: nil, news: name, hook: odds(p.odds), hookWins: false)
             }
-            return GaryPrompt(spot: .cigar, key: "parlay:\(date)", kicker: "PARLAY", newKicker: "JUST IN",
+            return GaryPrompt(spot: .shoulder, key: "parlay:\(date)", kicker: "PARLAY", newKicker: "JUST IN",
                               news: name, hook: odds(p.odds), hookWins: false)
         }
     }

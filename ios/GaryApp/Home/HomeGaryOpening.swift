@@ -8,7 +8,7 @@ import SwiftUI
 /// pencil behind his ear. He's alive (GaryIdleFigure): he stands a while, then lives a moment from a drawn
 /// clip. Six labels point at his outline the way a diagram labels a figure: last night at his sunglasses,
 /// tonight's Winners at his hip, the run of nights at his leg, and three prompts that change through the day
-/// (founder: "the Parlay of the day has arrived and those kinds of things"): the parlay at his cigar, the
+/// (founder: "the Parlay of the day has arrived and those kinds of things"): the parlay at his shoulder, the
 /// darts at his other hip, his picks at his shoe. A prompt that's new
 /// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
 struct HomeGaryOpening: View {
@@ -28,6 +28,8 @@ struct HomeGaryOpening: View {
     @State private var parlay: ParlaySlipModel?
     @State private var lastParlay: ParlaySlipModel?
     @State private var now = Date()
+    /// His whiteboard is up: the leaders step back so no pin lands on it.
+    @State private var boardUp = false
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
     #if DEBUG
@@ -66,7 +68,9 @@ struct HomeGaryOpening: View {
                     .frame(width: 170, height: 14)
                     .position(x: center, y: Self.garyTop + gh + 2)
                 Button { onOpen(.winners) } label: {
-                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live)
+                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live) { up in
+                        withAnimation(.easeInOut(duration: 0.3)) { boardUp = up }
+                    }
                         .frame(width: gw + 60, height: gh + 30)
                         .contentShape(Rectangle())
                 }
@@ -75,10 +79,13 @@ struct HomeGaryOpening: View {
                 .accessibilityLabel(garyAccessibility)
                 .accessibilityHint("Opens Winners")
 
-                leaders(width: w, at: at, prompts: prompts)
-                ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
-                    PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
+                Group {
+                    leaders(width: w, at: at, prompts: prompts)
+                    ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
+                        PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
+                    }
                 }
+                .opacity(boardUp ? 0 : 1)
 
                 if let d = lastNight {
                     tap(.winners, key: nil) { lastNightLabel(d) }
@@ -126,7 +133,9 @@ struct HomeGaryOpening: View {
     /// Where each prompt sits around him (x from the left edge, the label's width).
     private static func place(_ spot: GaryPrompt.Spot, width w: CGFloat) -> (x: CGFloat, y: CGFloat, width: CGFloat) {
         switch spot {
-        case .cigar: return (w - 94, 52, 94)
+        // A touch lower than it was, clear of his cigar and above his arm (founder, Oct 30 2026: "move the
+        // parlay of the day thing down a bit just so it's not blocking his cigar").
+        case .shoulder: return (w - 94, 64, 94)
         case .pocket: return (0, 196, 100)
         case .shoe: return (0, 294, 92)
         }
@@ -134,7 +143,7 @@ struct HomeGaryOpening: View {
 
     private static func door(_ spot: GaryPrompt.Spot) -> Door {
         switch spot {
-        case .cigar: return .parlay
+        case .shoulder: return .parlay
         case .pocket: return .darts
         case .shoe: return .picks
         }
@@ -148,7 +157,7 @@ struct HomeGaryOpening: View {
         for p in prompts {
             let to = at(GaryIdleFigure.anchor(p.spot))
             switch p.spot {
-            case .cigar: lines.append((CGPoint(x: w - 100, y: 68), CGPoint(x: w - 114, y: 68), to))
+            case .shoulder: lines.append((CGPoint(x: w - 100, y: 80), CGPoint(x: w - 114, y: 80), to))
             case .pocket: lines.append((CGPoint(x: 84, y: 214), CGPoint(x: 100, y: 214), to))
             case .shoe: lines.append((CGPoint(x: 78, y: 320), CGPoint(x: 94, y: 320), to))
             }
@@ -441,6 +450,8 @@ struct GaryIdleFigure: View {
     let mood: String?
     let height: CGFloat
     let active: Bool
+    /// Told when his whiteboard comes up to face you and when it goes away.
+    var onBoard: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var life = GaryLife()
@@ -454,19 +465,19 @@ struct GaryIdleFigure: View {
 
     /// Where the labels point on the stance: always his outline, about level with each label, so a line never
     /// crosses him and his hands never cover one (founder, Oct 30 2026: "the lines should stay to the outer
-    /// parts of Gary"). The edge of his sunglasses, his right hip, the outside of his right leg, his cigar
-    /// tip, his left hip, the toe of his left shoe.
+    /// parts of Gary"). The edge of his sunglasses, his right hip, the outside of his right leg, his right
+    /// shoulder, his left hip, the toe of his left shoe.
     static let head = CGPoint(x: 0.34, y: 0.09)
     static let hip = CGPoint(x: 0.75, y: 0.59)
     static let leg = CGPoint(x: 0.645, y: 0.86)
-    static let cigar = CGPoint(x: 0.67, y: 0.195)
+    static let shoulder = CGPoint(x: 0.73, y: 0.25)
     static let pocket = CGPoint(x: 0.29, y: 0.57)
     static let shoe = CGPoint(x: 0.12, y: 0.955)
 
     /// The spot on him each prompt points at.
     static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {
         switch spot {
-        case .cigar: return cigar
+        case .shoulder: return shoulder
         case .pocket: return pocket
         case .shoe: return shoe
         }
@@ -479,6 +490,7 @@ struct GaryIdleFigure: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onChange(of: mood) { m in life.mood = m }
+        .onChange(of: life.boardUp) { onBoard($0) }
         // Lives while he's on screen and moving; SwiftUI ends it when he leaves and starts it again on return.
         .task(id: active && !reduceMotion) {
             life.mood = mood
@@ -501,19 +513,20 @@ struct GaryIdleFigure: View {
             let r = Self.clipStance
             let vw = s.width / r.width, vh = s.height / r.height
             ZStack(alignment: .topLeading) {
-                // Until the first clip is up (and on Reduce Motion): a clip's own first frame, cut out the same
-                // way and laid exactly where the clips lie, so handing over to the video changes nothing.
+                // His stance between clips (and on Reduce Motion): a clip's own first frame, cut out the same way
+                // and laid exactly where the clips lie, so handing over to the video changes nothing.
                 Image("GaryStanceClip")
                     .resizable()
                     .frame(width: vw, height: vh)
                     .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
                                          startPoint: .top, endPoint: .bottom))
                     .opacity(life.opacity(of: -1, at: date))
+                    .zIndex(life.depth(of: -1))
                     .position(x: left - r.minX * vw + vw / 2, y: floor - s.height - r.minY * vh + vh / 2)
                 // Two clip layers that take turns, both always mounted, so the next clip's first frame is up
                 // before it shows. Their smoke fades out over the top before it reaches the scoreboard.
                 ForEach(0..<2, id: \.self) { i in
-                    GaryClipView(player: life.players[i], output: life.outputs[i])
+                    GaryClipView(player: life.players[i], output: life.outputs[i], board: life.boards[i])
                         .frame(width: vw, height: vh)
                         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
                                              startPoint: .top, endPoint: .bottom))
@@ -554,11 +567,12 @@ struct GaryIdleFigure: View {
     }
 }
 
-/// Gary's days between the labels: a stand of a few seconds, a clip, a stand, another clip. Once the first
-/// clip is up he is always a video frame, never the drawing, so a clip starting is the same frame starting to
-/// move (founder, Oct 30 2026: "a little jump or hint that it's changing videos"). Two players take turns: while
-/// he stands, the next clip loads in the hidden one and its first frame (the stance) dissolves in over the last
-/// clip's last frame (the stance too). `live()` runs inside the figure's task, so leaving Home ends it.
+/// Gary's days between the labels: a stand of a few seconds, a clip, a stand, another clip. He stands in one
+/// frame, the stance cut from a clip, never the drawing, so a clip starting is the same frame starting to move
+/// (founder, Oct 30 2026: "a little jump or hint that it's changing videos"). While he stands, the next clip
+/// loads in a hidden player and its first frame (the stance) dissolves in over the stance frame; in a clip's
+/// last moments the stance frame fades back in over it, so a clip that ends a hair off his pose still lands on
+/// it. `live()` runs inside the figure's task, so leaving Home ends it.
 @MainActor
 final class GaryLife: ObservableObject {
     /// The plan's clips that shipped in this build.
@@ -570,16 +584,24 @@ final class GaryLife: ObservableObject {
         AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
     }
     var mood: String?
-    /// The layer showing: 0 or 1, or -1 for the drawing before the first clip is up.
+    /// The layer showing: 0 or 1 while a clip plays, -1 for the stance frame he stands in between them.
     @Published private(set) var front = -1
     /// A hand-over in progress: the next layer fading in over the one showing.
     @Published private(set) var handOver: (from: Int, to: Int, start: Date)?
     @Published private(set) var playing = false
+    /// A clip's last moments: the stance frame fading in over it, so every clip lands on the same frame however
+    /// near its own last frame came (founder, Oct 30 2026: "still some smoothing to do").
+    @Published private(set) var settle: Date?
+    /// His whiteboard faces you (its bet is showing).
+    @Published private(set) var boardUp = false
+    /// Each layer's whiteboard ink, when its clip is the whiteboard.
+    @Published private(set) var boards: [GaryBoardInk?] = [nil, nil]
     private var standEnd: Date?
     private var lastClipEnd: Date?
     private var recent: [String] = []
 
     private static let handOverTime = 0.45
+    private static let settleTime = 0.35
     /// The day he last played a rare clip.
     private static let rareDayKey = "garyRareClipDay"
 
@@ -599,11 +621,13 @@ final class GaryLife: ObservableObject {
             if layer == h.from { return 1 }
             return 0
         }
+        if layer == -1, let s = settle { return Self.smooth(now.timeIntervalSince(s) / Self.settleTime) }
         return layer == front ? 1 : 0
     }
 
     func depth(of layer: Int) -> Double {
-        handOver?.to == layer ? 2 : layer == front ? 1 : 0
+        if layer == -1, settle != nil { return 3 }
+        return handOver?.to == layer ? 2 : layer == front ? 1 : 0
     }
 
     /// How much the stance breathes and sways: none during a clip, easing back after one and out before the next.
@@ -621,9 +645,14 @@ final class GaryLife: ObservableObject {
             for p in players { p.pause() }
             playing = false
             handOver = nil
+            settle = nil
+            boardUp = false
             standEnd = nil
+            // Back on Home he picks up from his stance, not from a clip cut off part way.
+            front = -1
         }
         var first = true
+        var turn = 0
         while !Task.isCancelled {
             // The fourth-wall phone is a once-a-day bit, never the first thing he does.
             let today = SupabaseAPI.todayEST()
@@ -636,7 +665,10 @@ final class GaryLife: ObservableObject {
             if let forced = UserDefaults.standard.string(forKey: "garyClipPreview"), !forced.isEmpty { pick = forced }
             #endif
             guard let name = pick, let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
-            let next = front == 0 ? 1 : 0
+            // The players take turns, so the one that just played is never reloaded under the stance.
+            let next = turn % 2
+            turn += 1
+            boards[next] = nil
             let item = AVPlayerItem(url: url)
             item.add(outputs[next])
             players[next].replaceCurrentItem(with: item)
@@ -644,6 +676,12 @@ final class GaryLife: ObservableObject {
             first = false
             let began = Date()
             standEnd = began.addingTimeInterval(stand)
+            // His bet for the whiteboard, read while he stands.
+            if let track = GaryBoardInk.track(for: name) {
+                let board = await Self.board(today: today)
+                guard !Task.isCancelled else { return }
+                boards[next] = GaryBoardInk(track: track, board: board)
+            }
             while item.status == .unknown && !Task.isCancelled { try? await Task.sleep(nanoseconds: 50_000_000) }
             guard !Task.isCancelled, item.status == .readyToPlay else { return }
             _ = await players[next].seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -665,9 +703,17 @@ final class GaryLife: ObservableObject {
             players[front].play()
             let until = Date().addingTimeInterval(length + 3)
             while !Task.isCancelled, Date() < until, players[front].currentTime().seconds < length - 0.05 {
+                let now = players[front].currentTime().seconds
+                if settle == nil, now >= length - Self.settleTime - 0.08 { settle = Date() }
+                let up = (boards[front]?.face(at: now, in: CGSize(width: 1, height: 1))?.show ?? 0) > 0.3
+                if up != boardUp { boardUp = up }
                 try? await Task.sleep(nanoseconds: 30_000_000)
             }
             guard !Task.isCancelled else { return }
+            // He stands in the stance frame until the next clip takes over from it.
+            boardUp = false
+            front = -1
+            settle = nil
             playing = false
             lastClipEnd = Date()
             recent = Array((recent + [name]).suffix(2))
@@ -678,6 +724,96 @@ final class GaryLife: ObservableObject {
     private static func smooth(_ x: Double) -> Double {
         let t = min(1, max(0, x)); return t * t * (3 - 2 * t)
     }
+
+    /// Today's streak pick (it's the free pick), or what he writes before there is one.
+    private static func board(today: String) async -> GaryLifePlan.Board {
+        let state = try? await SupabaseAPI.fetchStreak(date: today)
+        func ticket(_ p: StreakPick?) -> GaryLifePlan.Ticket? {
+            p.map { GaryLifePlan.Ticket(kind: $0.kind, league: $0.league, pickText: $0.pick_text, player: $0.player,
+                                        prop: $0.prop, bet: $0.bet, result: $0.result) }
+        }
+        return GaryLifePlan.board(today: ticket(state?.today), yesterday: ticket(state?.yesterday))
+    }
+}
+
+/// The bet on Gary's whiteboard (founder, Oct 30 2026: "he wrote on it and turned it around ... a bet on it in
+/// his hand writing"). The clip is drawn with the board's face blank; the bet is written once in a marker hand
+/// and laid onto the face every frame along the board's corners, tracked from the clip (`gary-board.json`:
+/// per frame TL TR BR BL in the picture, 0...1 from the top left, and how much of it shows as it turns).
+final class GaryBoardInk {
+    struct Track: Decodable {
+        let fps: Double
+        let frames: [[Double]?]
+    }
+
+    let track: Track
+    let ink: CIImage
+
+    init(track: Track, board: GaryLifePlan.Board) {
+        self.track = track
+        self.ink = Self.write(board)
+    }
+
+    static func track(for clip: String) -> Track? {
+        guard let url = Bundle.main.url(forResource: clip, withExtension: "json"), let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(Track.self, from: data)
+    }
+
+    /// The board's corners in a frame of `size` (Core Image's, from the bottom left) and how much ink shows.
+    func face(at seconds: Double, in size: CGSize) -> (corners: [CGPoint], show: Double)? {
+        let i = Int((seconds * track.fps).rounded())
+        guard i >= 0, i < track.frames.count, let f = track.frames[i], f.count >= 9 else { return nil }
+        let corners = stride(from: 0, to: 8, by: 2).map { CGPoint(x: f[$0] * size.width, y: (1 - f[$0 + 1]) * size.height) }
+        return (corners, f[8])
+    }
+
+    /// His hand: black marker, two lines set to fill the board, a touch off level; a green check when it cashed.
+    private static func write(_ board: GaryLifePlan.Board) -> CIImage {
+        let size = CGSize(width: 900, height: 640)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            let cg = ctx.cgContext
+            cg.translateBy(x: size.width / 2, y: size.height / 2)
+            cg.rotate(by: -3 * .pi / 180)
+            cg.translateBy(x: -size.width / 2, y: -size.height / 2)
+            let ink = UIColor(red: 0.086, green: 0.094, blue: 0.118, alpha: 1)
+            let lines = Array(board.lines.prefix(2))
+            let rowHeight = size.height / CGFloat(max(lines.count, 1))
+            var lastFrame = CGRect.zero
+            for (i, line) in lines.enumerated() {
+                var pt: CGFloat = 210
+                var attrs: [NSAttributedString.Key: Any] = [:]
+                var w: CGFloat = .greatestFiniteMagnitude
+                let room = size.width * (board.check && i == lines.count - 1 ? 0.7 : 0.86)
+                repeat {
+                    let font = UIFont(name: "MarkerFelt-Wide", size: pt) ?? .systemFont(ofSize: pt, weight: .heavy)
+                    attrs = [.font: font, .foregroundColor: ink]
+                    w = (line as NSString).size(withAttributes: attrs).width
+                    pt -= 6
+                } while w > room && pt > 60
+                let h = (line as NSString).size(withAttributes: attrs).height
+                let x = (size.width - w) / 2 - (board.check && i == lines.count - 1 ? size.width * 0.07 : 0)
+                let frame = CGRect(x: x, y: rowHeight * CGFloat(i) + (rowHeight - h) / 2 + (i == 0 ? 18 : -18), width: w, height: h)
+                (line as NSString).draw(in: frame, withAttributes: attrs)
+                lastFrame = frame
+            }
+            if board.check {
+                let c = CGPoint(x: lastFrame.maxX + 40, y: lastFrame.midY)
+                let tick = UIBezierPath()
+                tick.move(to: CGPoint(x: c.x, y: c.y + 4))
+                tick.addLine(to: CGPoint(x: c.x + 34, y: c.y + 44))
+                tick.addLine(to: CGPoint(x: c.x + 100, y: c.y - 60))
+                tick.lineWidth = 26
+                tick.lineCapStyle = .round
+                tick.lineJoinStyle = .round
+                UIColor(red: 0.12, green: 0.56, blue: 0.24, alpha: 1).setStroke()
+                tick.stroke()
+            }
+        }
+        return CIImage(image: image) ?? CIImage.empty()
+    }
 }
 
 /// A clip with its see-through kept. Each clip is one plain video, the picture over its alpha (a video's own
@@ -686,11 +822,13 @@ final class GaryLife: ObservableObject {
 private struct GaryClipView: UIViewRepresentable {
     let player: AVPlayer
     let output: AVPlayerItemVideoOutput
+    let board: GaryBoardInk?
 
     final class ClipView: UIView {
         private static let context = CIContext(options: [.cacheIntermediates: false])
         private var link: CADisplayLink?
         var output: AVPlayerItemVideoOutput?
+        var board: GaryBoardInk?
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -711,14 +849,35 @@ private struct GaryClipView: UIViewRepresentable {
             let full = CIImage(cvPixelBuffer: buffer)
             let w = full.extent.width, h = full.extent.height / 2
             // Core Image counts from the bottom: the picture is the upper half, its alpha the lower.
-            let picture = full.cropped(to: CGRect(x: 0, y: h, width: w, height: h))
+            var picture = full.cropped(to: CGRect(x: 0, y: h, width: w, height: h))
                 .transformed(by: CGAffineTransform(translationX: 0, y: -h))
+            if let board, let face = board.face(at: t.seconds, in: CGSize(width: w, height: h)) {
+                picture = Self.write(board.ink, on: picture, at: face.corners, show: face.show)
+            }
             let alpha = full.cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
             let frame = picture.applyingFilter("CIBlendWithMask", parameters: [
                 kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha,
             ])
             guard let image = Self.context.createCGImage(frame, from: CGRect(x: 0, y: 0, width: w, height: h)) else { return }
             layer.contents = image
+        }
+
+        /// The ink laid along the board's corners, only where the board is white: his fingers stay over it.
+        private static func write(_ ink: CIImage, on picture: CIImage, at c: [CGPoint], show: Double) -> CIImage {
+            let laid = ink.applyingFilter("CIPerspectiveTransform", parameters: [
+                "inputTopLeft": CIVector(cgPoint: c[0]), "inputTopRight": CIVector(cgPoint: c[1]),
+                "inputBottomRight": CIVector(cgPoint: c[2]), "inputBottomLeft": CIVector(cgPoint: c[3]),
+            ]).applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(show))])
+            // White is where every channel is high: min(r, g, b) from about 0.66 up to 0.79, a soft edge.
+            let white = picture.applyingFilter("CIMinimumComponent")
+                .applyingFilter("CIColorMatrix", parameters: [
+                    "inputRVector": CIVector(x: 8, y: 0, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 8, z: 0, w: 0),
+                    "inputBVector": CIVector(x: 0, y: 0, z: 8, w: 0), "inputBiasVector": CIVector(x: -5.3, y: -5.3, z: -5.3, w: 0),
+                ])
+                .applyingFilter("CIColorClamp")
+            return laid.composited(over: picture).applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: picture, kCIInputMaskImageKey: white,
+            ]).cropped(to: picture.extent)
         }
     }
 
@@ -729,11 +888,13 @@ private struct GaryClipView: UIViewRepresentable {
         v.isUserInteractionEnabled = false
         v.layer.contentsGravity = .resize
         v.output = output
+        v.board = board
         return v
     }
 
     func updateUIView(_ v: ClipView, context: Context) {
         v.output = output
+        v.board = board
     }
 }
 

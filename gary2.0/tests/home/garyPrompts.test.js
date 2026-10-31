@@ -50,7 +50,7 @@ out([row(GaryPrompts.parlay(date: "2026-10-29", today: nil, yesterday: nil)),
      row(GaryPrompts.parlay(date: "2026-10-29", today: p("won", 3), yesterday: nil)),
      row(GaryPrompts.parlay(date: "2026-10-29", today: p("lost", 1), yesterday: nil)),
      row(GaryPrompts.parlay(date: "2026-10-30", today: nil, yesterday: p("won", 3)))])`);
-    expect(r[0]).toMatchObject({ spot: 'cigar', key: null, kicker: 'COMING TONIGHT', news: 'PARLAY OF\nTHE DAY', hook: null });
+    expect(r[0]).toMatchObject({ spot: 'shoulder', key: null, kicker: 'COMING TONIGHT', news: 'PARLAY OF\nTHE DAY', hook: null });
     expect(r[1]).toMatchObject({ key: 'parlay:2026-10-29', kicker: 'PARLAY', newKicker: 'JUST IN', hook: '+442', hookWins: false });
     expect(r[2]).toMatchObject({ key: 'parlay-legs:2026-10-29:2', kicker: '2 OF 3 IN', hook: '+442' });
     expect(r[3]).toMatchObject({ key: 'parlay-won:2026-10-29', kicker: 'IT HIT', hook: '+442', hookWins: true });

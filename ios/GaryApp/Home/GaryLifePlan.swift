@@ -23,6 +23,8 @@ enum GaryLifePlan {
         Clip(name: "gary-chuckle", good: 3, bad: 0.5),
         // He flashes his phone at you: a ticket that cashed.
         Clip(name: "gary-phone", good: 2, bad: 1, rare: true),
+        // He writes his bet on a whiteboard and turns it around to you (`board`).
+        Clip(name: "gary-board", good: 2, bad: 1.5),
     ]
 
     /// The next clip: never one of the last two he played (when there are others to play), weighted by last
@@ -52,5 +54,98 @@ enum GaryLifePlan {
     /// Seconds he stands before the next clip: a short beat when Home opens, a few seconds after that.
     static func stand(first: Bool, roll: Double) -> Double {
         first ? 1.5 + roll * 1.5 : 2.5 + roll * 4.5
+    }
+
+    // MARK: - His whiteboard
+
+    /// A streak pick as the board needs it (get_streak's today / yesterday; the streak pick is the free pick).
+    struct Ticket: Equatable {
+        let kind: String?
+        let league: String?
+        let pickText: String?
+        var player: String? = nil
+        var prop: String? = nil
+        var bet: String? = nil
+        var result: String? = nil
+    }
+
+    /// What he writes: two short lines in his hand, and a check when it already cashed.
+    struct Board: Equatable {
+        let lines: [String]
+        let check: Bool
+    }
+
+    /// The board he turns around (founder, Oct 30 2026: "a bet on it in his hand writing like Rams -3.5 ...
+    /// a real one of his bets"): today's streak pick; before it's set, last night's if it cashed, with a check;
+    /// after today's misses, he's back tomorrow.
+    static func board(today: Ticket?, yesterday: Ticket?) -> Board {
+        if let t = today, let lines = words(t) {
+            if t.result == "lost" { return Board(lines: ["BACK", "TOMORROW"], check: false) }
+            return Board(lines: lines, check: t.result == "won")
+        }
+        if let y = yesterday, y.result == "won", let lines = words(y) { return Board(lines: lines, check: true) }
+        return Board(lines: ["WORKING", "ON IT"], check: false)
+    }
+
+    /// "Golden State Warriors +2.5 -104" → WARRIORS / +2.5; "Brewers ML -142" → BREWERS / TO WIN; a college
+    /// side by its school; a prop by the player's last name and the line ("WIGGINS UNDER" / "12.5 PTS").
+    private static func words(_ t: Ticket) -> [String]? {
+        guard var text = t.pickText?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        // The price is never on the board.
+        text = text.replacingOccurrences(of: #"\s*@?\s*[+-]?\d{3,4}$"#, with: "", options: .regularExpression)
+        if t.kind == "prop", let player = t.player, !player.isEmpty {
+            let last = player.split(separator: " ").last.map(String.init) ?? player
+            let line = number(in: t.prop) ?? number(in: text) ?? ""
+            let side = (t.bet ?? "over").uppercased()
+            return ["\(last.uppercased()) \(side)", [line, market(t.prop)].filter { !$0.isEmpty }.joined(separator: " ")]
+        }
+        var tokens = text.split(separator: " ").map(String.init)
+        guard let tail = tokens.popLast() else { return nil }
+        let line: String
+        if tail.uppercased() == "ML" { line = "TO WIN" } else if tail.range(of: #"^[+-]?\d+(\.\d+)?$"#, options: .regularExpression) != nil {
+            line = tail
+        } else { return [text.uppercased()] }
+        guard !tokens.isEmpty else { return nil }
+        let team = tokens.joined(separator: " ")
+        if ["over", "under"].contains(team.lowercased()) { return [team.uppercased(), line] }
+        return [name(team, college: ["NCAAF", "NCAAB"].contains((t.league ?? "").uppercased())).uppercased(), line]
+    }
+
+    /// Nicknames of two words, so "Red Sox" stays whole and "Wake Forest Demon Deacons" is Wake Forest.
+    private static let twoWordNicknames: Set<String> = [
+        "red sox", "white sox", "blue jays", "trail blazers", "maple leafs", "golden knights", "blue jackets",
+        "red wings", "demon deacons", "crimson tide", "fighting irish", "golden gophers", "red raiders",
+        "blue devils", "tar heels", "yellow jackets", "sun devils", "nittany lions", "horned frogs",
+        "scarlet knights", "golden bears", "mean green", "green wave", "golden hurricane", "golden eagles",
+        "fighting illini", "black knights", "red wolves", "rainbow warriors", "thundering herd", "blue raiders",
+        "golden flashes", "ragin' cajuns", "black bears", "blue hens", "big red", "golden griffins",
+    ]
+
+    /// A pro team by its nickname, a college team by its school.
+    private static func name(_ team: String, college: Bool) -> String {
+        let w = team.split(separator: " ").map(String.init)
+        guard w.count > 1 else { return team }
+        let nickWords = w.count > 2 && twoWordNicknames.contains(w.suffix(2).joined(separator: " ").lowercased()) ? 2 : 1
+        return (college ? w.dropLast(nickWords) : w.suffix(nickWords)).joined(separator: " ")
+    }
+
+    private static func number(in s: String?) -> String? {
+        guard let s, let r = s.range(of: #"\d+(\.\d+)?$"#, options: .regularExpression) else { return nil }
+        return String(s[r])
+    }
+
+    /// The market the way a bettor jots it.
+    private static func market(_ prop: String?) -> String {
+        let key = (prop ?? "").lowercased()
+            .replacingOccurrences(of: #"\s*\d+(\.\d+)?$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: "batter_", with: "")
+        let short: [String: String] = [
+            "points": "PTS", "rebounds": "REB", "assists": "AST", "threes": "3S", "steals": "STL", "blocks": "BLK",
+            "points_rebounds_assists": "PTS+REB+AST", "passing_yards": "PASS YDS", "rushing_yards": "RUSH YDS",
+            "receiving_yards": "REC YDS", "receptions": "CATCHES", "passing_tds": "TD PASSES", "pitcher_outs": "OUTS",
+            "pitcher_strikeouts": "KS", "pitcher_earned_runs": "RUNS", "pitcher_hits_allowed": "HITS", "hits": "HITS",
+            "hits_runs_rbis": "H+R+RBI", "total_bases": "BASES", "shots_on_goal": "SHOTS", "saves": "SAVES",
+        ]
+        return short[key] ?? key.replacingOccurrences(of: "_", with: " ").uppercased()
     }
 }
