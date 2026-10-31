@@ -8,6 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		0295F82266DFFA606C3514C0 /* gary-phone.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */; };
+		FE97D657D532FB79707F2D04 /* gary-crystal.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 3C669EC7D336D3FAC967B421 /* gary-crystal.mp4 */; };
+		4FCA1F9B47304C4FC142E88B /* gary-peek.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 9F05E9EBA4C9622FB7639661 /* gary-peek.mp4 */; };
+		41B07E65EC4A2A1CACBBE987 /* gary-spin.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = CC467D97854852CF0FB78AD9 /* gary-spin.mp4 */; };
+		BC1D44FC1BE9B5579228759B /* gary-cigarout.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = A2A185EE74F92CFAB3245EC0 /* gary-cigarout.mp4 */; };
 		373BC8D5CEC1E88BC541EC9C /* gary-board.json in Resources */ = {isa = PBXBuildFile; fileRef = 07FDA2FA0D50B8D5FCC0A192 /* gary-board.json */; };
 		7D02A42AB720C4F8BCFB423A /* gary-board.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = A614D144E3B9DCB787F7AAF0 /* gary-board.mp4 */; };
 		EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */; };
@@ -184,6 +188,10 @@
 
 /* Begin PBXFileReference section */
 		CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-phone.mp4"; sourceTree = "<group>"; };
+		3C669EC7D336D3FAC967B421 /* gary-crystal.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-crystal.mp4"; sourceTree = "<group>"; };
+		9F05E9EBA4C9622FB7639661 /* gary-peek.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-peek.mp4"; sourceTree = "<group>"; };
+		CC467D97854852CF0FB78AD9 /* gary-spin.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-spin.mp4"; sourceTree = "<group>"; };
+		A2A185EE74F92CFAB3245EC0 /* gary-cigarout.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-cigarout.mp4"; sourceTree = "<group>"; };
 		07FDA2FA0D50B8D5FCC0A192 /* gary-board.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "gary-board.json"; sourceTree = "<group>"; };
 		A614D144E3B9DCB787F7AAF0 /* gary-board.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-board.mp4"; sourceTree = "<group>"; };
 		3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */ = {isa = PBXFileReference; lastKnownFileType = file.mp4; path = "gary-chuckle.mp4"; sourceTree = "<group>"; };
@@ -512,6 +520,10 @@
 			isa = PBXGroup;
 			children = (
 				CA1F2F79D0CB9DCE66933046 /* gary-phone.mp4 */,
+				3C669EC7D336D3FAC967B421 /* gary-crystal.mp4 */,
+				9F05E9EBA4C9622FB7639661 /* gary-peek.mp4 */,
+				CC467D97854852CF0FB78AD9 /* gary-spin.mp4 */,
+				A2A185EE74F92CFAB3245EC0 /* gary-cigarout.mp4 */,
 				07FDA2FA0D50B8D5FCC0A192 /* gary-board.json */,
 				A614D144E3B9DCB787F7AAF0 /* gary-board.mp4 */,
 				3019FA3ACD58F9C9C8D99C3D /* gary-chuckle.mp4 */,
@@ -712,6 +724,10 @@
 			files = (
 				0D3593A1A2CB73655586485A /* Assets.xcassets in Resources */,
 				0295F82266DFFA606C3514C0 /* gary-phone.mp4 in Resources */,
+				FE97D657D532FB79707F2D04 /* gary-crystal.mp4 in Resources */,
+				4FCA1F9B47304C4FC142E88B /* gary-peek.mp4 in Resources */,
+				41B07E65EC4A2A1CACBBE987 /* gary-spin.mp4 in Resources */,
+				BC1D44FC1BE9B5579228759B /* gary-cigarout.mp4 in Resources */,
 				373BC8D5CEC1E88BC541EC9C /* gary-board.json in Resources */,
 				7D02A42AB720C4F8BCFB423A /* gary-board.mp4 in Resources */,
 				EF8904B1D711537A807DB251 /* gary-chuckle.mp4 in Resources */,

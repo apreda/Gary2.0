@@ -11,12 +11,22 @@ enum GaryLifePlan {
         /// A bit that lands once (founder, Oct 30 2026: "break the 4th wall just once"): at most once a day,
         /// never the first thing he does when Home opens.
         var rare = false
+        /// The seconds his prop is out past him (the board up, the ball spinning by his head): the diagram's
+        /// lines step back and he plays in front of the labels.
+        var stage: ClosedRange<Double>? = nil
+
+        func performs(at seconds: Double) -> Bool { stage?.contains(seconds) ?? false }
     }
 
     /// Every clip he has, by the bundled file's name.
     static let clips: [Clip] = [
         Clip(name: "gary-cigar", good: 3, bad: 1),
+        // He reads the paper, turns a page or two, folds it into his pocket.
         Clip(name: "gary-paper", good: 1, bad: 3),
+        // The cigar out of his mouth: a smoke ring, the ash tapped, back in.
+        Clip(name: "gary-cigarout", good: 3, bad: 1),
+        // A basketball spun on one finger.
+        Clip(name: "gary-spin", good: 2, bad: 1, stage: 1.3...6.3),
         Clip(name: "gary-watch", good: 1, bad: 2),
         Clip(name: "gary-pencil", good: 1, bad: 2),
         Clip(name: "gary-cash", good: 3, bad: 0.5),
@@ -24,7 +34,11 @@ enum GaryLifePlan {
         // He flashes his phone at you: a ticket that cashed.
         Clip(name: "gary-phone", good: 2, bad: 1, rare: true),
         // He writes his bet on a whiteboard and turns it around to you (`board`).
-        Clip(name: "gary-board", good: 2, bad: 1.5),
+        Clip(name: "gary-board", good: 2, bad: 1.5, stage: 4.4...8.1),
+        // The fourth wall again: sunglasses down his nose, a look over them, a point and a wink at you.
+        Clip(name: "gary-peek", good: 2, bad: 1, rare: true),
+        // Gary the fortune teller: a crystal ball out of thin air, a long look into it, a tap of the nose.
+        Clip(name: "gary-crystal", good: 1.5, bad: 1.5, rare: true),
     ]
 
     /// The next clip: never one of the last two he played (when there are others to play), weighted by last
@@ -43,6 +57,12 @@ enum GaryLifePlan {
             left -= w
         }
         return pool.last?.name
+    }
+
+    /// The clips he may play next: every everyday one, and each once-a-day bit that hasn't had its day
+    /// (`rareDays`: clip name → the day it last played).
+    static func pool(_ clips: [Clip], first: Bool, rareDays: [String: String], today: String) -> [Clip] {
+        clips.filter { !$0.rare || rareAllowed(first: first, lastRareDay: rareDays[$0.name], today: today) }
     }
 
     /// A rare clip may come up: not as the first thing he does, and not twice in a day (`today` and

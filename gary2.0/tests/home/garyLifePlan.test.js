@@ -84,6 +84,24 @@ out([w(nil, won), w(nil, lost), w(nil, nil), w(won, nil), w(lost, won)])`);
     ]);
   });
 
+  it('each once-a-day bit keeps its own day: the phone today does not use up the crystal ball', () => {
+    const r = swiftJSON(`
+let clips = [C(name: "a", good: 1, bad: 1), C(name: "phone", good: 1, bad: 1, rare: true), C(name: "ball", good: 1, bad: 1, rare: true)]
+out([GaryLifePlan.pool(clips, first: false, rareDays: ["phone": "2026-10-30"], today: "2026-10-30").map(\\.name),
+     GaryLifePlan.pool(clips, first: false, rareDays: ["phone": "2026-10-29"], today: "2026-10-30").map(\\.name),
+     GaryLifePlan.pool(clips, first: true, rareDays: [:], today: "2026-10-30").map(\\.name)])`);
+    expect(r).toEqual([['a', 'ball'], ['a', 'phone', 'ball'], ['a']]);
+  });
+
+  it('knows when a clip\'s prop is out past him (the diagram steps back)', () => {
+    const r = swiftJSON(`
+let s = GaryLifePlan.clips.first { $0.name == "gary-spin" }!
+out([s.performs(at: 0.5), s.performs(at: 3), s.performs(at: 7.5),
+     GaryLifePlan.clips.first { $0.name == "gary-board" }!.performs(at: 5),
+     GaryLifePlan.clips.first { $0.name == "gary-cigar" }!.performs(at: 3)])`);
+    expect(r).toEqual([false, true, false, true, false]);
+  });
+
   it('stands a beat on arrival, then a few seconds between clips', () => {
     const r = swiftJSON(`out([GaryLifePlan.stand(first: true, roll: 0), GaryLifePlan.stand(first: true, roll: 0.999),
      GaryLifePlan.stand(first: false, roll: 0), GaryLifePlan.stand(first: false, roll: 0.999)])`);

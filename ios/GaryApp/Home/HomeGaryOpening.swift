@@ -28,8 +28,12 @@ struct HomeGaryOpening: View {
     @State private var parlay: ParlaySlipModel?
     @State private var lastParlay: ParlaySlipModel?
     @State private var now = Date()
-    /// His whiteboard is up: the leaders step back so no pin lands on it.
-    @State private var boardUp = false
+    /// His prop is out past him (the whiteboard up, a ball spinning by his head): the leaders step back so no
+    /// pin lands on it, and he plays in front of the labels.
+    @State private var performing = false
+    /// The right-hand labels' own widths, so each sits flush to the right edge as the left ones sit to the left
+    /// (founder, Oct 30 2026: "bumped away from Gary so it's closer to the edge the way the other side is").
+    @State private var rightWidths: [String: CGFloat] = [:]
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
     #if DEBUG
@@ -69,12 +73,15 @@ struct HomeGaryOpening: View {
                     .position(x: center, y: Self.garyTop + gh + 2)
                 Button { onOpen(.winners) } label: {
                     GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live) { up in
-                        withAnimation(.easeInOut(duration: 0.3)) { boardUp = up }
+                        withAnimation(.easeInOut(duration: 0.3)) { performing = up }
                     }
                         .frame(width: gw + 60, height: gh + 30)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // In front of the labels while he performs; taps still reach the labels.
+                .zIndex(performing ? 1 : 0)
+                .allowsHitTesting(!performing)
                 .position(x: center, y: Self.garyTop - 30 + (gh + 30) / 2)
                 .accessibilityLabel(garyAccessibility)
                 .accessibilityHint("Opens Winners")
@@ -85,23 +92,34 @@ struct HomeGaryOpening: View {
                         PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
                     }
                 }
-                .opacity(boardUp ? 0 : 1)
+                .opacity(performing ? 0 : 1)
 
                 if let d = lastNight {
                     tap(.winners, key: nil) { lastNightLabel(d) }
                         .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
                 }
                 tap(.winners, key: nil) { tonightLabel }
-                    .frame(width: 100, alignment: .leading).offset(x: w - 100, y: 226)
+                    .fixedSize()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["tonight"] = $0 }
+                    .offset(x: rightX("tonight", w, 100), y: 226)
                 if run.count > 0 {
                     tap(.winners, key: nil) { streakLabel }
-                        .frame(width: 94, alignment: .leading).offset(x: w - 94, y: 316)
+                        .fixedSize()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["streak"] = $0 }
+                        .offset(x: rightX("streak", w, 94), y: 316)
                 }
                 ForEach(prompts, id: \.spot) { p in
                     let place = Self.place(p.spot, width: w)
-                    tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                        .frame(width: place.width, alignment: .leading)
-                        .offset(x: place.x, y: place.y)
+                    if p.spot == .shoulder {
+                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                            .fixedSize()
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["shoulder"] = $0 }
+                            .offset(x: rightX("shoulder", w, place.width), y: place.y)
+                    } else {
+                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                            .frame(width: place.width, alignment: .leading)
+                            .offset(x: place.x, y: place.y)
+                    }
                 }
                 Text("FIG. 1 — GARY")
                     .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
@@ -149,15 +167,23 @@ struct HomeGaryOpening: View {
         }
     }
 
+    /// Where a right-hand label starts: flush to the right edge by its own width.
+    private func rightX(_ key: String, _ w: CGFloat, _ fallback: CGFloat) -> CGFloat {
+        w - (rightWidths[key] ?? fallback)
+    }
+
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
     private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt]) -> some View {
-        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: w - 106, y: 232), CGPoint(x: w - 120, y: 232), at(GaryIdleFigure.hip))]
+        let tx = rightX("tonight", w, 100), sx = rightX("streak", w, 94)
+        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: tx - 6, y: 232), CGPoint(x: tx - 20, y: 232), at(GaryIdleFigure.hip))]
         if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
-        if run.count > 0 { lines.append((CGPoint(x: w - 100, y: 326), CGPoint(x: w - 114, y: 326), at(GaryIdleFigure.leg))) }
+        if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
         for p in prompts {
             let to = at(GaryIdleFigure.anchor(p.spot))
             switch p.spot {
-            case .shoulder: lines.append((CGPoint(x: w - 100, y: 80), CGPoint(x: w - 114, y: 80), to))
+            case .shoulder:
+                let px = rightX("shoulder", w, 94)
+                lines.append((CGPoint(x: px - 6, y: 80), CGPoint(x: px - 20, y: 80), to))
             case .pocket: lines.append((CGPoint(x: 84, y: 214), CGPoint(x: 100, y: 214), to))
             case .shoe: lines.append((CGPoint(x: 78, y: 320), CGPoint(x: 94, y: 320), to))
             }
@@ -450,8 +476,8 @@ struct GaryIdleFigure: View {
     let mood: String?
     let height: CGFloat
     let active: Bool
-    /// Told when his whiteboard comes up to face you and when it goes away.
-    var onBoard: (Bool) -> Void = { _ in }
+    /// Told when his prop goes out past him and when it's back.
+    var onPerform: (Bool) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var life = GaryLife()
@@ -490,7 +516,7 @@ struct GaryIdleFigure: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onChange(of: mood) { m in life.mood = m }
-        .onChange(of: life.boardUp) { onBoard($0) }
+        .onChange(of: life.performing) { onPerform($0) }
         // Lives while he's on screen and moving; SwiftUI ends it when he leaves and starts it again on return.
         .task(id: active && !reduceMotion) {
             life.mood = mood
@@ -592,8 +618,8 @@ final class GaryLife: ObservableObject {
     /// A clip's last moments: the stance frame fading in over it, so every clip lands on the same frame however
     /// near its own last frame came (founder, Oct 30 2026: "still some smoothing to do").
     @Published private(set) var settle: Date?
-    /// His whiteboard faces you (its bet is showing).
-    @Published private(set) var boardUp = false
+    /// His prop is out past him (the board up, the ball spinning): the diagram steps back.
+    @Published private(set) var performing = false
     /// Each layer's whiteboard ink, when its clip is the whiteboard.
     @Published private(set) var boards: [GaryBoardInk?] = [nil, nil]
     private var standEnd: Date?
@@ -602,8 +628,8 @@ final class GaryLife: ObservableObject {
 
     private static let handOverTime = 0.45
     private static let settleTime = 0.35
-    /// The day he last played a rare clip.
-    private static let rareDayKey = "garyRareClipDay"
+    /// Each once-a-day clip's last day: clip name → day.
+    private static let rareDaysKey = "garyRareClipDays"
 
     init() {
         for p in players {
@@ -646,7 +672,7 @@ final class GaryLife: ObservableObject {
             playing = false
             handOver = nil
             settle = nil
-            boardUp = false
+            performing = false
             standEnd = nil
             // Back on Home he picks up from his stance, not from a clip cut off part way.
             front = -1
@@ -656,15 +682,16 @@ final class GaryLife: ObservableObject {
         while !Task.isCancelled {
             // The fourth-wall phone is a once-a-day bit, never the first thing he does.
             let today = SupabaseAPI.todayEST()
-            let rare = GaryLifePlan.rareAllowed(first: first, lastRareDay: UserDefaults.standard.string(forKey: Self.rareDayKey),
-                                                today: today)
-            var pick = GaryLifePlan.next(from: clips, recent: recent, mood: mood, roll: Double.random(in: 0..<1),
-                                         rareAllowed: rare)
+            let rareDays = UserDefaults.standard.dictionary(forKey: Self.rareDaysKey) as? [String: String] ?? [:]
+            let pool = GaryLifePlan.pool(clips, first: first, rareDays: rareDays, today: today)
+            var pick = GaryLifePlan.next(from: pool, recent: recent, mood: mood, roll: Double.random(in: 0..<1),
+                                         rareAllowed: true)
             #if DEBUG
             // Tour verb `garyclip <name>` plays that clip every time, to check it.
             if let forced = UserDefaults.standard.string(forKey: "garyClipPreview"), !forced.isEmpty { pick = forced }
             #endif
             guard let name = pick, let url = Bundle.main.url(forResource: name, withExtension: "mp4") else { return }
+            let clip = clips.first { $0.name == name }
             // The players take turns, so the one that just played is never reloaded under the stance.
             let next = turn % 2
             turn += 1
@@ -705,19 +732,23 @@ final class GaryLife: ObservableObject {
             while !Task.isCancelled, Date() < until, players[front].currentTime().seconds < length - 0.05 {
                 let now = players[front].currentTime().seconds
                 if settle == nil, now >= length - Self.settleTime - 0.08 { settle = Date() }
-                let up = (boards[front]?.face(at: now, in: CGSize(width: 1, height: 1))?.show ?? 0) > 0.3
-                if up != boardUp { boardUp = up }
+                let up = clip?.performs(at: now) ?? false
+                if up != performing { performing = up }
                 try? await Task.sleep(nanoseconds: 30_000_000)
             }
             guard !Task.isCancelled else { return }
             // He stands in the stance frame until the next clip takes over from it.
-            boardUp = false
+            performing = false
             front = -1
             settle = nil
             playing = false
             lastClipEnd = Date()
             recent = Array((recent + [name]).suffix(2))
-            if clips.first(where: { $0.name == name })?.rare == true { UserDefaults.standard.set(today, forKey: Self.rareDayKey) }
+            if clip?.rare == true {
+                var days = rareDays
+                days[name] = today
+                UserDefaults.standard.set(days, forKey: Self.rareDaysKey)
+            }
         }
     }
 
