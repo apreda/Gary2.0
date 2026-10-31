@@ -189,7 +189,7 @@ struct CashRailCard: View {
                 .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
                 let rows = Array(board.ranked.prefix(3))
                 ForEach(Array(rows.enumerated()), id: \.element.key) { i, hit in
-                    CashRailRow(hit: hit, space: priceSpace)
+                    CashRailRow(hit: hit, space: priceSpace, strip: false)
                         .overlay(alignment: .top) {
                             if i > 0 { Rectangle().fill(CR.line2).frame(height: 1) }
                         }
@@ -330,10 +330,13 @@ func garyTag(_ hit: CashRailHit, size: CGFloat) -> Text {
     return Text("  GARY\u{2019}S PICK").font(.system(size: size, weight: .bold)).tracking(1.33).foregroundColor(GaryColors.gold)
 }
 
-/// One ranked hit: price, who + market + when, what $10 paid, and a climbing ladder's strip.
+/// One ranked hit: price, who + market + when, what $10 paid, and (in ALL HITS) a climbing ladder's strip.
+/// On the card the rows stay one line each, the ladder only on the hero (founder, Oct 30 2026, an NBA card
+/// beside the NFL one: "I don't remember it having all this space", every NBA bet being a ladder).
 struct CashRailRow: View {
     let hit: CashRailHit
     let space: Namespace.ID?
+    var strip = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -353,7 +356,7 @@ struct CashRailRow: View {
                     .fitsOneLine()
                     .frame(width: 58, alignment: .trailing)
             }
-            if hit.showsStrip {
+            if strip && hit.showsStrip {
                 CashRailRungStrip(rungs: hit.climb, big: false).padding(.leading, 64)
             }
         }
