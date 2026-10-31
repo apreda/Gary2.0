@@ -135,6 +135,7 @@ import SwiftUI
                 switch kind {
                 case "start":
                     if let rate = event["rate"] as? Double { voice.prepare(rate: rate) }
+                    voice.speed = Float(event["speed"] as? Double ?? 1)
                 case "text":
                     if let s = event["s"] as? String, let i = turns.indices.last { turns[i].text += s }
                 case "audio":
@@ -356,6 +357,8 @@ enum GaryAudio {
 final class GaryVoicePlayer {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
+    /// Plays him faster without raising his pitch (Eleven v4 has no speed setting of its own).
+    private let pace = AVAudioUnitTimePitch()
     /// The stream's rate: 48 kHz from the server for this build (crisper), 24 kHz from older servers.
     private var format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 24_000, channels: 1, interleaved: false)!
     private let lock = NSLock()
@@ -366,7 +369,15 @@ final class GaryVoicePlayer {
 
     init() {
         engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
+        engine.attach(pace)
+        engine.connect(node, to: pace, format: format)
+        engine.connect(pace, to: engine.mainMixerNode, format: format)
+    }
+
+    /// How much faster than recorded he plays: 1 is as recorded.
+    var speed: Float {
+        get { pace.rate }
+        set { pace.rate = min(max(newValue, 0.75), 1.5) }
     }
 
     var hasAudio: Bool { scheduled > 0 }
@@ -410,8 +421,10 @@ final class GaryVoicePlayer {
               let f = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: rate, channels: 1, interleaved: false) else { return }
         stop()
         engine.disconnectNodeOutput(node)
+        engine.disconnectNodeOutput(pace)
         format = f
-        engine.connect(node, to: engine.mainMixerNode, format: f)
+        engine.connect(node, to: pace, format: f)
+        engine.connect(pace, to: engine.mainMixerNode, format: f)
     }
 
     func level(at t: Double) -> Float {

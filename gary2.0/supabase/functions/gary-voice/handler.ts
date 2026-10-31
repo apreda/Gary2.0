@@ -1,7 +1,8 @@
 // gary-voice: someone asks Gary a question out loud on Home; he answers in his own voice.
 //
 // POST { question, history?, date?, install?, hq? }  ->  NDJSON stream, one event per line:
-//   {"t":"start","rate":48000}            raw 16-bit mono PCM follows at this rate (48 kHz with hq, else 24 kHz)
+//   {"t":"start","rate":48000,"speed":1.15}  raw 16-bit mono PCM at this rate (48 kHz with hq, else 24 kHz),
+//                                         to be played this much faster
 //   {"t":"text","s":"..."}                his words as he writes them
 //   {"t":"audio","b":"<base64 pcm>"}      his voice, in order
 //   {"t":"words","w":[...],"s":[...],"e":[...]}  word timings (seconds from the start of his audio)
@@ -131,7 +132,9 @@ export function createVoiceHandler(cfg: VoiceConfig) {
           },
         };
         const voice: Speaker = eleven ? new ElevenVoice(options) : new GaryVoice(options);
-        send({ t: "start", rate });
+        // Eleven v4 has no speed setting, so the app plays it faster without raising the pitch; Cartesia
+        // speeds itself up, so the app plays it as is.
+        send({ t: "start", rate, speed: eleven ? Number(admitted.speed) || 1 : 1 });
 
         let answer = "", error: string | null = null, tools: string[] = [];
         let usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
