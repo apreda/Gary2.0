@@ -675,8 +675,13 @@ function withoutOrphans(lines, drop) {
           let j = n; while (j < lines.length && (blank(j) || (drop[j] && !heading(j)))) j += 1; return j < lines.length && heading(j); };
         const parentAt = (k) => heading(k) && nextIdx(k) >= 0 && (heading(nextIdx(k)) || (overDropped(k) && !(prevIdx(k) >= 0 && heading(prevIdx(k)))));
         const parent = parentAt(i);
+        // A markdown parent owns everything to the next markdown heading of its own level or higher, deeper headings and
+        // bold lines included (round 18: "## PHOENIX SUNS" ended at "### RECENT GAMES", a parent over a bold game line, and
+        // "## Toronto Raptors" at a bold "Record: 3-1" over one; their storylines read under no team when the recaps left).
+        const level = (k) => (lines[k].match(/^\s*(#{1,6})\s/) || [])[1]?.length || 0;
+        const ends = (k) => (parent && level(i) ? level(k) > 0 && level(k) <= level(i) : parent ? parentAt(k) : heading(k));
         let k = i + 1, kept = false;
-        while (k < lines.length && !(parent ? parentAt(k) : heading(k))) { if (!blank(k) && !drop[k] && !heading(k)) { kept = true; break; } k += 1; }
+        while (k < lines.length && !ends(k)) { if (!blank(k) && !drop[k] && !heading(k)) { kept = true; break; } k += 1; }
         if (!kept) set(i);
       }
     }
@@ -719,9 +724,13 @@ const unAbbrev = (s) => s.replace(/\b(Jan|Feb|Mar|Apr|Aug|Sept?|Oct|Nov|Dec)\./g
 const SEARCH_NOTE_2 = /^(?:Nothing (?:has been|was|is) reported|No\b[^.]*\b(?:was|were|has been|have been|is|are) reported\b|This (?:is|was) the latest item found|None\.?\s*$|None\.? (?:The official|Nothing)|The official (?:pregame )?(?:injury )?report remains the final word|.*\bat the cutoff\b)/i;
 // And more (round 17): pages that would not open or load, "as of research time", a headline cut off or not tied to this
 // game, "None found", "Nothing from ..." and the search's handling of a page's embedded instruction.
-const SEARCH_NOTE_3 = /\bcould not (?:be )?(?:opened|open|loaded|load|accessed|access|tied|confirmed? from an opened)\b|\bwould(?:n['’]t| not) load\b|\bas of research time\b|\bwas cut off\b|^None found\b|^Nothing (?:new )?from\b|\bembedded instruction\b|\bwas not relied on\b|^As of \d{1,2}:\d{2}\b[^.]*\bno (?:update|news|report)s?\b|^No\b[^.]*\b(?:account|update|report|statement)s? (?:was|were) confirmed\b/i;
+const SEARCH_NOTE_3 = /\bcould not (?:be )?(?:opened|open|loaded|load|accessed|access|tied|confirmed? from an opened)\b|\bwould(?:n['’]t| not) load\b|\bas of (?:the )?research time\b|\bwas cut off\b|^None found\b|^Nothing (?:new )?from\b|\bembedded instruction\b|\bwas not relied on\b|^As of \d{1,2}:\d{2}\b[^.]*\bno (?:update|news|report)s?\b|^No\b[^.]*\b(?:account|update|report|statement)s? (?:was|were) confirmed\b/i;
+// And (round 18) a search summary the desk could not confirm, another source's tip time, and career totals: a career or
+// franchise count is mostly past seasons ("5,794 career rebounds", "the 1,000th of his career", "his 200th triple-double").
+const SEARCH_NOTE_4 = /^A search summary (?:said|says)\b|\blists \d{1,2}(?::\d{2})?\s*[ap]\.m\.|\bwhich conflicts with every other source\b/i;
+const CAREER = /\bcareer (?:points|rebounds|assists|steals|blocks|threes|three-pointers|triple-doubles|double-doubles|games)\b|\b\d[\d,]*(?:st|nd|rd|th)\b[^.]{0,40}\bof (?:his|her) career\b|\bfranchise(?:'s|’s)? (?:leading|all-time|career)\b|\ball-time (?:leading|leader|list|record)\b|\b\d[\d,]*(?:st|nd|rd|th) (?:career )?(?:triple-double|double-double)\b|\bin (?:his|her) \d[\d,]*(?:st|nd|rd|th) (?:regular-season|career|NBA) game\b/i;
 const emptyNews = (raw) => { const s = unAbbrev(raw); return SEARCH_NOTE_2.test(s.replace(/^\W*\*\*[^*]+:\*\*\s*/, '').replace(/^\W+/, '')) || NOTHING_FOUND.test(s.replace(/^\W+/, '')) || SEARCH_EMPTY.test(s.replace(/^\W+/, '')) || FILING.test(s) || TWO_WAY.test(s) || ASKED.test(s)
-  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || SEARCH_NOTE_3.test(s.replace(/^[^\w*]+/, '')) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)) || PLACE.test(s); };
+  || SEARCH_NOTE.test(s.replace(/^\W+/, '')) || SEARCH_NOTE_3.test(s.replace(/^[^\w*]+/, '')) || SEARCH_NOTE_4.test(s.replace(/^[^\w*]+/, '')) || CAREER.test(s) || (AVERAGE.test(s) && !MINUTES_PLAN.test(s)) || PLACE.test(s); };
 function withoutEmptyNews(text) {
   // A bullet that leaves takes its deeper-indented sub-bullets with it (round 11: "He had a 14-point, 10-rebound game"
   // was left under Jrue Holiday when Robert Williams III's line went).
@@ -763,12 +772,29 @@ export function newsForGary(desk, { facts = null, start = null, asOf = new Date(
   const broadcast = (l) => /^\s*(?:[-•*]\s*)?\*\*(?:TV|Radio|Broadcast|Television|Streaming)[^*]*:?\*\*/i.test(l) || /\b(?:listings? include|radio coverage|broadcast on|televised on)\b/i.test(l);
   // The desk's sourcing note is about its own matching, not the game (round 17: "*Sourcing note: ESPN box scores don't
   // print a player name on each row ...*").
-  const sourcing = (l) => /^\s*\*?\s*Sourcing note\b/i.test(l);
-  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || broadcast(l) || sourcing(l) || Boolean(facts && uncheckedNumbers(l, facts).length)));
+  const sourcing = (l) => /^\s*\*?\s*(?:Sourcing note|Source discrepanc)/i.test(l);
+  // The news's own title line (date, venue, tip, TV) and its tip, venue, matchup and uniform bullets restate THE GAME and
+  // the league records (round 18: "Tip: 7:30 p.m. ET (6:30 p.m. CT) at TD Garden.", "Venue: Xfinity Mobile Arena,
+  // Philadelphia.", "Uniforms: Warriors in white (Association)"), with other sources' tip times and door times.
+  const title = (l) => /^\s*\*\*(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day,? [^*]*\b\d{1,2}(?::\d{2})?(?::\d{2})?\s*[ap]\.m\.[^*]*\*\*\s*$/i.test(l)
+    || /^\s*[-*•]\s+\*\*(?:Tip(?:-off| and venue)?|Time and broadcast|Venue|Matchup|Game|Uniforms?)[:.]?\*\*/i.test(l);
+  const drop = lines.map((l) => Boolean(l.trim()) && (pastSeasonLine(l, season) || beforeTheSeason(l, start, asOf) || broadcast(l) || sourcing(l) || title(l) || Boolean(facts && uncheckedNumbers(l, facts).length)));
   // A TV or radio bullet's deeper sub-bullets are its listings and go with it (round 17: "WPLG Local 10", "DAZN in Indiana"
   // and the radio stations were left under the bullet above it).
   const indent = (l) => l.match(/^\s*/)[0].length;
   lines.forEach((l, k) => { if (!broadcast(l) || !/^\s*[-•*]\s/.test(l)) return; for (let j = k + 1; j < lines.length && lines[j].trim() && indent(lines[j]) > indent(l); j++) drop[j] = true; });
+  // Any other dropped bullet's sub-bullets are about it, and would read under the bullet above (round 18: Green's and
+  // Kerr's quotes on the rookie Lendeborg read under Porziņģis when his bullet failed the box check). A bullet dropped
+  // only for a number keeps its bold label over them; any other drop takes them along.
+  lines.forEach((l, k) => {
+    if (!drop[k] || broadcast(l) || !/^\s*[-•*]\s/.test(l)) return;
+    const kids = []; for (let j = k + 1; j < lines.length && lines[j].trim() && indent(lines[j]) > indent(l); j++) kids.push(j);
+    if (!kids.length || kids.every((j) => drop[j])) return;
+    const label = (l.match(/^(\s*[-•*]\s+\*\*[^*]+\*\*)/) || [])[1];
+    const numberOnly = facts && !pastSeasonLine(l, season) && !beforeTheSeason(l, start, asOf) && !sourcing(l) && !title(l);
+    if (label && numberOnly && !uncheckedNumbers(label, facts).length && !pastSeasonLine(label, season)) { lines[k] = label; drop[k] = false; return; }
+    for (const j of kids) drop[j] = true;
+  });
   for (const k of startersTables(lines, desk)) drop[k] = true;
   withoutOrphans(lines, drop);
   return lines.filter((_, k) => !drop[k]).filter((p, k, a) => p.trim() || (k > 0 && a[k - 1].trim())).join('\n').replace(/\n{3,}/g, '\n\n').trim();
