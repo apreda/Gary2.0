@@ -13,7 +13,7 @@
 import { ask, boardFor, costUSD, type Turn } from "./brain.ts";
 import { makeDb, readScoreboard, slateDate } from "./notebook.ts";
 import { SpeechChunker } from "./speech.ts";
-import { GaryVoice, VOICE_SAMPLE_RATE } from "./voice.ts";
+import { ElevenVoice, GaryVoice, type Speaker, VOICE_SAMPLE_RATE, type VoiceOptions } from "./voice.ts";
 
 export interface VoiceConfig {
   supabaseURL: string;
@@ -21,6 +21,7 @@ export interface VoiceConfig {
   anonKey: string;
   anthropicKey: string;
   cartesiaKey: string;
+  elevenKey?: string;
   fallbackVoiceId?: string;
   fetch?: typeof fetch;
 }
@@ -53,6 +54,11 @@ async function listener(cfg: VoiceConfig, bearer: string | null, install: unknow
   return null;
 }
 
+/** The key for whichever company speaks for him. */
+function voiceKey(cfg: VoiceConfig, provider: unknown): string {
+  return (provider === "elevenlabs" ? cfg.elevenKey : cfg.cartesiaKey) ?? "";
+}
+
 export function createVoiceHandler(cfg: VoiceConfig) {
   const f = cfg.fetch ?? fetch;
   const service = (path: string, body: unknown) => f(`${cfg.supabaseURL}/rest/v1/${path}`, {
@@ -72,10 +78,10 @@ export function createVoiceHandler(cfg: VoiceConfig) {
     if (body.prime) {
       const db = makeDb(cfg.supabaseURL, cfg.serviceKey, cfg.anonKey, null, f);
       const board = await boardFor(db, date, boards).catch(() => null);
-      const conf = await f(`${cfg.supabaseURL}/rest/v1/gary_voice_config?id=eq.1&select=enabled`, {
+      const conf = await f(`${cfg.supabaseURL}/rest/v1/gary_voice_config?id=eq.1&select=enabled,tts_provider`, {
         headers: { apikey: cfg.serviceKey, Authorization: `Bearer ${cfg.serviceKey}` },
       }).then((r) => r.json()).catch(() => null);
-      const ready = conf?.[0]?.enabled !== false && !!cfg.anthropicKey && !!cfg.cartesiaKey;
+      const ready = conf?.[0]?.enabled !== false && !!cfg.anthropicKey && !!voiceKey(cfg, conf?.[0]?.tts_provider);
       return json({ enabled: ready, questions: board?.questions ?? [], names: board?.names ?? [] });
     }
 
@@ -85,7 +91,7 @@ export function createVoiceHandler(cfg: VoiceConfig) {
       .filter((t: any) => (t?.role === "user" || t?.role === "assistant") && typeof t.text === "string" && t.text.trim())
       .slice(-8).map((t: any) => ({ role: t.role, text: t.text.slice(0, 1500) }));
 
-    if (!cfg.anthropicKey || !cfg.cartesiaKey) return json({ error: "off" }, 503);
+    if (!cfg.anthropicKey) return json({ error: "off" }, 503);
     const who = await listener(cfg, bearer, body.install).catch(() => null);
     if (!who) return json({ error: "who" }, 401);
     const admitted = await f(`${cfg.supabaseURL}/rest/v1/rpc/gary_voice_admit`, {
@@ -94,8 +100,10 @@ export function createVoiceHandler(cfg: VoiceConfig) {
       body: JSON.stringify({ p_who: who.who, p_signed_in: who.signedIn }),
     }).then((r) => r.json()).catch(() => null);
     if (!admitted || admitted.reason === "off") return json({ error: "off" }, 503);
-    const voiceId = admitted.voice_id || cfg.fallbackVoiceId;
-    if (!voiceId) return json({ error: "no voice" }, 503);
+    const eleven = admitted.tts_provider === "elevenlabs";
+    const voiceId = (eleven ? admitted.eleven_voice_id : admitted.voice_id) || cfg.fallbackVoiceId;
+    const apiKey = voiceKey(cfg, admitted.tts_provider);
+    if (!voiceId || !apiKey) return json({ error: "off" }, 503);
 
     const started = Date.now();
     const enc = new TextEncoder();
@@ -109,15 +117,18 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         const send = (o: unknown) => { if (open) { try { controller.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { open = false; } } };
         let voiceDone!: () => void;
         const voiceFinished = new Promise<void>((r) => (voiceDone = r));
-        const voice = new GaryVoice({
-          apiKey: cfg.cartesiaKey, voiceId, model: admitted.tts_model || "sonic-3.6", speed: Number(admitted.speed) || 1,
+        const options: VoiceOptions = {
+          apiKey, voiceId,
+          model: eleven ? admitted.eleven_model || "eleven_v4_turbo" : admitted.tts_model || "sonic-3.6",
+          speed: Number(admitted.speed) || 1,
           events: {
             audio: (b) => { if (!firstAudio) firstAudio = Date.now() - started; send({ t: "audio", b }); },
             words: (w, s, e) => send({ t: "words", w, s, e }),
             done: () => voiceDone(),
             error: (m) => { send({ t: "voice_error", m }); voiceDone(); },
           },
-        });
+        };
+        const voice: Speaker = eleven ? new ElevenVoice(options) : new GaryVoice(options);
         send({ t: "start", rate: VOICE_SAMPLE_RATE });
 
         let answer = "", error: string | null = null, tools: string[] = [];

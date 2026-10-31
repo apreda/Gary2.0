@@ -21,7 +21,16 @@ export interface VoiceOptions {
   socket?: (url: string) => WebSocket;
 }
 
-export class GaryVoice {
+/** What the handler needs from a voice, whichever company speaks it. */
+export interface Speaker {
+  chars: number;
+  say(text: string): Promise<void>;
+  pause(): Promise<void>;
+  finish(): Promise<void>;
+  close(): void;
+}
+
+export class GaryVoice implements Speaker {
   private ws: WebSocket;
   private ready: Promise<void>;
   // One context per stretch of speech. A lookup pauses him for seconds, long enough for Cartesia to let a
@@ -130,6 +139,103 @@ export class GaryVoice {
   }
 
   close() {
+    if (this.closed) return;
+    this.closed = true;
+    try { this.ws.close(); } catch { /* already gone */ }
+  }
+}
+
+// ElevenLabs Eleven v4 Turbo over the Text to Dialogue WebSocket: one voice, text streamed in as he writes
+// it, 16-bit 24 kHz PCM back (the same audio the app already plays) with character timings per chunk.
+// The server holds text until it has about 40 characters, so a short line before a lookup is flushed.
+export class ElevenVoice implements Speaker {
+  private ws: WebSocket;
+  private ready: Promise<void>;
+  private seconds = 0;
+  private inWord = false;
+  private keepAlive: ReturnType<typeof setInterval> | undefined;
+  private finished = false;
+  private closed = false;
+  chars = 0;
+
+  constructor(private opts: VoiceOptions) {
+    const url = `wss://api.elevenlabs.io/v1/text-to-dialogue/stream-input?model_id=${encodeURIComponent(opts.model)}` +
+      `&output_format=pcm_${VOICE_SAMPLE_RATE}&sync_alignment=true`;
+    this.ws = (opts.socket ?? ((u) => new WebSocket(u)))(url);
+    this.ready = new Promise((resolve, reject) => {
+      this.ws.onopen = () => {
+        this.ws.send(JSON.stringify({ voices: [opts.voiceId], xi_api_key: opts.apiKey }));
+        // A lookup can leave the socket quiet; the server drops it after 20 silent seconds.
+        this.keepAlive = setInterval(() => this.send({ keep_alive: true }), 10_000);
+        resolve();
+      };
+      this.ws.onerror = () => reject(new Error("voice connection failed"));
+    });
+    this.ready.catch(() => {});
+    this.ws.onmessage = (e) => this.receive(e.data);
+    this.ws.onclose = () => {
+      clearInterval(this.keepAlive);
+      if (!this.closed && !this.finished) opts.events.error("voice connection closed");
+      this.closed = true;
+    };
+  }
+
+  private send(o: unknown) {
+    if (!this.closed && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(o));
+  }
+
+  private receive(raw: unknown) {
+    if (typeof raw !== "string") return;
+    let m: any;
+    try { m = JSON.parse(raw); } catch { return; }
+    if (typeof m.audio === "string" && m.audio) {
+      const start = this.seconds;
+      this.seconds += (m.audio.length * 3 / 4) / 2 / VOICE_SAMPLE_RATE;
+      this.opts.events.audio(m.audio);
+      const a = m.alignment;
+      if (a && Array.isArray(a.chars)) {
+        // Words begin where a letter follows a space; a word can straddle two chunks.
+        const words: string[] = [], starts: number[] = [], ends: number[] = [];
+        a.chars.forEach((c: string, i: number) => {
+          if (/\s/.test(c)) { this.inWord = false; return; }
+          if (!this.inWord) { words.push(c); starts.push(start + (a.char_start_times_ms?.[i] ?? 0) / 1000); ends.push(start); }
+          else if (words.length) words[words.length - 1] += c;
+          this.inWord = true;
+        });
+        if (words.length) this.opts.events.words(words, starts, ends);
+      }
+    } else if (m.is_final) {
+      this.finished = true;
+      this.opts.events.done();
+      this.close();
+    } else if (m.error) {
+      this.finished = true;
+      this.opts.events.error(String(m.message ?? m.error));
+      this.close();
+    }
+  }
+
+  async say(text: string) {
+    if (!text.trim() || this.closed) return;
+    await this.ready;
+    this.chars += text.length;
+    this.send({ inputs: [{ text, voice_id: this.opts.voiceId, new_turn: false }] });
+  }
+
+  async pause() {
+    if (this.closed) return;
+    await this.ready;
+    this.send({ flush: true });
+  }
+
+  async finish() {
+    if (this.closed) return;
+    await this.ready;
+    this.send({ close_socket: true });
+  }
+
+  close() {
+    clearInterval(this.keepAlive);
     if (this.closed) return;
     this.closed = true;
     try { this.ws.close(); } catch { /* already gone */ }
