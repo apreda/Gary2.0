@@ -92,3 +92,30 @@ describe('settleNba on CLE @ ATL', () => {
     expect(hit(out, 'game|spread|home|-1.5').gary).toBe(true);
   });
 });
+
+describe('settleNba situation line (the NFL card shows down and distance there)', () => {
+  const ordered = [...plays].sort((a, b) => a.order - b.order);
+  const live = { ...game, status_state: 'in' };
+  const at = i => settle(ordered.slice(0, i + 1), live).situation;
+
+  it('reads the latest bucket by the scorer and the shot', () => {
+    expect(at(8)).toBe('MOBLEY FREE THROW');
+    expect(at(18)).toBe('MOBLEY DUNK');
+    expect(at(19)).toBe('ALEXANDER-WALKER THREE');
+    expect(at(20)).toBe('HARDEN LAYUP');
+  });
+
+  it('a run of 8 or more unanswered reads as the run', () => {
+    expect(at(116)).toBe('CLE 8–0 RUN');
+  });
+
+  it('a timeout reads as the team that called it', () => {
+    expect(at(41)).toBe('ATL TIMEOUT');
+  });
+
+  it('nothing at the final, and no possession guess (basketball plays come out of order)', () => {
+    const out = settle();
+    expect(out.situation).toBeNull();
+    expect(settle(ordered.slice(0, 21), live).possession).toBeNull();
+  });
+});

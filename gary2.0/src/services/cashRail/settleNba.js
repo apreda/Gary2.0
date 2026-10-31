@@ -84,6 +84,35 @@ function playText(base, p, cum) {
   return `${cum} total`;
 }
 
+const SHOTS = [[/dunk/i, 'DUNK'], [/layup|finger roll/i, 'LAYUP'], [/hook/i, 'HOOK'], [/tip/i, 'TIP-IN']];
+
+/**
+ * The line under the clock, where the NFL card shows down and distance: a timeout by the team that called
+ * it, a run of 8 or more unanswered ("CLE 8–0 RUN"), else the latest bucket ("MAXEY THREE"). Nothing at a
+ * period's end (the clock says it). No possession: BDL lists some rebounds ahead of the miss they follow.
+ */
+function situationOf(ps) {
+  const last = ps[ps.length - 1];
+  if (!last || /End Period/i.test(last.type || '')) return null;
+  if (/Timeout/i.test(last.type || '') && last.team?.abbreviation) return `${last.team.abbreviation} TIMEOUT`;
+  let runTeam = null, run = 0, lastScore = null;
+  for (const p of ps) {
+    if (!p.scoring_play) continue;
+    const team = p.team?.abbreviation ?? null;
+    const pts = Number(p.score_value) || 0;
+    if (team === runTeam) run += pts; else { runTeam = team; run = pts; }
+    lastScore = p;
+  }
+  if (run >= 8 && runTeam) return `${runTeam} ${run}\u20130 RUN`;
+  if (!lastScore) return null;
+  const name = String(lastScore.text || '').split(' makes ')[0].trim().split(/\s+/).pop().toUpperCase();
+  const type = String(lastScore.type || '');
+  const kind = Number(lastScore.score_value) === 3 ? 'THREE'
+    : /free throw/i.test(type) ? 'FREE THROW'
+      : (SHOTS.find(([re]) => re.test(type)) || [null, 'JUMPER'])[1];
+  return name ? `${name} ${kind}` : null;
+}
+
 /**
  * @param {{markets: object[], plays: object[], game: object, players: Record<string,string>, garyPick: object|null}} input
  * @returns {{hits: object[], possession: null, situation: null, elapsed_s: number, clock: string, status: string}}
@@ -164,7 +193,7 @@ export function settleNba({ markets = [], plays = [], game = {}, players = {}, g
   return {
     hits,
     possession: null,
-    situation: null,
+    situation: final ? null : situationOf(ordered),
     elapsed_s: final ? finalElapsed : (last ? elapsedOf(last) : 0),
     clock,
     status: final ? 'final' : 'live',
