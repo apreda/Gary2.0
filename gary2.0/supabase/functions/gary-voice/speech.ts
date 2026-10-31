@@ -95,8 +95,38 @@ export function jersey(text: string): string {
   });
 }
 
+// Long Island: the "aw" words, the r dropped off the end ("ovah", "covah", "nevah"), ya, and -in'.
+const LONG_ISLAND: Record<string, string> = {
+  talk: "tawk", talks: "tawks", talked: "tawked", talking: "tawkin'", coffee: "cawfee", dog: "dawg", dogs: "dawgs",
+  long: "lawng", you: "ya", god: "gawd",
+  // So they drop the r at the start of a sentence too, where a capital would read as a name.
+  never: "nevah", over: "ovah", under: "undah", ever: "evah", after: "aftah", better: "bettah", other: "othah",
+  brother: "brothah", number: "numbah", cover: "covah", whatever: "whatevah", remember: "remembah", either: "eithah",
+  whether: "whethah", together: "togethah", later: "latah",
+  nothing: "nothin'", something: "somethin'", anything: "anythin'", everything: "everythin'",
+};
+/** -er words whose -er isn't a dropped r (beer, career) or is stressed (prefer). */
+const R_KEPT = /(eer|fer)s?$/;
+
+/** Long Island: cawfee, tawk, dawg, ovah, nevah, ya, -in'. */
+export function longIsland(text: string): string {
+  return text.replace(/[A-Za-z]+(?:'[A-Za-z]+)?/g, (word) => {
+    const [base, tail] = word.includes("'") ? [word.slice(0, word.indexOf("'")), word.slice(word.indexOf("'"))] : [word, ""];
+    const lower = base.toLowerCase();
+    if (tail && lower === "you") return word;
+    const swap = LONG_ISLAND[lower];
+    if (swap) return matchCase(base, swap) + tail;
+    if (tail) return word;
+    // Lowercase only: a capital is a name (Miller, Packers), said as it's spelled.
+    if (/^[a-z]{2,}ers?$/.test(base) && !R_KEPT.test(base)) return base.replace(/er(s?)$/, "ah$1");
+    if (/^[a-z]{2,}ing$/.test(base) && !ING_NOUNS.has(base)) return base.slice(0, -1) + "'";
+    return word;
+  });
+}
+
 /** The accent each voice was picked for, by ElevenLabs voice id. */
 const ACCENTS: Record<string, (s: string) => string> = {
   VYTY6BZy2r6t2zp1udts: jersey, // #20, North Jersey
+  HajairViv4XpOfGXskuF: longIsland, // #35, Long Island 1 (picked Oct 31)
 };
 export const accentFor = (voiceId: string) => ACCENTS[voiceId] ?? null;

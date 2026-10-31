@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { jersey, SpeechChunker, speakable } from "./speech.ts";
+import { jersey, longIsland, SpeechChunker, speakable } from "./speech.ts";
 
 Deno.test("pieces end at sentences, never inside a line or a price", () => {
   const c = new SpeechChunker();
@@ -26,4 +26,11 @@ Deno.test("his accent swaps word for word, so the captions stay in step", () => 
   assertEquals(said, "Dey're not even sweatin' it. Ya wanna take da over wit dis team? I'll see ya at da window, cryin'. Nothin' doin'. DA pick: Bears -3.5 at -110, you're welcome, King. Manning is bettin'.");
   assertEquals(said.split(/\s+/).length, plain.split(/\s+/).length);
   assertEquals(jersey("a thing on a string in spring"), "a thing on a string in spring");
+});
+
+Deno.test("Long Island drops the r and draws out the aw, word for word", () => {
+  const plain = "You want the over? Never. I'm talking coffee, they cover under the number, and Miller is better than the Packers. You're welcome, beer and career.";
+  const said = longIsland(plain);
+  assertEquals(said, "Ya want the ovah? Nevah. I'm tawkin' cawfee, they covah undah the numbah, and Miller is bettah than the Packers. You're welcome, beer and career.");
+  assertEquals(said.split(/\s+/).length, plain.split(/\s+/).length);
 });
