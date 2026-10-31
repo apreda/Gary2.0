@@ -112,7 +112,7 @@ export async function runPass({ league = 'NFL', now = new Date(), date, db, bdl,
     const mine = league === 'NFL' && db.garyBets ? await db.garyBets(id, g) : null;
     const gary_bets = league === 'NFL'
       ? garyBets({ plays: plays ?? [], game: g, garyPick: gary?.garyPick ?? null, props: mine?.props ?? [], darts: mine?.darts ?? [] })
-      : null;
+      : []; // the column is NOT NULL: an empty strip, never null
     await db.upsertBoard({ league, game_id: id, date, ...out, spread, gary_bets, prices_frozen_at: snap?.captured_at ?? null, updated_at: now.toISOString() });
     done.boards++;
     log(`board ${id}: ${out.status} ${out.clock} · ${out.hits.length} hits`);

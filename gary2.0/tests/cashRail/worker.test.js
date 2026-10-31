@@ -157,7 +157,8 @@ describe('Cash Rail worker pass, NBA', () => {
     const expected = settleNba({ markets, plays: nba.plays, game: { ...nba.game, status_state: 'final' }, players: { 3547244: 'Onyeka Okongwu' } });
     expect(board).toMatchObject({ league: 'NBA', game_id: String(nba.game.id), status: 'final', clock: 'FINAL', spread: 'ATL -1.5' });
     expect(board.hits.find(h => h.key === '3547244|points')).toEqual(expected.hits.find(h => h.key === '3547244|points'));
-    expect(board.gary_bets).toBeNull();
+    // The column is NOT NULL (an empty strip off the NFL): a null failed every NBA write live on Oct 30.
+    expect(board.gary_bets).toEqual([]);
   });
 });
 
