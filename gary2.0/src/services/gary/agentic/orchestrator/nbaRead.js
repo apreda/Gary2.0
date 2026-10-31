@@ -260,7 +260,7 @@ function teamHead(desk, ratings, team, ts) {
   // told that a team is first or last"; every game below says home or away).
   const head = `${team} (${w}-${regular.length - w})`;
   const missing = ratings[RATINGS_MISSING];
-  const rated = missing ? `opponents' records: not on file (the league's ratings did not load: ${missing})` : null;
+  const rated = missing ? `opponents' other games: not on file (the league's ratings did not load: ${missing})` : null;
   return { head, rated, text: `${head}${rated ? `\n  ${rated}` : ''}` };
 }
 async function gameLog(desk, ratings, team, asOf, ts, meetingUnder = null, meetingData = null, meetingWith = null) {
@@ -821,7 +821,7 @@ function boardGames(ts, league = {}) {
     const opp = home ? g.visitor_team : g.home_team;
     const us = home ? g.home_team_score : g.visitor_team_score, them = home ? g.visitor_team_score : g.home_team_score;
     const o = league[opp?.full_name];
-    return `${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp?.name || opp?.full_name}${o ? ` (${o.w}-${o.l} now)` : ''}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` (${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')})` : ''}`;
+    return `${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp?.name || opp?.full_name}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` (${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')})` : ''}`;
   }).join(', ')}`;
 }
 

@@ -235,7 +235,7 @@ function qbSplit(gs, qb) {
   const mine = qb ? [...by.keys()].find((k) => nameKey(k) === nameKey(qb)) : null;
   if (!gs.length || (mine && by.size === 1)) return null;
   const parts = [...by].sort(([a], [b]) => (a === mine ? -1 : b === mine ? 1 : 0))
-    .map(([k, list]) => `${k}${k === mine ? " (this week's quarterback)" : ''} ${record(list)} (${list.map((g) => `${g.at} ${g.opponent}`).join(', ')})`);
+    .map(([k, list]) => `${k}${k === mine ? " (this week's quarterback)" : ''} (${list.map((g) => `${g.at} ${g.opponent}`).join(', ')})`);
   if (qb && !mine) {
     // A game he played in without throwing the most passes is named (Oct 24 2026: Michigan's Tommy Carr, today's
     // starter, played the second half against Penn State).
@@ -249,12 +249,15 @@ function gameLog(desk) {
   const conf = byTeam('NCAAF CONFERENCE CONTEXT', (l) => (/^\[(?:HOME|AWAY)\] /.test(l) ? l.replace(/^\[(?:HOME|AWAY)\] /, '') : ''));
   const teams = seasonGames(desk);
   const starters = thisWeeksQuarterbacks(desk, teams.map((t) => t.team));
-  const log = afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME'));
+  // A desk built before Oct 31 2026 still carries each opponent's record ("opponent: SEC, now 4-3"); the story leaves it out.
+  const log = afterIntro(sectionOf(desk, 'THIS SEASON GAME BY GAME')).replace(/(— opponent: [^,—\n]+?), now \d+-\d+(?:-\d+)?/g, '$1');
+  // Oct 31 2026 (founder: "the only record Gary needs is their actual overall season record ... it's not something to
+  // add to stats"; Oct 3: "records don't help really"): each team's own record once, in its heading; none on opponents,
+  // quarterbacks or splits. The games themselves stay.
   return log.replace(/^(\S.*) \((\d+-\d+(?:-\d+)?)\):$/gm, (whole, team, rec) => {
     const t = teams.find((x) => x.team === team);
     if (!t) return whole;
-    const fbs = t.games.filter((g) => !g.fcs);
-    const head = `${team} (${rec}${fbs.length < t.games.length ? `; ${record(fbs)} against FBS teams` : ''})${conf.get(team) ? ` · ${conf.get(team)}` : ''}, newest first:`;
+    const head = `${team} (${rec})${conf.get(team) ? ` · ${conf.get(team)}` : ''}, newest first:`;
     return [head, qbSplit(t.games, starters.get(team))].filter(Boolean).join('\n');
   });
 }
@@ -294,8 +297,8 @@ export function seasonGames(desk) {
     const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
     // The opponent's conference and record now, from the line's opponent label (Oct 24 2026: the board read "W 24-21 @
     // Michigan State" without Michigan State being 2-5).
-    const o = l.match(/— opponent: ([^,—]+?), now (\d+-\d+(?:-\d+)?)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? `${o[1].trim()}, ${o[2]} now` : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
+    const o = l.match(/— opponent: ([^,—]+?)(?:,|$| —)/);
+    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? o[1].trim() : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     // The first passer, past a starter who threw none ("Dylan Lonergan started, no pass; AJ Surace 7-of-18"; Oct 29
     // 2026 hunt: Rutgers' game read "passer not on file").
@@ -322,13 +325,13 @@ const games = (n) => `${n} game${n === 1 ? '' : 's'}`;
 // A game whose box score's player lines are not on file (or carry no passer) names no quarterback.
 const NOT_ON_FILE_QB = 'not on file';
 // The quarterback lines name their games and give the record only: the games themselves are listed once, above them.
-const byQb = (gs) => `${record(gs)} (${gs.map((g) => `${g.at || 'vs'} ${g.opponent}`).join(', ')})`;
+const byQb = (gs) => gs.map((g) => `${g.at || 'vs'} ${g.opponent}`).join(', ');
 
 // One team: its games against FBS teams, newest first, the FCS games named apart, and the same games by who threw the
 // most passes.
 export function seasonLines(team, all, qb = null) {
   const fbs = all.filter((g) => !g.fcs), fcs = all.filter((g) => g.fcs);
-  const out = [fbs.length ? `${team}, against FBS teams, ${games(fbs.length)}, newest first: ${record(fbs)}, ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
+  const out = [fbs.length ? `${team} (${record(all)}), against FBS teams, ${games(fbs.length)}, newest first: ${perGame(fbs)}` : `${team}: no games against FBS teams yet this season.`];
   if (fcs.length) out.push(`  against FCS teams: ${fcs.map((g) => `${g.result} ${g.pf}-${g.pa} vs ${g.opponent}`).join('; ')}`);
   if (!fbs.length) return out.join('\n');
   const by = byPasser(fbs, NOT_ON_FILE_QB);

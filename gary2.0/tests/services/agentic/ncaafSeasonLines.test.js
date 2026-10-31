@@ -38,10 +38,12 @@ describe('college season lines', () => {
 
   it('keeps FCS games out, lists every game newest first, and splits by quarterback', () => {
     const text = seasonLines('Oregon Ducks', teams[0].games, 'Brock Thomas');
-    expect(text).toMatch(/against FBS teams, 2 games, newest first: 1-1, L 15-17 vs UCLA Bruins \(Big Ten, 5-0 now; 272 yards, allowed 345\), W 34-27 vs Boise State Broncos \(Pac-12, 5-1 now\)\n/);
+    expect(text).toMatch(/^Oregon Ducks \(2-1\), against FBS teams, 2 games, newest first: L 15-17 vs UCLA Bruins \(Big Ten; 272 yards, allowed 345\), W 34-27 vs Boise State Broncos \(Pac-12\)\n/);
+    // Oct 31 2026: the team's own record once; none on opponents or quarterbacks.
+    expect(text).not.toMatch(/\d+-\d+ now|: 1-0/);
     expect(text).toMatch(/against FCS teams: W 84-0 vs Portland State Vikings/);
     expect(text).toMatch(/Brock Thomas, this week's quarterback, threw the most passes in none/);
-    expect(text).toMatch(/With Dante Moore throwing the most passes, 1 game: 1-0/);
+    expect(text).toMatch(/With Dante Moore throwing the most passes, 1 game: /);
   });
 
   // Oct 23 2026 data audit: from six games the board averaged the season, and Virginia's last three (about 250 yards
@@ -49,7 +51,7 @@ describe('college season lines', () => {
   it('lists six games or more one by one, never as an average', () => {
     const six = Array.from({ length: 6 }, (_, i) => ({ result: i < 3 ? 'L' : 'W', pf: 20 + i, pa: 24, at: 'vs', opponent: `Team ${i}`, fcs: false, qb: 'Beau Pribula', off: 250 + i, def: 430 }));
     const text = seasonLines('Virginia Cavaliers', six, 'Beau Pribula');
-    expect(text).toMatch(/6 games, newest first: 3-3, L 20-24 vs Team 0 \(250 yards, allowed 430\), .*W 25-24 vs Team 5 \(255 yards, allowed 430\)/);
+    expect(text).toMatch(/^Virginia Cavaliers \(3-3\), against FBS teams, 6 games, newest first: L 20-24 vs Team 0 \(250 yards, allowed 430\), .*W 25-24 vs Team 5 \(255 yards, allowed 430\)/);
     expect(text).not.toMatch(/a game|per game/);
   });
 

@@ -251,14 +251,17 @@ function opponentThatDay(d, before, x, read = null) {
   // The meeting with tonight's other team: each of its other games is a full row in its own list, printed next (round 17:
   // about 1,000 characters of the Broncos' season again on the Chiefs' Week 1 row).
   const below = read?.tonight?.has(x.opp) && others.length ? `their other games: each a row in the ${teamName(x.opp)} list below` : null;
-  return `${record(games)} now${qbThat}; ${below || (seen ? `their other games: under ${seen} above` : others.length ? `their other games, newest first: ${others.join(', ')}` : 'no other games yet')}`;
+  // Oct 31 2026 (founder: "the only record Gary needs is their actual overall season record ... it's not something to
+  // add to stats"; Oct 3: "records don't help really"): each team's own record once, in its heading; none on opponents,
+  // quarterbacks or splits. The games themselves stay.
+  return `${qbThat ? `${qbThat.slice(2)}; ` : ''}${below || (seen ? `their other games: under ${seen} above` : others.length ? `their other games, newest first: ${others.join(', ')}` : 'no other games yet')}`;
 }
 /** The defense a player faced, for the prop sheets: its record now and the points it allowed in each of its games,
  * newest first (Oct 29 2026, founder: no averages or places; it read "allowing 26.3 points a game, 5th most"). */
 export function defensesFaced(schedule, season, before, asOf = null) {
   const d = { schedule: schedule || [], season, asOf };
   const codes = [...new Set((d.schedule || []).filter((g) => String(g.season) === String(season)).flatMap((g) => [g.home_team, g.away_team]))];
-  return new Map(codes.map((code) => { const gs = teamGames(d, code, season, before); return [code, gs.length ? `${record(gs)} now; allowed ${gs.slice().reverse().map((g) => g.pa).join(', ')} in its games, newest first` : 'no games yet']; }));
+  return new Map(codes.map((code) => { const gs = teamGames(d, code, season, before); return [code, gs.length ? `allowed ${gs.slice().reverse().map((g) => g.pa).join(', ')} in its games, newest first` : 'no games yet']; }));
 }
 // Each game with the opponent's record and season now and who played quarterback for it that day, as the game log gives
 // them (Oct 24 2026: the board read "W 22-6 vs Chargers" without the Chargers being 0-6).
@@ -297,9 +300,9 @@ export function strength(d, team, before, qb = null) {
   if (unknown.length) return [...lines, season].join('\n');
   if (!qb || (!without.length && !both.length)) return [...lines, season].join('\n');
   const others = [...new Set(without.map(starterOf).filter(Boolean))].join(', ') || 'other quarterbacks';
-  if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${record(his)}, ${perGame(d, before, his)}`);
+  if (his.length) lines.push(`  With ${qb} at quarterback, ${games(his.length)}: ${perGame(d, before, his)}`);
   else lines.push(`  ${qb} has not played a full game at quarterback this season.`);
-  if (without.length) lines.push(`  Without him (${others} at quarterback), ${games(without.length)}: ${record(without)}, ${perGame(d, before, without)}`);
+  if (without.length) lines.push(`  Without him (${others} at quarterback), ${games(without.length)}: ${perGame(d, before, without)}`);
   if (both.length) lines.push(`  Shared at quarterback, ${games(both.length)}: ${both.map((x) => `Wk ${x.week} ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${x.ot ? ' in overtime' : ''} (${passerLine(x)})`).join('; ')}`);
   // The quarterback split replaces the season line: it covered three quarterbacks and repeated the lists (Oct 23 2026
   // audit); every score is in the game log.
@@ -1213,7 +1216,7 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byG
     const others = {}; gs.forEach((x, i) => { if (!qb || roles[i] === 'without') { const nm = starterOf(x); if (nm) others[nm] = (others[nm] || 0) + 1; } });
     const otherList = Object.entries(others).sort((a, b) => b[1] - a[1]).map(([nm, c]) => `${nm} ${c}`).join(', ');
     const split = qb && (k('without') || k('shared'));
-    const rec = (xs) => (split && xs.length ? ` (Wk ${xs.map((x) => x.week).join(', ')}: ${record(xs)})` : '');
+    const rec = (xs) => (split && xs.length ? ` (Wk ${xs.map((x) => x.week).join(', ')})` : '');
     const who = k('unknown') ? 'not on file (the weekly player stats did not load)'
       : qb ? [`${qb} ${k('with')}${rec(group('with'))}`, k('shared') ? `shared ${k('shared')}${rec(group('shared'))}` : null,
         k('without') ? `without him ${k('without')}${otherList ? `: ${otherList}` : ''}${rec(group('without'))}` : null].filter(Boolean).join(' · ') : otherList;
@@ -1465,7 +1468,7 @@ export function nflGameFull(d, x, code, before, read = null) {
   for (const g of fresh) if (!rowOf(g)) read?.shown?.set(`${o}|${g.g.game_id}`, label);
   const listed = [...[...under].map(([at, wks]) => `Wk ${wks.join(', ')} under ${at} above`),
     ...fresh.map((g) => { const r = rowOf(g); return r ? `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, nickname(g.opp), true)}: ${r.label} ${r.pos < here ? 'above' : 'below'}` : res(g); })];
-  lines.push(`  ${teamName(o)} coming in: ${record(prior)}${prior.length ? `; ${listed.join('; ')}` : ' (their first game)'} · ${record(oppGames)} before tonight`);
+  lines.push(`  ${teamName(o)} coming in: ${prior.length ? listed.join('; ') : 'their first game'}`);
   return lines.filter(Boolean).join('\n');
 }
 

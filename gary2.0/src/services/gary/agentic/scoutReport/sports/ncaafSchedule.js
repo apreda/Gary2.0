@@ -164,7 +164,7 @@ function opponentLabel(opponentId, { teamsById, records, league = null, leagueGa
   // Its record now and its games; no AP poll place (round 9, Oct 29 2026: ranks and places are out of what Gary reads).
   const record = records.get(Number(opponentId));
   return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
-    record ? `now ${record}` : null,
+    // No record (Oct 31 2026, founder: "a team record doesn't matter for a spread"); its games follow.
     // A league table that did not load is said (round 15: every opponent's games went without a word).
     full && !league ? "its other games: not on file (the season's games could not be loaded)" : full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
       units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null), exclude }) : null].filter(Boolean).join(', ');

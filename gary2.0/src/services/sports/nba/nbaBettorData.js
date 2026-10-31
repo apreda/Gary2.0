@@ -428,7 +428,10 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const oppGames = byTeamSummaries?.get(String(oppId));
     const wl = oppGames ? wonLost(oppGames, oppId) : o ? `${o.w}-${o.l}` : null;
     const gp = oppGames ? oppGames.length : o?.gp;
-    const rec = wl ? ` (${wl} now${gp === 1 ? '; this was their only game' : others ? `; their other games, newest first: ${others}` : byTeamSummaries ? '' : '; their other games: not on file'})` : '';
+    // Oct 31 2026 (founder: "the only record Gary needs is their actual overall season record ... it's not something to
+    // add to stats"; Oct 3: "records don't help really"): each team's own record once, in its heading; none on opponents,
+    // quarterbacks or splits. The games themselves stay.
+    const rec = wl ? ` (${gp === 1 ? 'this was their only game' : others ? `their other games, newest first: ${others}` : byTeamSummaries ? 'no other games' : 'their other games: not on file'})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
     const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
