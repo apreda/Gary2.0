@@ -15,6 +15,7 @@ import { getPlayLedger } from './nflPlayLedger.js';
 import { loadNflGameWeather, gameWeatherLine } from './nflGameWeather.js';
 import { withOfficialBox } from './espnNflBox.js';
 import { getNflHeadCoach } from '../../providers/espnNflCoaches.js';
+import { finalReportIn } from './nflAvailability.js';
 
 const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
 export const codeOf = (team) => NFLVERSE_TEAM_CODES[team];
@@ -1127,13 +1128,16 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
   const key = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
   for (const team of [awayTeam, homeTeam]) {
     const code = codeOf(team);
-    const week = (d.schedule || []).filter((r) => r.season === String(d.season) && (r.home_team === code || r.away_team === code) && String(r.gameday) >= before)
-      .sort((a, b) => String(a.gameday).localeCompare(String(b.gameday)))[0]?.week;
+    const row = (d.schedule || []).filter((r) => r.season === String(d.season) && (r.home_team === code || r.away_team === code) && String(r.gameday) >= before)
+      .sort((a, b) => String(a.gameday).localeCompare(String(b.gameday)))[0];
+    const week = row?.week;
     const report = week ? await getPracticeReport(team, d.season, Number(week)).catch(() => null) : null;
     // A report not in the file, or not read, is said, never read as nobody listed (round 13).
     if (!report?.players) { lines.push(`${team}: the official report is not on file, so the next man up is not listed`); continue; }
-    // A game status, or a missed practice (limited alone usually plays).
-    const listed = (report?.players || []).filter((p) => /out|doubtful|questionable/i.test(p.game_status || '') || p.practice === 'DNP');
+    // A game status, or a missed practice (limited alone usually plays) until the final report is in: a DNP with no
+    // status on the final report is a rest day (round 18: the Bengals' Wk 7 DTs Allen, Hill and Lawrence all played).
+    const final = finalReportIn(report, row?.gameday ? `${row.gameday}T12:00:00-05:00` : null);
+    const listed = (report?.players || []).filter((p) => /out|doubtful|questionable/i.test(p.game_status || '') || (!final && p.practice === 'DNP'));
     const depth = await espnDepthChart(team);
     if (!depth) { if (listed.length) lines.push(`${team}: ESPN's depth chart did not load`); continue; }
     const { rosterOf, snaps } = depthSnaps(d, code, before);
@@ -1454,9 +1458,13 @@ export function nflGameFull(d, x, code, before, read = null) {
   const label = `the ${nickname(code)}' Wk ${x.week} row`;
   const under = new Map();
   for (const g of prior) { const at = read?.shown?.get(`${o}|${g.g.game_id}`); if (at) under.set(at, [...(under.get(at) || []), g.week]); }
+  // A game that is a full row of tonight's two teams in this read is that row (round 18).
+  const here = read?.rows?.get(x.g.game_id)?.pos;
+  const rowOf = (g) => (here != null && g.g.game_id !== x.g.game_id ? read.rows.get(g.g.game_id) : null);
   const fresh = prior.filter((g) => !read?.shown?.has(`${o}|${g.g.game_id}`));
-  for (const g of fresh) read?.shown?.set(`${o}|${g.g.game_id}`, label);
-  const listed = [...[...under].map(([at, wks]) => `Wk ${wks.join(', ')} under ${at} above`), ...fresh.map(res)];
+  for (const g of fresh) if (!rowOf(g)) read?.shown?.set(`${o}|${g.g.game_id}`, label);
+  const listed = [...[...under].map(([at, wks]) => `Wk ${wks.join(', ')} under ${at} above`),
+    ...fresh.map((g) => { const r = rowOf(g); return r ? `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, nickname(g.opp), true)}: ${r.label} ${r.pos < here ? 'above' : 'below'}` : res(g); })];
   lines.push(`  ${teamName(o)} coming in: ${record(prior)}${prior.length ? `; ${listed.join('; ')}` : ' (their first game)'} · ${record(oppGames)} before tonight`);
   return lines.filter(Boolean).join('\n');
 }

@@ -20,9 +20,9 @@ import { fetchNflArticlesAsWritten } from './nflArticlesAsWritten.js';
 import { nflGameByGameSections, attachNflParticipation } from './nflGameByGame.js';
 import { nflSituationSection } from './nflSituation.js';
 import { getNflSchedule, scheduleRowFor, siteFor } from '../../../../sports/nfl/nflSchedule.js';
-import { nflverseCode, getPracticeReport } from '../../../../providers/nflverseService.js';
+import { nflverseCode, getPracticeReport, loadNflverseFile } from '../../../../providers/nflverseService.js';
 import { getPlayLedger } from '../../../../sports/nfl/nflPlayLedger.js';
-import { finalReportNotDue } from '../../../../sports/nfl/nflAvailability.js';
+import { finalReportNotDue, finalReportIn } from '../../../../sports/nfl/nflAvailability.js';
 import { formatNflPlayers, loadNflOffenseGameLogs } from './nflPlayers.js';
 import { weekStorylinesSection } from '../shared/weekStorylines.js';
 import { loadTeamResults, gameStoryLine } from '../../tools/statRouters/footballTeamGames.js';
@@ -1056,7 +1056,9 @@ export async function buildNflScoutReport(game, options = {}) {
   // official report saying Out); the feed's note stays as text.
   // The feed's comments without the reporter's credit ("..., Aric DiLalla of the team's official site reports"), on every
   // row: round 16 dropped it only where a row met the official report, and IR rows off the report kept it (round 17).
-  const withoutCredit = (c) => String(c || '').replace(/,\s*[A-Z][^,]*?\s+(?:of|from)\s+[^,]*?\s+reports?\.?\s*$/, '.').replace(/\s+(?:according to|per)\s+[A-Z][^.]*\.\s*$/, '.');
+  // After a closing quote too, and a credit with no outlet ("..., Cam Inman reports."; round 18).
+  const withoutCredit = (c) => String(c || '').replace(/,(["”]?)\s*[A-Z][^,]*?\s+(?:of|from)\s+[^,]*?\s+reports?\.?\s*$/, '.$1')
+    .replace(/,\s*[A-Z][a-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){1,2}\s+reports?\.?\s*$/, '.').replace(/\s+(?:according to|per)\s+[A-Z][^.]*\.\s*$/, '.');
   for (const side of ['home', 'away']) for (const i of (Array.isArray(injuries?.[side]) ? injuries[side] : [])) if (i.comment) i.comment = withoutCredit(i.comment);
   if (injuries && injuries.sourceOk !== false && !scheduleWeek) {
     (injuries.notOnFile ||= []).push(`Official injury report: not on file (the schedule did not give this game's week); the statuses below are the injury feed's.`);
@@ -1066,6 +1068,11 @@ export async function buildNflScoutReport(game, options = {}) {
     // side has it (Oct 27 2026 data check: last name and first initial merged Atlanta's two Terrells, A.J. and Avieon,
     // into one entry with both injuries; and the Jets' "Kiko" and "Francisco" Mauigoa, one player, read as two).
     const norm = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+    // And only when the club's own roster has one player by that last name (round 18: the Browns' report row for Elgton
+    // Jenkins, the starting center, merged into the feed's IR row for Teven Jenkins).
+    const rosterRows = await loadNflverseFile('roster_weekly', nflSeasonYear).then((f) => (f?.unavailable ? null : f?.rows)).catch(() => null);
+    const latestRosterWeek = Math.max(0, ...(rosterRows || []).map((r) => Number(r.week) || 0));
+    const rosterLast = (team) => { const m = new Map(); for (const r of rosterRows || []) if (Number(r.week) === latestRosterWeek && r.team === nflverseCode(team)) m.set(norm(r.last_name), (m.get(norm(r.last_name)) || 0) + 1); return m; };
     for (const [side, team] of [['home', homeTeam], ['away', awayTeam]]) {
       const report = await getPracticeReport(team, nflSeasonYear, scheduleWeek).catch((e) => ({ unavailable: true, reason: `Could not reach the league's file: ${e.message}` }));
       // A download that failed is not a file without the team (round 11).
@@ -1090,13 +1097,16 @@ export async function buildNflScoutReport(game, options = {}) {
       for (const i of list) { const k = norm(i.player?.last_name); byLast.set(k, [...(byLast.get(k) || []), i]); }
       const reportLast = new Map();
       for (const r of report.players) { const k = norm(String(r.name || '').trim().split(/\s+/).slice(1).join(' ')); reportLast.set(k, (reportLast.get(k) || 0) + 1); }
+      const clubLast = rosterRows ? rosterLast(team) : null;
       const findListed = (first, last) => byFull.get(`${norm(first)}${norm(last)}`)
-        || (byLast.get(norm(last))?.length === 1 && reportLast.get(norm(last)) === 1 ? byLast.get(norm(last))[0] : null);
+        || (byLast.get(norm(last))?.length === 1 && reportLast.get(norm(last)) === 1 && (!clubLast || (clubLast.get(norm(last)) || 0) <= 1) ? byLast.get(norm(last))[0] : null);
       // The week's game statuses come with its final report (the day before a Thursday game, the Friday before a
       // Sunday one); until then the report carries practice participation only, and a blank status is not "no
       // designation" (Oct 28 2026 sweep: the night before Panthers-Packers every player read "No game designation",
       // Golden under a note saying he was listed questionable and Franklin, Phillips and Lewis under "out").
-      const designated = report.players.some((r) => r.game_status);
+      // A final report that designated no one is final too, known from the report day the league's file carries (round 18:
+      // on game day the Bengals' Wk 7 report, all players available, read "No game status yet").
+      const designated = finalReportIn(report, game.commence_time);
       // Until then a feed's weekly word is its placeholder too (Oct 29 2026 hunt: on Thursday nine Eagles read Questionable
       // for Sunday, Omenihu's under a note from Oct 20); nflAvailability.js says the statuses are not issued yet.
       // Once the final report is due the feed's word is the team's own Friday status, and the league's file can trail it by

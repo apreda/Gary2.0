@@ -227,7 +227,9 @@ export async function getPracticeReport(teamName, season, week = null, opts = {}
     gsis_id: r.gsis_id || null
   }));
 
-  return { week: targetWeek, team: teamName, players };
+  // The report day this file carries, as an ET date, so a final report that designated no one reads as final (round 18).
+  const carries = file.real && published ? new Date(published - (etHour < 16 ? 86_400_000 : 0)).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) : null;
+  return { week: targetWeek, team: teamName, players, carries };
 }
 
 /**

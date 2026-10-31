@@ -139,3 +139,22 @@ export function finalReportNotDue(kickoff, now = new Date()) {
   const due = new Date(kEt); due.setDate(due.getDate() - (kEt.getDay() === 4 ? 1 : 2)); due.setHours(16, 0, 0, 0);
   return et(now) < due;
 }
+
+/** The ET date (YYYY-MM-DD) of the week's final injury report for a kickoff: the day before a Thursday game, two days
+ * before any other. */
+export function finalReportDay(kickoff) {
+  const k = new Date(kickoff);
+  if (Number.isNaN(k.getTime())) return null;
+  const kEt = new Date(k.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const due = new Date(kEt); due.setDate(due.getDate() - (kEt.getDay() === 4 ? 1 : 2));
+  return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+}
+
+/** The week's final report is in when a player on it has a game status, or when the league's file carries the final
+ * report's day (round 18: the Bengals' Wk 7 final report designated no one, and on game day the read called its three
+ * rest-day DNPs "No game status yet" under a note that the statuses were not out). `report.carries`: getPracticeReport. */
+export function finalReportIn(report, kickoff) {
+  if ((report?.players || []).some((r) => r.game_status)) return true;
+  const day = kickoff ? finalReportDay(kickoff) : null;
+  return Boolean(report?.carries && day && report.carries >= day);
+}

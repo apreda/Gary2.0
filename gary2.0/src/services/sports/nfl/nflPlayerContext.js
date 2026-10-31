@@ -7,7 +7,7 @@
 import { RELEASE_BASE, fetchCsv, TEAM_NAMES } from './nflStreaksService.js';
 import { normName } from '../../gary/darts/dartsCommon.js';
 import { withOfficialBox } from './espnNflBox.js';
-import { loadNflverseFile } from '../../providers/nflverseService.js';
+import { loadNflverseFile, nflverseCode } from '../../providers/nflverseService.js';
 
 // PFR's charting files through the desk's disk-cached loader, asked twice (round 16: a fresh download failed in one of
 // two identical darts builds, and every drop note vanished as if no receiver had dropped a ball). Null when both fail.
@@ -525,15 +525,17 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
 export function withOfficialReport(injuries, reports, roster = null) {
   const full = (i) => normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`);
   const latest = Math.max(0, ...(roster || []).map((r) => Number(r.week) || 0));
-  const practiceSquad = new Set((roster || []).filter((r) => Number(r.week) === latest && String(r.status).toUpperCase() === 'DEV').map((r) => normName(r.full_name)));
-  const rows = (injuries || []).filter((i) => !practiceSquad.has(full(i)));
-  for (const { team, report, pending = false } of reports || []) {
+  // By club and name (round 18: Carolina's practice-squad Devonta Smith took the Eagles' DeVonta Smith, Out, off the darts).
+  const practiceSquad = new Set((roster || []).filter((r) => Number(r.week) === latest && String(r.status).toUpperCase() === 'DEV').map((r) => `${r.team}|${normName(r.full_name)}`));
+  const rows = (injuries || []).filter((i) => !practiceSquad.has(`${nflverseCode(i?.player?.team?.full_name || i?.team?.full_name)}|${full(i)}`));
+  // `final` (finalReportIn): the week's final report is in even when it designated no one (round 18).
+  for (const { team, report, pending = false, final = null } of reports || []) {
     // A report not filed yet, before the final report is due: the feed's weekly word is its placeholder (round 8).
     if (!report?.players?.length) {
       if (pending) for (let k = 0; k < rows.length; k++) { const i = rows[k]; if ((i?.player?.team?.full_name || i?.team?.full_name) === team && /^(questionable|doubtful|probable)$/i.test(String(i.status || ''))) rows[k] = { ...i, status: 'no game status yet' }; }
       continue;
     }
-    const designated = report.players.some((r) => r.game_status);
+    const designated = final ?? report.players.some((r) => r.game_status);
     const mine = rows.filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === team);
     const byName = new Map(mine.map((i) => [full(i), i]));
     // Then a last name only one player on each side has, as the read matches them (nfl.js; Oct 29 2026 hunt, round 7:
@@ -542,12 +544,16 @@ export function withOfficialReport(injuries, reports, roster = null) {
     const feedLast = new Map(), reportLast = new Map();
     for (const i of mine) { const k = normName(i?.player?.last_name); feedLast.set(k, [...(feedLast.get(k) || []), i]); }
     for (const r of report.players) reportLast.set(lastOf(r.name), (reportLast.get(lastOf(r.name)) || 0) + 1);
+    // And only when the club's roster has one player by that last name (round 18: Elgton Jenkins's report row on Teven's IR row).
+    const clubLast = new Map();
+    for (const r of roster || []) if (Number(r.week) === latest && r.team === nflverseCode(team)) clubLast.set(normName(r.last_name), (clubLast.get(normName(r.last_name)) || 0) + 1);
     for (const r of report.players) {
       const k = lastOf(r.name);
-      const listed = byName.get(normName(r.name)) || (k && feedLast.get(k)?.length === 1 && reportLast.get(k) === 1 ? feedLast.get(k)[0] : null);
+      const listed = byName.get(normName(r.name)) || (k && feedLast.get(k)?.length === 1 && reportLast.get(k) === 1 && (clubLast.get(k) || 0) <= 1 ? feedLast.get(k)[0] : null);
       // The report's injury and practice days ride with the row (round 13: the frames gave a status only), and before the
       // game statuses are filed every player on the report is listed, not only the feed's (Mahomes and Andrews were missing).
-      if (listed) { rows[rows.indexOf(listed)] = { ...listed, ...(r.game_status ? { status: r.game_status } : {}), report: r }; continue; }
+      // On a final report a listed player with no status has no designation, as the read says (round 18).
+      if (listed) { rows[rows.indexOf(listed)] = { ...listed, ...(r.game_status ? { status: r.game_status } : designated ? { status: 'no game designation' } : {}), report: r }; continue; }
       if (!r.game_status && designated) continue;
       const [first, ...rest] = String(r.name || '').trim().split(/\s+/);
       rows.push({ player: { first_name: first, last_name: rest.join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: r.game_status || 'no game status yet', report: r });

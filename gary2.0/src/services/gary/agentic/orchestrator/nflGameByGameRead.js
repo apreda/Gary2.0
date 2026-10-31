@@ -36,7 +36,17 @@ export async function buildNflGameByGameStory(desk, { homeTeam, awayTeam, gameDa
   const meetings = awayGames.filter((x) => x.opp === home);
   const meetingIds = new Set(meetings.map((x) => x.g.game_id));
   // One memory for the whole read: an opponent's earlier games are listed once (round 17).
-  const read = { shown: new Map() };
+  const read = { shown: new Map(), rows: new Map() };
+  // Each full row's place in the read, so an opponent's game that is itself a full row of tonight's teams points to it
+  // instead of printing again (round 18: the Texans' Wk 3 at the Colts, a full Colts row, reprinted under the Jaguars').
+  {
+    const nick = (t) => t.split(' ').pop();
+    let pos = 0;
+    for (const x of meetings) read.rows.set(x.g.game_id, { pos: pos++, label: "this season's meetings" });
+    for (const [team, games] of [[awayTeam, awayGames], [homeTeam, homeGames]]) {
+      for (const x of games.slice().reverse().slice(0, NFL_WINDOW)) if (!meetingIds.has(x.g.game_id)) read.rows.set(x.g.game_id, { pos: pos++, label: `the ${nick(team)}' Wk ${x.week} row` });
+    }
+  }
   const teamPart = (team, code, games) => {
     if (!games.length) return `${team.toUpperCase()}: no games yet this season`;
     const w = games.filter((x) => x.won).length, t = games.filter((x) => x.tied).length;
