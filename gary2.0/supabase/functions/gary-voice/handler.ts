@@ -13,7 +13,7 @@
 // gary_voice_config (on/off, per-person and per-day dollar caps) before any model is called.
 import { ask, boardFor, costUSD, type Turn } from "./brain.ts";
 import { makeDb, readScoreboard, slateDate } from "./notebook.ts";
-import { SpeechChunker } from "./speech.ts";
+import { accentFor, SpeechChunker } from "./speech.ts";
 import { ElevenVoice, GaryVoice, type Speaker, VOICE_SAMPLE_RATE, type VoiceOptions } from "./voice.ts";
 
 export interface VoiceConfig {
@@ -122,6 +122,7 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         const rate = body.hq === true ? 48000 : VOICE_SAMPLE_RATE;
         const options: VoiceOptions = {
           apiKey, voiceId, rate,
+          accent: eleven ? accentFor(voiceId) : null,
           model: eleven ? admitted.eleven_model || "eleven_v4_turbo" : admitted.tts_model || "sonic-3.6",
           speed: Number(admitted.speed) || 1,
           events: {

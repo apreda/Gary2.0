@@ -21,6 +21,8 @@ export interface VoiceOptions {
   socket?: (url: string) => WebSocket;
   /** PCM sample rate: 48 kHz for apps that play it, 24 kHz for builds that only know 24. */
   rate?: number;
+  /** Respells his words the way he says them, one word for one word (the voice reads spelling). */
+  accent?: ((text: string) => string) | null;
 }
 
 /** What the handler needs from a voice, whichever company speaks it. */
@@ -221,7 +223,8 @@ export class ElevenVoice implements Speaker {
     if (!text.trim() || this.closed) return;
     await this.ready;
     this.chars += text.length;
-    this.send({ inputs: [{ text, voice_id: this.opts.voiceId, new_turn: false }] });
+    const said = this.opts.accent ? this.opts.accent(text) : text;
+    this.send({ inputs: [{ text: said, voice_id: this.opts.voiceId, new_turn: false }] });
   }
 
   async pause() {

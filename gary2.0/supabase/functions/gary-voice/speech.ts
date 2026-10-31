@@ -64,3 +64,39 @@ function cutPoint(s: string, first: boolean): number {
   }
   return -1;
 }
+
+// His accent, for the voice only (the captions keep normal spelling). The voice reads spelling, so the
+// giveaway words are respelled the way he says them. Every swap is one word for one word, because the
+// captions follow the voice by counting words.
+const JERSEY: Record<string, string> = {
+  the: "da", that: "dat", this: "dis", these: "dese", those: "dose", them: "dem", they: "dey", their: "deir",
+  there: "dere", then: "den", with: "wit", you: "ya", talk: "tawk", talks: "tawks", talked: "tawked",
+  coffee: "cawfee", dog: "dawg", dogs: "dawgs",
+  nothing: "nothin'", something: "somethin'", anything: "anythin'", everything: "everythin'",
+};
+const ING_NOUNS = new Set(["thing", "bring", "sting", "swing", "sling", "fling", "cling", "wring", "string", "spring", "ceiling", "sterling", "offspring"]);
+
+function matchCase(from: string, to: string): string {
+  if (from.length > 1 && from === from.toUpperCase()) return to.toUpperCase();
+  return from[0] === from[0].toUpperCase() ? to[0].toUpperCase() + to.slice(1) : to;
+}
+
+/** North Jersey: d for th, wit, ya, tawk, cawfee, and -in' for -ing. */
+export function jersey(text: string): string {
+  return text.replace(/[A-Za-z]+(?:'[A-Za-z]+)?/g, (word) => {
+    const [base, tail] = word.includes("'") ? [word.slice(0, word.indexOf("'")), word.slice(word.indexOf("'"))] : [word, ""];
+    const lower = base.toLowerCase();
+    if (tail && lower === "you") return word; // you're, you'll: "ya're" is not a word
+    const swap = JERSEY[lower];
+    if (swap) return matchCase(base, swap) + tail;
+    // Lowercase only: a capital is a name (Manning, Reading), not a verb.
+    if (!tail && /^[a-z]{2,}ing$/.test(base) && !ING_NOUNS.has(base)) return base.slice(0, -1) + "'";
+    return word;
+  });
+}
+
+/** The accent each voice was picked for, by ElevenLabs voice id. */
+const ACCENTS: Record<string, (s: string) => string> = {
+  VYTY6BZy2r6t2zp1udts: jersey, // #20, North Jersey
+};
+export const accentFor = (voiceId: string) => ACCENTS[voiceId] ?? null;
