@@ -10,6 +10,7 @@ import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
 import { weeklyRows as officialWeeklyRows, withOfficialReport, snapCounts, aliasByRoster } from '../../sports/nfl/nflPlayerContext.js';
 import { getPracticeReport, nflverseCode, loadNflverseFile } from '../../providers/nflverseService.js';
 import { getNflSchedule, scheduleRowFor } from '../../sports/nfl/nflSchedule.js';
+import { finalReportIn } from '../../sports/nfl/nflAvailability.js';
 import { overPrice, mainLineBoth, fmtOdds, etClock, etDate, normName, clubShort, isNflSkillRow } from './dartsCommon.js';
 
 const START_BUFFER_MS = 10 * 60 * 1000;
@@ -130,7 +131,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
   const reports = schedule && !schedule.unavailable ? await Promise.all(games.flatMap((g) => {
     const week = Number(scheduleRowFor(schedule, season, nflverseCode(g.home_team.full_name), nflverseCode(g.visitor_team.full_name), g.date)?.week) || null;
     return week ? [g.home_team.full_name, g.visitor_team.full_name].map((team) => getPracticeReport(team, season, week)
-      .then((report) => ({ team, report: report?.unavailable ? null : report })).catch(() => ({ team, report: null }))) : [];
+      .then((report) => ({ team, report: report?.unavailable ? null : report, final: report?.unavailable ? null : finalReportIn(report, g.date) })).catch(() => ({ team, report: null }))) : [];
   })) : [];
   const injuries = withOfficialReport(feed, reports);
   const injuryById = new Map(injuries.filter((i) => i?.player?.id != null).map((i) => [String(i.player.id), String(i.status || '')]));

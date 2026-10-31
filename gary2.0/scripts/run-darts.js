@@ -35,7 +35,7 @@ const { getBatterXStats, getBatterStatcastProfiles } = await import('../src/serv
 const { refreshNflRedZone, loadNflRedZone } = await import('../src/services/sports/nfl/nflRedZone.js');
 const { gameDays, snapCounts, defenseByPosition, weeklyRows: nflWeeklyRows, teamTargetTotals, aliasByRoster, withOfficialReport, weekPassers, rosterWeekWords, qbPressure, regularsOut, receiverDrops } = await import('../src/services/sports/nfl/nflPlayerContext.js');
 const { loadNflverseFile, getPracticeReport, nflverseCode } = await import('../src/services/providers/nflverseService.js');
-const { finalReportNotDue } = await import('../src/services/sports/nfl/nflAvailability.js');
+const { finalReportNotDue, finalReportIn } = await import('../src/services/sports/nfl/nflAvailability.js');
 const { defensesFaced, etDate: nflEtDate } = await import('../src/services/sports/nfl/nflBettorData.js');
 const { stadiumWeatherLines } = await import('../src/services/gary/agentic/scoutReport/sports/nflSituation.js');
 const { getPlayLedger } = await import('../src/services/sports/nfl/nflPlayLedger.js');
@@ -188,7 +188,7 @@ async function throwLeague(league) {
         const week = Number(scheduleRowFor(schedule, board.season, nflverseCode(f.homeFull), nflverseCode(f.awayFull), f.commence)?.week) || null;
         const pending = finalReportNotDue(f.commence);
         return week ? [f.homeFull, f.awayFull].map((team) => getPracticeReport(team, board.season, week)
-          .then((report) => ({ team, report: report?.unavailable ? null : report, pending })).catch(() => ({ team, report: null, pending }))) : [];
+          .then((report) => ({ team, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, f.commence) })).catch(() => ({ team, report: null, pending }))) : [];
       })) : [];
       const injuries = withOfficialReport(feedInjuries, reports, roster && !roster.unavailable ? roster.rows : null);
       const priorByName = new Map(), defPrev = null, history = null;

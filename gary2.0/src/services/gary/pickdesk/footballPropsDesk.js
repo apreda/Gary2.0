@@ -54,7 +54,7 @@ import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
 import { buildNflReadStory, nflNewsFor, NEWS_NOT_ON_FILE as NFL_NEWS_NOT_ON_FILE } from '../agentic/orchestrator/nflRead.js';
 import { etDate, defensesFaced } from '../../sports/nfl/nflBettorData.js';
-import { finalReportNotDue } from '../../sports/nfl/nflAvailability.js';
+import { finalReportNotDue, finalReportIn } from '../../sports/nfl/nflAvailability.js';
 import { getNflSchedule, scheduleRowFor } from '../../sports/nfl/nflSchedule.js';
 
 const norm = (s) => String(s || '').toLowerCase().trim();
@@ -250,7 +250,7 @@ async function loadNflSheetContext({ season, game, players }) {
   const week = schedule && !schedule.unavailable ? Number(scheduleRowFor(schedule, season, nflverseCode(game.home_team), nflverseCode(game.away_team), game.commence_time)?.week) || null : null;
   const pending = finalReportNotDue(game.commence_time);
   const reports = week ? await Promise.all([game.home_team, game.away_team].map((team) => getPracticeReport(team, season, week)
-    .then((report) => ({ team, report: report?.unavailable ? null : report, pending })).catch(() => ({ team, report: null, pending })))) : [];
+    .then((report) => ({ team, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, game.commence_time) })).catch(() => ({ team, report: null, pending })))) : [];
   const reported = withOfficialReport(injuries, reports, roster && !roster.unavailable ? roster.rows : null);
   // Who each game's defense is this season, beside the player's games (Oct 26 2026); a schedule that did not load
   // leaves the rows as they were.
