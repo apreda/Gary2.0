@@ -93,6 +93,16 @@ describe('settleNba on CLE @ ATL', () => {
   });
 });
 
+describe('settleNba timing under a minute', () => {
+  it('times every hit in whole seconds when BDL sends a sub-minute clock as "58.4" (the app reads whole seconds)', () => {
+    const tenths = plays.map(p => (/^0:\d\d$/.test(p.clock) ? { ...p, clock: `${Number(p.clock.slice(2))}.4` } : p));
+    const out = settle(tenths);
+    expect(tenths.some(p => /^\d+\.4$/.test(p.clock))).toBe(true);
+    expect(out.hits.filter(h => !Number.isInteger(h.elapsed))).toEqual([]);
+    expect(Number.isInteger(out.elapsed_s)).toBe(true);
+  });
+});
+
 describe('settleNba situation line (the NFL card shows down and distance there)', () => {
   const ordered = [...plays].sort((a, b) => a.order - b.order);
   const live = { ...game, status_state: 'in' };

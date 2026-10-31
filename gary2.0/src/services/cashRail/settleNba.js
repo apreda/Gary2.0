@@ -34,7 +34,8 @@ const clockText = c => {
   const t = Math.floor(clockSecs(c));
   return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 };
-const elapsedOf = p => (p.period <= 4
+// Whole seconds: under a minute BDL's clock has tenths, and the app reads a hit's time as an integer.
+const elapsedOf = p => Math.floor(p.period <= 4
   ? (p.period - 1) * 720 + (720 - clockSecs(p.clock))
   : 2880 + (p.period - 5) * 300 + (300 - clockSecs(p.clock)));
 const periodName = n => (n <= 4 ? `Q${n}` : n === 5 ? 'OT' : `${n - 4}OT`);
