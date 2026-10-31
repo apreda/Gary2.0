@@ -12,14 +12,19 @@ import SwiftUI
 /// darts at his other hip, his picks at his shoe. A prompt that's new
 /// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
 struct HomeGaryOpening: View {
-    enum Door { case winners, darts, parlay, picks, talk }
+    enum Door { case winners, darts, parlay, picks }
 
     /// Gary's picks on today's slate, and the games on it (the board's own counts).
     var picks = 0
     var games = 0
     /// The question his ASK GARY label offers (founder, Oct 30 2026: "give the Gary on the home page of the
-    /// App a real voice people can ask questions to"); tapping it opens the talk room asking it. Nil, no label.
+    /// App a real voice people can ask questions to"). Tapping the label, he listens right here (HomeGaryTalk);
+    /// the question waits under LISTENING to tap instead. Nil, no label and no talking.
     var ask: String? = nil
+    /// Starts or ends talking from outside (the tour).
+    var talkCue: GaryTalkOpening? = nil
+    /// Told when talking starts and ends, so Home can bring all of him, captions and all, onto the screen.
+    var onTalk: (Bool) -> Void = { _ in }
     let onOpen: (Door) -> Void
 
     @Environment(\.readingPageActive) private var activePage
@@ -39,8 +44,12 @@ struct HomeGaryOpening: View {
     @State private var rightWidths: [String: CGFloat] = [:]
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
-    /// The talk room has been opened once: the ASK label stops wearing NEW.
+    /// He's been talked to once: the ASK label stops wearing NEW.
     @AppStorage("garyTalkSeen") private var talkSeen = false
+    /// Talking to him (HomeGaryTalk): the labels step back and the captions run under him.
+    @State private var talkOn = false
+    @StateObject private var talkHolder = GaryTalkHolder()
+    private var talk: GaryTalk { talkHolder.talk }
     #if DEBUG
     /// Tour verb `garymood GaryFire|GaryCooking|GaryBeer|GaryIceCold|GaryDoomsday|off` previews a mood (it tilts his clips).
     @AppStorage("garyMoodPreview") private var moodPreviewRaw = ""
@@ -68,18 +77,31 @@ struct HomeGaryOpening: View {
             let at = { (p: CGPoint) in CGPoint(x: gx + p.x * gw, y: Self.garyTop + p.y * gh) }
             let prompts = self.prompts
             ZStack(alignment: .topLeading) {
-                // The spotlight that lifts him off a black page, and the floor under him.
-                Ellipse()
-                    .fill(RadialGradient(colors: [GaryColors.lightGold.opacity(0.2), GaryColors.gold.opacity(0.07), .clear],
-                                         center: .center, startRadius: 0, endRadius: 170))
-                    .frame(width: 310, height: 350)
-                    .position(x: center, y: Self.garyTop + gh * 0.5)
+                // The spotlight that lifts him off a black page (swelling with the voices while you talk to him),
+                // and the floor under him.
+                Group {
+                    if talkOn {
+                        GaryTalkLight(talk: talk, radius: 170)
+                    } else {
+                        Ellipse()
+                            .fill(RadialGradient(colors: [GaryColors.lightGold.opacity(0.2), GaryColors.gold.opacity(0.07), .clear],
+                                                 center: .center, startRadius: 0, endRadius: 170))
+                    }
+                }
+                .frame(width: 310, height: 350)
+                .position(x: center, y: Self.garyTop + gh * 0.5)
                 Ellipse()
                     .fill(RadialGradient(colors: [.black.opacity(0.6), .clear], center: .center, startRadius: 0, endRadius: 85))
                     .frame(width: 170, height: 14)
                     .position(x: center, y: Self.garyTop + gh + 2)
-                Button { onOpen(.winners) } label: {
-                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live) { up in
+                if talkOn {
+                    GaryListeningRings(talk: talk)
+                        .frame(width: 210, height: 22)
+                        .position(x: center, y: Self.garyTop + gh + 2)
+                }
+                // Tapped, he opens Winners; while you talk to him, he listens, or stops to let you cut in.
+                Button { talkOn ? talk.micTapped() : onOpen(.winners) } label: {
+                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live, lives: !talkOn) { up in
                         withAnimation(.easeInOut(duration: 0.3)) { performing = up }
                     }
                         .frame(width: gw + 60, height: gh + 30)
@@ -91,65 +113,88 @@ struct HomeGaryOpening: View {
                 .allowsHitTesting(!performing)
                 .position(x: center, y: Self.garyTop - 30 + (gh + 30) / 2)
                 .accessibilityLabel(garyAccessibility)
-                .accessibilityHint("Opens Winners")
+                .accessibilityHint(talkOn ? "Talk to Gary, or cut him off" : "Opens Winners")
 
                 Group {
-                    leaders(width: w, at: at, prompts: prompts)
-                    ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
-                        PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
-                    }
-                    if ask != nil && !talkSeen {
-                        PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.jaw))
+                    leaders(width: w, at: at, prompts: prompts, talking: talkOn)
+                    if !talkOn {
+                        ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
+                            PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
+                        }
+                        if ask != nil && !talkSeen {
+                            PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.jaw))
+                        }
                     }
                 }
                 .opacity(performing ? 0 : 1)
 
-                if let d = lastNight {
-                    tap(.winners, key: nil) { lastNightLabel(d) }
-                        .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
-                }
                 if let ask {
-                    Button {
-                        talkSeen = true
-                        onOpen(.talk)
-                    } label: { askLabel(ask).contentShape(Rectangle()) }
-                        .buttonStyle(.plain)
-                        .frame(width: 100, alignment: .leading)
-                        .offset(x: 0, y: Self.askY)
-                        .accessibilityLabel("Ask Gary: \(ask)")
-                }
-                tap(.winners, key: nil) { tonightLabel }
-                    .fixedSize()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["tonight"] = $0 }
-                    .offset(x: rightX("tonight", w, 100), y: 226)
-                if run.count > 0 {
-                    tap(.winners, key: nil) { streakLabel }
-                        .fixedSize()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["streak"] = $0 }
-                        .offset(x: rightX("streak", w, 94), y: 316)
-                }
-                ForEach(prompts, id: \.spot) { p in
-                    let place = Self.place(p.spot, width: w)
-                    if p.spot == .shoulder {
-                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                            .fixedSize()
-                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["shoulder"] = $0 }
-                            .offset(x: rightX("shoulder", w, place.width), y: place.y)
+                    if talkOn {
+                        GaryTalkStateLabel(talk: talk, suggestion: ask) { q in talk.ask(q, spoken: true) }
+                            .frame(width: 104, alignment: .leading)
+                            .offset(x: 0, y: Self.askY)
+                            .transition(.opacity)
                     } else {
-                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                            .frame(width: place.width, alignment: .leading)
-                            .offset(x: place.x, y: place.y)
+                        Button { startTalk(first: nil) } label: { askLabel(ask).contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                            .frame(width: 100, alignment: .leading)
+                            .offset(x: 0, y: Self.askY)
+                            .accessibilityLabel("Ask Gary")
+                            .accessibilityHint("He listens. Or say: \(ask)")
+                            .transition(.opacity)
                     }
                 }
-                Text("FIG. 1 — GARY")
-                    .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
-                    .foregroundStyle(CR.mute2)
-                    .offset(x: 0, y: Self.height - 20)
-                    .accessibilityHidden(true)
+                Group {
+                    if let d = lastNight {
+                        tap(.winners, key: nil) { lastNightLabel(d) }
+                            .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
+                    }
+                    tap(.winners, key: nil) { tonightLabel }
+                        .fixedSize()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["tonight"] = $0 }
+                        .offset(x: rightX("tonight", w, 100), y: 226)
+                    if run.count > 0 {
+                        tap(.winners, key: nil) { streakLabel }
+                            .fixedSize()
+                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["streak"] = $0 }
+                            .offset(x: rightX("streak", w, 94), y: 316)
+                    }
+                    ForEach(prompts, id: \.spot) { p in
+                        let place = Self.place(p.spot, width: w)
+                        if p.spot == .shoulder {
+                            tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                                .fixedSize()
+                                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["shoulder"] = $0 }
+                                .offset(x: rightX("shoulder", w, place.width), y: place.y)
+                        } else {
+                            tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                                .frame(width: place.width, alignment: .leading)
+                                .offset(x: place.x, y: place.y)
+                        }
+                    }
+                    Text("FIG. 1 — GARY")
+                        .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
+                        .foregroundStyle(CR.mute2)
+                        .offset(x: 0, y: Self.height - 20)
+                        .accessibilityHidden(true)
+                }
+                .opacity(talkOn ? 0 : 1)
+                .allowsHitTesting(!talkOn)
+                .accessibilityHidden(talkOn)
+
+                if talkOn {
+                    talking(width: w)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.45), value: talkOn)
         }
         .frame(height: Self.height)
         .pageGutter()
+        .onChange(of: talkCue) { cue in
+            guard let cue, ask != nil else { return }
+            if cue.close { endTalk() } else { startTalk(first: cue.first) }
+        }
         .task(id: live) {
             if tonight == nil {
                 tonight = SupabaseAPI.cachedLabBoard(date: slate, account: AuthManager.shared.currentUser?.id)
@@ -160,9 +205,53 @@ struct HomeGaryOpening: View {
                 do { try await Task.sleep(for: .seconds(90)) } catch { break }
             }
         }
-        // Leaving Home is having looked: what was new on it isn't any more.
+        // Leaving Home is having looked: what was new on it isn't any more. And he stops talking.
         .onChange(of: live) { isLive in
-            if !isLive { markSeen(prompts.compactMap(\.key)) }
+            if !isLive { markSeen(prompts.compactMap(\.key)); endTalk() }
+        }
+    }
+
+    // MARK: - Talking to him
+
+    /// He listens (or answers `first` straight away) right where he stands.
+    private func startTalk(first: String?) {
+        talkSeen = true
+        if !talkOn {
+            talkOn = true
+            talk.open()
+            talk.seed(ask)
+            onTalk(true)
+        }
+        if let first { talk.ask(first) } else if talk.phase == .idle { talk.startListening() }
+    }
+
+    private func endTalk() {
+        guard talkOn else { return }
+        talk.close()
+        talkOn = false
+        onTalk(false)
+    }
+
+    /// The captions under him over a fade to the page, the x that ends it, and the watch that ends it once
+    /// he's been quiet a while.
+    private func talking(width w: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            GaryTalkScrim(talk: talk)
+                .frame(width: w + 2 * GaryLayout.gutter, height: Self.height - 214)
+                .offset(x: -GaryLayout.gutter, y: 214)
+            GaryTalkCaptions(talk: talk)
+                .frame(width: w, height: Self.height - 262, alignment: .bottomLeading)
+                .offset(y: 254)
+            Button(action: endTalk) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(GaryColors.warmWhite.opacity(0.75))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Stop talking to Gary")
+            .offset(x: w - 32, y: 4)
+            GaryTalkQuiet(talk: talk, after: 6, onQuiet: endTalk)
         }
     }
 
@@ -193,13 +282,17 @@ struct HomeGaryOpening: View {
     }
 
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
-    private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt]) -> some View {
+    /// The diagram's lines; while you talk to him, only ASK's, at his mouth.
+    private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt], talking: Bool = false) -> some View {
         let tx = rightX("tonight", w, 100), sx = rightX("streak", w, 94)
-        var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: tx - 6, y: 232), CGPoint(x: tx - 20, y: 232), at(GaryIdleFigure.hip))]
-        if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
-        if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
+        var lines: [(CGPoint, CGPoint, CGPoint)] = []
+        if !talking {
+            lines.append((CGPoint(x: tx - 6, y: 232), CGPoint(x: tx - 20, y: 232), at(GaryIdleFigure.hip)))
+            if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
+            if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
+        }
         if ask != nil { lines.append((CGPoint(x: 84, y: Self.askY + 30), CGPoint(x: 100, y: Self.askY + 30), at(GaryIdleFigure.jaw))) }
-        for p in prompts {
+        for p in talking ? [] : prompts {
             let to = at(GaryIdleFigure.anchor(p.spot))
             switch p.spot {
             case .shoulder:

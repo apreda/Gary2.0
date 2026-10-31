@@ -121,8 +121,8 @@ struct HomeView: View {
     // Current board and betting-news shelf.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var todayPicks: [GaryPick] = []
-    /// The talk room (Gary's voice), carrying the question it opens on.
-    @State private var talkRoom: GaryTalkOpening?
+    /// Starts or ends talking to Gary on Home from outside his figure (the tour).
+    @State private var talkCue: GaryTalkOpening?
     @State private var talkAvailable = true
     /// Game ids on today's Winners board, so the board can mark Gary's Winners
     /// picks in place. Empty while a paid board is locked or not loaded.
@@ -333,15 +333,12 @@ struct HomeView: View {
             }
         }
         .popupOverlay(item: $openGame) { game in GameCardPopup(game: game) { openGame = nil } }
-        .fullScreenCover(item: $talkRoom) { room in
-            GaryTalkRoom(first: room.first) { talkRoom = nil }
-        }
         .task { talkAvailable = await GaryTalk.available() }
         .onGaryTour { verb, arg in
-            // `talk Why the Hornets?` opens the talk room asking it; `talk` opens it on the questions;
-            // `talk close` shuts it. `voiceurl http://127.0.0.1:8787` points it at a local server (`off` clears).
+            // `talk Why the Hornets?` asks Gary on Home; `talk` has him listen; `talk close` ends it.
+            // `voiceurl http://127.0.0.1:8787` points him at a local server (`off` clears).
             if verb == "talk" {
-                talkRoom = arg == "close" ? nil : GaryTalkOpening(first: arg.isEmpty ? nil : arg)
+                talkCue = arg == "close" ? GaryTalkOpening(close: true) : GaryTalkOpening(first: arg.isEmpty ? nil : arg)
             }
             #if DEBUG
             if verb == "voiceurl" { UserDefaults.standard.set(arg == "off" ? nil : arg, forKey: "garyVoiceURL") }
@@ -1048,13 +1045,22 @@ struct HomeView: View {
         // Winners and his run of nights, plus three prompts that change with the day (the parlay of the day,
         // the darts, his picks), in place of the Bento ("it's not an analytics dashboard"). Each finished
         // game's story opens from its own row on the board (HomeBoardStory).
-        HomeGaryOpening(picks: todayPicks.filter { !$0.isScratched }.count,
-                        games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count,
-                        ask: talkAvailable ? talkQuestion : nil) { door in
-            if door == .talk { talkRoom = GaryTalkOpening(first: talkQuestion); return }
-            if door == .parlay { UserDefaults.standard.set(true, forKey: DartsView.openParlayKey) }
-            let tab: Int = { switch door { case .winners, .talk: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
+        // Talking to him brings all of him on screen, the captions under him included (he sits under the
+        // scoreboard, so they'd start below the fold).
+        ScrollViewReader { proxy in
+            HomeGaryOpening(picks: todayPicks.filter { !$0.isScratched }.count,
+                            games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count,
+                            ask: talkAvailable ? talkQuestion : nil,
+                            talkCue: talkCue,
+                            onTalk: { on in
+                                guard on else { return }
+                                withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo("garyOpening", anchor: .center) }
+                            }) { door in
+                if door == .parlay { UserDefaults.standard.set(true, forKey: DartsView.openParlayKey) }
+                let tab: Int = { switch door { case .winners: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
+            }
+            .id("garyOpening")
         }
         .allowsHitTesting(!boardLifted)
         .opacity(animateIn ? 1 : 0)
