@@ -29,11 +29,30 @@ struct CashRailHit: Codable, Equatable, Identifiable {
     var id: String { key }
 
     /// One rung is already said by the market line; the strip starts at two.
-    var showsStrip: Bool { (rungs?.count ?? 0) >= 2 }
+    var showsStrip: Bool { climb.count >= 2 }
+
+    /// The ladder's rungs with each mark once: an over and a milestone at the same mark are the same bet
+    /// ("O 0.5" is "1+", "O 2.5" is "3+"), kept as the higher of the two, the one the board priced the hit at
+    /// (founder, Oct 30 2026, an NBA card next to the NFL's: "something is off").
+    var climb: [CashRailRung] {
+        var out: [(mark: Double, rung: CashRailRung)] = []
+        for r in rungs ?? [] {
+            let mark = Self.mark(r.label)
+            if let m = mark, let last = out.last, last.mark == m { out[out.count - 1] = (m, r) } else { out.append((mark ?? .nan, r)) }
+        }
+        return out.map(\.rung)
+    }
+
+    /// The count a rung needs: "1+" → 1, "O 0.5" → 1, "O 58.5" → 59.
+    private static func mark(_ label: String) -> Double? {
+        if label.hasSuffix("+"), let n = Double(label.dropLast()) { return n }
+        if label.hasPrefix("O "), let n = Double(label.dropFirst(2)) { return n.rounded(.up) }
+        return nil
+    }
 
     /// "Rec yards 70+" / "Rec yards over 58.5": a ladder reads as its top cashed rung.
     var displayMarket: String {
-        guard let top = rungs?.last else { return market }
+        guard let top = climb.last else { return market }
         return top.label.hasPrefix("O ") ? "\(market) over \(top.label.dropFirst(2))" : "\(market) \(top.label)"
     }
 }

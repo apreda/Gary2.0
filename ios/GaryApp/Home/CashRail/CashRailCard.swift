@@ -277,8 +277,8 @@ struct CashRailHeroView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.top, 11)
-            if hit.showsStrip, let rungs = hit.rungs {
-                CashRailRungStrip(rungs: rungs, big: true).padding(.top, 13)
+            if hit.showsStrip {
+                CashRailRungStrip(rungs: hit.climb, big: true).padding(.top, 13)
             }
         }
         .id(hit.key)
@@ -326,8 +326,8 @@ struct CashRailRow: View {
                     .fitsOneLine()
                     .frame(width: 58, alignment: .trailing)
             }
-            if hit.showsStrip, let rungs = hit.rungs {
-                CashRailRungStrip(rungs: rungs, big: false).padding(.leading, 64)
+            if hit.showsStrip {
+                CashRailRungStrip(rungs: hit.climb, big: false).padding(.leading, 64)
             }
         }
         .padding(.vertical, 9)

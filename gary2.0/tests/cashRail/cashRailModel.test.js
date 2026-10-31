@@ -64,6 +64,17 @@ out([b.hits[2].showsStrip, one.showsStrip, b.hits[0].showsStrip])`);
     expect(r).toEqual([true, false, false]);
   });
 
+  it('an over and a milestone at the same mark are one rung (O 0.5 is 1+), so a ladder with nothing to climb draws no strip', () => {
+    const r = swiftJSON(`
+func h(_ rungs: [(String, Int)]) -> CashRailHit {
+  CashRailHit(key: "k", who: "Maxey", market: "Blocks", price: rungs.last!.1, rungs: rungs.map { CashRailRung(label: $0.0, price: $0.1) }, elapsed: 60, when: "Q1 7:19", play: nil, gary: nil)
+}
+let blocks = h([("O 0.5", 127), ("1+", 128)])
+let catches = h([("O 2.5", -111), ("3+", -118), ("4+", 194), ("5+", 400)])
+out([blocks.climb.map(\\.label), [blocks.showsStrip], catches.climb.map(\\.label), catches.climb.map(\\.price), [blocks.displayMarket]] as [Any])`);
+    expect(r).toEqual([['1+'], [false], ['3+', '4+', '5+'], [-118, 194, 400], ['Blocks 1+']]);
+  });
+
   it('names a ladder by its top cashed rung', () => {
     const r = swiftJSON(`${board}
 let over = CashRailHit(key: "m", who: "McMillan", market: "Rec yards", price: -115, rungs: [CashRailRung(label: "O 58.5", price: -115)], elapsed: 900, when: "Q1 0:00", play: nil, gary: nil)
