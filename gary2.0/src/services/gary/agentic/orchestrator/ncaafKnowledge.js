@@ -63,6 +63,9 @@ Today is ${today}. The scout report is current on rosters, injuries and every nu
 // model can't be asked a question and not want to answer it"): one question, as MLB's playoff pick asks it ("Who do you
 // think wins tonight, and why?"). "What actually matters in this game, and what doesn't" had him name things to dismiss
 // (the Oct 24 college reads' "that's noise"), and "the better one to be on" was a frame, not the outcome.
+// Oct 31 2026 (founder: "Gary shouldn't be biased towards either side ... the whole point of Gary is to see which side
+// of the spread he is picking and thinks will hit"): "Who do you think covers this spread" became "Which side of this spread
+// would you bet": both tickets at the same number, his job to pick one. "Covers" is said of the favorite.
 export const ncaafGameMessage = (story, news) => `## THE GAME
 
 ${story}
@@ -71,7 +74,7 @@ ${story}
 
 ${news || 'Nothing beyond the scout report.'}
 
-Who do you think covers this spread, and why?`;
+Which side of this spread would you bet, and why?`;
 
 // The card: his answer written for fans, with the ticket at THE LINE's exact price.
 export const ncaafCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:

@@ -23,16 +23,18 @@ export function lineOf(desk) {
     .filter((l) => /^(?:Spread|Moneyline|Tickets on this game|Total|Over\/Under):/.test(l)).join('\n');
 }
 
-// Who's favored, in words: "The Chicago Bears are favored by 1.5 points."
+// The spread, both teams at their number, in THE LINE's order: "Spread: Nevada Wolf Pack +22.5, UCLA Bruins -22.5".
+// Oct 31 2026 (founder: "why aren't we just simply telling Gary the spread of the game ... we need to remove all steering
+// and bias framing"): it was "The UCLA Bruins are favored by 22.5 points.", which named one team and put the number on
+// it alone (the Oct 31 college slate read as "can UCLA win by 23?", 21 underdogs of 29). The name stays for its callers.
 export function spreadInWords(line = '') {
   const m = String(line).match(/^Spread: (.+?) ([+-]?\d+(?:\.\d+)?|PK) \([^)]*\) \| (.+?) ([+-]?\d+(?:\.\d+)?|PK) \(/m);
   if (!m) return '';
-  const a = { team: m[1].trim(), pts: m[2] === 'PK' ? 0 : Number(m[2]) };
-  const b = { team: m[3].trim(), pts: m[4] === 'PK' ? 0 : Number(m[4]) };
-  if (!a.pts && !b.pts) return 'The spread is a pick\'em: neither team is favored.';
-  const fav = a.pts < b.pts ? a : b;
-  const pts = Math.abs(fav.pts);
-  return `The ${fav.team} are favored by ${pts} point${pts === 1 ? '' : 's'}.`;
+  const side = (team, pts) => {
+    const n = pts === 'PK' ? 0 : Number(pts);
+    return `${team.trim()} ${n === 0 ? 'PK' : n > 0 ? `+${n}` : `${n}`}`;
+  };
+  return `Spread: ${side(m[1], m[2])}, ${side(m[3], m[4])}`;
 }
 
 // The desk's articles: { heading, title, published, body }, with "appears above" references resolved by title.
