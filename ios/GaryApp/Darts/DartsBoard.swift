@@ -797,14 +797,13 @@ extension View {
 
 // MARK: - The dart wheel
 
-/// The darts on a wheel (founder, Oct 30 2026: "make it scrollable"; Oct 31: "do rank the wall and still let it
-/// rotate or move like it does now, just with the design of 4", and 4.5 once the games are in): the board hangs
-/// on the left wall with Gary's darts in it by his order, his #1 in the bull, and the darts' rows turn on a wheel
-/// at its right, every row whole, as on the wall in mock 4. The board shows the category of the row in the
-/// middle. Every category follows the last in one endless loop, so a hard flick spins through all of them and
-/// the tab above follows the wheel; a slow drag moves it a row at a time. A row tapped opens its player. Once
-/// a dart is graded its row shows a check or a cross and the player's final number, a miss dims, and a hit's
-/// dart wears a green ring (mock 4.5).
+/// The darts on the wall, as in mock 4 (founder, Oct 31 2026: "like 4 with the 1 2 3 4 5, not the focus on the
+/// middle or the curve of the wheel rotation"): the board hangs on the left wall with a category's darts in it by
+/// Gary's order, his #1 in the bull, and that category's rows run 1 to 5 down its right. The categories turn a
+/// page at a time: a swipe brings the next one in whole, a hard flick goes through several, every category
+/// follows the last in one endless loop, and the tab above follows. A row tapped opens its player. Once a dart is
+/// graded its row shows a check or a cross and the player's final number, a miss dims, and a hit's dart wears a
+/// green ring (mock 4.5).
 struct DartWheel: View {
     struct Item {
         let kind: String
@@ -819,10 +818,10 @@ struct DartWheel: View {
     let onPlayer: (DartRow) -> Void
     let onTeam: (_ name: String, _ league: String) -> Void
 
-    /// The wheel's place, read by the rows every frame (held in @State so the
+    /// The pages' place, read by the rows every frame (held in @State so the
     /// rest of the page does not redraw while it turns).
     @State private var wheel = WheelPosition()
-    /// The row in the middle: an index on the endless wheel, not into `items`.
+    /// The category showing: a page on the endless loop, not into `pages`.
     @State private var selected: Int
     @State private var jump = WheelJump(index: 0, nonce: 0, animated: false)
     @State private var teamPick: DartRow?
@@ -832,6 +831,10 @@ struct DartWheel: View {
     private let tick = UISelectionFeedbackGenerator()
 
     static let rowHeight: CGFloat = 72
+    static let height: CGFloat = 406
+
+    /// The categories in order, each its darts by Gary's rank.
+    private let pages: [[Item]]
 
     init(items: [Item], kind: Binding<String>, throwOnce: String? = nil, activePage: Bool = true,
          onPlayer: @escaping (DartRow) -> Void, onTeam: @escaping (_ name: String, _ league: String) -> Void) {
@@ -841,7 +844,12 @@ struct DartWheel: View {
         self.activePage = activePage
         self.onPlayer = onPlayer
         self.onTeam = onTeam
-        let start = items.firstIndex { $0.kind == kind.wrappedValue && $0.rank == 1 } ?? items.firstIndex { $0.kind == kind.wrappedValue } ?? 0
+        var pages: [[Item]] = []
+        for it in items {
+            if pages.last?.first?.kind == it.kind { pages[pages.count - 1].append(it) } else { pages.append([it]) }
+        }
+        self.pages = pages
+        let start = pages.firstIndex { $0.first?.kind == kind.wrappedValue } ?? 0
         let w = WheelPosition(); w.pos = Double(start)
         _wheel = State(initialValue: w)
         _selected = State(initialValue: start)
@@ -852,9 +860,12 @@ struct DartWheel: View {
                         ? Set(items.filter { $0.kind == first && !$0.dart.isScratched }.map(\.dart.id)) : [])
     }
 
-    private var count: Int { items.count }
-    private func item(_ i: Int) -> Item { items[((i % count) + count) % count] }
-    private var current: Item { item(selected) }
+    private var count: Int { max(pages.count, 1) }
+    private func page(_ i: Int) -> [Item] { pages.isEmpty ? [] : pages[((i % count) + count) % count] }
+    private var current: [Item] { page(selected) }
+    private var currentKind: String { current.first?.kind ?? kind }
+    /// The rows start here, so five sit in the middle of the wall.
+    private func top(_ h: CGFloat) -> CGFloat { (h - 5 * Self.rowHeight) / 2 }
 
     var body: some View {
         GeometryReader { g in
@@ -882,17 +893,13 @@ struct DartWheel: View {
                 darts(cx: cx, cy: cy, r: r, k: k)
                     .accessibilityHidden(true)
 
-                WheelRows(wheel: wheel, items: items, rowHeight: Self.rowHeight, height: h, width: colW)
+                WheelPages(wheel: wheel, pages: pages, rowHeight: Self.rowHeight, top: top(h), height: h, width: colW)
                     .frame(width: colW, height: h)
-                    .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.14),
-                                                 .init(color: .black, location: 0.86), .init(color: .clear, location: 1)],
-                                         startPoint: .top, endPoint: .bottom))
                     .offset(x: colX)
                     .allowsHitTesting(false)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(words(current))
-                    .accessibilityHint(DartCategory.title(current.dart.league, current.kind))
-                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(current.map(words).joined(separator: "; "))
+                    .accessibilityHint(DartCategory.title(current.first?.dart.league ?? "", currentKind))
                     .accessibilityAdjustableAction { dir in
                         switch dir {
                         case .increment: go(to: selected + 1)
@@ -900,23 +907,22 @@ struct DartWheel: View {
                         default: break
                         }
                     }
-                    .accessibilityAction { open(current.dart) }
 
-                // The wheel's hand: a scroll view with nothing in it, so a flick
+                // The pages' hand: a scroll view with nothing in it, so a flick
                 // carries on and slows the way every list on the phone does.
-                DartWheelInput(rowHeight: Self.rowHeight, jump: jump,
+                DartWheelInput(unit: h, jump: jump,
                                onPos: { p in turned(to: p) },
-                               onTap: { y in tapped(y: y, height: h) })
+                               onTap: { y in tapped(y: y, top: top(h)) })
                     .frame(width: colW + GaryLayout.gutter, height: h)
                     .offset(x: colX)
                     .accessibilityHidden(true)
             }
         }
-        .frame(height: 406)
+        .frame(height: Self.height)
         .clipped()
         .onChange(of: kind) { newKind in
-            // A tab tap turns the wheel to that category's #1.
-            guard current.kind != newKind, let start = items.firstIndex(where: { $0.kind == newKind }) else { return }
+            // A tab tap turns to that category.
+            guard currentKind != newKind, let start = pages.firstIndex(where: { $0.first?.kind == newKind }) else { return }
             let cycle = selected - (((selected % count) + count) % count)
             let target = [cycle - count + start, cycle + start, cycle + count + start].min { abs($0 - selected) < abs($1 - selected) } ?? start
             go(to: target)
@@ -924,7 +930,7 @@ struct DartWheel: View {
         .task(id: activePage) { throwIfDue() }
         .onAppear {
             tick.prepare()
-            if current.kind != kind { kind = current.kind }
+            if currentKind != kind { kind = currentKind }
         }
         .confirmationDialog("", isPresented: Binding(get: { teamPick != nil }, set: { if !$0 { teamPick = nil } })) {
             if let d = teamPick, let teams = d.gameTeams {
@@ -942,8 +948,7 @@ struct DartWheel: View {
         guard r != selected else { return }
         selected = r
         tick.selectionChanged()
-        let k = item(r).kind
-        if k != kind { kind = k }
+        if let k = page(r).first?.kind, k != kind { kind = k }
     }
 
     private func go(to index: Int) {
@@ -951,9 +956,10 @@ struct DartWheel: View {
     }
 
     /// A tap on a row opens its player's card (either club's on a first-inning dart).
-    private func tapped(y: CGFloat, height: CGFloat) {
-        let off = Int(((y - height / 2) / Self.rowHeight).rounded())
-        open(item(selected + off).dart)
+    private func tapped(y: CGFloat, top: CGFloat) {
+        let row = Int(((y - top) / Self.rowHeight).rounded(.down))
+        guard row >= 0, row < current.count else { return }
+        open(current[row].dart)
     }
 
     private func open(_ d: DartRow) {
@@ -973,7 +979,7 @@ struct DartWheel: View {
     }
 
     @ViewBuilder private func darts(cx: CGFloat, cy: CGFloat, r: CGFloat, k: CGFloat) -> some View {
-        let cat = items.filter { $0.kind == current.kind }
+        let cat = current
         ZStack(alignment: .topLeading) {
             ForEach(Array(cat.enumerated()), id: \.element.dart.id) { n, it in
                 let s = Self.spot(n)
@@ -993,7 +999,7 @@ struct DartWheel: View {
                     .position(x: tip.x + g, y: tip.y - g)
             }
         }
-        .id(current.kind)
+        .id(currentKind)
         .transition(.opacity)
     }
 
@@ -1031,7 +1037,7 @@ extension DartCategory {
     }
 }
 
-/// The wheel's place: the row at the middle, with the fraction it has turned past it.
+/// The pages' place: the category showing, with the fraction it has turned past it.
 final class WheelPosition: ObservableObject {
     @Published var pos: Double = 0
 }
@@ -1064,29 +1070,34 @@ private struct WheelBadge: View {
     }
 }
 
-/// The rows on the wheel, redrawn as it turns: flat rows on the wall, a rule between each, fading out at the
-/// wheel's top and bottom.
-private struct WheelRows: View {
+/// A category's rows on the wall, 1 at the top, a rule between each (mock 4), redrawn as the pages turn: the
+/// next category's rows come in whole beneath them.
+private struct WheelPages: View {
     @ObservedObject var wheel: WheelPosition
-    let items: [DartWheel.Item]
+    let pages: [[DartWheel.Item]]
     let rowHeight: CGFloat
+    let top: CGFloat
     let height: CGFloat
     let width: CGFloat
 
     var body: some View {
         let p = wheel.pos
-        let reach = Double(height / 2 / rowHeight) + 1
-        let lo = Int((p - reach).rounded(.down)), hi = Int((p + reach).rounded(.up))
-        let n = items.count
+        let n = max(pages.count, 1)
         ZStack(alignment: .topLeading) {
-            ForEach(Array(lo...hi), id: \.self) { i in
-                let d = Double(i) - p
-                WheelRow(item: items[((i % n) + n) % n])
-                    .frame(width: width, height: rowHeight)
-                    .overlay(alignment: .top) {
-                        Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10)
+            if !pages.isEmpty {
+                ForEach(Array(Int(p.rounded(.down))...Int(p.rounded(.up))), id: \.self) { i in
+                    let rows = pages[((i % n) + n) % n]
+                    let shift = CGFloat(Double(i) - p) * height
+                    ForEach(Array(rows.enumerated()), id: \.offset) { j, item in
+                        WheelRow(item: item)
+                            .frame(width: width, height: rowHeight)
+                            .overlay(alignment: .top) {
+                                if j > 0 { Rectangle().fill(LabInk.hair).frame(height: 1).padding(.leading, 10) }
+                            }
+                            .position(x: width / 2, y: top + (CGFloat(j) + 0.5) * rowHeight + shift)
                     }
-                    .position(x: width / 2, y: height / 2 + CGFloat(d) * rowHeight)
+                    .opacity(1 - 0.5 * min(1, abs(Double(i) - p)))
+                }
             }
         }
         .frame(width: width, height: height, alignment: .topLeading)
@@ -1109,6 +1120,18 @@ private struct WheelRow: View {
     }
     /// The final number shows once graded (and only with a number to show).
     private var grade: Bool? { d.actualText == nil ? nil : d.graded }
+    /// "G. Antetokounmpo" (a first-inning dart's matchup stays whole).
+    private var shortName: String {
+        let parts = d.player.split(separator: " ")
+        guard !d.isGame, parts.count > 1, let first = parts.first?.first else { return d.player }
+        return "\(first). \(parts.dropFirst().joined(separator: " "))"
+    }
+
+    private func name(_ s: String) -> some View {
+        Text(s)
+            .font(GaryFonts.ui(14.5, .semibold))
+            .foregroundStyle(d.isScratched ? LabInk.dim : GaryColors.warmWhite.opacity(grade == false ? 0.62 : 1))
+    }
 
     var body: some View {
         let miss = grade == false
@@ -1119,10 +1142,11 @@ private struct WheelRow: View {
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: grade == nil ? 7 : 6) {
                 HStack(spacing: 6) {
-                    Text(d.player)
-                        .font(GaryFonts.ui(14.5, .semibold))
-                        .foregroundStyle(d.isScratched ? LabInk.dim : GaryColors.warmWhite.opacity(miss ? 0.62 : 1))
-                        .fitsOneLine()
+                    // A long name beside a final number goes to an initial rather than shrinking.
+                    ViewThatFits(in: .horizontal) {
+                        name(d.player).fixedSize()
+                        name(shortName).fitsOneLine()
+                    }
                     if let grade, let actual = d.actualText {
                         Spacer(minLength: 4)
                         GradeMark(hit: grade)
@@ -1178,7 +1202,8 @@ private struct GradeMark: View {
 /// phone's own flick and slow-down, stops a turn on a row, and hands the
 /// place back as rows from the start.
 private struct DartWheelInput: UIViewRepresentable {
-    let rowHeight: CGFloat
+    /// How far one step is: a page.
+    let unit: CGFloat
     let jump: WheelJump
     let onPos: (Double) -> Void
     let onTap: (CGFloat) -> Void
@@ -1201,7 +1226,7 @@ private struct DartWheelInput: UIViewRepresentable {
         v.delegate = context.coordinator
         // The first row is set once the wheel has its size; a place set
         // before that was moved by UIKit (it opened on Points #5, Oct 30).
-        let start = Self.base + CGFloat(jump.index) * rowHeight
+        let start = Self.base + CGFloat(jump.index) * unit
         v.onFirstLayout = { [weak v] in v?.setContentOffset(CGPoint(x: 0, y: start), animated: false) }
         context.coordinator.lastNonce = jump.nonce
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
@@ -1213,7 +1238,7 @@ private struct DartWheelInput: UIViewRepresentable {
         context.coordinator.parent = self
         guard jump.nonce != context.coordinator.lastNonce else { return }
         context.coordinator.lastNonce = jump.nonce
-        v.setContentOffset(CGPoint(x: 0, y: Self.base + CGFloat(jump.index) * rowHeight), animated: jump.animated)
+        v.setContentOffset(CGPoint(x: 0, y: Self.base + CGFloat(jump.index) * unit), animated: jump.animated)
     }
 
     final class WheelScrollView: UIScrollView {
@@ -1232,12 +1257,12 @@ private struct DartWheelInput: UIViewRepresentable {
         init(_ parent: DartWheelInput) { self.parent = parent }
 
         func scrollViewDidScroll(_ v: UIScrollView) {
-            parent.onPos(Double((v.contentOffset.y - DartWheelInput.base) / parent.rowHeight))
+            parent.onPos(Double((v.contentOffset.y - DartWheelInput.base) / parent.unit))
         }
 
-        /// However hard the flick, the wheel comes to rest on a row.
+        /// However hard the flick, it comes to rest on a page.
         func scrollViewWillEndDragging(_ v: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
-            let h = parent.rowHeight
+            let h = parent.unit
             let rows = ((targetContentOffset.pointee.y - DartWheelInput.base) / h).rounded()
             targetContentOffset.pointee.y = DartWheelInput.base + rows * h
         }
