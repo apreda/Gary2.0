@@ -149,6 +149,8 @@
 		C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4536063BFE66307137544F6 /* HomeSheetRowView.swift */; };
 		33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */; };
 		D4FC45AD5F44665F7C6DB30C /* HomeGaryOpening.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11361AC8006F914161B6944F /* HomeGaryOpening.swift */; };
+		AB66D89BD806BE13B036B14E /* GaryTalkRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B67C0785FDC8663DE8659C8 /* GaryTalkRoom.swift */; };
+		8CA6FB78B557D542A32C3766 /* GaryTalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56CD84CB8087736C1DB55704 /* GaryTalk.swift */; };
 		8E2DC3D63C058F789710B126 /* HomeGaryPrompts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449EBFA7D4176A54AA5259A2 /* HomeGaryPrompts.swift */; };
 		4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */; };
 		C920D1248BE2F9B6BB1AA083 /* HubJudgment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D8646793345451E9ACFBEC6 /* HubJudgment.swift */; };
@@ -312,6 +314,8 @@
 		A4536063BFE66307137544F6 /* HomeSheetRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSheetRowView.swift; sourceTree = "<group>"; };
 		B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeXWire.swift; sourceTree = "<group>"; };
 		11361AC8006F914161B6944F /* HomeGaryOpening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGaryOpening.swift; sourceTree = "<group>"; };
+		6B67C0785FDC8663DE8659C8 /* GaryTalkRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryTalkRoom.swift; sourceTree = "<group>"; };
+		56CD84CB8087736C1DB55704 /* GaryTalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaryTalk.swift; sourceTree = "<group>"; };
 		449EBFA7D4176A54AA5259A2 /* HomeGaryPrompts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeGaryPrompts.swift; sourceTree = "<group>"; };
 		F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeBoardStory.swift; sourceTree = "<group>"; };
 		A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeagueWordsOverlay.swift; sourceTree = "<group>"; };
@@ -561,6 +565,8 @@
 				A4536063BFE66307137544F6 /* HomeSheetRowView.swift */,
 				B5C737CDC7E794CDDFE51E89 /* HomeXWire.swift */,
 				11361AC8006F914161B6944F /* HomeGaryOpening.swift */,
+				6B67C0785FDC8663DE8659C8 /* GaryTalkRoom.swift */,
+				56CD84CB8087736C1DB55704 /* GaryTalk.swift */,
 				449EBFA7D4176A54AA5259A2 /* HomeGaryPrompts.swift */,
 				F37BE39E6A1F338D7CE467AB /* HomeBoardStory.swift */,
 				A55811437713F16BBCEAECCC /* LeagueWordsOverlay.swift */,
@@ -859,6 +865,8 @@
 				C570C3DCCA048DB6903094EC /* HomeSheetRowView.swift in Sources */,
 				33D3E7F86FA1834D1CE18EA8 /* HomeXWire.swift in Sources */,
 				D4FC45AD5F44665F7C6DB30C /* HomeGaryOpening.swift in Sources */,
+				AB66D89BD806BE13B036B14E /* GaryTalkRoom.swift in Sources */,
+				8CA6FB78B557D542A32C3766 /* GaryTalk.swift in Sources */,
 				1224CF0EC8179FD36B08EF7B /* GaryLifePlan.swift in Sources */,
 				8E2DC3D63C058F789710B126 /* HomeGaryPrompts.swift in Sources */,
 				4D7F80E4D82707DEC7992D33 /* HomeBoardStory.swift in Sources */,

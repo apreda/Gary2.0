@@ -12,11 +12,14 @@ import SwiftUI
 /// darts at his other hip, his picks at his shoe. A prompt that's new
 /// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
 struct HomeGaryOpening: View {
-    enum Door { case winners, darts, parlay, picks }
+    enum Door { case winners, darts, parlay, picks, talk }
 
     /// Gary's picks on today's slate, and the games on it (the board's own counts).
     var picks = 0
     var games = 0
+    /// The question his ASK GARY label offers (founder, Oct 30 2026: "give the Gary on the home page of the
+    /// App a real voice people can ask questions to"); tapping it opens the talk room asking it. Nil, no label.
+    var ask: String? = nil
     let onOpen: (Door) -> Void
 
     @Environment(\.readingPageActive) private var activePage
@@ -36,6 +39,8 @@ struct HomeGaryOpening: View {
     @State private var rightWidths: [String: CGFloat] = [:]
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
+    /// The talk room has been opened once: the ASK label stops wearing NEW.
+    @AppStorage("garyTalkSeen") private var talkSeen = false
     #if DEBUG
     /// Tour verb `garymood GaryFire|GaryCooking|GaryBeer|GaryIceCold|GaryDoomsday|off` previews a mood (it tilts his clips).
     @AppStorage("garyMoodPreview") private var moodPreviewRaw = ""
@@ -45,6 +50,8 @@ struct HomeGaryOpening: View {
     #endif
 
     static let height: CGFloat = 408
+    /// The ASK GARY label's top: under last night's, clear of the darts prompt at his pocket.
+    private static let askY: CGFloat = 104
     private static let garyHeight: CGFloat = 344
     private static let garyTop: CGFloat = 28
 
@@ -91,12 +98,25 @@ struct HomeGaryOpening: View {
                     ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
                         PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
                     }
+                    if ask != nil && !talkSeen {
+                        PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.jaw))
+                    }
                 }
                 .opacity(performing ? 0 : 1)
 
                 if let d = lastNight {
                     tap(.winners, key: nil) { lastNightLabel(d) }
                         .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
+                }
+                if let ask {
+                    Button {
+                        talkSeen = true
+                        onOpen(.talk)
+                    } label: { askLabel(ask).contentShape(Rectangle()) }
+                        .buttonStyle(.plain)
+                        .frame(width: 100, alignment: .leading)
+                        .offset(x: 0, y: Self.askY)
+                        .accessibilityLabel("Ask Gary: \(ask)")
                 }
                 tap(.winners, key: nil) { tonightLabel }
                     .fixedSize()
@@ -178,6 +198,7 @@ struct HomeGaryOpening: View {
         var lines: [(CGPoint, CGPoint, CGPoint)] = [(CGPoint(x: tx - 6, y: 232), CGPoint(x: tx - 20, y: 232), at(GaryIdleFigure.hip))]
         if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
         if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
+        if ask != nil { lines.append((CGPoint(x: 84, y: Self.askY + 30), CGPoint(x: 100, y: Self.askY + 30), at(GaryIdleFigure.jaw))) }
         for p in prompts {
             let to = at(GaryIdleFigure.anchor(p.spot))
             switch p.spot {
@@ -312,6 +333,56 @@ struct HomeGaryOpening: View {
         var list = seenRaw.split(separator: "|").map(String.init)
         for k in keys where !list.contains(k) { list.append(k) }
         seenRaw = list.suffix(60).joined(separator: "|")
+    }
+
+    /// A question on two lines, broken where the halves come out closest in length.
+    static func twoLines(_ q: String) -> [String] {
+        let words: [String] = q.split(separator: " ").map(String.init)
+        guard words.count > 1 else { return [q] }
+        var best = 1
+        var bestGap = Int.max
+        for cut in 1..<words.count {
+            let a: Int = words[..<cut].joined(separator: " ").count
+            let b: Int = words[cut...].joined(separator: " ").count
+            if abs(a - b) < bestGap { bestGap = abs(a - b); best = cut }
+        }
+        return [words[..<best].joined(separator: " "), words[best...].joined(separator: " ")]
+    }
+
+    /// ASK GARY at his mouth: the question in his diagram's display type, two lines.
+    private func askLabel(_ q: String) -> some View {
+        let isNew = !talkSeen
+        let lines = Self.twoLines(q.uppercased())
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                if isNew {
+                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                        .background(Circle().fill(GaryColors.win.opacity(0.22)).frame(width: 12, height: 12))
+                }
+                Image(systemName: "mic.fill").font(.system(size: 8.5, weight: .bold))
+                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
+                Text("ASK GARY")
+                    .font(GaryFonts.kicker(9.5, .bold)).tracking(1.5)
+                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
+                    .fitsOneLine()
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                    HStack(spacing: 5) {
+                        Text(line)
+                            .font(GaryFonts.display(21)).foregroundStyle(GaryColors.warmWhite)
+                            .fitsOneLine()
+                        if i == lines.count - 1 {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(GaryColors.gold)
+                        }
+                    }
+                    .frame(height: 23, alignment: .leading)
+                }
+            }
+            .padding(.vertical, 1)
+        }
     }
 
     private func promptLabel(_ p: GaryPrompt) -> some View {
@@ -476,6 +547,8 @@ struct GaryIdleFigure: View {
     let mood: String?
     let height: CGFloat
     let active: Bool
+    /// Off, he only stands and breathes, the cigar going (the talk room: he listens and answers, no bits).
+    var lives = true
     /// Told when his prop goes out past him and when it's back.
     var onPerform: (Bool) -> Void = { _ in }
 
@@ -499,6 +572,8 @@ struct GaryIdleFigure: View {
     static let shoulder = CGPoint(x: 0.73, y: 0.25)
     static let pocket = CGPoint(x: 0.29, y: 0.57)
     static let shoe = CGPoint(x: 0.12, y: 0.955)
+    /// The left of his jaw, under the sunglasses: where ASK GARY points.
+    static let jaw = CGPoint(x: 0.33, y: 0.2)
 
     /// The spot on him each prompt points at.
     static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {
@@ -518,9 +593,9 @@ struct GaryIdleFigure: View {
         .onChange(of: mood) { m in life.mood = m }
         .onChange(of: life.performing) { onPerform($0) }
         // Lives while he's on screen and moving; SwiftUI ends it when he leaves and starts it again on return.
-        .task(id: active && !reduceMotion) {
+        .task(id: active && !reduceMotion && lives) {
             life.mood = mood
-            guard active && !reduceMotion else { return }
+            guard active && !reduceMotion && lives else { return }
             await life.live()
         }
     }

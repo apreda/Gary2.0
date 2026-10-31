@@ -121,6 +121,9 @@ struct HomeView: View {
     // Current board and betting-news shelf.
     @State private var wireItems: [SupabaseAPI.WireItem] = []
     @State private var todayPicks: [GaryPick] = []
+    /// The talk room (Gary's voice), carrying the question it opens on.
+    @State private var talkRoom: GaryTalkOpening?
+    @State private var talkAvailable = true
     /// Game ids on today's Winners board, so the board can mark Gary's Winners
     /// picks in place. Empty while a paid board is locked or not loaded.
     @State private var winnersBoardGameIDs: Set<Int> = []
@@ -196,6 +199,20 @@ struct HomeView: View {
             (pick.type ?? "") == "special"
                 || (pick.game_id.map(Self.allStarGameIDs.contains) ?? false)
         }
+    }
+
+    /// ASK GARY's question, as the day stands: why his next pick before it starts, how one is going while it's
+    /// on, how the night went once it's all played, and how last night went before today's picks are out.
+    private var talkQuestion: String {
+        let now = Date()
+        var live: String?
+        for pick in todayPicks where !pick.isScratched {
+            guard let team = GaryTalk.teamWord(pick.pick) else { continue }
+            guard let start = GaryTalk.date(pick.commence_time), start <= now else { return "Why the \(team)?" }
+            if live == nil, now.timeIntervalSince(start) < 3 * 3600 { live = team }
+        }
+        if let live { return "How are the \(live) doing?" }
+        return todayPicks.isEmpty ? GaryTalk.lastNight : GaryTalk.howDidItGo(now)
     }
 
     var body: some View {
@@ -311,7 +328,19 @@ struct HomeView: View {
             }
         }
         .popupOverlay(item: $openGame) { game in GameCardPopup(game: game) { openGame = nil } }
+        .fullScreenCover(item: $talkRoom) { room in
+            GaryTalkRoom(first: room.first) { talkRoom = nil }
+        }
+        .task { talkAvailable = await GaryTalk.available() }
         .onGaryTour { verb, arg in
+            // `talk Why the Hornets?` opens the talk room asking it; `talk` opens it on the questions;
+            // `talk close` shuts it. `voiceurl http://127.0.0.1:8787` points it at a local server (`off` clears).
+            if verb == "talk" {
+                talkRoom = arg == "close" ? nil : GaryTalkOpening(first: arg.isEmpty ? nil : arg)
+            }
+            #if DEBUG
+            if verb == "voiceurl" { UserDefaults.standard.set(arg == "off" ? nil : arg, forKey: "garyVoiceURL") }
+            #endif
             // The recap modal isn't a presented VC, so the generic "dismiss"
             // can't reach it — close it here (same ledger write as a real tap).
             if verb == "dismiss", showDailyRecap {
@@ -1015,9 +1044,11 @@ struct HomeView: View {
         // the darts, his picks), in place of the Bento ("it's not an analytics dashboard"). Each finished
         // game's story opens from its own row on the board (HomeBoardStory).
         HomeGaryOpening(picks: todayPicks.filter { !$0.isScratched }.count,
-                        games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count) { door in
+                        games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count,
+                        ask: talkAvailable ? talkQuestion : nil) { door in
+            if door == .talk { talkRoom = GaryTalkOpening(first: talkQuestion); return }
             if door == .parlay { UserDefaults.standard.set(true, forKey: DartsView.openParlayKey) }
-            let tab: Int = { switch door { case .winners: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
+            let tab: Int = { switch door { case .winners, .talk: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
         }
         .allowsHitTesting(!boardLifted)
