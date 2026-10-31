@@ -25,8 +25,8 @@ struct CashRailCard: View {
     let homeAbbr: String?
     let awayScore: Int?
     let homeScore: Int?
-    /// "GB −6.5 · GARY PACKERS −6.5"
-    let marketLine: String?
+    /// Gary's pick on the game ("76ers +1.5"), tracked live under the score.
+    let garyPick: String?
     /// "Q2 4:30" / "HALF" / "FINAL"
     let clockBig: String
     let board: CashRailBoard?
@@ -77,34 +77,61 @@ struct CashRailCard: View {
     // MARK: Scoreboard
 
     private var scoreboard: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 0) {
-                teamRow(awayName, score: awayScore, home: false, ball: hasBall(awayAbbr))
-                teamRow(homeName, score: homeScore, home: true, ball: hasBall(homeAbbr))
-                if let marketLine, !marketLine.isEmpty {
-                    Text(marketLine.uppercased())
-                        .font(CR.sys(11)).tracking(0.66)
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 0) {
+                    teamRow(awayName, score: awayScore, home: false, ball: hasBall(awayAbbr))
+                    teamRow(homeName, score: homeScore, home: true, ball: hasBall(homeAbbr))
+                }
+                Rectangle().fill(CR.line).frame(width: 1)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(clockBig)
+                        .font(CR.bebas(33)).tracking(1.15)
+                        .foregroundStyle(GaryColors.gold)
+                        .fitsOneLine()
+                    Text(board?.situation ?? " ")
+                        .font(CR.sys(10.5)).tracking(0.63)
                         .foregroundStyle(CR.mute)
                         .fitsOneLine()
-                        .padding(.top, 7)
                 }
+                .frame(width: 128, alignment: .leading)
             }
-            Rectangle().fill(CR.line).frame(width: 1)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(clockBig)
-                    .font(CR.bebas(33)).tracking(1.15)
-                    .foregroundStyle(GaryColors.gold)
-                    .fitsOneLine()
-                Text(board?.situation ?? " ")
-                    .font(CR.sys(10.5)).tracking(0.63)
-                    .foregroundStyle(CR.mute)
-                    .fitsOneLine()
-            }
-            .frame(width: 128, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            if let bet = garyBet { garyRow(bet).padding(.top, 10) }
         }
-        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 14).padding(.top, 14).padding(.bottom, 12)
         .contentShape(Rectangle())
+    }
+
+    private var garyBet: CashRailFormat.GaryBet? {
+        CashRailFormat.garyBet(pick: garyPick, away: awayName, home: homeName, awayScore: awayScore, homeScore: homeScore,
+                               final: board?.status == "final" || clockBig == "FINAL")
+    }
+
+    /// Gary's bet, tracked: his pick, and how it stands right now in green or red (founder, Oct 30 2026:
+    /// "Gary's bet should be more easy to see and track if it's winning").
+    private func garyRow(_ bet: CashRailFormat.GaryBet) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("GARY")
+                .font(CR.sys(10, .bold)).tracking(1.4)
+                .foregroundStyle(GaryColors.gold)
+            Text(bet.label)
+                .font(CR.bebas(21)).tracking(0.6)
+                .foregroundStyle(CR.ink)
+                .fitsOneLine()
+            Spacer(minLength: 8)
+            if let status = bet.status {
+                Text(status)
+                    .font(CR.sys(11, .bold)).tracking(0.8)
+                    .foregroundStyle(bet.tone > 0 ? GaryColors.win : bet.tone < 0 ? GaryColors.loss : CR.ink2)
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.35), value: status)
+                    .fitsOneLine()
+            }
+        }
+        .padding(.top, 9)
+        .overlay(alignment: .top) { Rectangle().fill(CR.line2).frame(height: 1) }
+        .accessibilityElement(children: .combine)
     }
 
     private func hasBall(_ abbr: String?) -> Bool {
@@ -376,7 +403,7 @@ struct CashRailRungStrip: View {
     ScrollView {
         CashRailCard(awayName: "Panthers", homeName: "Packers", awayAbbr: "CAR", homeAbbr: "GB",
                      awayScore: 24, homeScore: 24,
-                     marketLine: "GB \u{2212}6.5 · GARY PACKERS \u{2212}6.5",
+                     garyPick: "Packers \u{2212}6.5",
                      clockBig: "Q3 2:55",
                      board: CashRailBoard(league: "NFL", game_id: "1392323", status: "live", possession: "GB",
                                           situation: "2ND & 7 · CAR 34", elapsed_s: 2525, clock: "Q3 2:55",

@@ -127,17 +127,61 @@ enum CashRailFormat {
         }
     }
 
-    /// "GB −2.5 · GARY PACKERS −2.5": the spread off the board (the total when
-    /// there is no spread), then Gary's pick. Nil when there is neither.
-    static func marketLine(oddsLine: String?, pickLine: String?, spread boardSpread: String? = nil) -> String? {
-        let parts = (oddsLine ?? "").components(separatedBy: " · ").map { $0.trimmingCharacters(in: .whitespaces) }
-        let spread = parts.first { $0.uppercased().hasPrefix("RL ") }.map { String($0.dropFirst(3)) }
-        let total = parts.first { $0.uppercased().hasPrefix("O/U") }
-        var out: [String] = []
-        if let market = spread ?? boardSpread ?? total { out.append(market) }
-        if let pick = pickLine?.trimmingCharacters(in: .whitespaces), !pick.isEmpty { out.append("GARY \(pick)") }
-        guard !out.isEmpty else { return nil }
-        return out.joined(separator: " · ").uppercased().replacingOccurrences(of: "-", with: "\u{2212}")
+    /// Gary's bet on the game as the scoreboard tracks it (founder, Oct 30 2026: "Gary's bet should be more
+    /// easy to see and track if it's winning"): "76ERS +1.5" and "WINNING BY 11.5" while it's live, WON / LOST /
+    /// PUSH at the final. `tone` is 1 good, -1 bad, 0 neither. Nil without a pick.
+    struct GaryBet: Equatable {
+        let label: String
+        let status: String?
+        let tone: Int
+    }
+
+    static func garyBet(pick: String?, away: String, home: String, awayScore: Int?, homeScore: Int?, final: Bool) -> GaryBet? {
+        // Home writes a total with an arrow ("↑ 227.5") and can leave a moneyline's price on ("76ERS ML -130").
+        let raw = (pick ?? "").replacingOccurrences(of: "\u{2212}", with: "-")
+            .replacingOccurrences(of: "\u{2191}", with: "Over").replacingOccurrences(of: "\u{2193}", with: "Under")
+            .trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return nil }
+        var words = raw.split(separator: " ").map(String.init)
+        if words.count > 2, words[words.count - 2].uppercased() == "ML" { words.removeLast() }
+        let tail = words.popLast() ?? ""
+        let number = Double(tail)
+        let lead = words.joined(separator: " ")
+        // The label names the side the way the scoreboard does (its nickname), the line with a real minus sign.
+        let side: (name: String, home: Bool)? = [(away, false), (home, true)]
+            .first { !$0.0.isEmpty && lead.lowercased().hasSuffix($0.0.lowercased()) }
+        let shownLead = side?.name ?? lead
+        let label = "\(shownLead) \(tail)".uppercased().replacingOccurrences(of: "-", with: "\u{2212}")
+        guard let a = awayScore, let h = homeScore else { return GaryBet(label: label, status: nil, tone: 0) }
+        func amount(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v) }
+
+        // A total: over cashes once it's past the line; under is safe by what's left.
+        let kind = lead.lowercased()
+        if (kind == "over" || kind == "under" || kind == "o" || kind == "u"), let line = number {
+            let total = Double(a + h)
+            let over = kind.hasPrefix("o")
+            if final {
+                if total == line { return GaryBet(label: label, status: "PUSH", tone: 0) }
+                let won = over ? total > line : total < line
+                return GaryBet(label: label, status: won ? "WON" : "LOST", tone: won ? 1 : -1)
+            }
+            if over {
+                return total > line ? GaryBet(label: label, status: "CASHED", tone: 1)
+                    : GaryBet(label: label, status: "NEEDS \(amount((line - total).rounded(.up))) MORE", tone: 0)
+            }
+            return total < line ? GaryBet(label: label, status: "\(amount(line - total)) TO SPARE", tone: 1)
+                : GaryBet(label: label, status: "LOST", tone: -1)
+        }
+
+        // A side: the spread (or the moneyline's plain margin) from that team's end.
+        guard let side else { return GaryBet(label: label, status: nil, tone: 0) }
+        let margin = Double(side.home ? h - a : a - h) + (tail.uppercased() == "ML" ? 0 : (number ?? 0))
+        if final {
+            if margin == 0 { return GaryBet(label: label, status: "PUSH", tone: 0) }
+            return GaryBet(label: label, status: margin > 0 ? "WON" : "LOST", tone: margin > 0 ? 1 : -1)
+        }
+        if margin == 0 { return GaryBet(label: label, status: "EVEN", tone: 0) }
+        return GaryBet(label: label, status: "\(margin > 0 ? "WINNING" : "LOSING") BY \(amount(abs(margin)))", tone: margin > 0 ? 1 : -1)
     }
 
     /// What $10 returned: whole dollars from $100 up, else cents with ".00" dropped.

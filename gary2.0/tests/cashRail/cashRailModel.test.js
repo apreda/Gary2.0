@@ -75,6 +75,34 @@ out([blocks.climb.map(\\.label), [blocks.showsStrip], catches.climb.map(\\.label
     expect(r).toEqual([['1+'], [false], ['3+', '4+', '5+'], [-118, 194, 400], ['Blocks 1+']]);
   });
 
+  it('Gary\'s bet on the scoreboard tracks live: winning or losing by how much, then won or lost', () => {
+    const r = swiftJSON(`
+func g(_ pick: String, _ a: Int?, _ h: Int?, final: Bool = false) -> [Any] {
+  guard let b = CashRailFormat.garyBet(pick: pick, away: "Knicks", home: "76ers", awayScore: a, homeScore: h, final: final) else { return ["nil"] }
+  return [b.label, b.status ?? "none", b.tone]
+}
+out([g("76ers +1.5", 23, 33), g("Knicks \\u{2212}3.5", 23, 33), g("Philadelphia 76ers -1.5", 30, 31), g("76ers ML", 23, 33),
+     g("Over 227.5", 100, 110), g("Over 227.5", 120, 110), g("Under 227.5", 100, 110),
+     g("76ers +1.5", 110, 108, final: true), g("Knicks -2", 110, 108, final: true), g("Knicks -3.5", 110, 108, final: true),
+     g("76ers +1.5", nil, nil), g("", 1, 2), g("\u{2191} 227.5", 100, 110), g("76ERS ML -130", 23, 33)])`);
+    expect(r).toEqual([
+      ['76ERS +1.5', 'WINNING BY 11.5', 1],
+      ['KNICKS −3.5', 'LOSING BY 13.5', -1],
+      ['76ERS −1.5', 'LOSING BY 0.5', -1],
+      ['76ERS ML', 'WINNING BY 10', 1],
+      ['OVER 227.5', 'NEEDS 18 MORE', 0],
+      ['OVER 227.5', 'CASHED', 1],
+      ['UNDER 227.5', '17.5 TO SPARE', 1],
+      ['76ERS +1.5', 'LOST', -1],
+      ['KNICKS −2', 'PUSH', 0],
+      ['KNICKS −3.5', 'LOST', -1],
+      ['76ERS +1.5', 'none', 0],
+      ['nil'],
+      ['OVER 227.5', 'NEEDS 18 MORE', 0],
+      ['76ERS ML', 'WINNING BY 10', 1],
+    ]);
+  });
+
   it('names a ladder by its top cashed rung', () => {
     const r = swiftJSON(`${board}
 let over = CashRailHit(key: "m", who: "McMillan", market: "Rec yards", price: -115, rungs: [CashRailRung(label: "O 58.5", price: -115)], elapsed: 900, when: "Q1 0:00", play: nil, gary: nil)
@@ -97,22 +125,6 @@ out([CashRailFormat.billing(league: "NFL", commence: iso.date(from: "2026-10-30T
      CashRailFormat.hasScoreboard("NHL"), CashRailFormat.hasScoreboard(nil), CashRailFormat.billing(league: "NBA", commence: nil),
      CashRailFormat.billing(league: "NCAAF", commence: nil)])`);
     expect(r).toEqual([true, true, true, false, false, 'NBA', 'COLLEGE FOOTBALL']);
-  });
-
-  it('puts the spread and Gary\'s pick under the team names', () => {
-    const r = swiftJSON(`out([
-  CashRailFormat.marketLine(oddsLine: "CAR +130 · GB -155 · O/U 46.5 · RL GB -2.5", pickLine: "Packers -2.5") ?? "nil",
-  CashRailFormat.marketLine(oddsLine: "CAR +130 · GB -155 · O/U 46.5 · RL GB -2.5", pickLine: nil) ?? "nil",
-  CashRailFormat.marketLine(oddsLine: "O/U 46.5", pickLine: "Over 46.5") ?? "nil",
-  CashRailFormat.marketLine(oddsLine: nil, pickLine: nil) ?? "nil"])`);
-    expect(r).toEqual(['GB −2.5 · GARY PACKERS −2.5', 'GB −2.5', 'O/U 46.5 · GARY OVER 46.5', 'nil']);
-  });
-
-  it('falls back to the board\'s frozen spread when the slate row has none', () => {
-    const r = swiftJSON(`out([
-  CashRailFormat.marketLine(oddsLine: "O/U 46.5", pickLine: "Packers -3.5", spread: "GB -3.5") ?? "nil",
-  CashRailFormat.marketLine(oddsLine: "RL GB -2.5", pickLine: nil, spread: "GB -3.5") ?? "nil"])`);
-    expect(r).toEqual(['GB −3.5 · GARY PACKERS −3.5', 'GB −2.5']);
   });
 
   it('an empty board has no hero and counts nothing', () => {

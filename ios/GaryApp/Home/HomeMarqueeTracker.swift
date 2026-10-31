@@ -138,7 +138,7 @@ struct HomeMarqueeTracker: View {
                 CashRailLabelRow(title: "THURSDAY NIGHT FOOTBALL", live: cashDemo.board?.status != "final")
                 CashRailCard(awayName: "Panthers", homeName: "Packers", awayAbbr: "CAR", homeAbbr: "GB",
                              awayScore: cashDemo.away, homeScore: cashDemo.home,
-                             marketLine: cashDemo.marketLine, clockBig: cashDemo.clock,
+                             garyPick: cashDemo.garyPick, clockBig: cashDemo.clock,
                              board: cashDemo.board, onOpenGame: {})
             }
             .pageGutter()
@@ -168,7 +168,7 @@ struct HomeMarqueeTracker: View {
                          homeName: names.count > 1 ? names[1] : "",
                          awayAbbr: e.live?.away_abbr, homeAbbr: e.live?.home_abbr,
                          awayScore: e.live?.away_score, homeScore: e.live?.home_score,
-                         marketLine: CashRailFormat.marketLine(oddsLine: e.oddsLine, pickLine: e.pickLine, spread: board?.spread),
+                         garyPick: e.pickLine,
                          clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
                          board: board,
                          onOpenGame: { onOpenGame(e.matchupFull, e.league) })

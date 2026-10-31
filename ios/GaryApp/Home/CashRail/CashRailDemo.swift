@@ -14,7 +14,7 @@ final class CashRailDemo: ObservableObject {
     @Published private(set) var away = 0
     @Published private(set) var home = 0
     @Published private(set) var clock = "Q1 15:00"
-    let marketLine = "GB \u{2212}2.5 · GARY OVER 46.5"
+    let garyPick = "Over 46.5"
 
     private struct Ent { let who: String; let market: String; let price: Int?; let rungs: [CashRailRung]?; var gary = false }
     private struct Hit { let id: String; var n = 0; let play: String }
