@@ -169,6 +169,9 @@ struct TomorrowBigGame: Decodable {
     let context: String?            // "AL East · Cole vs Crochet"
     let commence_time: String?      // for the right-aligned time "7:10"
     let bdl_game_id: Int?           // exact provider identity for Home joins
+    /// In the day's hero chain (Nov 2 2026): Home's hero counts down to, shows and then leaves only these, so the
+    /// day's hero games never overlap and football leads. nil on older snapshots = every big game.
+    let hero: Bool?
     // Probable starters (MLB only) — last names; "Undecided" when unposted.
     // WC big games leave these nil → no pitcher line rendered.
     let awayPitcher: String?

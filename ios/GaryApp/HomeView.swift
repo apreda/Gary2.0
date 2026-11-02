@@ -1785,6 +1785,7 @@ struct HomeView: View {
                 live: ls,
                 result: result,
                 slateInterruptionLabel: slateInterruption,
+                heroEligible: big.hero ?? true,
                 awayRanking: rankings.away, homeRanking: rankings.home
             )
         }

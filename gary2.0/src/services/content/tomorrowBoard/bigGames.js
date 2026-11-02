@@ -24,6 +24,7 @@ export function buildBigGames(board, { mlb }) {
     // null for non-MLB. "Undecided" per side when a probable is unposted.
     let pitchers = null;
     let rivalry = false;
+    let chainOnly = false;
 
     const setReason = (label, w) => {
       if (w > bestReasonW) { bestReasonW = w; reason = label; }
@@ -114,6 +115,13 @@ export function buildBigGames(board, { mlb }) {
     } else if (row.league === 'NFL' && isBigGame({ league: 'NFL', game: row })) {
       weight += 40;
       setReason('NATIONAL WINDOW', 40);
+    } else if (row.league === 'NFL') {
+      // Every NFL window gets its game (founder, Nov 2 2026: "a 1 o'clock game, a 4:25 game, and then the night
+      // game"): an afternoon game is a candidate for its window's slot on Home, and makes the list only if it wins it.
+      const draw = nflDraw(row);
+      weight += draw;
+      setReason('NFL WINDOW', draw);
+      chainOnly = true;
     } else if (row.league === 'NBA') {
       const draw = nbaDraw(row);
       weight += draw.weight;
@@ -125,7 +133,7 @@ export function buildBigGames(board, { mlb }) {
     const h = etHour(row.commence_time);
     if (h != null && h >= PRIMETIME_HOUR_ET) weight += 8;
 
-    return { row, weight, reason, rivalry, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
+    return { row, weight, reason, rivalry, chainOnly, standing, pitchers, ctx: ctxParts.filter(Boolean).join(' · ') || null };
   }).filter((game) => game.reason != null);
 
   const byWeight = (a, b) => {
@@ -137,21 +145,31 @@ export function buildBigGames(board, { mlb }) {
   // game"): its headliner always makes it, a second game only when it's a rivalry, never the whole slate.
   const nba = scored.filter((s) => s.row.league === 'NBA').sort(byWeight);
   const nbaKept = new Set(nba.filter((s, i) => i === 0 || (i === 1 && s.rivalry)));
-  const ranked = scored.filter((s) => s.row.league !== 'NBA' || nbaKept.has(s)).sort(byWeight);
+
+  // THE HERO CHAIN (founder, Nov 2 2026): Home counts down to one game, shows it live, and after the final counts
+  // down to the next, so the day's hero games never overlap. Football first in the regular season ("any Monday
+  // night football game, Thursday night football game, Sunday night football ... is going to trump NBA regular
+  // season"; NBA playoffs are different), then the bigger game; a game that overlaps one already in the chain stays
+  // a big game in the ribbon but never takes the hero.
+  const chain = heroChain(scored);
+  const ranked = scored.filter((s) => chain.has(s) || (!s.chainOnly && (s.row.league !== 'NBA' || nbaKept.has(s)))).sort(byWeight);
 
   // BIG GAMES SIZE + MIX — up to 5 (founder is fine with 4–5, not a hard 3), and
   // always mix in at least one MLB game so other leagues don't crowd the
-  // domestic games out entirely.
+  // domestic games out entirely. The chain leads, in start order (rank 1 = the first countdown of the day).
   const MAX_BIG = 5;
-  const picked = ranked.slice(0, MAX_BIG);
+  const chained = ranked.filter((s) => chain.has(s)).sort((a, b) => startMs(a) - startMs(b));
+  const picked = [...chained, ...ranked.filter((s) => !chain.has(s))].slice(0, Math.max(MAX_BIG, chained.length));
   if (!picked.some((s) => s.row.league === 'MLB')) {
     const bestMlb = ranked.find((s) => s.row.league === 'MLB');
-    if (bestMlb) picked[picked.length - 1] = bestMlb;   // swap weakest slot for the top MLB
+    if (bestMlb && !chain.has(picked[picked.length - 1])) picked[picked.length - 1] = bestMlb;   // swap weakest slot for the top MLB
   }
 
   return picked.map((s, i) => {
     const item = {
       rank: i + 1,
+      // Home's hero takes only chain games (older snapshots without the field: every big game).
+      hero: chain.has(s),
       league: s.row.league,
       matchup: `${s.row.away_team} @ ${s.row.home_team}`,
       // DISPLAYED divisional context — plain text, e.g. "Brewers 1st · Cubs 2nd, NL
@@ -171,6 +189,44 @@ export function buildBigGames(board, { mlb }) {
     }
     return item;
   });
+}
+
+// How long a game holds the hero before the next one can start (founder, Nov 2 2026: the 1:00, the 4:15/4:25 and
+// the night game don't overlap; an NBA 7:00 and a 10:30 West Coast game don't).
+const HERO_MINUTES = { NFL: 180, NCAAF: 210, NBA: 150, MLB: 180, NHL: 150 };
+const startMs = (s) => Date.parse(s.row.commence_time || '') || 0;
+
+/** Football and every playoff game first, then MLB, then the NBA's regular season. */
+function heroTier(row) {
+  const lg = String(row.league || '').toUpperCase();
+  const post = row.postseason === true || String(row.season_type || '').toLowerCase() === 'postseason';
+  if (lg === 'NFL' || lg === 'NCAAF' || post) return 3;
+  if (lg === 'NBA') {
+    // The NBA's play-in and playoffs run mid-April to late June; the board rows carry no season type.
+    const md = (row.commence_time || '').slice(5, 10);
+    return md >= '04-14' && md <= '06-30' ? 3 : 1;
+  }
+  return lg === 'MLB' ? 2 : 1;
+}
+
+/** The day's hero games: highest tier, then weight, each kept only if it overlaps none already kept. */
+export function heroChain(scored) {
+  const kept = [];
+  const order = scored.filter((s) => startMs(s) && s.row.kickoff_status !== 'date_only')
+    .sort((a, b) => heroTier(b.row) - heroTier(a.row) || b.weight - a.weight || startMs(a) - startMs(b));
+  for (const s of order) {
+    const a = startMs(s), e = a + (HERO_MINUTES[s.row.league] || 180) * 60000;
+    if (kept.every((k) => e <= startMs(k) || a >= startMs(k) + (HERO_MINUTES[k.row.league] || 180) * 60000)) kept.push(s);
+  }
+  return new Set(kept);
+}
+
+// The NFL's national draws, by nickname: an afternoon window's game is the one with them in it, then the closer line.
+const NFL_DRAWS = new Set(['Cowboys', 'Eagles', 'Chiefs', 'Packers', 'Steelers', '49ers', 'Bills', 'Ravens', 'Lions']);
+function nflDraw(row) {
+  const draws = [nick(row.away_team), nick(row.home_team)].filter((t) => NFL_DRAWS.has(t)).length;
+  const spread = Math.abs(Number(row.spread));
+  return 30 + 4 * draws + (Number.isFinite(spread) && spread <= 3.5 ? 2 : 0);
 }
 
 // The NBA's national draws and its rivalries, by nickname.
