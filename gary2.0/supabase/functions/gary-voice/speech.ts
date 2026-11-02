@@ -9,6 +9,7 @@ export function speakable(text: string): string {
     .replace(/^\s*[-•]\s+/gm, "")
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
     .replace(/\s*—\s*/g, ", ")
+    .replace(/[[\]]/g, "")
     .replace(/[ \t]+/g, " ");
 }
 
@@ -127,6 +128,8 @@ export function longIsland(text: string): string {
 /** The accent each voice was picked for, by ElevenLabs voice id. */
 const ACCENTS: Record<string, (s: string) => string> = {
   VYTY6BZy2r6t2zp1udts: jersey, // #20, North Jersey
-  HajairViv4XpOfGXskuF: longIsland, // #35, Long Island 1 (picked Oct 31)
+  // #35, Long Island 1 (picked Oct 31). The respelling alone barely moves Eleven v4 Turbo (it reads "cawfee"
+  // as coffee); the delivery tag is what rounds the "aw" (measured: talk's F2 1328 Hz respelled, 892 tagged).
+  HajairViv4XpOfGXskuF: (s) => "[strong Long Island accent] " + longIsland(s),
 };
 export const accentFor = (voiceId: string) => ACCENTS[voiceId] ?? null;

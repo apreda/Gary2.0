@@ -157,6 +157,7 @@ export class ElevenVoice implements Speaker {
   private ready: Promise<void>;
   private seconds = 0;
   private inWord = false;
+  private inTag = false;
   private keepAlive: ReturnType<typeof setInterval> | undefined;
   private finished = false;
   private closed = false;
@@ -198,9 +199,12 @@ export class ElevenVoice implements Speaker {
       this.opts.events.audio(m.audio);
       const a = m.alignment;
       if (a && Array.isArray(a.chars)) {
-        // Words begin where a letter follows a space; a word can straddle two chunks.
+        // Words begin where a letter follows a space; a word can straddle two chunks. A delivery tag like
+        // "[strong Long Island accent]" is read, not said, so it's no word of his.
         const words: string[] = [], starts: number[] = [], ends: number[] = [];
         a.chars.forEach((c: string, i: number) => {
+          if (c === "[") { this.inTag = true; return; }
+          if (this.inTag) { if (c === "]") this.inTag = false; return; }
           if (/\s/.test(c)) { this.inWord = false; return; }
           if (!this.inWord) { words.push(c); starts.push(start + (a.char_start_times_ms?.[i] ?? 0) / 1000); ends.push(start); }
           else if (words.length) words[words.length - 1] += c;
@@ -222,8 +226,8 @@ export class ElevenVoice implements Speaker {
   async say(text: string) {
     if (!text.trim() || this.closed) return;
     await this.ready;
-    this.chars += text.length;
     const said = this.opts.accent ? this.opts.accent(text) : text;
+    this.chars += said.length;
     this.send({ inputs: [{ text: said, voice_id: this.opts.voiceId, new_turn: false }] });
   }
 
