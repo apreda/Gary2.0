@@ -119,7 +119,7 @@ export async function fetchCurrentState(homeTeam, awayTeam, sport, gameDate, { i
     const footballNarrativeInstructions = isFootball ? `
 Also include (if found in the search results):
 - **WEATHER:** Game-time conditions — only mention if SEVERE (blizzard, 25+ mph sustained wind, sub-15°F, heavy rain). Skip if dome/indoor.
-- **GAME CONTEXT:** Game type (TNF/SNF/MNF/Saturday${isNCAAF ? '/Bowl/CFP' : ''}), divisional/conference matchup.
+- **GAME CONTEXT:** Game type (TNF/SNF/MNF/Saturday${isNCAAF ? '/Bowl/CFP' : ''}), divisional/conference matchup, playoff implications, what's at stake.
 ` : '';
 
     const narrativePrompt = `You are a sports journalist writing a current state report for a ${sportName} game.
@@ -143,8 +143,8 @@ ${availabilityContext ? `\n--- GAME-DAY AVAILABILITY ---\n${availabilityContext}
 Based on the search results above, write the current state report. For EACH team, cover:
 
 **${homeTeam} — What's going on with this team right now?**
-${isNBA ? `- **RECENT GAMES:** Each of the last few regular-season games: the date, the score, who played and who didn't, and the key performances. A team that has not played a regular-season game yet has no recent games: say so in one line and report none.
-- **LAST GAME:** Its last regular-season game, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances. None yet: say so.` : `- **RECENT GAMES:** Each of the last few games: the date, the score, who played and who didn't, and the key performances.
+${isNBA ? `- **RECENT GAMES:** This season's regular-season record, and each of the last few regular-season games: the date, the score, who played and who didn't, and the key performances. A team that has not played a regular-season game yet has no recent games: say so in one line and report none.
+- **LAST GAME:** Its last regular-season game, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances. None yet: say so.` : `- **RECENT GAMES:** This season's record, and each of the last few games: the date, the score, who played and who didn't, and the key performances.
 - **LAST GAME:** What happened, with its date: the score, who played and for how long if reported, who left the game or didn't play, key performances.`}
 - **TOP STORYLINES & HEADLINES:** The big stories around this team RIGHT NOW:
   * Recent trades, acquisitions, roster moves
@@ -167,7 +167,6 @@ ${isNBA ? `- Listed injury statuses come from the league's official report, hand
 - Do NOT include ATS records, betting trends, cover percentages, or any against-the-spread statistics.
 - Do NOT include HISTORICAL records or series history (e.g., "Team is 28-49 all-time at...", "first win since 2019", "lost 13 of last 19 trips"). These are descriptive, not predictive.
 - Do NOT include conditional records (e.g., "15-0 when scoring 80+", "2-6 in Quad 1 games"). Focus on HOW they are playing, not won-loss tallies.
-- Do NOT include any win-loss record, winning or losing streak, home or road record, standings place, ranking or "unbeaten"/"winless" label, and no milestone or "first time since" facts (founder, Oct 31 2026: Gary already has each team's own season record once, and nothing else about records reaches him). The scores of specific games are fine.
 - Do NOT include future-tense content — no recruiting commitments, no next-season roster plans, no draft projections. Only cover what has ALREADY happened and what is relevant to TODAY'S game.
 - Do NOT make betting predictions or pick a winner.
 - Use specific details — names, dates, scores, quotes. No vague generalities.

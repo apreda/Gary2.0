@@ -42,7 +42,7 @@ const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor na
 
 1. The latest news on who plays. For BOTH teams, find reporting newer than what is below or missing from it: ${NEWS_DESK_ITEMS[isCollege(sport) ? 'NCAAF' : 'NFL']}. Give each item its date.
 
-2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, that the game is a rivalry game, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason. Leave out records and results: win-loss records, winning or losing streaks, standings, rankings and polls, bowl, playoff or title math, head-to-head and series history, and milestones or "first time since" facts; Gary already has this season's games. Leave out talk of a letdown, trap game, lookahead or must-win.
+2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason.
 
 Report what happened only: no statistics, no opinions, analysis or predictions from anyone (a coach's or reporter's word on whether a player plays is reporting: keep it, attributed and dated), nothing about betting lines, odds, line moves or betting percentages, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
 
@@ -105,30 +105,6 @@ ${desk}
 ${briefing}`;
 }
 
-// Records and results never reach Gary through the storylines (founder, Oct 31 2026: "the only record Gary needs to
-// know is just their actual overall season record"; Oct 23: "last season is old news"). Nov 2 2026 college hunt: 46
-// storyline lines across Oct 31's 30 college reads carried streaks, series history and bowl math ("Clemson has won 9
-// of the last 10 meetings", "PSU has won 11 straight against Purdue", "12 straight Big Ten losses") and letdown/trap
-// talk. The desk is told to leave them out; a storyline that still carries one is dropped whole.
-const STORYLINE_RECORD = new RegExp([
-  String.raw`\b(?:winning|losing|win|loss|unbeaten|road|home)[ -]streak`, String.raw`\b\d+(?:st|nd|rd|th)? straight (?:wins?|loss(?:es)?|games? (?:won|lost)|seasons?|meetings?|years?)`,
-  String.raw`\b(?:won|lost|has won|has lost|have won|have lost) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve) (?:straight|in a row|of (?:the|its|their) last)`,
-  String.raw`\b(?:has|have) (?:won|lost) (?:\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve) straight`,
-  String.raw`\bseries\b`, String.raw`\ball-time\b`, String.raw`\bhead-to-head\b`, String.raw`\bmeetings\b`, String.raw`\bsince (?:19|20)\d\d\b`, String.raw`\bfirst time (?:since|in program history)`,
-  String.raw`\bprogram history\b`, String.raw`\bbowl[- ]eligib`, String.raw`\b(?:unbeaten|undefeated|winless)\b`, String.raw`\b(?:ranked|No\.) ?\d+\b`,
-  String.raw`\b\d+-\d+ (?:record|at home|on the road|in (?:the )?(?:conference|league|Big|SEC|ACC|AFC|NFC))`, String.raw`\b(?:is|are|at|sits at|falls to|improves to) \d+-\d+\b`, String.raw`\b(?:below|above) \.500\b`,
-  String.raw`\b(?:letdown|trap game|look-?ahead|must-win)\b`, String.raw`\bthird straight (?:season|year)\b`,
-  String.raw`\b(?:two|three|four|five|six|seven|eight|nine|ten|\d+|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d+(?:st|nd|rd|th)) straight (?:[\w-]+ ){0,2}(?:wins?|loss(?:es)?|victor(?:y|ies)|defeats?)\b`,
-  String.raw`\bhas(?:n't| not) (?:won|beaten|lost)\b`, String.raw`\b(?:open|start)(?:s|ed)? (?:his|its|their|the) (?:tenure|season|career) \d+-\d+`, String.raw`\bcareer leader\b`, String.raw`\bbowl hopes?\b`,
-  String.raw`\bfirst (?:[\w-]+ )?(?:win|loss|victory|defeat)\b`, String.raw`\b(?:its|their|his) \d+(?:st|nd|rd|th) (?:win|loss|victory)\b`,
-  String.raw`\bwins? over ranked\b`, String.raw`\bschool record\b`, String.raw`\b\d+(?:st|nd|rd|th) meeting\b`, String.raw`\b(?:fewest|most) [\w\s-]{0,40}\bever\b`,
-].join('|'), 'i');
-export function storylinesWithoutRecords(text) {
-  const kept = String(text || '').split('\n').filter((l) => !STORYLINE_RECORD.test(l));
-  const out = kept.join('\n').trim();
-  return /^(?:none\.?)?$/i.test(out) ? '' : out;
-}
-
 export function renderNflResearchBriefing(factors = []) {
   return factors.map(f => {
     // Models sometimes return structured sources/assessments despite the
@@ -142,7 +118,7 @@ export function renderNflResearchBriefing(factors = []) {
     };
     // The news desk's items and what it could not confirm (NFL Oct 19, college Oct 21 2026); sources stay in the logs.
     const open = text(f.uncertainties);
-    const story = typeof f.storylines === 'string' ? storylinesWithoutRecords(f.storylines) : '';
+    const story = typeof f.storylines === 'string' ? f.storylines.trim() : '';
     return `${text(f.findings, f.keyFinding, f.finding)}${open && !/^(none|not supplied)\.?$/i.test(open.trim()) ? `\nNot confirmed: ${open}` : ''}${story && !/^none\.?$/i.test(story) ? `\n\nThis week's storylines:\n${story}` : ''}`;
   }).join('\n\n');
 }
