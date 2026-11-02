@@ -269,7 +269,7 @@ CRITICAL ANTI-OPINION RULES:
 
         const groundingRaw = apiInjuries.groundingRaw;
 
-        const lineupResult = await fetchNbaStartingLineups(homeTeam, awayTeam);
+        const lineupResult = await fetchNbaStartingLineups(homeTeam, awayTeam, isoDate);
         const lineups = lineupResult?.lineups || { home: [], away: [] };
 
         if (lineups.home.length < 5 || lineups.away.length < 5) {

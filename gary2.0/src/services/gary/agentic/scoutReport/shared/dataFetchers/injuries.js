@@ -1,6 +1,7 @@
 /** Scout-report data: The injury fetch for every sport and NBA starting lineups. (split from dataFetchers.js, Oct 13 2026) */
 import { getNcaafGameContext, formatNcaafGameContext } from '../../../../../sports/ncaaf/ncaafGameContext.js';
 import { ballDontLieService } from '../../../../../providers/ballDontLieService.js';
+import { bdlHttp, BALLDONTLIE_API_BASE_URL, buildQuery, API_KEY } from '../../../../../providers/bdl/transport.js';
 import { sportToBdlKey, findTeam } from '../utilities.js';
 import { groundedWebSearch } from '../grounding.js';
 import { fetchGroundingInjuries, parseGroundingInjuries } from './groundingInjuries.js';
@@ -478,7 +479,49 @@ function parseNbaStartingLineupsFromGrounding(content = '', homeTeam = '', awayT
   return lineups;
 }
 
-export async function fetchNbaStartingLineups(homeTeam, awayTeam) {
+// The starting fives come from BallDontLie's projected lineups (Nov 2 2026: BDL added /nba/v1/projected_lineups; it
+// updates each team's five as pregame news lands and says whether it is "expected" or "confirmed"). The web search
+// below stays only for a game BDL has not posted both fives for, and the desk names which source it printed.
+const etClock = (iso) => (iso ? `${new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })} ET` : null);
+
+export function bdlProjectedFive(row) {
+  return (row?.lineup || []).map((e) => ({
+    name: [e.player?.first_name, e.player?.last_name].filter(Boolean).join(' ').trim(),
+    position: String(e.position || '').toUpperCase(),
+    bdlId: e.player?.id ?? null,
+  })).filter((p) => p.name);
+}
+
+export async function fetchBdlNbaProjectedLineups(homeTeam, awayTeam, isoDate) {
+  const teams = await ballDontLieService.getTeams('basketball_nba');
+  const home = findTeam(teams, homeTeam), away = findTeam(teams, awayTeam);
+  if (!home?.id || !away?.id) return null;
+  const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/projected_lineups${buildQuery({ 'dates[]': [isoDate], 'team_ids[]': [home.id, away.id], per_page: 100 })}`;
+  const rows = (await bdlHttp.get(url, { headers: { Authorization: API_KEY } }))?.data?.data || [];
+  // One game per team per date; the newest row wins if BDL ever returns two.
+  const newest = (teamId) => rows.filter((r) => r.team_id === teamId).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+  const h = newest(home.id), a = newest(away.id);
+  if (!h || !a) return null;
+  return {
+    lineups: {
+      home: bdlProjectedFive(h), away: bdlProjectedFive(a),
+      meta: { source: 'BDL', home: { status: h.status, changed: etClock(h.updated_at) }, away: { status: a.status, changed: etClock(a.updated_at) } },
+    },
+  };
+}
+
+export async function fetchNbaStartingLineups(homeTeam, awayTeam, isoDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })) {
+  try {
+    const bdl = await fetchBdlNbaProjectedLineups(homeTeam, awayTeam, isoDate);
+    if (bdl && bdl.lineups.home.length >= 5 && bdl.lineups.away.length >= 5) return bdl;
+    console.warn(`[Scout Report] BDL projected lineups not posted for both teams (${awayTeam} @ ${homeTeam}, ${isoDate}) — using the web search`);
+  } catch (e) {
+    console.warn(`[Scout Report] BDL projected lineups failed (${e.message}) — using the web search`);
+  }
+  return fetchNbaStartingLineupsFromSearch(homeTeam, awayTeam);
+}
+
+async function fetchNbaStartingLineupsFromSearch(homeTeam, awayTeam) {
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   const buildQuery = (attempt) => {

@@ -217,7 +217,9 @@ export function projectedStarters(desk) {
   }
   const marked = five.split('\n').map((l) => l.replace(/^(\[(?:HOME|AWAY)\] [^:]+: )(.*)$/, (all, head, list) => head + list.split(/, (?=[^,()]+\()/)
     .map((p) => { const [, name, pos] = p.match(/^(.*?)(?: \(([A-Z]{1,2})\))?$/); const st = listed.get(playerKey(name)); return st ? `${name} (${pos ? `${pos}; ` : ''}${st} on the injury report)` : p; }).join(', '))).join('\n');
-  return `Projected starters (a web search's projection, not confirmed):\n${marked}`;
+  // The desk's heading names the source (Nov 2 2026: BallDontLie's projected lineups, each team's status on its own line).
+  const bdl = /^STARTING LINEUPS \(BALLDONTLIE/m.test(String(desk || ''));
+  return `${bdl ? 'Starting lineups (BallDontLie projected lineups):' : "Projected starters (a web search's projection, not confirmed):"}\n${marked}`;
 }
 
 

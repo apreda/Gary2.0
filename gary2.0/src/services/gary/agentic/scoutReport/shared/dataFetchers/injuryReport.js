@@ -316,18 +316,26 @@ export function formatInjuryReport(homeTeam, awayTeam, injuries, sportKey, roste
 export function formatStartingLineups(homeTeam, awayTeam, lineups) {
   if (!lineups || (!lineups.home?.length && !lineups.away?.length)) return '';
 
-  // A web search's projection, named as one (Oct 23 2026 source audit: printed as "CONFIRMED").
-  const lines = ['STARTING LINEUPS (PROJECTED, FROM A WEB SEARCH; NOT CONFIRMED)'];
+  // The source is named in the heading (Oct 23 2026 source audit: a web search's projection printed as "CONFIRMED").
+  // BallDontLie's projected lineups (Nov 2 2026) carry each team's own status, "expected" or "confirmed", and when
+  // that five last changed.
+  const bdl = lineups.meta?.source === 'BDL';
+  const lines = [bdl ? 'STARTING LINEUPS (BALLDONTLIE PROJECTED LINEUPS)' : 'STARTING LINEUPS (PROJECTED, FROM A WEB SEARCH; NOT CONFIRMED)'];
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  
+
   if (lineups.away?.length) {
     lines.push(`[AWAY] ${awayTeam}: ${lineups.away.map(p => `${p.name}${p.position ? ` (${p.position})` : ''}`).join(', ')}`);
   }
-  
+
   if (lineups.home?.length) {
     lines.push(`[HOME] ${homeTeam}: ${lineups.home.map(p => `${p.name}${p.position ? ` (${p.position})` : ''}`).join(', ')}`);
   }
-  
+
+  if (bdl) {
+    const st = (team, s) => `${team} ${s?.status || 'status not given'}${s?.changed ? ` (last changed ${s.changed})` : ''}`;
+    lines.push(`Status: ${st(awayTeam, lineups.meta.away)} · ${st(homeTeam, lineups.meta.home)}`);
+  }
+
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   return lines.join('\n');
 }
