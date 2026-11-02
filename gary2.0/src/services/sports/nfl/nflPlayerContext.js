@@ -480,7 +480,10 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
   const list = (injuries || []).filter((i) => (i?.player?.team?.full_name || i?.team?.full_name) === teamFull
     && normName(`${i?.player?.first_name || ''} ${i?.player?.last_name || ''}`) !== mine
     // Suspended and non-football-injury lists too (round 15: BDL's "Reserve-Sus" and "NFI-R" rows reached neither list).
-    && /^(out|doubtful|questionable|no game status yet|ir|injured reserve|pup|reserve-sus|suspen|nfi)/i.test(String(i?.status || '')));
+    // A player the injury feed carried whom the final report gives no designation: cleared, back tonight (Nov 2 2026: Zach
+    // Charbonnet, back from a torn ACL for his first game, and Jadarian Price, activated from IR, were on Seattle's report
+    // with no designation and in no darts frame; the Wilson TD dart read the backfield as his).
+    && /^(out|doubtful|questionable|no game status yet|no game designation|ir|injured reserve|pup|reserve-sus|suspen|nfi)/i.test(String(i?.status || '')));
   if (!list.length) return null;
   const rank = (s) => ['out', 'doubtful', 'questionable', 'no game status yet'].findIndex((w) => String(s).toLowerCase().startsWith(w));
   // His last game with this club: any stat row or any snap, offense, defense or special teams (round 12: a blocker hurt
@@ -507,11 +510,14 @@ export function outAroundLine(injuries, teamFull, name, { weeksByName = null, sn
     return [hurt, days ? `practice ${days}` : null].filter(Boolean).join('; ');
   };
   const statusWord = (st) => { const t = String(st || '').toLowerCase(); return /^reserve-sus|^suspen/.test(t) ? 'suspended' : /^nfi/.test(t) ? 'non-football injury list' : t; };
-  const word = (i) => { const w = lastWeek(i); const d = detail(i.report); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${d ? `${d}; ` : ''}${statusWord(i.status)}${w ? `; last played Wk ${w}` : ''})`.trim(); };
-  const week = list.filter((i) => rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
-  const reserve = list.filter((i) => rank(i.status) < 0);
-  return [week.length ? `${label}: ${week.map(word).join(', ')}` : `${label}: nobody listed this week`,
-    reserve.length ? `on reserve: ${reserve.map(word).join(', ')}` : null].filter(Boolean).join(' · ');
+  const known = Boolean(weeksByName || snaps);
+  const word = (i, { notYet = false } = {}) => { const w = lastWeek(i); const d = detail(i.report); return `${i.player?.position_abbreviation || i.player?.position || ''} ${i.player?.first_name} ${i.player?.last_name} (${d ? `${d}; ` : ''}${notYet ? '' : statusWord(i.status)}${w ? `${notYet ? '' : '; '}last played Wk ${w}` : notYet && known ? `has not played for the ${String(teamFull || '').split(' ').pop()} this season` : ''})`.replace(/ \(\)$/, '').replace(/; \)$/, ')').trim(); };
+  const cleared = list.filter((i) => /^no game designation/i.test(String(i.status || '')));
+  const week = list.filter((i) => !cleared.includes(i) && rank(i.status) >= 0).sort((a, b) => rank(a.status) - rank(b.status));
+  const reserve = list.filter((i) => !cleared.includes(i) && rank(i.status) < 0);
+  return [week.length ? `${label}: ${week.map((i) => word(i)).join(', ')}` : `${label}: nobody listed this week`,
+    cleared.length ? `on the report with no game designation: ${cleared.map((i) => word(i, { notYet: true })).join(', ')}` : null,
+    reserve.length ? `on reserve: ${reserve.map((i) => word(i)).join(', ')}` : null].filter(Boolean).join(' · ');
 }
 
 /**
@@ -554,7 +560,9 @@ export function withOfficialReport(injuries, reports, roster = null) {
       // game statuses are filed every player on the report is listed, not only the feed's (Mahomes and Andrews were missing).
       // On a final report a listed player with no status has no designation, as the read says (round 18).
       if (listed) { rows[rows.indexOf(listed)] = { ...listed, ...(r.game_status ? { status: r.game_status } : designated ? { status: 'no game designation' } : {}), report: r }; continue; }
-      if (!r.game_status && designated) continue;
+      // A player on the final report with no designation stays, as "no game designation" (Nov 2 2026: Charbonnet and
+      // Price, both back tonight, were on Seattle's report and dropped here because the feed no longer carried them).
+      if (!r.game_status && designated) { rows.push({ player: { first_name: r.name.split(' ')[0], last_name: r.name.split(' ').slice(1).join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: 'no game designation', report: r }); continue; }
       const [first, ...rest] = String(r.name || '').trim().split(/\s+/);
       rows.push({ player: { first_name: first, last_name: rest.join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: r.game_status || 'no game status yet', report: r });
     }

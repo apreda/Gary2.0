@@ -197,7 +197,7 @@ export function mlbGameBlock(frame, ctx = {}, rowsByPlayer = new Map()) {
  * loud. Never a model rank, never contact quality. The ask says the floors.
  */
 export const FLOOR_NOTE = {
-  td: 'Only players with a touchdown this season are listed.',
+  td: 'Only players with a touchdown this season, or with no games yet this season, are listed.',
   hr: "Only hitters in tonight's lineups are listed, and of those only hitters with two or more home runs in their last 30 games or 15 on the season.",
   hrr: "Only hitters in tonight's lineups are listed.",
   tb: "Only hitters in tonight's lineups are listed.",
@@ -363,8 +363,11 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
  */
 /** ANYTIME TD's floor (founder, Sep 25 2026: 363 players is too many): a touchdown this season (last season's five-or-more
  * went Oct 23 2026: no last season, ever; the runner passes no last-season games). */
+// A player with no games this season is listed too (Nov 2 2026: Zach Charbonnet, back from a torn ACL for his first game
+// at ANYTIME TD +130, was left off the board, so the dart went to the back who had carried in his place).
 export function clearsNflFloor(kind, games, prior) {
   if (kind !== 'td') return true;
+  if (!(games || []).length) return true;
   const tds = (list) => (list || []).reduce((a, g) => a + (Number(g.rush_tds) || 0) + (Number(g.rec_tds) || 0) + (Number(g.ret_tds) || 0), 0);
   return tds(games) >= 1 || tds(prior) >= 5;
 }
