@@ -26,6 +26,8 @@
  */
 import { teamReportHistory, historyLine, backFromReports, outOnGameDay, gameTimeOnGameDay } from '../../../../sports/ncaaf/ncaafAvailabilityReports.js';
 import { ballDontLieService } from '../../../../providers/ballDontLieService.js';
+import { getTeamTalent, getRankings } from '../../../../providers/cfbdService.js';
+import { cfbdSchoolFor } from '../../orchestrator/ncaafRosterAndPoll.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
   getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
@@ -158,12 +160,13 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
  * gives the short form for the one-line schedule behind the season totals.
  */
-function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, full = true, exclude = null }) {
+function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, strength = null, full = true, exclude = null, when = null }) {
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
-  // Its record now and its games; no AP poll place (round 9, Oct 29 2026: ranks and places are out of what Gary reads).
   const record = records.get(Number(opponentId));
-  return [Number.isFinite(conf) ? (FBS.has(conf) ? CONF_NAME[conf] : 'FCS') : null,
+  const fbs = Number.isFinite(conf) && FBS.has(conf);
+  return [Number.isFinite(conf) ? (fbs ? CONF_NAME[conf] : 'FCS') : null,
+    fbs && team ? opponentStrength(strength, team.full_name, when, leagueGames) : null,
     // No record (Oct 31 2026, founder: "a team record doesn't matter for a spread"); its games follow.
     // A league table that did not load is said (round 15: every opponent's games went without a word).
     full && !league ? "its other games: not on file (the season's games could not be loaded)" : full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
@@ -186,14 +189,62 @@ export async function opponentContext({ teams, resultLists, season, cutoff = nul
   const counted = (results) => results.filter((r) => !cutoff || new Date(r.date) < new Date(cutoff));
   const records = new Map(known);
   const opponentIds = [...new Set(resultLists.flatMap((list) => list.map((r) => Number(r.opponentId))).filter(Number.isFinite))];
-  const [league] = await Promise.all([
+  const [league, talent, polls] = await Promise.all([
     loadNcaafLeagueContext({ season, cutoff, teams }).catch(() => null),
+    getTeamTalent(season).catch(() => null),
+    getRankings(season).catch(() => null),
     ...opponentIds.filter((id) => !records.has(id)).map(async (id) => {
       const results = counted(await loadTeamResults(SPORT, id, season).catch(() => []));
       if (results.length) records.set(id, record(results));
     }),
   ]);
-  return (opponentId, { full = true, exclude = null } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, full, exclude });
+  const strength = opponentStrengthTables(talent?.rows, polls?.rows);
+  return (opponentId, { full = true, exclude = null, when = null } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, strength, full, exclude, when });
+}
+
+// HOW STRONG EACH OPPONENT WAS (founder GO, Nov 2 2026, reversing the Oct 29 "no ranks" call for this): on every
+// game line, the opponent's 247Sports talent place (this season's rosters) and its AP place in the poll that was out
+// when the game was played (CFBD's poll week N is the one going into week N's games). The Oct 31 slate's reads set
+// the favorite's margins against this spread with nothing to say who those margins came against. The preseason poll
+// (week 1) is left out: it is built on last season.
+export function opponentStrengthTables(talentRows, rankingRows) {
+  const talent = (talentRows || []).filter((r) => Number.isFinite(Number(r.talent))).sort((a, b) => Number(b.talent) - Number(a.talent));
+  const ap = new Map();
+  for (const w of rankingRows || []) {
+    const poll = (w.polls || []).find((p) => p.poll === 'AP Top 25');
+    if (poll && Number(w.week) >= 2) ap.set(Number(w.week), poll.ranks || []);
+  }
+  return { talent, ap };
+}
+
+const etDayKey = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+/** The CFBD week a game date sits in, from the season's games (the same date, or a day either side). */
+function weekOf(leagueGames, when) {
+  const rows = (leagueGames?.rows || []).filter((g) => g.startDate && g.week != null);
+  if (!when || !rows.length) return null;
+  const at = Date.parse(when);
+  const same = rows.find((g) => etDayKey(g.startDate) === etDayKey(when));
+  const near = same || rows.filter((g) => Math.abs(Date.parse(g.startDate) - at) <= 36 * 3600 * 1000)
+    .sort((a, b) => Math.abs(Date.parse(a.startDate) - at) - Math.abs(Date.parse(b.startDate) - at))[0];
+  return near ? Number(near.week) : null;
+}
+
+export function opponentStrength(strength, teamName, when, leagueGames) {
+  if (!strength) return null;
+  const bits = [];
+  if (strength.talent.length) {
+    const school = cfbdSchoolFor(strength.talent.map((r) => r.team), teamName);
+    const i = school ? strength.talent.findIndex((r) => r.team === school) : -1;
+    if (i >= 0) bits.push(`talent No. ${i + 1} of ${strength.talent.length}`);
+  }
+  const week = weekOf(leagueGames, when);
+  const ranks = week != null ? strength.ap.get(week) : null;
+  if (ranks) {
+    const school = cfbdSchoolFor(ranks.map((r) => r.school), teamName);
+    const row = school && ranks.find((r) => r.school === school);
+    bits.push(row ? `AP No. ${row.rank} that week` : 'not in the AP Top 25 that week');
+  }
+  return bits.length ? bits.join(', ') : null;
 }
 
 function splitLine(team, label, results, describe) {
@@ -963,8 +1014,9 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       // opponent both teams played printed its season twice, and each list opened with the row's own score).
       const etDayOf = (x) => new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const seen = shownOpponents.get(Number(r.opponentId));
-      const oppText = seen ? `${label(r.opponentId, { full: false })}${label(r.opponentId, { full: false }) ? '; ' : ''}its games: under ${seen} above`
-        : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date) });
+      const short = label(r.opponentId, { full: false, when: r.date });
+      const oppText = seen ? `${short}${short ? '; ' : ''}its games: under ${seen} above`
+        : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date });
       if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: oppText ? `opponent: ${oppText}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
         // The scoring line says every score's kind; "points from" only stands in when that line is missing (round 16).
@@ -1035,7 +1087,7 @@ ${sides.map((s, i) => regularsLines(s.team, reportOf(s), rows[i], s.results, pla
 ${RULE}`;
 
   const behind = (s) => (s.results.length
-    ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId, { full: false }) ? ` (${label(r.opponentId, { full: false })})` : ''}`).join(', ')
+    ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId, { full: false, when: r.date }) ? ` (${label(r.opponentId, { full: false, when: r.date })})` : ''}`).join(', ')
     : null);
   return { site: site?.missing ? null : site, seasonGames, homeRoad, whoProduced, offense, regulars,
     scheduleBehind: { home: behind(sides[0]), away: behind(sides[1]) } };
