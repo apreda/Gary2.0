@@ -198,7 +198,7 @@ export async function conferenceArchive(conference, options = {}) {
 }
 
 // A quoted nickname is left out of the key (Oct 29 2026 hunt, round 7: the report's 'Brenten "Inky" Jones').
-const playerKey = (name) => String(name || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+const playerKey = (name) => String(name || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
 
 /**
  * A team's earlier reports this season, before `date`: { found, byPlayer: Map playerKey → [{ week, opponent, gameDay }]

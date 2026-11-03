@@ -52,7 +52,9 @@ const ordinal = (n) => `${n}${['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || [
 // Without the suffix: a report's "Dierre Hill" is the box score's "Dierre Hill Jr.".
 // A quoted nickname is left out (Oct 29 2026 hunt, round 7: the report's 'Brenten "Inky" Jones', with two tackles this
 // season, read "no stat row this season").
-const nameKey = (value) => String(value || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
+// Accents are dropped, not the letters under them (Nov 3 2026 college data check: Duke's "Ché Ojarikre", 2 sacks Oct 24,
+// keyed "chojarikre" against the box score's "Che Ojarikre" and read "no stat row this season").
+const nameKey = (value) => String(value || '').replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/g, '').replace(/[^a-z]/g, '');
 const record = (results) => `${results.filter((r) => r.won).length}-${results.filter((r) => !r.won).length}`;
 
 function miles(a, b) {

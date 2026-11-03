@@ -330,7 +330,7 @@ export function bigPlayWho(text, pass) {
 }
 
 /** A player's play-by-play key: first initial and the first word of the last name, letters only ("r|porter"). */
-export const playKey = (first, last) => `${String(first || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 1)}|${String(last || '').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '')}`;
+export const playKey = (first, last) => `${String(first || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 1)}|${String(last || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '')}`;
 
 /** Whether a game's play-by-play names this player: by jersey and name when his jersey is known, else by name. */
 export function namedInPlays(named, { first, last, jersey } = {}) {
