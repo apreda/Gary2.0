@@ -367,7 +367,13 @@ async function teamBoxBuilder(season, weeks) {
   // school box agrees with ESPN); CFBD's sacks and tackles for loss, which ESPN's team totals lack, stay.
   const lines = (team, result, sackPlays = null, espn = null) => {
     const found = find(team, result);
-    if (!found && !espn) return ['      units: the per-game unit lines are not available for this game'];
+    // The official box's sacks alone are not a unit line (Nov 3 2026 college data check: with CFBD's week missing,
+    // Nebraska's Sep 5 game read "— runs for — (2 of them sacks) · passing — for — · — giveaways ..."). Its counts stay.
+    const espnHas = Boolean(espn) && [...(espn.own?.keys?.() || []), ...(espn.opp?.keys?.() || [])].some((k) => k !== 'sacks');
+    if (!found && !espnHas) {
+      const made = espn?.own?.get?.('sacks'), taken = espn?.opp?.get?.('sacks');
+      return [`      units: the per-game unit lines are not available for this game${made != null || taken != null ? ` (the official box's sacks: ${made ?? '—'} made, ${taken ?? '—'} taken)` : ''}`];
+    }
     const own = new Map([...(found?.own || []), ...(espn?.own || [])]), opp = new Map([...(found?.opp || []), ...(espn?.opp || [])]);
     const count = (n, word) => `${n ?? '—'} ${word}${String(n) === '1' ? '' : 's'}`;
     // College box scores count sacks as runs (Oct 23 2026 data audit: Virginia's "40 runs for 37" held 10 sacks for 68

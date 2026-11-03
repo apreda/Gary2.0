@@ -76,6 +76,10 @@ async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch, attempt
         return fetchBulk(path, cacheKey, { fetchImpl, attempt: attempt + 1 });
       }
       value = { unavailable: true, reason: 'CFBD rate limit reached (429) after three retries.' };
+    } else if (response.status >= 500 && attempt < 3) {
+      clearTimeout(timer);
+      await new Promise((resolve) => setTimeout(resolve, process.env.VITEST ? 0 : 2000 * attempt));
+      return fetchBulk(path, cacheKey, { fetchImpl, attempt: attempt + 1 });
     } else if (!response.ok) {
       value = { unavailable: true, reason: `CFBD returned HTTP ${response.status} for ${path}.` };
     } else {
@@ -83,7 +87,14 @@ async function fetchBulk(path, cacheKey, { fetchImpl = globalThis.fetch, attempt
       value = { rows: Array.isArray(json) ? json : [] };
     }
   } catch (error) {
-    // A failed fetch is not an empty result.
+    // A timeout or dropped connection is asked again twice (Nov 3 2026 college data check: on Oct 31 the Washington @
+    // Nebraska desk lost both teams' first two weeks, and with them those games' player lines, kicking, drives and
+    // scoring, which all hang off CFBD's week of team boxes). A failed fetch is not an empty result.
+    if (attempt < 3) {
+      clearTimeout(timer);
+      await new Promise((resolve) => setTimeout(resolve, process.env.VITEST ? 0 : 2000 * attempt));
+      return fetchBulk(path, cacheKey, { fetchImpl, attempt: attempt + 1 });
+    }
     return { unavailable: true, reason: `Could not reach CFBD for ${path}: ${error.message}` };
   } finally {
     clearTimeout(timer);
