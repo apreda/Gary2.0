@@ -3,10 +3,11 @@
  * published). All of it from ESPN, one source: each team's schedule (every game's id, venue, neutral site, score) and
  * each game's box (every player on both sides, each score with its quarter and clock, every drive, each team's totals,
  * the score by quarter). Tonight first (the live read's quarterbacks and coaches, availability report, regulars missing
- * from the last game, and schedule, travel and weather, without season totals), then the records of every team in the
- * read, this season's meetings, and each team's last NCAAF_WINDOW games in full, then one line for each older game. An
- * opponent is its record, its FBS or FCS standing and its results; no averages or ranks. The news is the live read's,
- * without recaps of the games shown.
+ * from the last game, and schedule, travel and weather, without season totals), then this season's meetings, and each
+ * team's last NCAAF_WINDOW games in full, then one line for each older game. An opponent is its FBS or FCS standing and
+ * its results; no records, averages or ranks. Each team's own record is in its heading only (founder, Oct 31 2026: "the
+ * only record Gary needs to know is just their actual overall season record"). The news is the live read's, without
+ * recaps of the games shown.
  */
 import { sectionOf, matchupHeader, spreadInWords, lineOf } from './footballDeskText.js';
 import { quarterbacksAndCoaches, availabilityReport, afterIntro, situation, quarterbacksAndCoachesText } from './ncaafRead.js';
@@ -196,7 +197,8 @@ async function fullGame(g, season, tonight, read = null) {
     if (p.kick.length) lines.push(`   kicking and punting: ${p.kick.join('; ')}`);
     lines.push(`   ${p.quiet ? `starters with no stat line: ${p.quiet.join(', ') || 'none'}` : 'starting lineup: not on file'}`);
   }
-  // The opponent coming in: its division, its record before this game and its games, its record before tonight.
+  // The opponent coming in: its division and its games before this one, no record (Nov 3 2026 college data check: the
+  // Oct 31 records law reached the live read only; this read still said "USC Trojans coming in (FBS): 6-1").
   const oppGames = await finishedGames(g.them.id, season, tonight);
   if (!oppGames) { lines.push(`  ${g.them.name} coming in: not on file (ESPN did not answer for its schedule)`); return lines.join('\n'); }
   const prior = oppGames.filter((x) => Date.parse(x.date) < Date.parse(g.date));
@@ -210,13 +212,13 @@ async function fullGame(g, season, tonight, read = null) {
   // Its games against FCS teams marked, as the live read marks them (round 16: Utah State's loss to Idaho State read as an
   // FBS result).
   const fcs = await Promise.all(prior.map((x) => teamInfo(x.them.id).then((t) => t?.division === 'FCS').catch(() => false)));
-  // Its record before tonight is in RECORDS BEFORE TONIGHT (round 18). Each game once per read: one printed under an
+  // Each game once per read: one printed under an
   // earlier row points there, and one that is itself a full row of tonight's teams points to that row (round 18: TCU's
   // games printed under Baylor's and UCF's rows alike, and its loss at UCF beside UCF's own row), as the live read does.
   const games = prior.map((x, k) => ({ x, text: `${etDay(x.date).replace(/^\w+, /, '')} ${result(x)} ${vs(x)} ${x.them.short}${fcs[k] ? ' (FCS)' : ''}${x.neutral ? ' (neutral site)' : ''}${priorFacts[k] ? ` (${priorFacts[k]})` : ''}` }));
-  const head2 = `  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}: ${wl(prior)}`;
+  const head2 = `  ${g.them.name} coming in${opp?.division ? ` (${opp.division})` : ''}`;
   if (read) { const token = `\u0000COMING ${g.us.id} ${g.id}\u0000`; read.coming.set(token, { g, head: head2, games }); lines.push(token); }
-  else lines.push(`${head2}${games.length ? `; ${games.map((x) => x.text).join('; ')}` : ' (their first game)'}`);
+  else lines.push(`${head2}${games.length ? `: ${games.map((x) => x.text).join('; ')}` : ': their first game'}`);
   return lines.join('\n');
 }
 
@@ -238,7 +240,7 @@ function comingInOnce(story, read) {
       if (here) shown.set(k, here.label);
     }
     const listed = [...[...under].map(([at, days]) => `${days.join(', ')} under ${at} above`), ...items];
-    return `${head}${games.length ? `; ${listed.join('; ')}` : ' (their first game)'}`;
+    return `${head}${games.length ? `: ${listed.join('; ')}` : ': their first game'}`;
   });
 }
 
@@ -265,9 +267,6 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
   }
   const [awayRaw, homeRaw] = await Promise.all([finishedGames(awayId, yr, tonight), finishedGames(homeId, yr, tonight)]);
   const awayGames = awayRaw || [], homeGames = homeRaw || [];
-  // Every team in the read: the two, their opponents, with division and record before tonight.
-  const ids = [...new Set([homeId, awayId, ...awayGames.map((g) => g.them.id), ...homeGames.map((g) => g.them.id)])];
-  const records = await Promise.all(ids.map(async (id) => { const [t, gs] = await Promise.all([teamInfo(id), finishedGames(id, yr, tonight)]); return t ? `${t.name}${t.division ? ` (${t.division})` : ''} ${gs ? wl(gs) : 'record not on file'}` : null; }));
   // From whichever schedule loaded (round 16: a failed away schedule read 'none before tonight').
   const meetings = awayRaw ? awayGames.filter((g) => g.them.id === homeId) : homeGames.filter((g) => g.them.id === awayId);
   const meetingIds = new Set(meetings.map((g) => g.id));
@@ -299,8 +298,9 @@ export async function buildNcaafGameByGameStory(desk, { homeTeam, awayTeam, game
     return [`${name.toUpperCase()}: ${wl(games)}${games.length > NCAAF_WINDOW ? `; the last ${NCAAF_WINDOW} games in full, newest first, then one line for each older game` : ', newest first'}`,
       full.join('\n\n'), older.length ? `Older games, one line each:\n${(await Promise.all(older.map(olderLine))).join('\n')}` : null].filter(Boolean).join('\n\n');
   };
+  // No RECORDS BEFORE TONIGHT list of both teams and every opponent (Nov 3 2026, the Oct 31 records law): each team's
+  // record is in its own heading below, and each opponent's division rides on its coming-in line.
   let story = [[matchupHeader(desk), spreadInWords(lineOf(desk))].filter(Boolean).join('\n'), tonightPart,
-    `RECORDS BEFORE TONIGHT (the two teams and every opponent they have played)\n${records.filter(Boolean).join(' · ')}`,
     !awayRaw && !homeRaw ? "THIS SEASON'S MEETINGS: not on file (ESPN did not answer for either team's schedule)" : meetings.length ? `THIS SEASON'S MEETINGS\n${(await Promise.all(meetings.map((g) => fullGame(g, yr, tonight, read)))).join('\n\n')}` : "THIS SEASON'S MEETINGS: none before tonight",
     await teamPart(awayTeam, awayGames, awayRaw), await teamPart(homeTeam, homeGames, homeRaw)].join('\n\n');
   story = comingInOnce(story, read);
