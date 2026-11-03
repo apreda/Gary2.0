@@ -111,7 +111,7 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
 async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker) {
   if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off') return { news: null, model: null };
   const timeoutMs = researchBudgetMs({
-    configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
+    configuredMs: Number(options.timeoutMs) || Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
     deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
     decisionReserveMs: process.env.GARY_RESEARCH_DECISION_RESERVE_MS ?? 8 * 60 * 1000,
   });

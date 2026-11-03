@@ -45,6 +45,7 @@ const { ballDontLieService: bdl } = await import('../src/services/providers/ball
 const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dartsCommon.js');
 const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
+const { nflNewsFor, NEWS_NOT_ON_FILE: NFL_NEWS_NOT_ON_FILE } = await import('../src/services/gary/agentic/orchestrator/nflRead.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -214,6 +215,19 @@ async function throwLeague(league) {
       for (const f of board.frames) f.extra = [...(f.extra || []), bettor
         ? `Roster moves since each club's last game:\n${await rosterMoves(bettor, f.homeFull, f.awayFull, nflEtDate(new Date(f.commence))).catch((e) => `not on file (${e.message})`)}`
         : "Roster moves since each club's last game: not on file (the weekly files did not load)"];
+      // TODAY'S NEWS in each frame, from the news desk the game read and the props desk read (founder, Nov 2 2026, MNF:
+      // the darts read no news, so Zach Charbonnet's first game since a torn ACL, and Jadarian Price off IR, were a bare
+      // "no games yet" row; the Wilson TD dart read the backfield as Wilson's). The desk reads the frame as Gary has it.
+      const NEWS_AT_ONCE = 4;
+      const newsQueue = [...board.frames];
+      await Promise.all(Array.from({ length: Math.min(NEWS_AT_ONCE, newsQueue.length) }, async () => {
+        for (let f = newsQueue.shift(); f; f = newsQueue.shift()) {
+          const news = await nflNewsFor(nflGameBlock(f, injuries, weeksByName, snaps), 'americanfootball_nfl', f.homeFull, f.awayFull,
+            { gameId: f.gameId, gameTime: f.commence, timeoutMs: 8 * 60 * 1000 }).catch(() => null);
+          f.extra = [...(f.extra || []), `Today's news:\n${news || NFL_NEWS_NOT_ON_FILE}`];
+        }
+      }));
+      log(`${league}: today's news in ${board.frames.filter((f) => !f.extra.at(-1).endsWith(NFL_NEWS_NOT_ON_FILE)).length} of ${board.frames.length} game frames`);
       ctx.frameReports = true;
       for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f, injuries, weeksByName, snaps)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, ctx, log: { log } }));
