@@ -460,21 +460,25 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
  * or { unavailable }. */
 export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.fetch } = {}) {
   if (teamId == null) return { unavailable: true, reason: 'no team id' };
-  return cachedResearch(`espn_cfb_roster_v4:${teamId}`, async () => {
+  return cachedResearch(`espn_cfb_roster_v5:${teamId}`, async () => {
     try {
       // The roster page stops at 100 players unless asked for more (Oct 27 2026 data loop: Miami's 117 read as 100, and
       // Malachi Toney, Daylyn Upshaw and Mohamed Toure, starters, had no position).
       const roster = await getJson(`${SITE}/teams/${teamId}/roster?limit=300`, fetchImpl);
       // `byJersey` (jersey -> [first initial and last name]) places a player the box score never lists (round 13: a hurt
       // lineman read "team not on file").
-      const positions = {}, jerseys = {}, byJersey = {};
+      // `names` (full name -> position) gives a position to a player the box score never lists (Nov 3 2026 college data
+      // check: 228 of 413 players out on an earlier report, linemen and players yet to play, read as a bare name).
+      const positions = {}, jerseys = {}, byJersey = {}, names = {};
       for (const group of roster?.athletes || []) {
         for (const a of group?.items || []) {
           if (a?.id && a?.position?.abbreviation) positions[String(a.id)] = a.position.abbreviation;
+          const full = a?.fullName || a?.displayName;
+          if (full && a?.position?.abbreviation) names[full] = full in names && names[full] !== a.position.abbreviation ? '' : a.position.abbreviation;
           if (a?.id && a?.jersey != null) { jerseys[String(a.id)] = String(a.jersey); (byJersey[String(a.jersey)] ||= []).push(`${String(a.firstName || '')[0] || ''}|${String(a.lastName || '').toLowerCase()}`); }
         }
       }
-      return Object.keys(positions).length ? { positions, jerseys, byJersey } : { unavailable: true, reason: 'ESPN roster empty' };
+      return Object.keys(positions).length ? { positions, jerseys, byJersey, names } : { unavailable: true, reason: 'ESPN roster empty' };
     } catch (error) {
       console.warn(`[NCAAF box] ESPN roster for team ${teamId} not retrieved: ${error.message}`);
       return { unavailable: true, reason: error.message };

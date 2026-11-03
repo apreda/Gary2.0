@@ -529,7 +529,8 @@ async function playerGames(sides, boxes) {
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, unitTotals, jerseys: roster?.jerseys || {} };
+    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, unitTotals, jerseys: roster?.jerseys || {},
+      rosterPositions: new Map(Object.entries(roster?.names || {}).filter(([, position]) => position).map(([name, position]) => [nameKey(name), position])) };
   }));
 }
 
@@ -653,12 +654,14 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   const kicking = (position) => /^(PK|K|P|LS)$/i.test(position || '');
   const weight = (entry) => (kicking(entry.position) ? entry.games.size : [...entry.games.values()].reduce((sum, row) => sum + (Number(row.passing_attempts) || 0) + (Number(row.rushing_attempts) || 0)
     + (Number(row.receptions) || 0) + (Number(row.total_tackles) || 0), 0));
+  // The roster's position for a player with no box row and none on the report (Nov 3 2026 college data check).
+  const rosterPosition = (name) => plays?.rosterPositions?.get(nameKey(name)) || '';
   const lines = [], none = [], linemen = [], positions = [];
   const reportedKeys = new Set([...(reported || []).map((i) => nameKey(reportName(i))), ...exempt.map(nameKey)]);
   for (const injury of reported || []) {
     const name = reportName(injury);
     const found = [...byPlayer].find(([player]) => nameKey(player) === nameKey(name));
-    const position = found?.[1].position || injury.player?.position_abbreviation || injury.player?.position || '';
+    const position = found?.[1].position || injury.player?.position_abbreviation || injury.player?.position || rosterPosition(name);
     if (found) {
       const said = note(injury);
       // Whether the absence is new or already in the numbers (Oct 24 2026): his game-day status on the season's earlier
@@ -699,7 +702,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   // hunt, round 7: Clemson's Peyton Streko and five more read "out on an earlier report, not on this week's").
   const exemptKeys = new Set(exempt.map(nameKey));
   const backAll = backFromReports(history, (reported || []).map(reportName));
-  const exemptBack = backAll.filter((b) => exemptKeys.has(nameKey(b.name))).map((b) => `${b.name} (out on game day Wk ${b.outWeeks.join(', ')})`);
+  const exemptBack = backAll.filter((b) => exemptKeys.has(nameKey(b.name))).map((b) => `${b.name}${rosterPosition(b.name) ? ` ${rosterPosition(b.name)}` : ''} (out on game day Wk ${b.outWeeks.join(', ')})`);
   const back = backAll.filter((b) => !exemptKeys.has(nameKey(b.name))).map((b) => {
     const entry = [...byPlayer].find(([player]) => nameKey(player) === nameKey(b.name));
     const after = (r) => !b.lastOutDate || new Date(r.date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) > b.lastOutDate;
@@ -708,7 +711,8 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // hunt: Ohio State's Phillip Daniels, starting at tackle again, read "no stat row since").
     const startedSince = lineups.filter((r) => after(r) && startedIn(starts.get(String(r.gameId)), b.name));
     const parts = [startedSince.length ? `started since: ${startedSince.map(day).join(', ')}` : null, since.length ? `stat rows since: ${since.map(day).join(', ')}` : null].filter(Boolean);
-    return `${b.name}${entry?.[1].position ? ` ${entry[1].position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${parts.length ? parts.join('; ') : `no stat row since${lineups.some(after) ? ' and no start in a lineup on file' : ''}`})`;
+    const position = entry?.[1].position || rosterPosition(b.name);
+    return `${b.name}${position ? ` ${position}` : ''} (out on game day Wk ${b.outWeeks.join(', ')}; ${parts.length ? parts.join('; ') : `no stat row since${lineups.some(after) ? ' and no start in a lineup on file' : ''}`})`;
   });
   // When this week's report was not read, that comes first, and the earlier outs are not set against it (Oct 29 2026
   // hunt, round 7: Fresno State's "absences unknown" was hidden under its earlier outs, and North Carolina's six "not on
