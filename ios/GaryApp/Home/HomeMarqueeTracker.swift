@@ -154,13 +154,13 @@ struct HomeMarqueeTracker: View {
         if let hero, isCashRail(hero) { cashRailBody(hero) } else { classicBody }
     }
 
-    /// The live big game (NFL, NBA, college): the Cash Rail card, the other big games' ribbon under it.
+    /// The live big game (NFL, NBA, college): the Cash Rail card alone. The other big games' ribbon under it went
+    /// (founder, Nov 2 2026, a "BKN @ NYK · Q2" strip under the MNF card: "this part is not needed").
     @ViewBuilder private func cashRailBody(_ e: Entry) -> some View {
         let names = e.title.components(separatedBy: " @ ")
         let gameID = e.live?.game_id ?? ""
         let league = (e.league ?? "NFL").uppercased()
         let board = cashStore.board(league: league, gameID: gameID)
-        let rail = rail(excluding: e.id)
         VStack(spacing: 0) {
             CashRailLabelRow(title: CashRailFormat.billing(league: e.league, commence: e.commence.flatMap(parseISO8601)),
                              live: !e.isFinal)
@@ -172,12 +172,6 @@ struct HomeMarqueeTracker: View {
                          clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
                          board: board,
                          onOpenGame: { onOpenGame(e.matchupFull, e.league) })
-            if !rail.isEmpty || tomorrowTease != nil {
-                ribbonView(rail)
-                    .background(GaryColors.insetBand)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.top, 10)
-            }
         }
         .pageGutter()
         .onAppear { if !gameID.isEmpty { cashStore.watch(league: league, gameID: gameID) } }
