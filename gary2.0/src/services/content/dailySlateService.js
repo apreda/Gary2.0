@@ -130,8 +130,9 @@ const SLATE_SPORTS = [
   { key: 'americanfootball_nfl', league: 'NFL' },
   { key: 'americanfootball_ncaaf', league: 'NCAAF' },
   { key: 'basketball_nba', league: 'NBA' },
-  // NHL (Oct 3 2026): schedule and lines come from the league's own free feeds.
-  { key: 'icehockey_nhl', league: 'NHL' },
+  // NHL left the slate Nov 3 2026: off the scheduler since the founder's Oct 15 "no more running NHL", yet the
+  // slate still pulled every NHL game each morning, spent Odds API backup credits on its lines and kept the live
+  // poller on the NHL score feed.
 ];
 
 export function getETDateStr(date) {
