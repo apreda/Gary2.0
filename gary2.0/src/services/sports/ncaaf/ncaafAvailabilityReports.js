@@ -22,6 +22,7 @@ export const REPORT_CONFERENCES = Object.freeze({
   MAC: { key: 'MAC', label: 'MAC', page: 'https://getsomemaction.com' },
   B10: { key: 'B10', label: 'Big Ten', page: 'https://bigten.org/sports/2026/9/10/FB_Availability_Reports.aspx' },
   B12: { key: 'B12', label: 'Big 12', page: 'https://big12sports.com' },
+  P12: { key: 'P12', label: 'Pac-12', page: 'https://pac-12.com/news/2026/9/11/2026-football-reports.aspx' },
 });
 const USER_AGENT = 'GaryAI-availability-reader/1.0 (+https://betwithgary.ai)';
 const CACHE_MS = 15 * 60_000;
@@ -78,7 +79,50 @@ function stripImages(value) {
   return value;
 }
 
+// The Pac-12 publishes its reports as one JSON file behind its own page, not through the service the others use (Nov 4
+// 2026 college data check: its eight teams' absences came from a news search every week, "the Pac-12 availability report
+// was not read for this game"). The file holds each game's latest report; the shape is the page's own renderer's.
+const PAC12_REPORT_URL = 'https://sbcautostorage.blob.core.windows.net/availability-reports/pac12-football/prod/report.json';
+// The page repairs raw newlines inside quoted strings before parsing, so the file can carry them.
+function parseTolerant(text) {
+  try { return JSON.parse(text); } catch { /* repaired below */ }
+  let out = '', inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' && text[i - 1] !== '\\') inString = !inString;
+    out += inString && (ch === '\n' || ch === '\r') ? ' ' : ch;
+  }
+  return JSON.parse(out);
+}
+
+async function fetchPac12({ fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(`${PAC12_REPORT_URL}?ts=${Date.now()}`, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`Availability reports unavailable (${response.status})`);
+  const data = parseTolerant(await response.text());
+  if (!data || !Array.isArray(data.games)) throw new Error('Availability reports returned no report list');
+  const pacific = (iso, options) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', ...options }).format(new Date(iso));
+  const updated = (g) => (g.updatedAtUTC && Number.isFinite(Date.parse(g.updatedAtUTC)) ? g.updatedAtUTC : null);
+  return data.games.filter((g) => g && typeof g === 'object').map((g) => ({
+    id: g.gameId || `${g.away?.name || ''} @ ${g.home?.name || ''}`,
+    conference: 'P12',
+    reportType: String(g.notes || '').trim() || null,
+    gameDate: String(g.dateISO || '').slice(0, 10) || null,
+    gameTime: g.kickoff || null,
+    location: g.venue || null,
+    publishDate: updated(g) ? pacific(updated(g), { year: 'numeric', month: '2-digit', day: '2-digit' }) : null,
+    postedTime: updated(g) ? pacific(updated(g), { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }) : null,
+    timeZone: 'PT',
+    // A team with no players is a report not yet posted ("Report will be posted to the institution's conference website").
+    teams: [g.away, g.home].filter(Boolean).map((t) => ({
+      team: String(t.name || '').trim(),
+      rows: (Array.isArray(t.players) ? t.players : []).filter((p) => p?.name)
+        .map((p) => ({ position: String(p.position || '').trim() || null, number: null, name: String(p.name).replace(/\s+/g, ' ').trim(), status: String(p.status || '').trim() })),
+    })),
+  }));
+}
+
 async function fetchConference(conference, { fetchImpl = fetch } = {}) {
+  if (conference === 'P12') return fetchPac12({ fetchImpl });
   const response = await fetchImpl(PUBLIC_REPORTS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },

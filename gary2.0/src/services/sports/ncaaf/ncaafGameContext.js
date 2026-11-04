@@ -216,8 +216,8 @@ function officialStatus(raw) {
 // A conference that publishes an availability report and failed to give one leaves that side's absences not on file:
 // the search's rows do not stand in for the official report (Oct 23 2026 source audit; founder: no fallback that gives
 // different data when the original source fails).
-// The Pac-12 publishes one too, not through the service the others use, so it is never read (Oct 29 2026 hunt: Boise
-// State read "its conference publishes no availability report" over rows citing the Pac-12 report).
+// The Pac-12 publishes one too, read from its own file (Oct 29 2026 hunt: Boise State read "its conference publishes no
+// availability report" over rows citing the Pac-12 report; read since Nov 4 2026).
 const REPORTING_CONFERENCES = { 1: 'ACC', 2: 'American', 3: 'B12', 4: 'B10', 7: 'MAC', 9: 'P12', 10: 'SEC' };
 const CONFERENCE_LABEL = { B10: 'Big Ten', B12: 'Big 12', P12: 'Pac-12' };
 export function markOfficialMissing(context, official, { game } = {}) {
@@ -247,7 +247,9 @@ export function labelSearchedAvailability(context, { game } = {}) {
     const team = side === 'home' ? game?.home_team : (game?.away_team ?? game?.visitor_team);
     const conference = REPORTING_CONFERENCES[ncaafTeamConferenceId(team)];
     row.availability = 'searched news reporting';
-    row.availability_note = conference ? `the ${CONFERENCE_LABEL[conference] || conference} availability report was not read for this game`
+    // "No report found", not "not read": the Big Ten reports only games between two reporting conferences (Nov 4 2026:
+    // UCLA's game with Nevada read "the Big Ten availability report was not read for this game"; there was none).
+    row.availability_note = conference ? `no ${CONFERENCE_LABEL[conference] || conference} availability report was found for this game`
       : 'no conference availability report on file';
   }
   return out;
