@@ -24,6 +24,7 @@ await import('../src/loadEnv.js');
 const { supabaseAdmin: db } = await import('../src/supabaseClient.js');
 const { createModelSession, sendToSessionWithRetry } = await import('../src/services/gary/agentic/orchestrator/sessionManager.js');
 const { BACKGROUND_GPT } = await import('../src/services/gary/agentic/orchestrator/subscriptionRoutes.js');
+const { discoverCodexHomes } = await import('../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js');
 const { readWinnersBook } = await import('./winners-book.js');
 
 const START = '2026-11-05', END = '2026-11-22', REPORT_ON = '2026-11-23';
@@ -31,7 +32,9 @@ const LEAGUES = { NFL: 'nfl', NBA: 'nba', NCAAF: 'ncaaf' };
 const DIR = `${homedir()}/Library/Logs/Gary2.0/winners-labels`; mkdirSync(DIR, { recursive: true });
 const LABELS = `${DIR}/labels.json`, CALIBRATION = `${DIR}/calibration.json`, REPORT = `${DIR}/report-${REPORT_ON}.md`;
 const READERS = [
-  { id: 'gpt', session: { modelName: BACKGROUND_GPT, thinkingLevel: 'high' } },
+  // Pinned: unpinned, a GPT outage falls through to Opus and the "two readers" are one model (Nov 5 2026: that happened).
+  // A pinned reader that can't answer leaves the bet unread, and the next run tries again.
+  { id: 'gpt', session: { modelName: BACKGROUND_GPT, routePinned: true, codexHomes: discoverCodexHomes(), thinkingLevel: 'high' } },
   { id: 'opus', session: { modelName: 'claude-opus-5-5', routePinned: true, thinkingLevel: 'medium' } },
 ];
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
