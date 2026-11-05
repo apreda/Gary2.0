@@ -6,16 +6,16 @@
  * on that reasoning would have done, without running one.
  *
  * It reads and records only: nothing here reaches Gary, a pick, or the Winners board. It does not say whether the
- * reasoning is good. Two readers (GPT and Opus, separate sessions, no tools, no web) see the write-up and never a score
- * or a result, so the label can't lean on the outcome. A bet the two read differently stays a split and is reported as
- * one. A quote that isn't in the write-up gets one more try, then is flagged.
+ * reasoning is good. The reader (Opus only, founder Nov 5 2026: "we trust Opus 5.5"; no tools, no web) sees the write-up
+ * and never a score or a result, so the label can't lean on the outcome. A quote that isn't in the write-up gets one more
+ * try, then is flagged.
  *
  *   node scripts/run-winners-reason-labels.js                 # label what's due; from Nov 23, write the report (safe to rerun)
  *   node scripts/run-winners-reason-labels.js --calibrate --from 2026-10-27 --to 2026-11-04 [--extra "nba/2026-11-04_Heat_at_Clippers"]
  *   node scripts/run-winners-reason-labels.js --report
  *
- * No schedule: it runs once on or after Nov 23, when the founder opens the review. The reads stay on disk, and the readers
- * never see a result, so labeling them all at once is as blind as labeling them daily.
+ * No schedule: it runs once on or after Nov 23, when the founder opens the review. The reads stay on disk, and the reader
+ * never sees a result, so labeling them all at once is as blind as labeling them daily.
  * Files: ~/Library/Logs/Gary2.0/winners-labels/ labels.json, calibration.json, calibration.md, report-2026-11-23.md
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -23,20 +23,13 @@ import { homedir } from 'node:os';
 await import('../src/loadEnv.js');
 const { supabaseAdmin: db } = await import('../src/supabaseClient.js');
 const { createModelSession, sendToSessionWithRetry } = await import('../src/services/gary/agentic/orchestrator/sessionManager.js');
-const { BACKGROUND_GPT } = await import('../src/services/gary/agentic/orchestrator/subscriptionRoutes.js');
-const { discoverCodexHomes } = await import('../src/services/gary/agentic/orchestrator/providerAdapters/codexHomes.js');
 const { readWinnersBook } = await import('./winners-book.js');
 
 const START = '2026-11-05', END = '2026-11-22', REPORT_ON = '2026-11-23';
 const LEAGUES = { NFL: 'nfl', NBA: 'nba', NCAAF: 'ncaaf' };
 const DIR = `${homedir()}/Library/Logs/Gary2.0/winners-labels`; mkdirSync(DIR, { recursive: true });
 const LABELS = `${DIR}/labels.json`, CALIBRATION = `${DIR}/calibration.json`, REPORT = `${DIR}/report-${REPORT_ON}.md`;
-const READERS = [
-  // Pinned: unpinned, a GPT outage falls through to Opus and the "two readers" are one model (Nov 5 2026: that happened).
-  // A pinned reader that can't answer leaves the bet unread, and the next run tries again.
-  { id: 'gpt', session: { modelName: BACKGROUND_GPT, routePinned: true, codexHomes: discoverCodexHomes(), thinkingLevel: 'high' } },
-  { id: 'opus', session: { modelName: 'claude-opus-5-5', routePinned: true, thinkingLevel: 'medium' } },
-];
+const READER = { modelName: 'claude-opus-5-5', routePinned: true, thinkingLevel: 'medium' };
 const arg = (name) => { const i = process.argv.indexOf(name); return i > -1 ? process.argv[i + 1] : null; };
 const args = (name) => process.argv.flatMap((a, i) => (a === name ? [process.argv[i + 1]] : []));
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -79,27 +72,25 @@ function parseAnswer(text) {
   try { const v = JSON.parse(blocks.at(-1)?.[1] || ''); return ROLES.has(v?.role) ? v : null; } catch { return null; }
 }
 
-async function askReader(reader, bet, text) {
+async function askReader(bet, text) {
   let last = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const session = await createModelSession({ ...reader.session, systemPrompt: SYSTEM, tools: null, browse: false, enableCache: false });
+    const session = await createModelSession({ ...READER, systemPrompt: SYSTEM, tools: null, browse: false, enableCache: false });
     const reply = await sendToSessionWithRetry(session, prompt(bet, text));
     const answer = parseAnswer(reply?.content);
     if (!answer) { last = { error: 'no readable answer' }; continue; }
     const quoteOk = answer.role === 'absent' ? !flat(answer.quote) : Boolean(flat(answer.quote)) && flat(text).includes(flat(answer.quote));
-    last = { role: answer.role, part_of_reasoning: answer.role === 'for_the_pick', quote: answer.quote || '', quote_ok: quoteOk, model: reader.session.modelName };
+    last = { role: answer.role, part_of_reasoning: answer.role === 'for_the_pick', quote: answer.quote || '', quote_ok: quoteOk, model: READER.modelName };
     if (quoteOk) break;
   }
   return last;
 }
 
 async function labelBet(bet) {
-  const answers = await Promise.all(READERS.map((r) => askReader(r, bet, bet.text).catch((e) => ({ error: e.message }))));
-  const readers = Object.fromEntries(READERS.map((r, i) => [r.id, answers[i]]));
-  const failed = answers.some((a) => a?.error || !a);
+  const answer = await askReader(bet, bet.text).catch((e) => ({ error: e.message }));
   const { text, ...kept } = bet;
-  const parts = answers.map((a) => a?.part_of_reasoning);
-  return { ...kept, readers, status: failed ? 'unread' : parts[0] === parts[1] ? 'agreed' : 'split', part_of_reasoning: !failed && parts[0] === parts[1] ? parts[0] : null, labeled_at: new Date().toISOString() };
+  const read = answer && !answer.error;
+  return { ...kept, ...answer, status: read ? 'read' : 'unread', part_of_reasoning: read ? answer.part_of_reasoning : null, labeled_at: new Date().toISOString() };
 }
 
 const section = (text, name) => { const m = text.match(new RegExp(`########## ${name}\\n([\\s\\S]*?)(?=\\n\\n########## |$)`)); return m ? m[1].trim() : null; };
@@ -150,13 +141,13 @@ async function pool(items, size, work) {
 
 async function runLabels(bets, path) {
   const labels = readJson(path);
-  const due = bets.filter((b) => labels[b.key]?.status !== 'agreed' && labels[b.key]?.status !== 'split' && b.text);
+  const due = bets.filter((b) => labels[b.key]?.status !== 'read' && b.text);
   console.log(`[labels] ${bets.length} bets, ${due.length} to read`);
   await pool(due, 3, async (bet) => {
     const row = await labelBet(bet);
     labels[bet.key] = row;
     writeJson(path, labels);
-    console.log(`[labels] ${row.status.padEnd(6)} ${row.game_date} ${row.league} ${row.pick} | gpt ${row.readers.gpt?.role || row.readers.gpt?.error} | opus ${row.readers.opus?.role || row.readers.opus?.error}`);
+    console.log(`[labels] ${row.game_date} ${row.league} ${row.pick} | ${row.role || row.error}`);
   });
   for (const b of bets.filter((x) => !x.text)) console.warn(`[labels] nothing to read for ${b.key}`);
   return labels;
@@ -164,17 +155,13 @@ async function runLabels(bets, path) {
 
 function calibrationReport(labels) {
   const rows = Object.values(labels).sort((a, b) => a.game_date.localeCompare(b.game_date));
-  const agreed = rows.filter((r) => r.status === 'agreed');
+  const read = rows.filter((r) => r.status === 'read');
   const lines = ['# Winners reason labels: calibration', '',
-    `${rows.length} past bets and known cases read by two separate readers, with no results shown. These don't count toward the Nov 5-22 numbers.`,
-    `Agreed: ${agreed.length} of ${rows.length}. Part of his reasoning, both readers: ${agreed.filter((r) => r.part_of_reasoning).length}. Not part, both readers: ${agreed.filter((r) => !r.part_of_reasoning).length}. Split: ${rows.filter((r) => r.status === 'split').length}. Unread: ${rows.filter((r) => r.status === 'unread').length}.`, ''];
-  for (const r of rows) {
-    lines.push(`## ${r.status.toUpperCase()} · ${r.game_date} ${r.league} · ${r.away} @ ${r.home} · ${r.pick}${r.extra ? ' (known case)' : ''}`);
-    for (const id of READERS.map((x) => x.id)) { const a = r.readers[id]; lines.push(`- ${id}: ${a?.role || a?.error}${a?.quote ? ` · "${a.quote.replace(/\s+/g, ' ').slice(0, 280)}"` : ''}${a && a.quote_ok === false ? ' · QUOTE NOT FOUND' : ''}`); }
-    lines.push('');
-  }
-  writeFileSync(`${DIR}/calibration.md`, lines.join('\n'));
-  console.log(`[labels] ${lines[2]}\n[labels] ${lines[3]}\n[labels] ${DIR}/calibration.md`);
+    `${rows.length} past bets and known cases, with no results shown. These don't count toward the Nov 5-22 numbers.`,
+    `Part of his reasoning: ${read.filter((r) => r.part_of_reasoning).length}. Not part: ${read.filter((r) => !r.part_of_reasoning).length}. Unread: ${rows.length - read.length}.`, ''];
+  for (const r of rows) lines.push(`- ${r.game_date} ${r.league} ${r.away} @ ${r.home} · ${r.pick}${r.extra ? ' (known case)' : ''}: ${r.role || r.error}${r.quote ? ` · "${r.quote.replace(/\s+/g, ' ').slice(0, 280)}"` : ''}${r.quote_ok === false ? ' · QUOTE NOT FOUND' : ''}`);
+  writeFileSync(`${DIR}/calibration.md`, `${lines.join('\n')}\n`);
+  console.log(`[labels] ${lines[3]}\n[labels] ${DIR}/calibration.md`);
 }
 
 /** Two-sided Fisher exact test on wins and losses, for how often a gap this size shows up by chance. */
@@ -198,21 +185,21 @@ async function writeReport() {
   const book = await readWinnersBook(db, { since: START, until: END });
   const graded = new Map(book.filter((r) => r.kind === 'game' && r.published).map((r) => [`${r.league}|${r.game_id}`, r]));
   const rows = bets.map((b) => ({ ...b, ...(labels[b.key] || { status: 'unread' }), result: graded.get(`${b.league}|${b.game_id}`)?.result || null, units: graded.get(`${b.league}|${b.game_id}`)?.units ?? null }));
-  const yes = rows.filter((r) => r.status === 'agreed' && r.part_of_reasoning), no = rows.filter((r) => r.status === 'agreed' && !r.part_of_reasoning);
-  const split = rows.filter((r) => r.status === 'split'), unread = rows.filter((r) => r.status === 'unread');
-  const [Y, N, S] = [tally(yes), tally(no), tally(split)];
+  const yes = rows.filter((r) => r.status === 'read' && r.part_of_reasoning), no = rows.filter((r) => r.status === 'read' && !r.part_of_reasoning);
+  const unread = rows.filter((r) => r.status !== 'read');
+  const [Y, N] = [tally(yes), tally(no)];
   const chance = Y.won + Y.lost && N.won + N.lost ? fisher(Y.won, Y.lost, N.won, N.lost) : null;
   const row = (name, t, n) => `| ${name} | ${n} | ${t.text} | ${sign(t.units)} |`;
   const lines = [`# Winners reason labels: results, ${START} to ${END}`, '',
-    `Written ${today}. Winners and Gary were not changed by any of this. Readers saw no results. Units are 1 risked per bet at its recorded price.`, '',
+    `Written ${today}. Winners and Gary were not changed by any of this. The reader saw no results. Units are 1 risked per bet at its recorded price.`, '',
     '| Shared-opponent comparison in his reasoning | Bets | Record | Units |', '|---|---|---|---|',
-    row('Yes, both readers', Y, yes.length), row('No, both readers', N, no.length), row('Readers split', S, split.length), ...(unread.length ? [row('Not read', tally(unread), unread.length)] : []), '',
+    row('Yes', Y, yes.length), row('No', N, no.length), ...(unread.length ? [row('Not read', tally(unread), unread.length)] : []), '',
     chance === null ? 'Too few graded bets on one side to compare.' : `If this reasoning made no difference, a gap this size would still show up by chance about ${Math.max(1, Math.round(chance * 100))} times in 100. Small counts: this can't prove a cause.`, '',
     `What a filter on "Yes" would have done: pulled ${yes.length} bets (${Y.text}, ${sign(Y.units)} units) and left ${rows.length - yes.length} (${tally(rows.filter((r) => !yes.includes(r))).text}, ${sign(tally(rows.filter((r) => !yes.includes(r))).units)} units).`, '',
-    '## By sport', '', '| Sport | Yes | No | Split |', '|---|---|---|---|'];
-  for (const l of Object.keys(LEAGUES)) lines.push(`| ${l} | ${tally(yes.filter((r) => r.league === l)).text} | ${tally(no.filter((r) => r.league === l)).text} | ${tally(split.filter((r) => r.league === l)).text} |`);
-  const list = (title, set) => { lines.push('', `## ${title} (${set.length})`, ''); for (const r of set.sort((a, b) => a.game_date.localeCompare(b.game_date))) { const q = Object.values(r.readers || {}).find((a) => a?.quote)?.quote; lines.push(`- ${r.game_date} ${r.league} ${r.pick}: ${r.result || 'ungraded'}${q ? ` · "${q.replace(/\s+/g, ' ').slice(0, 240)}"` : ''}`); } };
-  list('Yes', yes); list('Readers split', split);
+    '## By sport', '', 'College: the founder counts this as a fair way to judge teams on very different schedules (Nov 5 2026), so a yes there is not a flaw.', '', '| Sport | Yes | No |', '|---|---|---|'];
+  for (const l of Object.keys(LEAGUES)) lines.push(`| ${l} | ${tally(yes.filter((r) => r.league === l)).text} | ${tally(no.filter((r) => r.league === l)).text} |`);
+  const list = (title, set) => { lines.push('', `## ${title} (${set.length})`, ''); for (const r of set.sort((a, b) => a.game_date.localeCompare(b.game_date))) lines.push(`- ${r.game_date} ${r.league} ${r.pick}: ${r.result || 'ungraded'}${r.quote ? ` · "${r.quote.replace(/\s+/g, ' ').slice(0, 240)}"` : ''}${r.quote_ok === false ? ' · QUOTE NOT FOUND' : ''}`); };
+  list('Yes', yes);
   lines.push('', `## No (${no.length})`, '', no.sort((a, b) => a.game_date.localeCompare(b.game_date)).map((r) => `${r.game_date} ${r.league} ${r.pick}: ${r.result || 'ungraded'}`).join('\n'));
   if (unread.length) { lines.push('', `## Not read (${unread.length})`, '', unread.map((r) => `${r.game_date} ${r.league} ${r.pick}`).join('\n')); }
   writeFileSync(REPORT, `${lines.join('\n')}\n`);
