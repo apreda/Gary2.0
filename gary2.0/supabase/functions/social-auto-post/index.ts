@@ -53,10 +53,11 @@ async function postTweet(text: string, replyToId?: string): Promise<string> {
 
 // ── Metrics ─────────────────────────────────────────────────────────────────────
 // Impressions, likes, replies, retweets, bookmarks, profile and link clicks for the last six days of posts.
-// Each row's numbers are the SUM across its tweets (root + reply). Throttled to once per 45 minutes off the
-// stored timestamp, so it holds at any cron cadence without extra X reads.
+// Each row's numbers are the SUM across its tweets (root + reply). Throttled to once a day off the stored
+// timestamp, so it holds at any cron cadence without extra X reads (founder, Nov 5 2026: X reads cost money,
+// and nothing reads these numbers more often than daily).
 
-const METRICS_MIN_INTERVAL_MIN = 45;
+const METRICS_MIN_INTERVAL_MIN = 24 * 60;
 
 async function fetchMetricsBatch(ids: string[]): Promise<Record<string, any>> {
   const byId: Record<string, any> = {};
