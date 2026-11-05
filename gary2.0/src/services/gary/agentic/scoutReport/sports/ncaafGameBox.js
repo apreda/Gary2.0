@@ -354,6 +354,15 @@ function byScoreAtSnap(summary, teams) {
   }
   return out;
 }
+/** Who made the sacks and interceptions, both teams (Nov 5 2026: the unit lines count them, and the NFL rows name them). */
+function defensePlaysLine(box, us, them, name) {
+  const one = (t) => {
+    const mine = (box.players || []).filter((p) => p.teamId === t.id);
+    const list = (get) => mine.map((p) => [p.name, Number(get(p)) || 0]).filter(([n, v]) => n && v > 0).sort((a, b) => b[1] - a[1]).map(([n, v]) => `${n}${v === 1 ? '' : ` ${v}`}`).join(', ') || 'nobody';
+    return `${name(t.id)} sacks by ${list((p) => p.stats?.defensive?.sacks)}; interceptions by ${list((p) => p.stats?.interceptions?.interceptions)}`;
+  };
+  return (box.players || []).length ? `who made the defensive plays: ${one(us)} · ${one(them)}` : null;
+}
 /** The by-score line for both teams; said not on file when the plays run more than 30 yards off a team's box total. */
 function byScoreLine(box, us, them, name) {
   if (!box?.byScore) return null;
@@ -482,6 +491,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
     `scoring: ${plays.length ? plays.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${scoringWords(p.text)} (${/not on file/.test(p.note || '') ? p.note : `${score(p)}${p.note ? `; ${p.note}` : ''}`})`).join(' · ') : 'none'}`,
     `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · ${possession} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
+    ...(defensePlaysLine(box, us, them, name) ? [defensePlaysLine(box, us, them, name)] : []),
     ...(byScoreLine(box, us, them, name) ? [byScoreLine(box, us, them, name)] : []),
     ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`]
       : box.injuryText === false && (box.drives || []).length ? ['hurt during the game: not on file (this game\'s play-by-play logs no injuries)'] : []),

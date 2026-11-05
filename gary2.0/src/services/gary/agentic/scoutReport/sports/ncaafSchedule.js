@@ -73,7 +73,7 @@ async function resolveSite({ homeTeam, awayTeam, season, game, seasonGames }) {
   const row = seasonGameFor(seasonGames, homeTeam, awayTeam, game?.commence_time);
   const venue = row ? venueById(venues, row.venueId) : null;
   if (venue) {
-    return { confirmed: true, neutral: row.neutralSite === true, conferenceGame: row.conferenceGame === true,
+    return { confirmed: true, neutral: row.neutralSite === true, conferenceGame: row.conferenceGame === true, homeConference: row.homeConference || null, awayConference: row.awayConference || null,
       name: RENAMED_VENUES[venue.name || row.venue] || venue.name || row.venue, city: venue.city || null, state: venue.state || null,
       capacity: Number(venue.capacity) || null, surface: venue.grass === true ? 'grass' : venue.grass === false ? 'turf' : null,
       dome: venue.dome === true, elevationFt: Number.isFinite(Number(venue.elevation)) ? Math.round(Number(venue.elevation) * 3.281 / 10) * 10 : null,
@@ -139,6 +139,9 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
     site.surface, Number.isFinite(site.elevationFt) ? `elevation ${site.elevationFt.toLocaleString('en-US')} ft` : null].filter(Boolean);
   const lines = [`Site: ${place}${facts.length ? ` (${facts.join(', ')})` : ''}.`
     + (site.neutral ? ' NEUTRAL SITE: neither team is at home.' : ` ${homeTeam} are at home; ${awayTeam} are the visitors.`)
+    // Whether it's a league game (Nov 5 2026 college data round: the provider says so, and the read never did).
+    + (site.conferenceGame ? ` Conference game${site.homeConference ? ` (${site.homeConference})` : ''}.`
+      : site.confirmed && site.homeConference && site.awayConference ? ` Non-conference game: ${homeTeam} ${site.homeConference}, ${awayTeam} ${site.awayConference}.` : '')
     + (site.confirmed ? '' : ' This is the home team\'s stadium on file; the schedule provider did not confirm the site of this game.')];
   if (site.tz && game?.commence_time) {
     const local = new Date(game.commence_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: site.tz });
@@ -613,7 +616,11 @@ async function whoTheyAreLines(team, { season, schoolOf, portal, coaches, roster
   const passers = [...playersOf(rows, results)].filter(([, e]) => [...e.games.values()].some((row) => Number(row.passing_attempts) > 0) && /^QB$/i.test(e.position || 'QB')).map(([n]) => n);
   const listed = (reported || []).map((r) => String(reportName(r) || '').trim()).filter(Boolean);
   const seen = new Set();
-  const people = [...passers, ...core.keys(), ...listed].filter((n) => { const k = nameKey(n); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  // Who makes the defense's plays: a preview names them, and the box lines only count them.
+  const total = (e, key) => [...e.games.values()].reduce((a, row) => a + (Number(row[key]) || 0), 0);
+  const defenders = [...playersOf(rows, results)].map(([n, e]) => [n, total(e, 'sacks') + total(e, 'interceptions') + total(e, 'tackles_for_loss') / 2])
+    .filter(([, v]) => v >= 2).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+  const people = [...passers, ...core.keys(), ...defenders, ...listed].filter((n) => { const k = nameKey(n); if (!k || seen.has(k)) return false; seen.add(k); return true; });
   const who = (name) => {
     const k = nameKey(name), t = moved.get(k);
     const star = Number(t?.stars) > 0 ? Number(t.stars) : stars.get(k);
@@ -1124,8 +1131,9 @@ ${RULE}`;
   const whoTheyAre = `WHO THE PLAYERS AND COACHES ARE
 ${RULE}
 Each team's head coach, then its quarterbacks with a pass this season, its regular
-ball carriers and catchers and the players on its availability report: class, a
-transfer's old school if he moved this year, and recruiting stars where on file.
+ball carriers and catchers, the defenders with the most sacks, interceptions and
+tackles for loss, and the players on its availability report: class, a transfer's
+old school if he moved this year, and recruiting stars where on file.
 
 ${whoBlocks.join('\n\n')}
 ${RULE}`;

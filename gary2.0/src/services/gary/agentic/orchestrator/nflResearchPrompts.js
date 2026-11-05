@@ -44,13 +44,13 @@ const NEWS_DESK = (game, sport) => `You are the news desk for a sports bettor na
 
 1. The latest news on who plays. For BOTH teams, find reporting newer than what is below or missing from it: ${NEWS_DESK_ITEMS[isCollege(sport) ? 'NCAAF' : 'NFL']}. Give each item its date.
 
-2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason.
+2. The week's storylines: what someone following either team would know going into this game, beyond who plays. For example ${isCollege(sport) ? "what is at stake for each team in this game (the conference race, a playoff or bowl spot, a coach's job), a trophy game, homecoming or senior day, " : ''}an emotional occasion (a tribute, a first game since a death or a departure), a player or coach facing a former team, a rivalry, a milestone within reach, a coaching or front-office shakeup, or something that happened in or around the team this week. For BOTH teams, each as what happened, with its date. Leave out game plans and scheme or matchup breakdowns, and anything about past seasons or the preseason.
 
 Report what happened only: no statistics, no opinions, analysis or predictions from anyone (a coach's or reporter's word on whether a player plays, or how much, is reporting: keep it, attributed and dated), nothing about betting lines, odds, line moves or betting percentages, and no betting conclusion. If there is nothing new or no storyline, say so; that is a complete answer.
 
 Return one JSON object:
 {"factor": "The latest news", "findings": "Each item on who plays for both teams, one per line, with its date", "storylines": "Each storyline for both teams, one per line, with its date, or none", "sources": "URL and publication date for each item", "uncertainties": "Conflicting or unconfirmed reports, or none"}
-Keep the whole answer under 3,500 characters.
+Keep the whole answer under ${isCollege(sport) ? '5,000' : '3,500'} characters.
 
 ## THE GAME, AS GARY HAS IT
 ${game}`;
