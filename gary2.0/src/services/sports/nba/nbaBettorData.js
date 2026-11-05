@@ -11,7 +11,7 @@ import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../.
 import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
-import { recordsById, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
+import { recordsById, seasonSummaries, seasonTeamBoxes } from '../../gamebygame/gameRecordStore.js';
 import { flowFacts, lastLeft, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
@@ -407,12 +407,29 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // now)" alone; points allowed could not be read against who scored them).
   const asOfDay = new Date(before).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const byTeamSummaries = await seasonSummaries('NBA', season, asOfDay).then(summariesByTeam).catch(() => null);
+  // Nov 5 2026 (founder: "NBA should have a lot lot more than just bare box scores"): the football logs name the opponent's
+  // quarterback in each of its games with its yards both ways; here each game says who was out on each side and how it
+  // played both ways, so a result can be read against who was on the floor. A player counts as out only if he has played
+  // for that team this season: someone who hasn't played yet is no change from what the team has been. Tonight's own
+  // team keeps the bare score, since those games are full rows in its list.
+  const teamBoxes = byTeamSummaries ? await seasonTeamBoxes('NBA', season, asOfDay).catch(() => null) : null;
+  const playedFor = (teamId) => new Set((byTeamSummaries?.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[String(r.summary.home.id) === String(teamId) ? 'home' : 'away'] || []));
+  const outWords = (r, side, teamId) => {
+    if (r.summary.listed?.[side] == null) return 'not on file';
+    const played = playedFor(teamId);
+    return (r.summary.out?.[side] || []).filter((name) => played.has(name)).join(', ') || 'nobody';
+  };
+  const boxWords = (t) => `${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} rebounds (${t.oreb} offensive), ${t.turnover} turnovers`;
   const otherGames = (teamId, gameId) => {
     if (!byTeamSummaries) return null;
     const list = (byTeamSummaries.get(String(teamId)) || []).filter((r) => String(r.game_id) !== String(gameId)).slice().reverse();
     return list.map((r) => { const mine = String(r.summary.home.id) === String(teamId) ? 'home' : 'away', theirs = mine === 'home' ? 'away' : 'home';
       const a = r.summary[mine].score, b = r.summary[theirs].score;
-      return `${a > b ? 'W' : 'L'} ${a}-${b}${r.summary.ot ? ' (OT)' : ''} ${mine === 'home' ? 'vs' : '@'} ${r.summary[theirs].abbr || r.summary[theirs].name}`; }).join(', ');
+      const score = `${a > b ? 'W' : 'L'} ${a}-${b}${r.summary.ot ? ' (OT)' : ''} ${mine === 'home' ? 'vs' : '@'} ${r.summary[theirs].abbr || r.summary[theirs].name}`;
+      if (String(r.summary[theirs].id) === String(ts.id)) return score;
+      const box = teamBoxes?.get(String(r.game_id));
+      const played = box?.[mine]?.fga != null && box?.[theirs]?.fga != null ? `; about ${box[mine].possessions} possessions; ${boxWords(box[mine])}; allowed ${boxWords(box[theirs])}` : '';
+      return `${score} (their out: ${outWords(r, mine, teamId)}; ${r.summary[theirs].abbr || r.summary[theirs].name} out: ${outWords(r, theirs, r.summary[theirs].id)}${played})`; }).join(', ');
   };
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;

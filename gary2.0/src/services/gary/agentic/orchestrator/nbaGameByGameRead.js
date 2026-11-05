@@ -27,7 +27,8 @@ const etDate = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'A
 const etDay = (ymd) => new Date(`${String(ymd).slice(0, 10)}T16:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
 const ord = (n) => `${n}${[, 'st', 'nd', 'rd'][n % 100 > 10 && n % 100 < 14 ? 0 : n % 10] || 'th'}`;
 
-/** Builds any of the season's finished games missing from the store (the morning job keeps it current; this catches up). */
+/** Builds any of the season's finished games missing from the store. scripts/run-all-results.js runs it (Nov 5 2026: the
+ * game-by-game test that used to is off); the live NBA read, props and darts all read these records, so this stays. */
 export async function ensureNbaRecords(season = nbaSeason()) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const games = ((await ballDontLieService.getGames('basketball_nba', { seasons: [season], end_date: today, per_page: 100, paginateAll: true })) || []).filter((g) => /final/i.test(String(g.status)));

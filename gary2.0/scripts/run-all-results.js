@@ -40,7 +40,19 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const { run } = createResultsEngine({ supabase, apiKey: BDL_API_KEY, runOptions: RUN_OPTIONS });
 
-run().catch(err => {
+// The NBA game records the live read, props and darts use (Nov 5 2026: the game-by-game test that built them is off).
+// After results, on the same schedule; a miss here never fails the results run, and the next run catches up.
+async function buildNbaRecords() {
+  try {
+    const { ensureNbaRecords } = await import('../src/services/gary/agentic/orchestrator/nbaGameByGameRead.js');
+    const built = await ensureNbaRecords();
+    console.log(`📚 NBA game records: ${built.built} built${built.failed.length ? `; not built: ${built.failed.join('; ')}` : ''}`);
+  } catch (e) {
+    console.warn(`⚠️ NBA game records not built this run: ${e.message}`);
+  }
+}
+
+run().then(buildNbaRecords).catch(err => {
   console.error('\n❌ FATAL ERROR:', err);
   process.exit(1);
 });

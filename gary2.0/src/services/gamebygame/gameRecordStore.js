@@ -53,6 +53,19 @@ export async function seasonSummaries(league, season, beforeDate) {
   }
 }
 
+/** Every game's team box lines in a season before `beforeDate`, by game id: the opponent lists read them without loading
+ * each game's full record. */
+export async function seasonTeamBoxes(league, season, beforeDate) {
+  const out = new Map();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db().from(TABLE).select('game_id, teams:record->teams')
+      .eq('league', league).eq('season', season).lt('game_date', beforeDate).order('game_date').order('game_id').range(from, from + 999);
+    if (error) throw new Error(`game records store: team boxes failed: ${error.message}`);
+    for (const r of data || []) out.set(String(r.game_id), r.teams);
+    if (!data || data.length < 1000) return out;
+  }
+}
+
 /** Given games' full records, by id, oldest first. */
 export async function recordsById(league, gameIds) {
   if (!gameIds.length) return [];
