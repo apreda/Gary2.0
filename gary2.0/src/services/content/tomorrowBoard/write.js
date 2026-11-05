@@ -6,7 +6,7 @@ import { getPitcherXStats } from '../../providers/baseballSavantService.js';
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { readNflQuarterbacks, attachArmsTakes } from './armsTakes.js';
 import { supabaseUrl, supabaseAnonKey, supabaseServiceKey, TABLE, CONFLICT_KEY, SEASON, tomorrowET, nameKey, rowGameIdentity, indexMlbTeams, indexStandings, indexPitcherEraByName, computeLeagueAvgEra } from './basics.js';
-import { buildBigGames, toBoardRow, marqueeGameKeys } from './bigGames.js';
+import { buildBigGames, toBoardRow, marqueeGameKeys, nationalNbaKeys } from './bigGames.js';
 import { buildSlate, PRESERVED_BOARD_ROW, mergeFailedTomorrowLeagues, TomorrowBoardSourceError } from './slate.js';
 import { buildStarters, enrichStartersWithOutings, attachSeriesToBoard } from './starters.js';
 import { buildReturns, slateTeamsMlb, buildForm, buildRecentTeamMetrics, buildRunProfile } from './teamForm.js';
@@ -266,6 +266,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   // 4. BIG GAMES.
   const bigGames = buildBigGames(slateRows, {
     mlb: { teamIndex, standings, idByName, acesByGame, pitchersByGame },
+    nbaNational: await nationalNbaKeys(etDateStr, slateRows),
   });
   const marqueeKeys = marqueeGameKeys(bigGames);
 
@@ -445,6 +446,7 @@ export async function refreshMarqueeBoard(etDateStr, table = TABLE) {
   const { acesByGame, pitchersByGame } = await buildStarters(etDateStr, teamIndex, eraByName);
   const bigGames = buildBigGames(rows, {
     mlb: { teamIndex, standings: indexStandings(rawStandings), idByName: buildIdByName(teams), acesByGame, pitchersByGame },
+    nbaNational: await nationalNbaKeys(etDateStr, rows),
   });
   const keys = marqueeGameKeys(bigGames);
   const board = rows.map((row) => ({ ...row, is_marquee: keys.has(rowGameIdentity(row)) }));

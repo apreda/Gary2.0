@@ -2,6 +2,7 @@
 import { findParkData } from '../../gary/agentic/tools/statRouters/mlbFetchers.js';
 import { isBigGame } from '../../winners/winnersRules.js';
 import { PRIMETIME_HOUR_ET, nameKey, gameTimeBucket, rowMatchupKey, repeatedMatchupKeys, rowGameIdentity, etHour, abbrFor, isRivalry } from './basics.js';
+import { fetchNationalNbaGames } from '../../winners/nbaNationalGames.js';
 
 /* ───────────────────────────── 4. BIG GAMES ─────────────────────────────── */
 
@@ -12,8 +13,12 @@ import { PRIMETIME_HOUR_ET, nameKey, gameTimeBucket, rowMatchupKey, repeatedMatc
  * national draws, the late window) always makes it, plus a rivalry. Start time breaks ties among
  * qualified games; it never makes an ordinary matchup a big game.
  */
-export function buildBigGames(board, { mlb }) {
+export function buildBigGames(board, { mlb, nbaNational = null }) {
   const repeatedMatchups = repeatedMatchupKeys(board);
+  // The NBA's big games are the ones on national TV (founder, Nov 4 2026: "this should of been the 76ers Piston that
+  // was the big game on tv tonight along with spurs mavs later"; the draws list had put Bucks @ Celtics on Home). The
+  // nickname list below is only for a night ESPN's scoreboard can't be read or carries no national game.
+  const national = nbaNational instanceof Set && nbaNational.size ? nbaNational : null;
   const scored = board.map((row) => {
     let weight = 0;
     let reason = null;       // single highest-weight factor -> internal ranking trace
@@ -122,6 +127,8 @@ export function buildBigGames(board, { mlb }) {
       weight += draw;
       setReason('NFL WINDOW', draw);
       chainOnly = true;
+    } else if (row.league === 'NBA' && national) {
+      if (national.has(rowGameIdentity(row))) { weight += 30; setReason('NATIONAL TV', 30); }
     } else if (row.league === 'NBA') {
       const draw = nbaDraw(row);
       weight += draw.weight;
@@ -144,7 +151,7 @@ export function buildBigGames(board, { mlb }) {
   // The NBA plays most nights (founder, Oct 30 2026: "there has to be a game tonight? at least a big nba
   // game"): its headliner always makes it, a second game only when it's a rivalry, never the whole slate.
   const nba = scored.filter((s) => s.row.league === 'NBA').sort(byWeight);
-  const nbaKept = new Set(nba.filter((s, i) => i === 0 || (i === 1 && s.rivalry)));
+  const nbaKept = new Set(national ? nba : nba.filter((s, i) => i === 0 || (i === 1 && s.rivalry)));
 
   // THE HERO CHAIN (founder, Nov 2 2026): Home counts down to one game, shows it live, and after the final counts
   // down to the next, so the day's hero games never overlap. Football first in the regular season ("any Monday
@@ -189,6 +196,18 @@ export function buildBigGames(board, { mlb }) {
     }
     return item;
   });
+}
+
+/** The board's NBA games on national TV (ESPN's scoreboard), as row identities; null when it can't be read. */
+export async function nationalNbaKeys(etDateStr, rows) {
+  const nba = (rows || []).filter((row) => row?.league === 'NBA');
+  if (!nba.length) return null;
+  try {
+    return new Set((await fetchNationalNbaGames(etDateStr, nba, { max: 6 })).map(({ row }) => rowGameIdentity(row)));
+  } catch (e) {
+    console.warn(`[TomorrowBoard] NBA national TV games unavailable (draws list instead): ${e.message}`);
+    return null;
+  }
 }
 
 // How long a game holds the hero before the next one can start (founder, Nov 2 2026: the 1:00, the 4:15/4:25 and
