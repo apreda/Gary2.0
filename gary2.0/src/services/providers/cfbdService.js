@@ -136,11 +136,6 @@ export async function getRecruitClass(year, school, opts = {}) {
   return bulkGet(`/recruiting/players?year=${year}&team=${encodeURIComponent(school)}`, `recruits_${year}_${school}`, opts);
 }
 
-/** Every coach of a season with his hire date and seasons at each school, one request. */
-export async function getCoaches(season, opts = {}) {
-  return bulkGet(`/coaches?year=${season}`, `coaches_${season}`, opts);
-}
-
 /** SP+ for the whole league, one request. */
 export async function getSpPlus(season, opts = {}) {
   return bulkGet(`/ratings/sp?year=${season}`, `sp_${season}`, opts);

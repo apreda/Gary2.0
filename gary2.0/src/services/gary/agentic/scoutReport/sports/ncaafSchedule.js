@@ -29,7 +29,7 @@ import { ballDontLieService } from '../../../../providers/ballDontLieService.js'
 import { getTeamTalent, getRankings } from '../../../../providers/cfbdService.js';
 import { cfbdSchoolFor } from '../../orchestrator/ncaafRosterAndPoll.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
-  getWeekBoxScores, getWeekAdvancedGames, getTransfers, getRecruitClass, getCoaches, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
+  getWeekBoxScores, getWeekAdvancedGames, getTransfers, getRecruitClass, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -599,12 +599,12 @@ function notOnFile(results, onFile) {
 }
 
 /**
- * Who each team's players and coach are (Nov 5 2026, founder: "who those players are", and Gary "isnt going to know the
+ * Who each team's players are (Nov 5 2026, founder: "who those players are", and Gary "isnt going to know the
  * names of those backups"; his memory also predates this year's transfers): class, a transfer's old school, recruiting
  * stars, for the quarterbacks with a pass, the regular ball carriers and catchers and everyone on the availability report.
  * No past season's numbers or records.
  */
-async function whoTheyAreLines(team, { season, schoolOf, portal, coaches, roster, rows, results, core, reported }) {
+async function whoTheyAreLines(team, { season, schoolOf, portal, roster, rows, results, core, reported }) {
   const school = schoolOf(team);
   const recruits = [];
   // One school and year at a time: CFBD refuses concurrent requests to one endpoint.
@@ -627,19 +627,7 @@ async function whoTheyAreLines(team, { season, schoolOf, portal, coaches, roster
     const bits = [classes.get(k)?.toLowerCase(), t ? `transfer from ${t.origin}` : null, star ? `${star}-star` : null].filter(Boolean);
     return `${name}${positionOf.get(k) ? ` ${positionOf.get(k)}` : ''}${bits.length ? ` (${bits.join(', ')})` : ''}`;
   };
-  const staff = (coaches || []).filter((c) => (c.seasons || []).some((x) => Number(x.year) === Number(season) && cfbdTeamMatches(x.school, team)))
-    .sort((a, b) => String(a.hireDate || '').localeCompare(String(b.hireDate || '')));
-  // CFBD's list for a year holds that year only, so a coach's seasons here come from his hire date: hired from August on
-  // his first full season is the next one, unless he took over during this one.
-  const coachWords = staff.map((c) => {
-    const at = c.hireDate ? new Date(c.hireDate) : null;
-    if (!at || Number.isNaN(at.getTime())) return `${c.firstName} ${c.lastName}`;
-    const first = at.getUTCFullYear() + (at.getUTCMonth() >= 7 && at.getUTCFullYear() < Number(season) ? 1 : 0);
-    const n = Number(season) - first + 1;
-    const hired = at.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: 'numeric' });
-    return `${c.firstName} ${c.lastName}, hired ${hired}${n <= 1 ? ' (first season here)' : ` (season ${n} here)`}`;
-  });
-  return [`${team}`, `  head coach: ${coachWords.length ? coachWords.join(' · ') : 'not on file'}`, `  ${people.length ? people.map(who).join('; ') : 'no players on file'}`];
+  return [`${team}`, `  ${people.length ? people.map(who).join('; ') : 'no players on file'}`];
 }
 
 /**
@@ -1118,19 +1106,19 @@ ${RULE}`;
   const reportOf = (s) => availability[s.atHome ? 'home' : 'away'];
   const cores = sides.map((s, i) => offenseCore(rows[i], s.results, played[i].onFile));
 
-  const [fbsRows, portalRows, coachRows] = [await getFbsTeams(season).catch(() => null), await getTransfers(season).catch(() => null), await getCoaches(season).catch(() => null)];
+  const [fbsRows, portalRows] = [await getFbsTeams(season).catch(() => null), await getTransfers(season).catch(() => null)];
   const schoolOf = (t) => [...(fbsRows?.rows || []).map((x) => x.school)].filter((n) => cfbdTeamMatches(n, t)).sort((a, b) => b.length - a.length)[0] || null;
   const whoBlocks = [];
   for (const [i, s] of sides.entries()) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     // Never at the cost of the schedule sections: this section failing says so and the rest of the desk stands.
-    whoBlocks.push((await whoTheyAreLines(s.team, { season, schoolOf, portal: portalRows?.rows, coaches: coachRows?.rows, roster, rows: rows[i], results: s.results, core: cores[i], reported: reportOf(s) })
+    whoBlocks.push((await whoTheyAreLines(s.team, { season, schoolOf, portal: portalRows?.rows, roster, rows: rows[i], results: s.results, core: cores[i], reported: reportOf(s) })
       .catch((e) => [`${s.team}`, `  not on file (${e.message})`])).join('\n'));
   }
-  const whoTheyAre = `WHO THE PLAYERS AND COACHES ARE
+  const whoTheyAre = `WHO THE PLAYERS ARE
 ${RULE}
-Each team's head coach, then its quarterbacks with a pass this season, its regular
+Each team's quarterbacks with a pass this season, its regular
 ball carriers and catchers, the defenders with the most sacks, interceptions and
 tackles for loss, and the players on its availability report: class, a transfer's
 old school if he moved this year, and recruiting stars where on file.

@@ -36,25 +36,6 @@ export function rosterAndPollLines(talentRows, rankingRows, { awayTeam, homeTeam
     };
     lines.push(`AP Top 25 (this season, week ${latest.week}): ${say(awayTeam)}; ${say(homeTeam)}`);
   } else lines.push(`AP Top 25: not on file${missing.poll ? ` (${missing.poll})` : ''}`);
-  // Each team's path through this season's poll (Nov 5 2026 college data round: where it started and how far it has moved
-  // is what anyone following the sport knows about a team; the read had this week's place alone).
-  const apWeeks = (rankingRows || []).filter((w) => (w.polls || []).some((p) => p.poll === 'AP Top 25')).sort((a, b) => a.week - b.week);
-  if (apWeeks.length > 1) {
-    const path = (team) => `${team} ${apWeeks.map((w) => { const ap = w.polls.find((p) => p.poll === 'AP Top 25').ranks || []; const school = cfbdSchoolFor(ap.map((r) => r.school), team); return ap.find((r) => r.school === school)?.rank ?? 'NR'; }).join(', ')}`;
-    lines.push(`AP poll week by week (weeks ${apWeeks[0].week}-${apWeeks.at(-1).week}; NR = not ranked): ${path(awayTeam)}; ${path(homeTeam)}`);
-  }
-  // The committee's rankings from when they start each November (Nov 5 2026 college data round: AP only, while the slate
-  // is played under the committee's). None yet: no line.
-  const committee = (rankingRows || []).filter((w) => (w.polls || []).some((p) => p.poll === 'Playoff Committee Rankings')).sort((a, b) => b.week - a.week)[0];
-  if (committee) {
-    const cfp = committee.polls.find((p) => p.poll === 'Playoff Committee Rankings').ranks || [];
-    const say = (team) => {
-      const school = cfbdSchoolFor(cfp.map((r) => r.school), team);
-      const row = school && cfp.find((r) => r.school === school);
-      return row ? `${team} No. ${row.rank}` : `${team} not ranked`;
-    };
-    lines.push(`Playoff committee rankings (week ${committee.week}): ${say(awayTeam)}; ${say(homeTeam)}`);
-  }
   return lines.join('\n');
 }
 
