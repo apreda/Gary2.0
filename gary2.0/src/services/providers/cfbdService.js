@@ -186,6 +186,12 @@ export async function getWeekAdvancedStats(season, week, opts = {}) {
   return bulkGet(`/stats/game/advanced?year=${season}&week=${week}&seasonType=regular`, `advweek_${season}_${week}`, opts);
 }
 
+/** Every game's advanced box for one week, garbage time out: each team's success rate, line yards and so on, offense and
+ * defense (Nov 5 2026, founder: how a team really played, beyond yards). Regular season and postseason. */
+export async function getWeekAdvancedGames(season, week, opts = {}) {
+  return bulkGet(`/stats/game/advanced?year=${season}&week=${week}&seasonType=both&excludeGarbageTime=true`, `advgames_nogarbage_${season}_${week}`, opts);
+}
+
 /** Every FBS game's box score for one week (rushing, passing, turnovers, sacks, third downs), in one request. */
 export async function getWeekBoxScores(season, week, opts = {}) {
   // FBS games, and FBS teams' games against FCS teams, which CFBD lists under FCS only (Oct 24 2026 read check: Baylor's

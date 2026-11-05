@@ -29,7 +29,7 @@ import { ballDontLieService } from '../../../../providers/ballDontLieService.js'
 import { getTeamTalent, getRankings } from '../../../../providers/cfbdService.js';
 import { cfbdSchoolFor } from '../../orchestrator/ncaafRosterAndPoll.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
-  getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
+  getWeekBoxScores, getWeekAdvancedGames, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -357,6 +357,8 @@ async function teamBoxBuilder(season, weeks) {
   // burst lost four of six weeks of unit lines on five desks).
   const boxRows = [];
   for (let week = 0; week <= through; week++) boxRows.push(...((await getWeekBoxScores(season, week).catch(() => null))?.rows || []));
+  const advancedRows = [];
+  for (let week = 0; week <= through; week++) advancedRows.push(...((await getWeekAdvancedGames(season, week).catch(() => null))?.rows || []));
   const stats = (entry) => new Map((entry?.stats || []).map((row) => [row.category, row.stat]));
   const find = (team, result) => {
     const game = boxRows.find((row) => (row.teams || []).some((t) => cfbdTeamMatches(t.team, team))
@@ -409,9 +411,16 @@ async function teamBoxBuilder(season, weeks) {
     // Penalties and fourth downs from the same box (Oct 23 2026 data audit: SMU went 4-for-5 on fourth down against
     // Virginia; third downs alone undercounted how drives were kept alive). Penalties are the whole team's, every unit.
     const penalties = (box) => { const m = String(box.get('totalPenaltiesYards') ?? '').match(/^(\d+)-(-?\d+)$/); return m ? `${m[1]} for ${m[2]} yards` : '—'; };
+    // Success rate and line yards with garbage time out, the game's own numbers and no season figure (Nov 5 2026, founder:
+    // "yes add in those missing things"; the Oct 23 cut of play-by-play rates is his to overrule, and he did).
+    const advanced = found ? advancedRows.find((row) => String(row.gameId) === String(found.game?.id) && cfbdTeamMatches(row.team, team)) : null;
+    const pct = (v) => (Number.isFinite(Number(v)) ? `${Math.round(Number(v) * 100)}%` : '—');
+    const unit = (u) => `${pct(u?.successRate)} (runs ${pct(u?.rushingPlays?.successRate)}, passes ${pct(u?.passingPlays?.successRate)}), ${Number.isFinite(Number(u?.lineYards)) ? Number(u.lineYards).toFixed(1) : '—'} line yards a run`;
+    const advancedLine = advanced ? `      success rate, garbage time out: ${unit(advanced.offense)} · allowed ${unit(advanced.defense)}` : '      success rate: not on file for this game';
     return [
       `      offense: ${side(own, opp.get('sacks'), sackPlays?.mine)} · ${lost(own, 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'} · fourth down ${own.get('fourthDownEff') ?? '—'} · team penalties ${penalties(own)}`,
       `      defense: ${side(opp, own.get('sacks'), sackPlays?.theirs)} · ${count(own.get('sacks'), 'sack')}, ${count(own.get('tacklesForLoss'), 'tackle')} for loss · ${lost(opp, 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'} · opponent fourth down ${opp.get('fourthDownEff') ?? '—'} · opponent penalties ${penalties(opp)}`,
+      advancedLine,
     ];
   };
   return { find, lines };

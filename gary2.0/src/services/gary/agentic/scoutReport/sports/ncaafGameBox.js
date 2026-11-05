@@ -300,6 +300,11 @@ export function gameBoxFromSummary(summary, eventId) {
     // third-quarter kickoff return).
     .filter((x) => !allPlays.slice(x.at + 1).some((q) => new RegExp(`#${x.jersey}\\s+${x.who.replace('.', '\\.\\s?')}\\b`).test(String(q?.text || ''))))
     .sort((a, b) => b.n - a.n);
+  // Each side's runs and pass plays by the score at the snap (Nov 5 2026, founder, from a gap against the NFL logs: yards
+  // from a close game and yards up 30 read the same). ESPN's play scores are after the play, so the snap's score is the
+  // play before it. Yards are as the play states them; an interception counts as a pass play for none. Sacks are pass
+  // plays, as the NFL line has them. The total is checked against the box where the line is printed.
+  const byScore = byScoreAtSnap(summary, teams);
   // Each side's starting quarterback: the first of its passers the play-by-play has dropping back (round 15: Iowa's
   // starter Jeremy Hecklinski read second to the reliever, and Oregon's Dante Moore, hurt early, was dropped).
   const starterQb = {};
@@ -310,7 +315,55 @@ export function gameBoxFromSummary(summary, eventId) {
       .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}\\b[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
     if (hit) starterQb[t.id] = hit.name;
   }
-  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], sacks: (summary?.drives?.previous || []).length ? sacks : null };
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null };
+}
+
+const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9-21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9-21'], ['behindBig', 'behind by 22+']];
+// The yards from the play's words: ESPN's statYardage carries returns and penalties (a 5-yard sack with a fumble return
+// read 61). Its number only when the words give none.
+function snapYards(text, stat) {
+  if (/\bfor no gain\b/i.test(text)) return 0;
+  const sack = text.match(/sacked\b[^,.]*?for (?:a )?loss of (\d+) yards?/i);
+  if (sack) return -Number(sack[1]);
+  const m = text.match(/\b(?:rush|run|pass complete)\b.*?\bfor (\d+) yards?(?:\s+(loss|gain))?/i);
+  if (m) return m[2]?.toLowerCase() === 'loss' ? -Number(m[1]) : Number(m[1]);
+  return /\bincomplete\b/i.test(text) ? 0 : Number(stat) || 0;
+}
+function byScoreAtSnap(summary, teams) {
+  const list = summary?.drives?.previous || [];
+  const home = teams.find((t) => t.homeAway === 'home')?.id;
+  if (!list.length || home == null) return null;
+  const out = Object.fromEntries(teams.map((t) => [t.id, Object.fromEntries(SCORE_BUCKETS.map(([k]) => [k, { runs: 0, runYards: 0, passes: 0, passYards: 0 }]))]));
+  const seen = new Set();
+  let h = 0, a = 0;
+  for (const drive of list) for (const p of drive?.plays || []) {
+    if (p?.id != null && seen.has(p.id)) continue;
+    if (p?.id != null) seen.add(p.id);
+    const type = String(p?.type?.text || ''), text = String(p?.text || '');
+    const pass = /^(Pass Reception|Pass Incompletion|Passing Touchdown|Sack)\b|Interception/i.test(type), run = /^(Rush|Rushing Touchdown)\b/i.test(type);
+    const fumble = /Fumble/i.test(type) && !/punt|kick/i.test(text) ? (/\b(pass|sacked)\b/i.test(text) ? 'pass' : /\brush\b|\brun\b/i.test(text) ? 'run' : null) : null;
+    const team = String(p?.start?.team?.id ?? drive?.team?.id ?? '');
+    if ((pass || run || fumble) && out[team] && !/\bno play\b/i.test(text)) {
+      const by = team === String(home) ? h - a : a - h;
+      const slot = out[team][by >= 22 ? 'aheadBig' : by >= 9 ? 'ahead' : by <= -22 ? 'behindBig' : by <= -9 ? 'behind' : 'close'];
+      const yards = /Interception/i.test(type) ? 0 : snapYards(text, p?.statYardage);
+      if (run || fumble === 'run') { slot.runs += 1; slot.runYards += yards; } else { slot.passes += 1; slot.passYards += yards; }
+    }
+    if (Number.isFinite(Number(p?.homeScore))) h = Number(p.homeScore);
+    if (Number.isFinite(Number(p?.awayScore))) a = Number(p.awayScore);
+  }
+  return out;
+}
+/** The by-score line for both teams; said not on file when the plays run more than 30 yards off a team's box total. */
+function byScoreLine(box, us, them, name) {
+  if (!box?.byScore) return null;
+  const yards = (id) => SCORE_BUCKETS.reduce((n, [k]) => n + box.byScore[id][k].runYards + box.byScore[id][k].passYards, 0);
+  const total = (t) => Number(t?.totals?.totalYards);
+  const off = [us, them].find((t) => Number.isFinite(total(t)) && Math.abs(yards(t.id) - total(t)) > 30);
+  if (off) return `by the score at the snap: not on file (this game's plays run ${Math.abs(yards(off.id) - total(off))} yards off ${name(off.id)}'s box)`;
+  const part = (s) => `${s.runs} run${s.runs === 1 ? '' : 's'} for ${s.runYards} yds, ${s.passes} pass play${s.passes === 1 ? '' : 's'} for ${s.passYards}`;
+  const one = (t) => `${name(t.id)} ${SCORE_BUCKETS.filter(([k]) => box.byScore[t.id][k].runs || box.byScore[t.id][k].passes).map(([k, w]) => `${w}: ${part(box.byScore[t.id][k])}`).join('; ') || 'no plays on file'}`;
+  return `by the score at the snap: ${one(us)} · ${one(them)}`;
 }
 
 // Who made a 20+ yard play, from ESPN's words in either form (round 9: 798 of 812 read "?"): "#12 A.Philo pass complete
@@ -429,6 +482,7 @@ export function ncaafFlowLines(box, teamId, names = {}) {
     `scoring: ${plays.length ? plays.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${scoringWords(p.text)} (${/not on file/.test(p.note || '') ? p.note : `${score(p)}${p.note ? `; ${p.note}` : ''}`})`).join(' · ') : 'none'}`,
     `largest lead: ${leadText(us.id)}, ${leadText(them.id)}; the lead changed hands ${changes} time${changes === 1 ? '' : 's'} · ${possession} · ${hurryText}`,
     `plays of 20+ yards: ${name(us.id)} ${big(us.id)} · ${name(them.id)} ${big(them.id)}`,
+    ...(byScoreLine(box, us, them, name) ? [byScoreLine(box, us, them, name)] : []),
     ...(box.hurt?.length ? [`hurt during the game (play-by-play): ${box.hurt.map((h) => `${h.teamId ? `${name(h.teamId)} ` : 'team not on file: '}${h.who} (#${h.jersey}, ${h.period > 4 ? 'OT' : `Q${h.period}`}${h.clock ? ` ${h.clock}` : ''}; ${h.later ? 'on a later play' : 'not on a later play'})`).join(', ')}`]
       : box.injuryText === false && (box.drives || []).length ? ['hurt during the game: not on file (this game\'s play-by-play logs no injuries)'] : []),
     ...(box.ejected?.length ? [`ejected: ${box.ejected.map((e) => `${e.teamId ? `${name(e.teamId)} ` : 'team not on file: '}${e.who} (#${e.jersey}, ${e.period > 4 ? 'OT' : `Q${e.period}`}${e.clock ? ` ${e.clock}` : ''}${e.targeting ? ', targeting' : ''})`).join(', ')}`] : []),
@@ -441,7 +495,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   if (eventId == null) return { unavailable: true, reason: 'no game id' };
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
   // v27 (round 18): a drive ESPN logs twice is one; early exits judged by the score when the player left.
-  return cachedResearch(`espn_cfb_box_v27:${eventId}`, async () => {
+  // v28 (Nov 5 2026): runs and pass plays by the score at the snap.
+  return cachedResearch(`espn_cfb_box_v28:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
