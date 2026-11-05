@@ -1,5 +1,6 @@
 import { discoverCodexHomes, personalCodexHome } from './providerAdapters/codexHomes.js';
 import { deepseekConfigured } from './providerAdapters/deepseekSession.js';
+import { creditSweepOpen } from './apiCreditSweep.js';
 
 // One Claude subscription, several models (founder, Sep 22 2026: "a Claude on
 // which can use multiple models if, let's say, Fable is at capacity"). When a
@@ -48,7 +49,7 @@ export const isBackgroundWork = (raw, tier) => /^claude-(sonnet|haiku)/.test(raw
 
 // September 19: one explicit account order for every lane; every GPT rung is
 // GPT 6.1 Sol (Oct 1 2026).
-export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', college = false, env = process.env, home } = {}) {
+export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', college = false, env = process.env, home, now } = {}) {
   // A request that names the API route starts at the subscription like any Claude request.
   const raw = String(primary).replace(/^anthropic-/, '').replace(/^codex-/, '').replace(/^claude-api-/, 'claude-');
   const gptLogins = (model) => [
@@ -61,6 +62,13 @@ export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', c
   }
   const claude = raw.startsWith('claude-') && !isBackgroundWork(raw, tier) ? raw : 'claude-opus-5-5';
   const gpt = GPT_SOL;
+  const subscription = { id: 'claude-subscription', model: claude, siblings: claudeSiblings() };
+  // THE API CREDIT (founder, Oct 13 2026): when the subscription is at its cap, the same model answers through
+  // the API key on the organization's monthly API credit before the turn leaves Claude for GPT. Heavy work
+  // only (Gary's picks, props, darts, Winners, the app's writing); background work never spends it.
+  const apiCredit = env.ANTHROPIC_API_KEY && env.GARY_CLAUDE_API !== 'off' ? { id: 'claude-api', model: claude.replace(/^claude-/, 'claude-api-') } : null;
+  // The last days before the next credit arrives, what is left goes first (apiCreditSweep.js, Nov 5 2026).
+  const claudeRoutes = !apiCredit ? [subscription] : creditSweepOpen({ env, now }) ? [apiCredit, subscription] : [subscription, apiCredit];
   return [
     // College excluded the Claude subscription while it was pinned to Sol on
     // GPT. NCAAF game picks and props run Opus on the Claude subscription now
@@ -74,11 +82,7 @@ export function subscriptionRoutes(primary = BACKGROUND_GPT, { tier = 'light', c
     // A dated college override that NAMES a Claude model (GARY_NCAAF_BRAIN_MODEL, founder, Oct 12 2026: "let's
     // switch it to Fable and see") takes the Claude route for that model; the back door above stays shut.
     ...(!college || raw === 'claude-opus-5-5' || (raw.startsWith('claude-') && String(env.GARY_NCAAF_BRAIN_MODEL || '').trim() === raw)
-      ? [{ id: 'claude-subscription', model: claude, siblings: claudeSiblings() },
-        // THE API CREDIT (founder, Oct 13 2026): when the subscription is at its cap, the same model answers through
-        // the API key on the organization's monthly API credit before the turn leaves Claude for GPT. Heavy work
-        // only (Gary's picks, props, darts, Winners, the app's writing); background work never spends it.
-        ...(env.ANTHROPIC_API_KEY && env.GARY_CLAUDE_API !== 'off' ? [{ id: 'claude-api', model: claude.replace(/^claude-/, 'claude-api-') }] : [])]
+      ? claudeRoutes
       : []),
     ...gptLogins(gpt),
     // No DeepSeek behind Gary (founder GO, Oct 3 2026): it made 12 college
