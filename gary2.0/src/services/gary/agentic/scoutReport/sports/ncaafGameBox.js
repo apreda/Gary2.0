@@ -534,17 +534,16 @@ export async function getNcaafRosterPositions(teamId, { fetchImpl = globalThis.f
       // lineman read "team not on file").
       // `names` (full name -> position) gives a position to a player the box score never lists (Nov 3 2026 college data
       // check: 228 of 413 players out on an earlier report, linemen and players yet to play, read as a bare name).
-      const positions = {}, jerseys = {}, byJersey = {}, names = {}, classes = {};
+      const positions = {}, jerseys = {}, byJersey = {}, names = {};
       for (const group of roster?.athletes || []) {
         for (const a of group?.items || []) {
           if (a?.id && a?.position?.abbreviation) positions[String(a.id)] = a.position.abbreviation;
           const full = a?.fullName || a?.displayName;
-          if (full && a?.experience?.displayValue) classes[full] = a.experience.displayValue;
           if (full && a?.position?.abbreviation) names[full] = full in names && names[full] !== a.position.abbreviation ? '' : a.position.abbreviation;
           if (a?.id && a?.jersey != null) { jerseys[String(a.id)] = String(a.jersey); (byJersey[String(a.jersey)] ||= []).push(`${String(a.firstName || '')[0] || ''}|${String(a.lastName || '').toLowerCase()}`); }
         }
       }
-      return Object.keys(positions).length ? { positions, jerseys, byJersey, names, classes } : { unavailable: true, reason: 'ESPN roster empty' };
+      return Object.keys(positions).length ? { positions, jerseys, byJersey, names } : { unavailable: true, reason: 'ESPN roster empty' };
     } catch (error) {
       console.warn(`[NCAAF box] ESPN roster for team ${teamId} not retrieved: ${error.message}`);
       return { unavailable: true, reason: error.message };

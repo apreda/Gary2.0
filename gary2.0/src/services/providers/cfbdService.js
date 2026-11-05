@@ -126,16 +126,6 @@ export async function getRankings(season, opts = {}) {
   return bulkGet(`/rankings?year=${season}&seasonType=regular`, `rankings_${season}`, opts);
 }
 
-/** The season's transfer portal, one request: origin, destination, stars (Nov 5 2026). */
-export async function getTransfers(season, opts = {}) {
-  return bulkGet(`/player/portal?year=${season}`, `portal_${season}`, opts);
-}
-
-/** One school's recruiting class for one year (name, position, stars), one request. */
-export async function getRecruitClass(year, school, opts = {}) {
-  return bulkGet(`/recruiting/players?year=${year}&team=${encodeURIComponent(school)}`, `recruits_${year}_${school}`, opts);
-}
-
 /** SP+ for the whole league, one request. */
 export async function getSpPlus(season, opts = {}) {
   return bulkGet(`/ratings/sp?year=${season}`, `sp_${season}`, opts);
