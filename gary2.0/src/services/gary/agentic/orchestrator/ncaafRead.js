@@ -366,6 +366,8 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, asOf = new
     [matchupHeader(desk), spreadInWords(line)].filter(Boolean).join('\n'),
     ['THE QUARTERBACKS AND COACHES', quarterbacksAndCoachesText(desk)],
     ['THE AVAILABILITY REPORT', availabilityReport(desk)],
+    // Nov 5 2026: class, transfer and stars, for names his memory doesn't have.
+    ['WHO THE PLAYERS AND COACHES ARE', afterIntro(sectionOf(desk, 'WHO THE PLAYERS AND COACHES ARE'))],
     // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
@@ -392,6 +394,7 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
     // availability report), without the bare "Availability source: checked." lines.
     'Quarterbacks and coaches:', quarterbacksAndCoaches(desk).split('\n').filter((l) => !/^Availability source:/.test(l)).join('\n').trim() || quarterbacksAndCoachesText(desk), '',
     'Availability report:', injuriesAsReported(desk) || 'Nothing reported.', '',
+    ...(afterIntro(sectionOf(desk, 'WHO THE PLAYERS AND COACHES ARE')) ? ['Who the players and coaches are:', afterIntro(sectionOf(desk, 'WHO THE PLAYERS AND COACHES ARE')), ''] : []),
     'This season:', howGood(desk), '',
     'Roster talent and the AP poll:', strength, '',
     'Schedule, travel and weather:', situation(desk) || 'Nothing unusual.',

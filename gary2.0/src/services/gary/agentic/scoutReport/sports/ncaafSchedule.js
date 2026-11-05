@@ -29,7 +29,7 @@ import { ballDontLieService } from '../../../../providers/ballDontLieService.js'
 import { getTeamTalent, getRankings } from '../../../../providers/cfbdService.js';
 import { cfbdSchoolFor } from '../../orchestrator/ncaafRosterAndPoll.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
-  getWeekBoxScores, getWeekAdvancedGames, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
+  getWeekBoxScores, getWeekAdvancedGames, getTransfers, getRecruitClass, getCoaches, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -596,6 +596,46 @@ function notOnFile(results, onFile) {
 }
 
 /**
+ * Who each team's players and coach are (Nov 5 2026, founder: "who those players are", and Gary "isnt going to know the
+ * names of those backups"; his memory also predates this year's transfers): class, a transfer's old school, recruiting
+ * stars, for the quarterbacks with a pass, the regular ball carriers and catchers and everyone on the availability report.
+ * No past season's numbers or records.
+ */
+async function whoTheyAreLines(team, { season, schoolOf, portal, coaches, roster, rows, results, core, reported }) {
+  const school = schoolOf(team);
+  const recruits = [];
+  // One school and year at a time: CFBD refuses concurrent requests to one endpoint.
+  if (school) for (let year = season; year >= season - 5; year--) recruits.push(...((await getRecruitClass(year, school).catch(() => null))?.rows || []));
+  const stars = new Map(recruits.filter((r) => Number(r.stars) > 0).map((r) => [nameKey(r.name), Number(r.stars)]));
+  const moved = new Map((portal || []).filter((t) => t.destination && cfbdTeamMatches(t.destination, team)).map((t) => [nameKey(`${t.firstName} ${t.lastName}`), t]));
+  const classes = new Map(Object.entries(roster?.classes || {}).map(([n, c]) => [nameKey(n), c]));
+  const positionOf = new Map(Object.entries(roster?.names || {}).map(([n, p]) => [nameKey(n), p]));
+  const passers = [...playersOf(rows, results)].filter(([, e]) => [...e.games.values()].some((row) => Number(row.passing_attempts) > 0) && /^QB$/i.test(e.position || 'QB')).map(([n]) => n);
+  const listed = (reported || []).map((r) => String(reportName(r) || '').trim()).filter(Boolean);
+  const seen = new Set();
+  const people = [...passers, ...core.keys(), ...listed].filter((n) => { const k = nameKey(n); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  const who = (name) => {
+    const k = nameKey(name), t = moved.get(k);
+    const star = Number(t?.stars) > 0 ? Number(t.stars) : stars.get(k);
+    const bits = [classes.get(k)?.toLowerCase(), t ? `transfer from ${t.origin}` : null, star ? `${star}-star` : null].filter(Boolean);
+    return `${name}${positionOf.get(k) ? ` ${positionOf.get(k)}` : ''}${bits.length ? ` (${bits.join(', ')})` : ''}`;
+  };
+  const staff = (coaches || []).filter((c) => (c.seasons || []).some((x) => Number(x.year) === Number(season) && cfbdTeamMatches(x.school, team)))
+    .sort((a, b) => String(a.hireDate || '').localeCompare(String(b.hireDate || '')));
+  // CFBD's list for a year holds that year only, so a coach's seasons here come from his hire date: hired from August on
+  // his first full season is the next one, unless he took over during this one.
+  const coachWords = staff.map((c) => {
+    const at = c.hireDate ? new Date(c.hireDate) : null;
+    if (!at || Number.isNaN(at.getTime())) return `${c.firstName} ${c.lastName}`;
+    const first = at.getUTCFullYear() + (at.getUTCMonth() >= 7 && at.getUTCFullYear() < Number(season) ? 1 : 0);
+    const n = Number(season) - first + 1;
+    const hired = at.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', year: 'numeric' });
+    return `${c.firstName} ${c.lastName}, hired ${hired}${n <= 1 ? ' (first season here)' : ` (season ${n} here)`}`;
+  });
+  return [`${team}`, `  head coach: ${coachWords.length ? coachWords.join(' · ') : 'not on file'}`, `  ${people.length ? people.map(who).join('; ') : 'no players on file'}`];
+}
+
+/**
  * The players CARRIES AND CATCHES, GAME BY GAME lists for one team, name to entry: the two with the most carries and the
  * three with the most catches in the games with player lines on file, and in each of the last three of them,
  * quarterbacks left out (Oct 23 2026 data audit; Oct 27 the last three games).
@@ -1071,6 +1111,25 @@ ${RULE}`;
   const reportOf = (s) => availability[s.atHome ? 'home' : 'away'];
   const cores = sides.map((s, i) => offenseCore(rows[i], s.results, played[i].onFile));
 
+  const [fbsRows, portalRows, coachRows] = [await getFbsTeams(season).catch(() => null), await getTransfers(season).catch(() => null), await getCoaches(season).catch(() => null)];
+  const schoolOf = (t) => [...(fbsRows?.rows || []).map((x) => x.school)].filter((n) => cfbdTeamMatches(n, t)).sort((a, b) => b.length - a.length)[0] || null;
+  const whoBlocks = [];
+  for (const [i, s] of sides.entries()) {
+    const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
+    const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
+    // Never at the cost of the schedule sections: this section failing says so and the rest of the desk stands.
+    whoBlocks.push((await whoTheyAreLines(s.team, { season, schoolOf, portal: portalRows?.rows, coaches: coachRows?.rows, roster, rows: rows[i], results: s.results, core: cores[i], reported: reportOf(s) })
+      .catch((e) => [`${s.team}`, `  not on file (${e.message})`])).join('\n'));
+  }
+  const whoTheyAre = `WHO THE PLAYERS AND COACHES ARE
+${RULE}
+Each team's head coach, then its quarterbacks with a pass this season, its regular
+ball carriers and catchers and the players on its availability report: class, a
+transfer's old school if he moved this year, and recruiting stars where on file.
+
+${whoBlocks.join('\n\n')}
+${RULE}`;
+
   const whoProduced = `WHO PRODUCED IT, AND WHO IS ON TODAY'S AVAILABILITY REPORT
 ${RULE}
 Each player on this game's availability report beside the games he started
@@ -1110,6 +1169,6 @@ ${RULE}`;
   const behind = (s) => (s.results.length
     ? [...s.results].reverse().map((r) => `${versus(r)}${label(r.opponentId, { full: false, when: r.date }) ? ` (${label(r.opponentId, { full: false, when: r.date })})` : ''}`).join(', ')
     : null);
-  return { site: site?.missing ? null : site, seasonGames, homeRoad, whoProduced, offense, regulars,
+  return { site: site?.missing ? null : site, seasonGames, homeRoad, whoProduced, whoTheyAre, offense, regulars,
     scheduleBehind: { home: behind(sides[0]), away: behind(sides[1]) } };
 }

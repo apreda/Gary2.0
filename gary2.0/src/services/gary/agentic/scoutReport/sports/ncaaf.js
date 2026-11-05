@@ -1443,6 +1443,8 @@ ${schedule ? `${schedule.seasonGames}
 
 ${schedule.whoProduced}
 
+${schedule.whoTheyAre}
+
 ${schedule.regulars}
 
 ${schedule.offense}
