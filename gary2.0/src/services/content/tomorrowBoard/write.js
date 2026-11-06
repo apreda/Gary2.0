@@ -117,6 +117,12 @@ async function attachRailExtras(board, etDateStr, { existingBoard, idByName, sup
   }
 }
 
+/** The board reads top to bottom by kickoff (Nov 6 2026: it kept the order the leagues' feeds returned). A game with no time yet goes last. */
+export function byKickoff(rows) {
+  const at = (r) => { const t = Date.parse(r?.commence_time ?? ''); return Number.isNaN(t) ? Infinity : t; };
+  return [...rows].sort((a, b) => at(a) - at(b));
+}
+
 /**
  * Assemble + persist tomorrow's board snapshot. Idempotent upsert on (date) —
  * re-runs (e.g. the evening line refresh) overwrite in place so overnight-posted
@@ -286,7 +292,7 @@ export async function writeTomorrowBoard(etDateStr = tomorrowET(), table = TABLE
   }
 
   // board[] presentation rows.
-  const board = slateRows.map((r) => (
+  const board = byKickoff(slateRows).map((r) => (
     r[PRESERVED_BOARD_ROW] ? { ...r[PRESERVED_BOARD_ROW] } : toBoardRow(r, marqueeKeys, teamIndex)
   ));
   // SCOUT EXTRAS — per-MLB-game season series (record + venue split + last
