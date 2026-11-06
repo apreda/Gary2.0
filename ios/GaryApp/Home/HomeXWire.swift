@@ -19,6 +19,68 @@ struct XWirePost: Decodable, Identifiable, Equatable {
     let matchup: String?
     let big_game: Bool?
     let posted_at: String?
+
+    var link: URL? { URL(string: "https://x.com/\(username)/status/\(id)") }
+}
+
+/// The show's touches, in UIKit: a SwiftUI drag that tracks from the first touch kept the page from scrolling
+/// wherever a finger landed on or beside the show (founder, Nov 5 2026: "will not scroll back up"). Here an up and
+/// down pan fails at once so the page scrolls, and a sideways one holds the page still while the card moves.
+private struct XWireTouch: UIViewRepresentable {
+    var onHold: (Bool) -> Void
+    var onDrag: (CGFloat) -> Void
+    var onRelease: (CGFloat) -> Void
+    var onTap: () -> Void
+
+    /// A resting finger reaches this view; one the page takes for a scroll is cancelled, which lets the show go.
+    final class TouchView: UIView {
+        var onHold: (Bool) -> Void = { _ in }
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) { onHold(true) }
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) { onHold(false) }
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) { onHold(false) }
+    }
+
+    func makeUIView(context: Context) -> TouchView {
+        let view = TouchView()
+        view.backgroundColor = .clear
+        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
+        pan.delegate = context.coordinator
+        pan.cancelsTouchesInView = false // the hold lasts until the finger lifts
+        view.addGestureRecognizer(pan)
+        view.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tap)))
+        return view
+    }
+    func updateUIView(_ view: TouchView, context: Context) {
+        context.coordinator.parent = self
+        view.onHold = onHold
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: XWireTouch
+        init(_ parent: XWireTouch) { self.parent = parent }
+
+        @objc func pan(_ g: UIPanGestureRecognizer) {
+            let dx = g.translation(in: g.view).x
+            switch g.state {
+            case .began, .changed: parent.onDrag(dx)
+            case .ended, .cancelled, .failed: parent.onRelease(dx)
+            default: break
+            }
+        }
+        @objc func tap() { parent.onTap() }
+
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let pan = g as? UIPanGestureRecognizer else { return true }
+            let t = pan.translation(in: pan.view)
+            let v = pan.velocity(in: pan.view)
+            return abs(t.x) + abs(v.x) * 0.02 > abs(t.y) + abs(v.y) * 0.02
+        }
+        /// Every scroll view around the show waits for its pan to fail.
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            g is UIPanGestureRecognizer && other.view is UIScrollView
+        }
+    }
 }
 
 /// TONIGHT ON X (founder, Oct 29 2026): under the board, where the Wire's injury and moment lines were ("people
@@ -31,6 +93,7 @@ struct HomeXWire: View {
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     @State private var posts: [XWirePost] = []
     @State private var index = 0
     @State private var progress: CGFloat = 0
@@ -66,22 +129,19 @@ struct HomeXWire: View {
                     .frame(height: max(posts.indices.contains(index) ? heights[posts[index].id] ?? 160 : 160, 120), alignment: .top)
                     .offset(x: dragX)
                     .clipped()
-                    .contentShape(Rectangle())
-                    // A finger on the show holds it; pulled sideways and let go, it moves a card that way.
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { v in
-                                if !holding { holding = true }
-                                let dx = v.translation.width
-                                if abs(dx) > 8, abs(dx) > abs(v.translation.height) { dragX = dx * 0.5 }
-                            }
-                            .onEnded { v in
-                                holding = false
-                                let dx = v.translation.width
-                                withAnimation(Self.slide) { dragX = 0 }
-                                if posts.count > 1, abs(dx) > 50, abs(dx) > abs(v.translation.height) { step(dx < 0 ? 1 : -1) }
-                            }
-                    )
+                    // A finger on the show holds it; pulled sideways and let go, it moves a card that way; a tap
+                    // opens the post. Up and down belongs to the page.
+                    .overlay {
+                        XWireTouch(onHold: { holding = $0 },
+                                   onDrag: { dragX = $0 * 0.5 },
+                                   onRelease: { dx in
+                                       withAnimation(Self.slide) { dragX = 0 }
+                                       if posts.count > 1, abs(dx) > 50 { step(dx < 0 ? 1 : -1) }
+                                   },
+                                   onTap: {
+                                       if posts.indices.contains(index), let url = posts[index].link { openURL(url) }
+                                   })
+                    }
                     // Every card measured at the page's width, off screen.
                     .background(alignment: .top) {
                         ZStack(alignment: .top) {
@@ -233,7 +293,7 @@ struct XPostCard: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture {
-            if let url = URL(string: "https://x.com/\(post.username)/status/\(post.id)") { openURL(url) }
+            if let url = post.link { openURL(url) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
