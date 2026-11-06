@@ -221,35 +221,98 @@ struct CashRailCard: View {
     }
 }
 
-/// "THURSDAY NIGHT FOOTBALL ········ ● LIVE" above the card.
+/// The game's billing over the card, on a marquee (founder, Nov 5 2026: "more than just plain words its a marquee
+/// game!"): the old Vegas kind, the name in lit gold inside a border of bulbs that chase while the game is on and
+/// hold steady once it's over.
 struct CashRailLabelRow: View {
     let title: String
     let live: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.readingPageActive) private var activePage
     @State private var dim = false
 
+    private static let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
     var body: some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .foregroundStyle(CR.mute)
+                .font(GaryFonts.display(24)).tracking(1.2)
+                .foregroundStyle(LinearGradient(colors: [GaryMetal.lit, GaryColors.gold], startPoint: .top, endPoint: .bottom))
+                .shadow(color: GaryColors.gold.opacity(0.45), radius: 7)
                 .fitsOneLine()
             Spacer(minLength: 8)
-            if live {
-                HStack(spacing: 7) {
-                    Circle().fill(GaryColors.gold).frame(width: 6, height: 6).opacity(dim ? 0.25 : 1)
-                    Text("LIVE")
+            Group {
+                if live {
+                    HStack(spacing: 6) {
+                        Circle().fill(GaryColors.gold).frame(width: 6, height: 6).opacity(dim ? 0.25 : 1)
+                        Text("LIVE")
+                    }
+                    .foregroundStyle(GaryColors.gold)
+                    .onAppear {
+                        guard !reduceMotion else { return }
+                        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
+                    }
+                } else {
+                    Text("FINAL").foregroundStyle(CR.mute)
                 }
-                .foregroundStyle(GaryColors.gold)
-                .onAppear {
-                    guard !reduceMotion else { return }
-                    withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { dim = true }
+            }
+            .font(CR.sys(10.5, .bold)).tracking(1.68)
+        }
+        .padding(.horizontal, 17).padding(.vertical, 15)
+        .background {
+            Self.shape.fill(LinearGradient(colors: [Color(hex: "#2B2110"), Color(hex: "#120E08")], startPoint: .top, endPoint: .bottom))
+        }
+        .overlay {
+            MarqueeBulbs(chasing: live && activePage && !reduceMotion)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+        .overlay { Self.shape.strokeBorder(GaryColors.gold.opacity(0.55), lineWidth: 1) }
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The marquee's bulbs, evenly round its border. Chasing, every third one is lit and the light walks round.
+private struct MarqueeBulbs: View {
+    let chasing: Bool
+
+    private static let spacing: CGFloat = 11
+    private static let inset: CGFloat = 6
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.16, paused: !chasing)) { time in
+            Canvas { ctx, size in
+                let step = chasing ? Int(time.date.timeIntervalSinceReferenceDate / 0.16) : 0
+                let spots = Self.spots(in: size)
+                let isLit = { (i: Int) in !chasing || (i + step) % 3 == 0 }
+                // The glow first, so the bulbs sit sharp on top of it.
+                ctx.drawLayer { layer in
+                    layer.addFilter(.blur(radius: 2.5))
+                    for (i, p) in spots.enumerated() where isLit(i) {
+                        layer.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(GaryColors.gold.opacity(0.7)))
+                    }
                 }
-            } else {
-                Text("FINAL").foregroundStyle(CR.mute)
+                for (i, p) in spots.enumerated() {
+                    let bulb = Path(ellipseIn: CGRect(x: p.x - 1.5, y: p.y - 1.5, width: 3, height: 3))
+                    ctx.fill(bulb, with: .color(isLit(i) ? Color(hex: "#FFF1C4") : Color(hex: "#6B5522")))
+                }
             }
         }
-        .font(CR.sys(10.5, .bold)).tracking(1.68)
-        .padding(.horizontal, 2).padding(.bottom, 9)
+    }
+
+    /// Clockwise from the top left, the corners cut so the bulbs follow the rounded edge.
+    private static func spots(in size: CGSize) -> [CGPoint] {
+        let w = size.width - 2 * inset, h = size.height - 2 * inset
+        guard w > 0, h > 0 else { return [] }
+        let across = max(1, Int((w / spacing).rounded())), down = max(1, Int((h / spacing).rounded()))
+        let dx = w / CGFloat(across), dy = h / CGFloat(down)
+        var out: [CGPoint] = []
+        for i in 0..<across { out.append(CGPoint(x: inset + CGFloat(i) * dx, y: inset)) }
+        for i in 0..<down { out.append(CGPoint(x: inset + w, y: inset + CGFloat(i) * dy)) }
+        for i in 0..<across { out.append(CGPoint(x: inset + w - CGFloat(i) * dx, y: inset + h)) }
+        for i in 0..<down { out.append(CGPoint(x: inset, y: inset + h - CGFloat(i) * dy)) }
+        return out
     }
 }
 
