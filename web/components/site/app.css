@@ -392,7 +392,7 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) var(--night-card);
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   column-gap: clamp(28px, 3.2vw, 44px);
 }
 .night-copy,
@@ -523,13 +523,13 @@
 /* Gary and last night's Winners */
 .night-stage {
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 1 / span 2;
   display: grid;
-  align-content: start;
+  align-content: center;
   justify-items: center;
 }
 .night-face {
-  width: clamp(140px, 14vw, 180px);
+  width: clamp(200px, 21vw, 300px);
   aspect-ratio: 1;
 }
 .night-face::before {
@@ -588,72 +588,52 @@
   color: var(--app-dim);
 }
 
-/* the app, three screens fanned on a lit floor, sized to their own column:
-   the fan's ink is 2.4 middle phones wide, so 2.5 leaves air before the
-   picks at every window width */
+/* the app, three screens side by side on a lit floor, the width of the whole
+   hero: all one size, straight on, big enough to read without zooming */
 .night-fan {
-  container-type: inline-size;
-  grid-column: 2;
-  grid-row: 2;
-  margin-top: 24px;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: clamp(44px, 5vw, 72px);
 }
 .night-fan-deck {
-  --mid: min(200px, 100cqi / var(--fit, 2.5));
-  --side: calc(var(--mid) * 0.83);
-  --off: calc(var(--mid) * 0.6);
   position: relative;
-  height: calc(var(--mid) * 1434 / 660 + 22px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 400px));
+  justify-content: center;
+  gap: clamp(20px, 4vw, 60px);
+  padding-bottom: 22px;
 }
 .night-fan-deck::before {
   content: "";
   position: absolute;
   left: 50%;
   bottom: 0;
-  width: 120%;
+  width: 100%;
   height: 60px;
   transform: translateX(-50%);
   background: radial-gradient(50% 50% at 50% 50%, rgba(var(--mood), 0.3), rgba(var(--mood), 0) 70%);
   filter: blur(6px);
 }
 .night-phone {
-  position: absolute;
-  left: 50%;
-  bottom: 22px;
-  width: var(--side);
-  aspect-ratio: 660 / 1434;
-  padding: calc(var(--side) * 0.029);
-  border-radius: calc(var(--side) * 0.15);
+  position: relative;
+  min-width: 0;
+  padding: 2.9%;
+  border-radius: 13% / 6%;
   background: linear-gradient(145deg, #3a3833, #121110 40%, #2a2824);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 26px 50px rgba(0, 0, 0, 0.65);
-  transform: translateX(calc(-50% + var(--x, 0px))) translateY(var(--dy, 0px)) rotate(var(--r, 0deg));
-  transform-origin: 50% 100%;
-}
-.night-phone-mid {
-  z-index: 2;
-  width: var(--mid);
-  padding: calc(var(--mid) * 0.029);
-  border-radius: calc(var(--mid) * 0.15);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 34px 70px rgba(0, 0, 0, 0.7),
-    0 0 80px rgba(var(--mood), 0.25);
+    0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 30px 60px rgba(0, 0, 0, 0.65);
 }
-.night-phone-l { --x: calc(var(--off) * -1); --r: -6deg; --dy: -8px; }
-.night-phone-r { --x: var(--off); --r: 6deg; --dy: -8px; }
 .night-phone-screen {
   position: relative;
-  width: 100%;
-  height: 100%;
   overflow: hidden;
-  border-radius: 12.2% / 5.6%;
+  border-radius: 11% / 5.1%;
   background: #000;
 }
 .night-phone-screen img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top;
+  height: auto;
 }
 
 /* today's free pick and yesterday's, stacked */
@@ -684,17 +664,42 @@
   white-space: nowrap;
 }
 
-/* Tablets: the words then the picks in one column, Gary then the app in the
-   other, each stacked straight down. */
+/* Tablets: the words beside Gary, the two picks beside each other, then the app
+   across the whole width. */
 @media (max-width: 999px) {
   .night-inner {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
   }
-  .night-copy { grid-column: 1; grid-row: 1 / 3; }
-  .night-picks { grid-column: 1; grid-row: 3; padding-top: 36px; max-width: var(--app-card); }
+  .night-copy { grid-column: 1; grid-row: 1; }
   .night-stage { grid-column: 2; grid-row: 1; }
-  .night-fan { grid-column: 2; grid-row: 2 / 4; }
+  .night-picks {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: repeat(2, minmax(0, var(--app-card)));
+    justify-content: center;
+    column-gap: 24px;
+    padding-top: 36px;
+  }
+  /* Three across would be too small to read here: one phone at a time, the next one's edge says swipe. */
+  .night-fan {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin-inline: calc(var(--app-gutter) * -1);
+  }
+  .night-fan-deck {
+    --phone: min(82vw, 380px);
+    grid-template-columns: repeat(3, var(--phone));
+    justify-content: start;
+    gap: 14px;
+    padding: 0 calc((100vw - var(--phone)) / 2) 22px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .night-fan-deck::-webkit-scrollbar { display: none; }
+  .night-fan-deck::before { display: none; }
+  .night-phone { scroll-snap-align: center; }
 }
 /* Phones: Gary first, then the words, the picks, and the app. */
 @media (max-width: 760px) {
@@ -703,9 +708,8 @@
   .night-stage, .night-copy, .night-picks, .night-fan { grid-column: 1; }
   .night-stage { grid-row: 1; }
   .night-copy { grid-row: 2; padding-top: 22px; gap: 22px; }
-  .night-picks { grid-row: 3; padding-top: 30px; max-width: none; }
+  .night-picks { grid-row: 3; grid-template-columns: minmax(0, 1fr); padding-top: 30px; max-width: none; }
   .night-fan { grid-row: 4; margin-top: 40px; }
-  .night-fan-deck { --fit: 2.42; }
   .night-face { width: 170px; }
   .night-title { font-size: clamp(56px, 17vw, 84px); }
   .night-features { gap: 14px; }

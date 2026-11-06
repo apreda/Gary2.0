@@ -12,9 +12,10 @@ import type { GaryMood, WinnersNight } from "@/lib/gary/winners-recap";
 
 // The home page's opening (founder, Oct 14 2026, mock 16 "Night Sunrise"):
 // Gary in last night's face and its weather, last night's Winners under him,
-// the app's own screens fanned beneath, the app's tab icons saying what's
-// inside, the app icon as the way in, and today's free pick and yesterday's
-// stacked on the app's real pick cards.
+// the app's tab icons saying what's inside, the app icon as the way in, today's
+// free pick and yesterday's stacked on the app's real pick cards, and the app's
+// own screens in a row underneath, big enough to read without zooming (founder,
+// Nov 5 2026: "it has to be visible nobody can zoom in and they shouldnt have to").
 
 const MOOD_RGB: Record<GaryMood, string> = {
   fire: "255, 120, 30",
@@ -32,9 +33,9 @@ const FEATURES = [
 ] as const;
 
 const SCREENS = [
-  { src: "/site/hero/screen-darts.jpg", alt: "The Darts board in the app: Gary’s player props as darts", side: "l" },
-  { src: "/site/hero/screen-winners.jpg", alt: "Winners in the app: tonight’s pick sealed, more coming soon, yesterday’s results", side: "mid" },
-  { src: "/site/hero/screen-home.jpg", alt: "Home in the app: last night’s result and tonight’s game", side: "r" },
+  { src: "/site/hero/screen-home.webp", alt: "Home in the app: tonight’s big game, last night’s result and what Gary has on today" },
+  { src: "/site/hero/screen-darts.webp", alt: "Darts in the app: the parlay of the day and the Anytime TD board, each dart with how it finished" },
+  { src: "/site/hero/screen-billfold.webp", alt: "Billfold in the app: Gary’s bankroll, record and win rate, with every result charted" },
 ] as const;
 
 const dollars = (n: number) => `$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
@@ -139,9 +140,9 @@ export function NightHero({
         <div className="night-fan" aria-label="Inside the app">
           <div className="night-fan-deck">
             {SCREENS.map((s) => (
-              <div key={s.side} className={`night-phone night-phone-${s.side}`}>
+              <div key={s.src} className="night-phone">
                 <div className="night-phone-screen">
-                  <Image src={s.src} alt={s.alt} width={540} height={1173} sizes="(max-width: 760px) 40vw, 240px" />
+                  <Image src={s.src} alt={s.alt} width={1206} height={2622} unoptimized />
                 </div>
               </div>
             ))}
