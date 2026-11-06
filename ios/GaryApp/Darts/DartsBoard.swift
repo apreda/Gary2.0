@@ -154,7 +154,7 @@ struct DartTag: View {
     /// YRFI or NRFI on a first-inning dart (its tab's own words); the line on a lined dart.
     private var side: String? {
         if dart.isGame { return (dart.bet ?? "over") == "under" ? "NRFI" : "YRFI" }
-        return dart.lineWords
+        return dart.betWords
     }
     /// Over or under on a dart with a line (H+R+RBI, total bases, yards, passing TDs, interceptions).
     private var direction: LabDirection? {
@@ -1023,7 +1023,7 @@ struct DartWheel: View {
 
     private func words(_ it: Item) -> String {
         let d = it.dart
-        let side = d.isGame ? ((d.bet ?? "over") == "under" ? "NRFI" : "YRFI") : d.lineWords
+        let side = d.isGame ? ((d.bet ?? "over") == "under" ? "NRFI" : "YRFI") : d.betWords
         let price = d.isScratched ? d.scratchWord.lowercased() : [side, LabFormat.price(d.odds)].compactMap { $0 }.joined(separator: " ")
         let grade = d.graded.flatMap { hit in d.actualText.map { "\(hit ? "hit" : "missed"), finished with \($0)" } }
         return ["\(it.rank)", d.player, price, grade ?? d.gameLine].filter { !$0.isEmpty }.joined(separator: ", ")
@@ -1112,7 +1112,7 @@ private struct WheelRow: View {
     private var d: DartRow { item.dart }
     private var side: String? {
         if d.isGame { return (d.bet ?? "over") == "under" ? "NRFI" : "YRFI" }
-        return d.lineWords
+        return d.betWords
     }
     private var direction: LabDirection? {
         guard !d.isGame, d.lineWords != nil else { return nil }

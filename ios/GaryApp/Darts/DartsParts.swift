@@ -52,6 +52,17 @@ extension DartRow {
         guard ["hrr", "tb", "recyds", "rushyds", "passtd", "int", "pts", "reb", "ast", "threes", "pra"].contains(kind), let line = LabFormat.trailingNumber(prop) else { return nil }
         return "\((bet ?? "over").lowercased() == "under" ? "UNDER" : "OVER") \(line)"
     }
+    /// What sits beside the price: the line, or what the dart is on when it has no over or under, so those rows
+    /// read like the others (founder, Nov 5 2026).
+    var betWords: String? {
+        if let line = lineWords { return line }
+        switch kind {
+        case "td": return "ANYTIME TD"
+        case "qbtd": return "QB RUSHING TD"
+        case "hr": return "HOME RUN"
+        default: return nil
+        }
+    }
     var scratchWord: String { (scratch_reason ?? "").contains("postpon") ? "POSTPONED" : "SCRATCHED" }
 }
 
