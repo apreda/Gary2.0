@@ -26,6 +26,8 @@
 	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Gary uses your microphone so you can talk to him about picks, teams, and games.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Gary saves the videos and images you choose to your photos.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Gary turns your voice into text so he can hear your question and respond.</string>
 	<key>UIAppFonts</key>

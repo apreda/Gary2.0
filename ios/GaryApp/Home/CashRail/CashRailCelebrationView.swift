@@ -19,6 +19,8 @@ struct CashRailReel: Identifiable {
     let tint: Color
     let frames: [String: Frame]
     let timeline: CashRailDance.Timeline
+    /// Waits for a tap instead of closing itself: a replay someone asked for, or one they're sharing.
+    var stays = false
     var id: String { celebration.play_key }
 }
 
@@ -55,11 +57,11 @@ final class CashRailCelebrations: ObservableObject {
     /// A tap on a hit: plays its celebration now, and it won't play again on its own.
     func replay(_ c: CashRailCelebration) {
         markSeen(c.play_key)
-        play(c)
+        play(c, stays: true)
     }
 
     /// Plays one now, seen or not (a tap on the hit, or the tour).
-    func play(_ c: CashRailCelebration) {
+    func play(_ c: CashRailCelebration, stays: Bool = false) {
         guard !loading else { return }
         loading = true
         loadingKey = c.play_key
@@ -67,12 +69,26 @@ final class CashRailCelebrations: ObservableObject {
             let reel = await Self.load(c)
             loading = false
             loadingKey = nil
-            if let reel { self.reel = reel }
+            if var reel {
+                reel.stays = stays
+                self.reel = reel
+            }
         }
     }
 
     func finish(_ id: String) {
         if reel?.id == id { reel = nil }
+    }
+
+    /// The dance is over: closes, unless it's waiting for a tap.
+    func expire(_ id: String) {
+        if reel?.id == id, reel?.stays == false { reel = nil }
+    }
+
+    /// Someone's sharing it, so it can't close under them. Lives here because the
+    /// app's host and the ALL HITS sheet's host each run their own copy of the view.
+    func keep(_ id: String) {
+        if reel?.id == id { reel?.stays = true }
     }
 
     #if DEBUG
@@ -164,7 +180,7 @@ struct CashRailCelebrationHost: View {
     var body: some View {
         ZStack {
             if let reel = player.reel, selectedTab == 0 {
-                CashRailCelebrationView(reel: reel) { player.finish(reel.id) }
+                CashRailCelebrationView(reel: reel)
                     .id(reel.id)
                     .transition(.opacity)
             }
@@ -175,45 +191,105 @@ struct CashRailCelebrationHost: View {
 
 /// The celebration itself, as the approved mock drew it: the stat box, then
 /// Gary's dance on his team's backdrop, confetti on the last beat, the
-/// dance's name. Tap anywhere to close; it closes itself when the dance ends.
+/// dance's name, and SHARE under it. Tap anywhere else to close; one that
+/// popped up on its own closes itself when the dance ends.
 struct CashRailCelebrationView: View {
     let reel: CashRailReel
-    let onDone: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start = Date()
+    @State private var making: Task<Void, Never>?
+    @State private var video: CashRailMadeVideo?
+    @State private var sharing: CashRailMadeVideo?
+    @State private var failed = false
 
-    /// Gary's standing height as a share of the scene (the mock's K).
-    private static let figureShare = 0.64
-    private static let linger = 0.9
+    /// Long enough to reach SHARE after the dance ends.
+    private static let linger = 2.5
 
     private var c: CashRailCelebration { reel.celebration }
+    private var player: CashRailCelebrations { .shared }
 
     var body: some View {
         // Measured inside the safe area: the card starts under the status bar
         // and leaves the dock its room, as the mock placed it.
         GeometryReader { geo in
             let cardW = min(geo.size.width - 36, 420)
-            let sceneH = min(cardW * 1.5, geo.size.height - 150)
-            TimelineView(.animation(paused: false)) { ctx in
-                let t = reduceMotion ? reel.timeline.end : ctx.date.timeIntervalSince(start)
-                card(t: t, width: cardW, sceneH: sceneH)
+            let sceneH = min(cardW * 1.5, geo.size.height - 200)
+            VStack(spacing: 12) {
+                // The video draws on the main thread too; the card holds still while it does.
+                TimelineView(.animation(paused: making != nil)) { ctx in
+                    let t = reduceMotion ? reel.timeline.end : ctx.date.timeIntervalSince(start)
+                    CashRailCelebrationCard(reel: reel, t: t, width: cardW, sceneH: sceneH, motion: !reduceMotion)
+                        .shadow(color: .black.opacity(0.6), radius: 30, y: 30)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(c.who), \(c.market), \(CashRailFormat.price(c.price)). Ten dollars paid \(CashRailFormat.payout10(c.price)).")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Closes the celebration")
+                shareButton
             }
             .padding(.top, 40)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .background(scrim.ignoresSafeArea())
         .contentShape(Rectangle())
-        .onTapGesture(perform: onDone)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(c.who), \(c.market), \(CashRailFormat.price(c.price)). Ten dollars paid \(CashRailFormat.payout10(c.price)).")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint("Closes the celebration")
+        .onTapGesture { player.finish(reel.id) }
+        .sheet(item: $sharing) { ActivityShareSheet(items: [$0.url, c.shareCaption]) }
         .task {
             start = Date()
             let wait = reduceMotion ? 3.0 : reel.timeline.end + Self.linger
             try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-            onDone()
+            player.expire(reel.id)
+        }
+        .onDisappear {
+            making?.cancel()
+            if let video { try? FileManager.default.removeItem(at: video.url) }
+        }
+    }
+
+    // A disabled button would pass a second tap through to the close gesture,
+    // so while the video is being made a tap here just does nothing.
+    private var shareButton: some View {
+        Button(action: share) {
+            HStack(spacing: 7) {
+                if making != nil {
+                    ProgressView().controlSize(.small).tint(GaryColors.gold)
+                } else {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .semibold))
+                }
+                Text(making != nil ? "MAKING VIDEO" : failed ? "TRY AGAIN" : "SHARE")
+                    .font(CR.sys(11.5, .bold)).tracking(1.7)
+            }
+            .foregroundColor(GaryColors.gold)
+            .frame(minWidth: 132, minHeight: 44)
+            .padding(.horizontal, 14)
+            // Near-solid dark: the dock or a row sits behind it, dimmed, and shouldn't read through the word.
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(hex: "#090808").opacity(0.92)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GaryColors.gold.opacity(0.55), lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(making != nil ? "Making the video" : "Share this celebration")
+    }
+
+    private func share() {
+        guard making == nil else { return }
+        player.keep(reel.id)
+        if let video {
+            sharing = video
+            return
+        }
+        failed = false
+        making = Task {
+            let url = await CashRailShareVideo.make(reel)
+            making = nil
+            guard !Task.isCancelled else { return }
+            if let url {
+                video = CashRailMadeVideo(url: url)
+                sharing = video
+            } else {
+                failed = true
+            }
         }
     }
 
@@ -226,9 +302,30 @@ struct CashRailCelebrationView: View {
         }
     }
 
-    // MARK: Card
+}
 
-    private func card(t: Double, width: CGFloat, sceneH: CGFloat) -> some View {
+/// A finished video, ready for the share sheet.
+struct CashRailMadeVideo: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+/// The card at one moment of the dance. The app samples it every display
+/// frame; the shared video samples it 30 times a second.
+struct CashRailCelebrationCard: View {
+    let reel: CashRailReel
+    let t: Double
+    let width: CGFloat
+    let sceneH: CGFloat
+    /// False for Reduce Motion: the backdrop's thumps, the shake, and the confetti stay out.
+    let motion: Bool
+
+    /// Gary's standing height as a share of the scene (the mock's K).
+    private static let figureShare = 0.64
+
+    private var c: CashRailCelebration { reel.celebration }
+
+    var body: some View {
         VStack(spacing: 0) {
             statBox(t: t).padding([.horizontal, .top], 12)
             scene(t: t, width: width, height: sceneH)
@@ -237,7 +334,6 @@ struct CashRailCelebrationView: View {
         .background(reel.tint)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(GaryColors.lightGold.opacity(0.45), lineWidth: 1))
-        .shadow(color: .black.opacity(0.6), radius: 30, y: 30)
     }
 
     private func statBox(t: Double) -> some View {
@@ -258,7 +354,7 @@ struct CashRailCelebrationView: View {
             .frame(minWidth: 92)
             Rectangle().fill(CR.ink.opacity(0.25)).frame(width: 1)
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(c.who), \(Self.lowerFirst(c.market))")
+                Text(c.headline)
                     .font(.system(size: 14.5, weight: .bold))
                     .foregroundColor(CR.ink)
                     .fitsLines(2)
@@ -276,16 +372,11 @@ struct CashRailCelebrationView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.lightGold.opacity(0.25), lineWidth: 1))
     }
 
-    private static func lowerFirst(_ s: String) -> String {
-        guard let f = s.first, s.dropFirst().first?.isLowercase ?? true else { return s }
-        return f.lowercased() + s.dropFirst()
-    }
-
     // MARK: Scene
 
     private func scene(t: Double, width: CGFloat, height: CGFloat) -> some View {
         let tl = reel.timeline
-        let impact = reduceMotion ? nil : tl.sinceImpact(at: t)
+        let impact = motion ? tl.sinceImpact(at: t) : nil
         // The backdrop slams in (scale 1.5 → .97 → 1), then thumps on impacts.
         let intro = CashRailDance.sample([(0, .init(sx: 1.5)), (0.7, .init(sx: 0.97)), (1, .rest)],
                                          CashRailDance.Ease.slam(min(1, max(0, t / 0.52))))
@@ -326,7 +417,7 @@ struct CashRailCelebrationView: View {
                     pose(f, tl.pose(slug, at: t), opacity: o, width: width, height: height)
                 }
             }
-            if !reduceMotion { confetti(t: t - tl.lastStart, width: width, height: height) }
+            if motion { confetti(t: t - tl.lastStart, width: width, height: height) }
             Color.white.opacity(flash).allowsHitTesting(false)
             Text(c.assets.name)
                 .font(CR.bebas(24)).tracking(2)

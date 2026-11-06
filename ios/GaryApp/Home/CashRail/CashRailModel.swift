@@ -247,6 +247,22 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
         return ISO8601DateFormatter().date(from: trimmed)
     }
 
+    /// The bet in words, as the stat box says it: "Justice Hill, anytime TD".
+    var headline: String {
+        guard let f = market.first, market.dropFirst().first?.isLowercase ?? true else { return "\(who), \(market)" }
+        return "\(who), \(f.lowercased())\(market.dropFirst())"
+    }
+
+    /// What goes along with the video when it's shared.
+    var shareCaption: String {
+        "\(headline) \(CashRailFormat.price(price)). $10 paid \(CashRailFormat.payout10(price)). betwithgary.ai"
+    }
+
+    /// The video's file name; a name with a slash in it can't be a path.
+    var shareFilename: String {
+        "\(who) \(market).mp4".replacingOccurrences(of: #"[/:\\]"#, with: " ", options: .regularExpression)
+    }
+
     /// When in the game the play happened: the seconds in its play key ("935@592").
     private var gameSeconds: Int { Int(play_key.split(separator: "@").last ?? "") ?? 0 }
 

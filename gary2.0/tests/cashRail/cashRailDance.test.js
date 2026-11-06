@@ -85,6 +85,21 @@ out([td.playKey ?? "nil", gl.playKey ?? "nil"])`);
   });
 });
 
+describe.skipIf(!hasSwiftCompiler)('sharing a celebration', () => {
+  it('captions the video with the bet and what $10 paid, and keeps its file name a single path', () => {
+    const r = swiftJSON(`func c(_ who: String, _ market: String, _ price: Int) -> CashRailCelebration {
+  CashRailCelebration(play_key: "1@2", who: who, market: market, price: price, when_label: nil, play: nil, kind: "td", dance: "bird", team: "BAL", number: "43", ready_at: nil, assets: .init(bg: "", frames: [:], seq: [], name: "N"))
+}
+let hill = c("Justice Hill", "Anytime TD", 575), odd = c("A/B: C", "Rush yards 70+", 3200)
+out([hill.shareCaption, hill.shareFilename, odd.shareFilename])`);
+    expect(r).toEqual([
+      'Justice Hill, anytime TD +575. $10 paid $67.50. betwithgary.ai',
+      'Justice Hill Anytime TD.mp4',
+      'A B  C Rush yards 70+.mp4',
+    ]);
+  });
+});
+
 describe.skipIf(!hasSwiftCompiler)('trimming Gary out of his canvas', () => {
   it('finds the figure\'s box and its center of mass, ignoring faint edge pixels', () => {
     const r = swiftJSON(`var a = [UInt8](repeating: 0, count: 10 * 10)

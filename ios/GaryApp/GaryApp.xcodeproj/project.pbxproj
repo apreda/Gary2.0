@@ -28,6 +28,7 @@
 		9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF06182E7B8C9740E22A012 /* CashRailModel.swift */; };
 		10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4E8CD23C526CD205E10607 /* CashRailCard.swift */; };
 		BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */; };
+		A1C7E2F04B6D8391C5E7A2D4 /* CashRailShareVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D8F3A15C7E94A2D6F8B3E5 /* CashRailShareVideo.swift */; };
 		777E3671E910DCC68EC80983 /* LabModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958086BBEEB1C76916D435F9 /* LabModels.swift */; };
 		94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */; };
 		4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E364F49796338B2D876663BF /* LabTracker.swift */; };
@@ -210,6 +211,7 @@
 		4AF06182E7B8C9740E22A012 /* CashRailModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailModel.swift; sourceTree = "<group>"; };
 		EF4E8CD23C526CD205E10607 /* CashRailCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailCard.swift; sourceTree = "<group>"; };
 		D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailSheet.swift; sourceTree = "<group>"; };
+		B2D8F3A15C7E94A2D6F8B3E5 /* CashRailShareVideo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CashRailShareVideo.swift; sourceTree = "<group>"; };
 		958086BBEEB1C76916D435F9 /* LabModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabModels.swift; sourceTree = "<group>"; };
 		C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabDesign.swift; sourceTree = "<group>"; };
 		E364F49796338B2D876663BF /* LabTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabTracker.swift; sourceTree = "<group>"; };
@@ -394,6 +396,7 @@
 				4AF06182E7B8C9740E22A012 /* CashRailModel.swift */,
 				EF4E8CD23C526CD205E10607 /* CashRailCard.swift */,
 				D798C694BE4961B87F7A0A9B /* CashRailSheet.swift */,
+				B2D8F3A15C7E94A2D6F8B3E5 /* CashRailShareVideo.swift */,
 			);
 			path = CashRail;
 			sourceTree = "<group>";
@@ -853,6 +856,7 @@
 				9154240E5D4CAAF711AAB626 /* CashRailModel.swift in Sources */,
 				10A3496D6E174EA75CCF721E /* CashRailCard.swift in Sources */,
 				BB905A7621C37E6C3F69D247 /* CashRailSheet.swift in Sources */,
+				A1C7E2F04B6D8391C5E7A2D4 /* CashRailShareVideo.swift in Sources */,
 				3292358B12933B1F8DD2A4D2 /* HomePersonalScorecard.swift in Sources */,
 				9F2CE5FFECBC920827D175D6 /* HomePresentation.swift in Sources */,
 				00E8441238CE0350F71EDF8A /* HomeReceiptMath.swift in Sources */,
