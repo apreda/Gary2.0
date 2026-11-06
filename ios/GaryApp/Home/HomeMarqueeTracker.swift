@@ -135,8 +135,7 @@ struct HomeMarqueeTracker: View {
         #if DEBUG
         if cashDemo.isOn {
             VStack(spacing: 0) {
-                CashRailLabelRow(title: "THURSDAY NIGHT FOOTBALL", live: cashDemo.board?.status != "final")
-                CashRailCard(awayName: "Panthers", homeName: "Packers", awayAbbr: "CAR", homeAbbr: "GB",
+                CashRailCard(billing: "THURSDAY NIGHT FOOTBALL", isLive: cashDemo.board?.status != "final", awayName: "Panthers", homeName: "Packers", awayAbbr: "CAR", homeAbbr: "GB",
                              awayScore: cashDemo.away, homeScore: cashDemo.home,
                              garyPick: cashDemo.garyPick, clockBig: cashDemo.clock,
                              board: cashDemo.board, onOpenGame: {})
@@ -161,18 +160,16 @@ struct HomeMarqueeTracker: View {
         let gameID = e.live?.game_id ?? ""
         let league = (e.league ?? "NFL").uppercased()
         let board = cashStore.board(league: league, gameID: gameID)
-        VStack(spacing: 0) {
-            CashRailLabelRow(title: CashRailFormat.billing(league: e.league, commence: e.commence.flatMap(parseISO8601)),
-                             live: !e.isFinal)
-            CashRailCard(awayName: names.first ?? e.title,
-                         homeName: names.count > 1 ? names[1] : "",
-                         awayAbbr: e.live?.away_abbr, homeAbbr: e.live?.home_abbr,
-                         awayScore: e.live?.away_score, homeScore: e.live?.home_score,
-                         garyPick: e.pickLine,
-                         clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
-                         board: board,
-                         onOpenGame: { onOpenGame(e.matchupFull, e.league) })
-        }
+        CashRailCard(billing: CashRailFormat.billing(league: e.league, commence: e.commence.flatMap(parseISO8601)),
+                     isLive: !e.isFinal,
+                     awayName: names.first ?? e.title,
+                     homeName: names.count > 1 ? names[1] : "",
+                     awayAbbr: e.live?.away_abbr, homeAbbr: e.live?.home_abbr,
+                     awayScore: e.live?.away_score, homeScore: e.live?.home_score,
+                     garyPick: e.pickLine,
+                     clockBig: e.isFinal ? "FINAL" : (board?.clock ?? e.live?.detail ?? "STARTED").uppercased(),
+                     board: board,
+                     onOpenGame: { onOpenGame(e.matchupFull, e.league) })
         .pageGutter()
         .onAppear { if !gameID.isEmpty { cashStore.watch(league: league, gameID: gameID) } }
         .onChange(of: gameID) { id in if !id.isEmpty { cashStore.watch(league: league, gameID: id) } }
