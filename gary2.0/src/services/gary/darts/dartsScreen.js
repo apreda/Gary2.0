@@ -4,7 +4,8 @@
  * is hidden (Adam: the seventh hitter on a heater, the "he's due" bet). The
  * prop models (MLB: his own per-plate-appearance rates against tonight's arm;
  * NFL: team volume, opponent, share and efficiency) only put the board in
- * ORDER; their numbers never reach the ask. Each player carries his sheet:
+ * ORDER (NFL no longer, Nov 6 2026: its list goes game by game, and its model
+ * only keeps score); their numbers never reach the ask. Each player carries his sheet:
  * his games by date, opponent and arm, the windows side by side, his splits,
  * his own price history; each game carries its frame (both starters, the
  * Arms take, the clubs' form, park and weather). Gary picks and says why.
@@ -307,7 +308,10 @@ const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB
 export function nflGameBlock(frame, injuries = null, weeksByName = null, snaps = null) {
   const sp = frame.spreadHome;
   const spread = sp == null ? null : sp < 0 ? `${frame.homeFull?.replace(/^.* /, '')} ${sp}` : sp > 0 ? `${frame.awayFull?.replace(/^.* /, '')} ${-sp}` : 'pick em';
-  const lines = [[`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ')];
+  const head = [`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ');
+  // The game packet (nflGamePacket.js) carries the reports, the weather and the roster moves; the header and the news stay.
+  if (frame.packet) return [head, frame.packet, frame.news ? `TODAY'S NEWS\n${frame.news}` : null].filter(Boolean).join('\n\n');
+  const lines = [head];
   for (const extra of frame.extra || []) lines.push(extra);
   if (injuries) for (const team of [frame.awayFull, frame.homeFull].filter(Boolean)) lines.push(outAroundLine(injuries, team, '', { weeksByName, snaps, label: `${team} report` }) || `${team} report: nobody listed`);
   return lines.join('\n    ');
@@ -425,9 +429,11 @@ export function screenNflCategory({ kind, board, gamesByName: logged, priorByNam
     return { id: m.id, c, gameId: c.gameId, edge: s?.edge ?? null, side: s?.side ?? (m.under_odds != null ? null : 'over'), chance: s ? { p: s.pModel, games: s.sample } : null,
       sheet, line: nflBoardLine(kind, c, gamesByName.get(key) || [], String(season)) };
   });
-  const priced = read.filter((r) => r.edge != null).sort((a, b) => rankScore(b.edge) - rankScore(a.edge));
-  const blind = read.filter((r) => r.edge == null);
-  const menu = [...priced, ...blind];
+  // The list goes game by game, as the NBA's does; the volume model no longer orders it (founder, Nov 6 2026: it can't see
+  // who the quarterback is, and the Zay Flowers over with a rookie's first start was its most confident of 52 NFL darts). It
+  // only keeps score on the darts thrown (`screen`).
+  const priced = read.filter((r) => r.edge != null);
+  const menu = read;
   log.log(`   [Darts] ${kind}: ${markets.length} priced${kind === 'td' ? ' past the floor' : ''}, ${priced.length} read by the model, all ${menu.length} on the board`);
   const table = ctx.defenses?.size ? `Each club's record now and the points it allowed in its games, newest first (the sheets' opponents): ${[...ctx.defenses].sort(([a], [b]) => a.localeCompare(b)).map(([code, text]) => `${code} ${text.replace(/ now; allowed /, ', allowed ').replace(/ in its games, newest first$/, '')}`).join('; ')}.` : null;
   return { kind, menu, note: [FLOOR_NOTE[kind], table].filter(Boolean).join('\n\n') || null, screen: Object.fromEntries(read.map((r) => [r.id, { p: r.chance?.p ?? null, edge: r.edge, side: r.side, games: r.chance?.games ?? null }])) };

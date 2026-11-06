@@ -4,8 +4,8 @@
 // (a one-game night, the first-inning board) comes in one ask with every
 // sheet; a full board comes in two, the way a bettor works a slate: every
 // priced player one line each, Gary names the sheets he wants, then he reads
-// those sheets game by game and throws. The prop model's order is the order
-// of the list and nothing more. Opus 5.5 at medium effort on the
+// those sheets game by game and throws. MLB's prop model orders the list and
+// nothing more; NFL and NBA list by game. Opus 5.5 at medium effort on the
 // subscription. The ask is the product contract and founder facts only: how
 // many, from which ids, over or under where the line is two-sided, the
 // prices already know the season, reasons in words. His own recent darts and
@@ -14,9 +14,11 @@
 // exactly what is missing; only after two re-asks does the list's own order
 // fill the last spot, and that dart says so in its model stamp.
 import { createHash } from 'crypto';
+import { appendFileSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
-import { DART_CATEGORIES, SIDED_KINDS, FLEX_MIN, fmtOdds } from './dartsCommon.js';
+import { DART_CATEGORIES, SIDED_KINDS, FLEX_MIN, fmtOdds, etDate } from './dartsCommon.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
 export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-opus-5-5';
@@ -212,9 +214,19 @@ export function formulaFill({ kind, menu, count, taken, perClub = false, board }
   return filled;
 }
 
+/** What he was asked and answered, as the reads keep it (Nov 6 2026: no dart's ask was on file to check). Never fatal. */
+function saveDartRead(league, kind, dateLong, turns) {
+  try {
+    const dir = `${homedir()}/Library/Logs/gary-darts-read`;
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(`${dir}/${etDate()}_${league}_${kind}.md`,
+      `########## SYSTEM\n${buildDartsSystemPrompt(dateLong)}\n\n${turns.map(([ask, answer]) => `########## ASKED\n${ask}\n\n########## ANSWERED\n${answer}`).join('\n\n')}\n\n`);
+  } catch (e) { console.warn(`[Darts] ${kind} transcript not saved: ${e.message}`); }
+}
+
 /**
  * Throw one category over the whole board. `menu` = every entry in the
- * model's order ({ id, gameId, sheet, line, standalone? }); `blocks` = game id
+ * list's order ({ id, gameId, sheet, line, standalone? }); `blocks` = game id
  * → the game's frame; `starts` = game id → start time. Returns Gary's darts in his order
  * (rank 1 first), the model that answered, how many the order filled, and
  * the ids he asked to read.
@@ -231,12 +243,15 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
   let message;
   let looked = [];
   let fillOrder = menu;
+  const turns = [];
   if (menu.length <= WHOLE_BOARD_READ) {
     message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, note, flex });
   } else {
     const want = Math.max(SHEETS_WANTED, count + 4);
     try {
-      const res = await sendToSessionWithRetry(session, buildBoardAsk({ kind, menu, dateLong, look: want, note }), {});
+      const boardAsk = buildBoardAsk({ kind, menu, dateLong, look: want, note });
+      const res = await sendToSessionWithRetry(session, boardAsk, {});
+      turns.push([boardAsk, res.content]);
       model = res.model || session.modelName || model;
       const ids = new Set(menu.map((m) => m.id));
       looked = [...new Set((parseJsonKey(res.content, 'look') || []).map(cleanId).filter((id) => ids.has(id)))].slice(0, want + 4);
@@ -255,6 +270,7 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     let res;
     try { res = await sendToSessionWithRetry(session, message, {}); }
     catch (e) { log.warn(`[Darts] ${kind} ask ${attempt + 1} failed: ${e.message}`); break; }
+    turns.push([message, res.content]);
     model = res.model || session.modelName || model;
     const answer = parseJsonKey(res.content, 'darts');
     const { missing, problems } = accept(answer, { kind, menu, count, taken, perClub, board, min });
@@ -262,6 +278,7 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     const shown = answer ? problems : ['no darts JSON in the answer'];
     message = `Still owed: ${missing} more in ${CATEGORY_LABEL[kind] || kind}.${shown.length ? ` ${shown.join('; ')}.` : ''} Already thrown: ${taken.map((t) => t.id).join(', ') || 'none'}. Return only the missing darts in the same JSON.`;
   }
+  saveDartRead(league, kind, dateLong, turns);
   for (const t of taken) t.model ||= model;
   const filled = formulaFill({ kind, menu: fillOrder, count: min, taken, perClub, board });
   if (filled.length) log.warn(`[Darts] ${kind}: the list's order filled ${filled.length} of ${min}`);

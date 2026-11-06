@@ -46,6 +46,7 @@ const { normName, isNflSkillRow } = await import('../src/services/gary/darts/dar
 const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoard.js');
 const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
 const { nflNewsFor, NEWS_NOT_ON_FILE: NFL_NEWS_NOT_ON_FILE } = await import('../src/services/gary/agentic/orchestrator/nflRead.js');
+const { nflGamePacket, packetOn } = await import('../src/services/gary/darts/nflGamePacket.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -218,13 +219,22 @@ async function throwLeague(league) {
       // TODAY'S NEWS in each frame, from the news desk the game read and the props desk read (founder, Nov 2 2026, MNF:
       // the darts read no news, so Zach Charbonnet's first game since a torn ACL, and Jadarian Price off IR, were a bare
       // "no games yet" row; the Wilson TD dart read the backfield as Wilson's). The desk reads the frame as Gary has it.
+      // The game packet first, when the board is small enough (nflGamePacket.js). A game whose packet can't be built keeps
+      // the frame it had, and the log says so.
+      if (packetOn(board.games)) {
+        for (const f of board.frames) {
+          f.packet = await nflGamePacket(f).catch((e) => { log(`${league}: no game packet for ${f.matchup} (${e.message}); its frame stays as it was`); return null; });
+          if (f.packet) log(`${league}: game packet for ${f.matchup} (${f.packet.length} chars)`);
+        }
+      }
       const NEWS_AT_ONCE = 4;
       const newsQueue = [...board.frames];
       await Promise.all(Array.from({ length: Math.min(NEWS_AT_ONCE, newsQueue.length) }, async () => {
         for (let f = newsQueue.shift(); f; f = newsQueue.shift()) {
-          const news = await nflNewsFor(nflGameBlock(f, injuries, weeksByName, snaps), 'americanfootball_nfl', f.homeFull, f.awayFull,
+          const news = await nflNewsFor(f.packet || nflGameBlock(f, injuries, weeksByName, snaps), 'americanfootball_nfl', f.homeFull, f.awayFull,
             { gameId: f.gameId, gameTime: f.commence, timeoutMs: 8 * 60 * 1000 }).catch(() => null);
-          f.extra = [...(f.extra || []), `Today's news:\n${news || NFL_NEWS_NOT_ON_FILE}`];
+          f.news = news || NFL_NEWS_NOT_ON_FILE;
+          f.extra = [...(f.extra || []), `Today's news:\n${f.news}`];
         }
       }));
       log(`${league}: today's news in ${board.frames.filter((f) => !f.extra.at(-1).endsWith(NFL_NEWS_NOT_ON_FILE)).length} of ${board.frames.length} game frames`);
