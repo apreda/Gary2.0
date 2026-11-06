@@ -195,7 +195,7 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         open = false;
         try { controller.close(); } catch { /* client left */ }
 
-        const cost = costUSD(usage, voice.chars);
+        const cost = costUSD(usage, voice.chars, options.model);
         await Promise.allSettled([
           service("rpc/gary_voice_spend", { p_who: who.who, p_cost: cost }),
           service("gary_voice_log", {

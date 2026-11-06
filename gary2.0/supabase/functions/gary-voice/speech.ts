@@ -165,5 +165,7 @@ const ACCENTS: Record<string, (s: string) => string> = {
   HajairViv4XpOfGXskuF: (s) => "[strong Long Island accent] " + longIsland(s),
   // Clear take 1 (picked Nov 6 2026), the full-range redo of #35's guy. Kept as he heard and picked it: the tag, no respelling.
   n6z5BP3f6BLdUmqfxvaY: (s) => "[strong Long Island accent] " + s,
+  // Uncle Dan (picked Nov 6 2026), on Eleven v4, as he heard and picked him: this cue on every line, no respelling.
+  v54DUrx2qPTkyzeYbsyW: (s) => "[casual, brash] " + s,
 };
 export const accentFor = (voiceId: string) => ACCENTS[voiceId] ?? null;
