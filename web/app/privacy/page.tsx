@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMetadata({
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-5 py-12">
-      <PageMasthead title="Privacy policy" meta="Last updated: October 9, 2026">
+      <PageMasthead title="Privacy policy" meta="Last updated: November 6, 2026">
         <p className="mt-2 font-mono text-[11px] text-low">Operated by Gary A.I. LLC</p>
       </PageMasthead>
 
@@ -122,6 +122,14 @@ export default function PrivacyPage() {
               receives that answer to speak it in his voice. Gary keeps each question and answer
               with your account ID, or a random installation ID when signed out, to run the feature,
               limit use and check his answers. Please don&rsquo;t share anything private with him.
+            </li>
+            <li>
+              New installs of the App send a few anonymous counts, without an analytics choice:
+              that a step happened (first opened, entered the App, read a pick, opened Winners, or
+              came back the next day, within the week or within the month), the date the App was
+              first opened on that device, and the app version. Each step is sent once. These counts
+              carry no account, device, session or network identifier, so they cannot be linked to
+              you or to each other. They tell us how many new people start using Gary.
             </li>
             <li>
               Starting with iOS version 2.25 (build 899), the App&rsquo;s Settings include <strong className="text-hi">Share product analytics</strong>{' '}

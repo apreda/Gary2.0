@@ -117,6 +117,7 @@ struct FlippablePickCard: View {
         .contentShape(Rectangle())
         .onTapGesture {
             hasEverFlipped = true; flipped.toggle()
+            AppCounts.once(.readPick)
         }
         .onGaryTour { verb, _ in
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }

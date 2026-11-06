@@ -86,7 +86,7 @@ struct FlippablePropCard: View {
         .rotation3DEffect(.degrees(flipped ? 180 : 0), axis: (x: 0, y: 1, z: 0), perspective: 0.55)
         .animation(.spring(response: 0.6, dampingFraction: 0.82), value: flipped)
         .contentShape(Rectangle())
-        .onTapGesture { hasEverFlipped = true; flipped.toggle() }
+        .onTapGesture { hasEverFlipped = true; flipped.toggle(); AppCounts.once(.readPick) }
         .onGaryTour { verb, _ in
             if verb == "flip" { hasEverFlipped = true; flipped.toggle() }
         }

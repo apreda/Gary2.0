@@ -168,8 +168,13 @@ struct GaryApp: App {
             .onChange(of: scenePhase) { phase in
                 if phase == .active {
                     appDelegate.refreshNotificationAuthorization(UIApplication.shared)
+                    AppCounts.appActive(alreadyEntered: hasEntered)
                 }
             }
+            .onChange(of: hasEntered) { entered in
+                if entered { AppCounts.once(.entered) }
+            }
+            .task { AppCounts.appActive(alreadyEntered: hasEntered) }
             // Native Google sign-in's redirect (the reversed-client-id
             // scheme) routes back through the SDK; every other URL is
             // untouched (handle() returns false and nothing else consumes

@@ -56,3 +56,79 @@ enum ExternalCheckoutPolicy {
     static func permitsPurchase(countryCode: String?) -> Bool { countryCode == "USA" }
     static let unavailableMessage = "Winners purchases aren't available from this App Store region. Sign in to use access already included in your account."
 }
+
+/// How many new installs reach each first step, and whether they come back
+/// (founder, Nov 6 2026: "people to actually start using the app"). Counts with
+/// no identifier of any kind: a step, the day the app was first opened and the
+/// app version, once per install, from new installs only. Nothing here can tell
+/// one person's steps from another's. Described in the privacy policy.
+enum AppCounts {
+    enum Step: String {
+        case firstOpen = "first_open"
+        case entered = "entered"
+        case readPick = "read_pick"
+        case openedWinners = "opened_winners"
+        case nextDay = "returned_next_day"
+        case thisWeek = "returned_week"
+        case thisMonth = "returned_month"
+    }
+
+    private static let installKey = "counts.installDate"
+    private static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// A store install: not the simulator or a Debug build, and not TestFlight.
+    private static var counts: Bool {
+        #if DEBUG
+        return false
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent != "sandboxReceipt"
+        #endif
+    }
+
+    /// The app came to the front. An install that had already entered the app
+    /// when this arrived is not new, and stays out of the counts.
+    static func appActive(alreadyEntered: Bool) {
+        let store = UserDefaults.standard
+        guard let installed = store.object(forKey: installKey) as? Date else {
+            guard !alreadyEntered else { return }
+            store.set(Date(), forKey: installKey)
+            once(.firstOpen)
+            return
+        }
+        let calendar = Calendar.current
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: installed),
+                                           to: calendar.startOfDay(for: Date())).day ?? 0
+        switch days {
+        case 1: once(.nextDay)
+        case 2...7: once(.thisWeek)
+        case 8...30: once(.thisMonth)
+        default: break
+        }
+    }
+
+    /// Counts a step the first time this new install reaches it.
+    static func once(_ step: Step) {
+        let store = UserDefaults.standard
+        guard let installed = store.object(forKey: installKey) as? Date else { return }
+        let sent = "counts.sent.\(step.rawValue)"
+        guard !store.bool(forKey: sent) else { return }
+        store.set(true, forKey: sent)
+        guard counts, let url = URL(string: "\(Secrets.supabaseURL)/rest/v1/rpc/count_app_step") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(Secrets.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(Secrets.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        req.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "p_step": step.rawValue, "p_install_day": dayFormat.string(from: installed), "p_version": version,
+        ])
+        Task.detached { _ = try? await URLSession.shared.data(for: req) }
+    }
+}

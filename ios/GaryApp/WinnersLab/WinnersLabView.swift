@@ -990,6 +990,7 @@ struct WinnersLabView: View {
             streakBest: streakBest,
             celebrate: revealing == group.lead.candidateID,
             onOpen: { ticket in
+                AppCounts.once(.openedWinners)
                 if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
             },
             onReseal: { if !sealed { reseal(group.lead.candidateID) } })
