@@ -1078,6 +1078,8 @@ private struct GaryClipView: UIViewRepresentable {
         private static let queue = device?.makeCommandQueue()
         private static let context = device.map { CIContext(mtlDevice: $0, options: [.cacheIntermediates: false]) }
         private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
+        private static let frames = DispatchQueue(label: "ai.betwithgary.gary-frames", qos: .userInteractive)
+        private var rendering = false
         private var link: CADisplayLink?
         var output: AVPlayerItemVideoOutput?
         var board: GaryBoardInk?
@@ -1107,34 +1109,50 @@ private struct GaryClipView: UIViewRepresentable {
             link = l
         }
 
+        /// A frame is decided on the main thread and drawn off it: waiting for a free drawable there stalled the
+        /// whole page while it scrolled (Nov 6 2026). If the GPU falls behind, the frame is skipped and the page isn't.
         @objc private func tick() {
-            guard let output else { return }
+            guard !rendering, let output else { return }
             let t = output.itemTime(forHostTime: CACurrentMediaTime())
-            guard output.hasNewPixelBuffer(forItemTime: t),
-                  let buffer = output.copyPixelBuffer(forItemTime: t, itemTimeForDisplay: nil) else { return }
+            guard output.hasNewPixelBuffer(forItemTime: t) else { return }
+            rendering = true
+            let board = board, metal = metal
+            Self.frames.async { [weak self] in
+                defer { DispatchQueue.main.async { self?.rendering = false } }
+                guard let buffer = output.copyPixelBuffer(forItemTime: t, itemTimeForDisplay: nil) else { return }
+                Self.draw(buffer, seconds: t.seconds, board: board, on: metal)
+            }
+        }
+
+        private static func draw(_ buffer: CVPixelBuffer, seconds: Double, board: GaryBoardInk?, on metal: CAMetalLayer) {
             let full = CIImage(cvPixelBuffer: buffer)
             let w = full.extent.width, h = full.extent.height / 2
             // Core Image counts from the bottom: the picture is the upper half, its alpha the lower.
             var picture = full.cropped(to: CGRect(x: 0, y: h, width: w, height: h))
                 .transformed(by: CGAffineTransform(translationX: 0, y: -h))
-            if let board, let face = board.face(at: t.seconds, in: CGSize(width: w, height: h)) {
-                picture = Self.write(board.ink, on: picture, at: face.corners, show: face.show)
+            if let board, let face = board.face(at: seconds, in: CGSize(width: w, height: h)) {
+                picture = write(board.ink, on: picture, at: face.corners, show: face.show)
             }
             let alpha = full.cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
             let frame = picture.applyingFilter("CIBlendWithMask", parameters: [
                 kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha,
             ])
-            present(frame, width: w, height: h)
+            present(frame, width: w, height: h, on: metal)
         }
 
-        private func present(_ frame: CIImage, width: CGFloat, height: CGFloat) {
+        private static func present(_ frame: CIImage, width: CGFloat, height: CGFloat, on metal: CAMetalLayer) {
             let size = CGSize(width: width, height: height)
-            if metal.drawableSize != size { metal.drawableSize = size }
-            guard let context = Self.context, let drawable = metal.nextDrawable(),
-                  let commands = Self.queue?.makeCommandBuffer() else { return }
+            if metal.drawableSize != size {
+                // This queue has no run loop to flush an implicit transaction.
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                metal.drawableSize = size
+                CATransaction.commit()
+            }
+            guard let context, let drawable = metal.nextDrawable(), let commands = queue?.makeCommandBuffer() else { return }
             let target = CIRenderDestination(width: Int(width), height: Int(height), pixelFormat: metal.pixelFormat,
                                              commandBuffer: commands) { drawable.texture }
-            target.colorSpace = Self.sRGB
+            target.colorSpace = sRGB
             target.alphaMode = .premultiplied
             target.isFlipped = true
             _ = try? context.startTask(toClear: target)
