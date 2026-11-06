@@ -88,7 +88,7 @@ BOARDS = [
        'background:linear-gradient(180deg,rgba(14,12,9,0),#0E0C09 92%);"></div></div>'),
     # 6. Honesty: the record, losses included.
     ("06-record",
-     copy("Billfold", "The losses<br><em>stay up too.</em>", "Every pick is graded in public. Nothing gets deleted.")
+     copy("Billfold", "The losses<br><em>stay up too.</em>", "Every pick is graded in public, wins and losses.")
      + phone("billfold.png", 1010)),
 ]
 
