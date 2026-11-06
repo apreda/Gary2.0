@@ -38,7 +38,7 @@ export const TEAM_LOOKS = {
   SEA: { uniform: 'a navy blue jersey with white numerals outlined in lime green, navy pants, navy socks', bg: 'navy blue' },
   TB: { uniform: 'a red jersey with white numerals outlined in pewter and orange, pewter pants, red socks', bg: 'red' },
   TEN: { uniform: 'a navy blue jersey with light blue numerals outlined in white, white pants, navy socks', bg: 'navy blue' },
-  WAS: { uniform: 'a burgundy jersey with gold numerals outlined in white, gold pants, burgundy socks', bg: 'burgundy' },
+  WSH: { uniform: 'a burgundy jersey with gold numerals outlined in white, gold pants, burgundy socks', bg: 'burgundy' },
 };
 
 /** Sixteen celebrations: each a routine of [frame, hold ms, move] over a few drawn poses.
@@ -159,8 +159,10 @@ const BIG = 800;
 
 /**
  * Plays worth a celebration: any touchdown scorer bet, or any player bet that
- * cashed at +800 or longer. One per play (player + moment), carrying the best
- * price that play cashed. Game lines never celebrate.
+ * cashed at +800 or longer. One per play (player + moment). A touchdown play is
+ * named for its best touchdown bet, even when a yardage bet on the same run paid
+ * more (founder, Nov 5 2026: "Rush yards 70+" under TOUCHDOWN! read as a mismatch);
+ * any other play for its best price. Game lines never celebrate.
  * @returns {Array<{playKey:string, playerId:string, kind:'td'|'big', hit:object}>}
  */
 export function celebrationPlays(hits = []) {
@@ -173,10 +175,8 @@ export function celebrationPlays(hits = []) {
     const playKey = `${playerId}@${h.elapsed}`;
     const cur = plays.get(playKey);
     if (!cur) plays.set(playKey, { playKey, playerId, kind: td ? 'td' : 'big', hit: h });
-    else {
-      if (td) cur.kind = 'td';
-      if (h.price > cur.hit.price) cur.hit = h;
-    }
+    else if (td && cur.kind !== 'td') { cur.kind = 'td'; cur.hit = h; }
+    else if (td === (cur.kind === 'td') && h.price > cur.hit.price) cur.hit = h;
   }
   return [...plays.values()].sort((a, b) => a.hit.elapsed - b.hit.elapsed);
 }

@@ -33,7 +33,9 @@ export async function runCelebrations({ db, bdl, art, store, limit = 2, log = ()
       if (drawn >= limit) return drawn;
       if (done.has(p.playKey)) continue;
       const who = await bdl.player(p.playerId);
-      const team = TEAM_LOOKS[who?.team] ? who.team : 'GB';
+      // Unplaced stays undrawn for the next pass: never another team's colors.
+      if (!TEAM_LOOKS[who?.team]) continue;
+      const team = who.team;
       const number = who?.number ? String(who.number) : '1';
       const dance = DANCES.find(d => d.id === pickDance(p.playKey, p.kind));
       const row = {

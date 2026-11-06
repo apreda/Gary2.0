@@ -20,6 +20,17 @@ describe('which hits get a celebration', () => {
     expect(plays[0].playerId).toBe('935');
   });
 
+  it('names a touchdown play for the touchdown, even when a yardage bet on the same run paid more', () => {
+    const run = [
+      hit('518|anytime_td|1', 'Justice Hill', 'Anytime TD', 575, 3165),
+      hit('518|longest_rush', 'Justice Hill', 'Longest run', 186, 3165),
+      hit('518|rushing_yards', 'Justice Hill', 'Rush yards', 3200, 3165, { rungs: [{ label: '70+', price: 3200 }] }),
+    ];
+    for (const hits of [run, [...run].reverse()]) {
+      expect(celebrationPlays(hits).map(p => [p.playKey, p.hit.key, p.kind])).toEqual([['518@3165', '518|anytime_td|1', 'td']]);
+    }
+  });
+
   it('never celebrates a game line', () => {
     expect(celebrationPlays([hit('game|ml|away', 'Panthers', 'Moneyline', 900, 3600)])).toEqual([]);
   });
@@ -63,8 +74,8 @@ describe('the art prompts', () => {
     expect(p).toMatch(/black football cleats/i);
   });
 
-  it('has a look for all 32 teams', () => {
-    expect(Object.keys(TEAM_LOOKS).length).toBe(32);
+  it('has a look for all 32 teams, under the abbreviations BDL sends', () => {
+    expect(Object.keys(TEAM_LOOKS).sort()).toEqual(['ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN', 'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LAR', 'LV', 'MIA', 'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WSH']);
     for (const t of Object.values(TEAM_LOOKS)) expect(t.uniform && t.bg).toBeTruthy();
   });
 

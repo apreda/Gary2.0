@@ -74,6 +74,13 @@ describe('runCelebrations', () => {
     expect(f.writes.art).toEqual([]);
   });
 
+  it('leaves a player it cannot place undrawn, for a later pass, rather than dress him in another team\'s colors', async () => {
+    const f = fakes();
+    f.bdl.player = async () => null;
+    expect(await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 })).toBe(0);
+    expect(f.writes.claims).toEqual([]);
+  });
+
   it('marks a play failed when the art cannot be drawn, so it is never half-shown', async () => {
     const f = fakes({ failArt: true });
     await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 });
