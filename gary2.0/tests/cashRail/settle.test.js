@@ -26,6 +26,11 @@ const settle = (ps = plays, g = game, more = {}) => settleNfl({ markets, plays: 
 const hit = (out, key) => out.hits.find(h => h.key === key);
 
 describe('settleNfl on NE @ CHI', () => {
+  it('shows no quarter or half bets, even from a board frozen before they came off', () => {
+    const { hits } = settleNfl({ markets: [...markets, m(SWIFT, 'anytime_td_1q', 'milestone', 1, '1+', 900), m(SWIFT, 'anytime_td_1h', 'milestone', 1, '1+', 410)], plays, game, players });
+    expect(hits.filter(h => h.who === "D'Andre Swift").map(h => h.market)).toEqual(['First TD scorer']);
+  });
+
   it('cashes first TD for the first touchdown\'s scorer only', () => {
     const out = settle();
     expect(hit(out, `${SWIFT}|first_td`)).toMatchObject({ who: "D'Andre Swift", market: 'First TD scorer', price: 600, when: 'Q1 1:38', elapsed: 802 });

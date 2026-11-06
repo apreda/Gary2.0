@@ -72,7 +72,7 @@ export function settleNcaaf({ markets = [], plays = [], stats = [], game = {}, p
     const v = Number(STAT[m.propType]?.(s));
     if (!Number.isFinite(v) || !(m.kind === 'milestone' ? v >= m.line : v > m.line)) continue;
     if (m.propType === 'anytime_td') {
-      hits.push(timed({ key: `${m.playerId}|anytime_td|${m.line}`, who: name, market: tdMarketName(m.line, ''),
+      hits.push(timed({ key: `${m.playerId}|anytime_td|${m.line}`, who: name, market: tdMarketName(m.line),
         price: m.price, play: v === 1 ? 'Scored' : `${v} TDs` }));
       continue;
     }

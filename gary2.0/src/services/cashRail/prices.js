@@ -13,15 +13,12 @@ const BASE_TYPES = new Set([
   'receptions', 'passing_tds',
   'interceptions', 'longest_reception', 'longest_rush', 'longest_pass',
 ]);
-const WINDOWS = ['_1q', '_1h', '_2h'];
-
-/** True for a prop type the settlement engine can grade from plays. */
+/**
+ * True for a prop type the settlement engine can grade from plays. Whole-game bets only (founder, Nov 5 2026: "we
+ * dont need to do like quarter bets"): a touchdown is first TD, anytime, or 2+ and 3+, never a quarter or a half.
+ */
 export function settleableType(propType) {
-  if (BASE_TYPES.has(propType)) return true;
-  const w = WINDOWS.find(s => propType.endsWith(s));
-  // Quarter and half windows only for touchdowns: a 1st-quarter yards line is
-  // the same story as the game's ladder, told again at a shorter price.
-  return Boolean(w) && propType.slice(0, -w.length) === 'anytime_td';
+  return BASE_TYPES.has(propType);
 }
 
 const PREDICTION_MARKETS = new Set(['polymarket', 'kalshi']);

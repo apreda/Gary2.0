@@ -75,7 +75,7 @@ describe('freezeBoard', () => {
     expect(markets.map(m => m.label)).toEqual(['40+']);
   });
 
-  it('keeps the bets people talk about: no attempts or completions, and quarter or half windows only for touchdowns', () => {
+  it('keeps the bets people talk about: no attempts or completions, and whole-game bets only', () => {
     const { markets } = freezeBoard([
       row('fanduel', 'rushing_attempts', '15', { type: 'milestone', odds: 120 }),
       row('fanduel', 'passing_completions', '25', { type: 'milestone', odds: 130 }),
@@ -85,7 +85,7 @@ describe('freezeBoard', () => {
       row('fanduel', 'anytime_td_1q', '1', { type: 'milestone', odds: 900 }),
       row('fanduel', 'anytime_td_1h', '1', { type: 'milestone', odds: 410 }),
     ], []);
-    expect(markets.map(m => m.propType)).toEqual(['anytime_td_1q', 'anytime_td_1h']);
+    expect(markets).toEqual([]);
   });
 
   it('keeps one over line per player prop and per game total: the line most books hang', () => {

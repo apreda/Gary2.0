@@ -17,15 +17,11 @@ export const MARKET_NAMES = {
   interceptions: 'Interceptions thrown', longest_reception: 'Longest catch', longest_rush: 'Longest run',
   longest_pass: 'Longest completion',
 };
-const WINDOW_LABEL = { _1q: '1st quarter', _1h: '1st half', _2h: '2nd half' };
-const IN_WINDOW = { '': () => true, _1q: p => p === 1, _1h: p => p <= 2, _2h: p => p >= 3 };
+/** A quarter or half bet on a board frozen before they came off (founder, Nov 5 2026): no longer shown. */
+const PART_OF_GAME = /_(1q|1h|2h)$/;
 const SCORER_TYPES = ['receiver', 'rusher', 'interception_returner', 'kickoff_returner', 'punt_returner',
   'fumble_recoverer', 'recoverer', 'returner', 'blocked_kick_recoverer'];
 
-const splitWindow = propType => {
-  const w = Object.keys(WINDOW_LABEL).find(s => propType.endsWith(s));
-  return w ? { base: propType.slice(0, -w.length), window: w } : { base: propType, window: '' };
-};
 const clockSecs = c => {
   const [m, s] = String(c || '0:00').split(':').map(Number);
   return (Number.isFinite(m) ? m : 0) * 60 + (Number.isFinite(s) ? s : 0);
@@ -100,10 +96,9 @@ function tdText(p) {
   return p.short_text || 'Touchdown';
 }
 
-export function tdMarketName(line, window) {
+export function tdMarketName(line) {
   const n = Number(line);
-  const base = n <= 1 ? 'Anytime TD' : `${n}+ TDs`;
-  return window ? `${base} · ${WINDOW_LABEL[window]}` : base;
+  return n <= 1 ? 'Anytime TD' : `${n}+ TDs`;
 }
 
 /**
@@ -129,7 +124,8 @@ export function playerTotals(plays = []) {
   return { totals, last: ordered[ordered.length - 1] ?? null };
 }
 
-export function settleNfl({ markets = [], plays = [], game = {}, players = {}, garyPick = null }) {
+export function settleNfl({ markets: frozen = [], plays = [], game = {}, players = {}, garyPick = null }) {
+  const markets = frozen.filter(m => !PART_OF_GAME.test(m.propType ?? ''));
   const ordered = plays
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => Number.isFinite(p.period) && p.period >= 1)
@@ -143,31 +139,27 @@ export function settleNfl({ markets = [], plays = [], game = {}, players = {}, g
     byPlayer.get(m.playerId).push(m);
   }
 
-  const cum = new Map(); // `${pid}|${stat}|${window}` → value
+  const cum = new Map(); // `${pid}|${stat}` → value
   const cashed = new Map(); // market key → { play, value }
   let firstTd = null;
   let totalCash = new Map(); // game total market key → play
 
   for (const p of ordered) {
     for (const [pid, stat, value, mode] of statLines(p)) {
-      for (const w of Object.keys(IN_WINDOW)) {
-        if (!IN_WINDOW[w](p.period)) continue;
-        const k = `${pid}|${stat}|${w}`;
-        const before = cum.get(k) ?? 0;
-        cum.set(k, mode === 'max' ? Math.max(before, value) : before + value);
-      }
+      const k = `${pid}|${stat}`;
+      const before = cum.get(k) ?? 0;
+      cum.set(k, mode === 'max' ? Math.max(before, value) : before + value);
       if (stat === 'tds' && !firstTd) firstTd = { pid, p };
       for (const m of byPlayer.get(pid) || []) {
         if (cashed.has(m.key)) continue;
-        const { base, window } = splitWindow(m.propType);
-        if (!IN_WINDOW[window](p.period)) continue;
+        const base = m.propType;
         if (base === 'first_td') {
           if (firstTd && firstTd.p === p && firstTd.pid === pid) cashed.set(m.key, { play: p, value: 1 });
           continue;
         }
         const stat2 = base === 'anytime_td' ? 'tds' : base;
         if (stat2 !== stat) continue;
-        const v = cum.get(`${pid}|${stat2}|${window}`) ?? 0;
+        const v = cum.get(`${pid}|${stat2}`) ?? 0;
         if (m.kind === 'milestone' ? v >= m.line : v > m.line) cashed.set(m.key, { play: p, value: v });
       }
     }
@@ -190,25 +182,24 @@ export function settleNfl({ markets = [], plays = [], game = {}, players = {}, g
   const ladders = new Map();
   for (const m of markets) {
     if (m.playerId == null || !cashed.has(m.key)) continue;
-    const { base, window } = splitWindow(m.propType);
+    const base = m.propType;
     const name = players[m.playerId];
     if (!name) continue;
     if (base === 'first_td' || base === 'anytime_td') {
       const c = cashed.get(m.key);
       const key = base === 'first_td' ? `${m.playerId}|${m.propType}` : `${m.playerId}|${m.propType}|${m.line}`;
-      hits.push({ key, who: name, market: base === 'first_td' ? 'First TD scorer' : tdMarketName(m.line, window),
+      hits.push({ key, who: name, market: base === 'first_td' ? 'First TD scorer' : tdMarketName(m.line),
         price: m.price, elapsed: elapsedOf(c.play), when: whenOf(c.play), play: tdText(c.play) });
       continue;
     }
     const lk = `${m.playerId}|${m.propType}`;
-    if (!ladders.has(lk)) ladders.set(lk, { name, base, window, rungs: [] });
+    if (!ladders.has(lk)) ladders.set(lk, { name, base, rungs: [] });
     ladders.get(lk).rungs.push({ m, c: cashed.get(m.key) });
   }
   for (const [key, l] of ladders) {
     l.rungs.sort((a, b) => (a.m.line - b.m.line) || (a.m.kind === 'over' ? -1 : 1));
     const top = l.rungs[l.rungs.length - 1];
-    const market = MARKET_NAMES[l.base] + (l.window ? ` · ${WINDOW_LABEL[l.window]}` : '');
-    hits.push({ key, who: l.name, market, price: top.m.price,
+    hits.push({ key, who: l.name, market: MARKET_NAMES[l.base], price: top.m.price,
       rungs: l.rungs.map(r => ({ label: r.m.label, price: r.m.price })),
       elapsed: elapsedOf(top.c.play), when: whenOf(top.c.play), play: playText(l.base, top.c.play, top.c.value) });
   }
