@@ -42,7 +42,7 @@ What's true and what's a bit
 
 Picks and money
 - These are your own picks and your own reasoning. Explain them the way you wrote them, in the first person: what you saw, why you took that side, what worries you.
-- When they ask what you think about a game, a player or a bet, tell them, and if you like a side, name it, the way a guy at the bar tells you who he likes. If you didn't officially bet it, that's fine: go on what your lookups show, or your gut if you haven't done the homework yet, and let them hear that it's just you talking, not one of your picks in the app. Never say you're on a bet you didn't make, and don't go against a pick you did make. Your official picks come out once the lineups and injury news are in, usually a few hours before the game.
+- You're an expert bettor talking bets with a friend, and that goes well past your own picks. They can ask you for bets you haven't made, run their own ideas by you, or work through a card with you. So dig in: check the injuries, the lines, the prop board and the players, say who you like and why, tell them when an idea is bad, and help them find a better one. Take a little more room when you're working through bets together. When something isn't one of your picks, say so once, in passing, then get on with it. Don't keep pointing them back to your picks, or telling them to wait for injury news you can check. If there's no desk yet and you're missing something you'd want, say what, and still give your read. Never say you're on a bet you didn't make, and don't go against a pick you did make. If they ask when your official picks come out, it's once the lineups and injury news are in, usually a few hours before the game.
 - This season only for stats and results. Never bring up last season.
 - Winners is the paid room in the app: your real-money bets from a $10,000 bankroll. Talk about it in dollars, never units. If the notebook says Winners plays are locked for this listener, you can say how many are in there, never which teams or players; tell them they're in Winners.
 - Be straight about results, good and bad. A loss is a loss; don't spin it.
@@ -50,7 +50,7 @@ Picks and money
 - If someone sounds like betting is hurting them (chasing losses, money they need, can't stop), drop the act and the picks talk, be kind and brief, and mention 1-800-GAMBLER. If they sound like they're in a bad place some other way, drop the act too and take it seriously; if it sounds serious, mention they can call or text 988.
 
 Lookups
-Your notebook below has your picks for this slate, your write-ups and how things stand. Your lookups have the rest, so use them whenever a question about sports goes past the notebook: your desk for a game (the injuries, who's playing, stats, schemes, weather and news you read before picking), a player's card, what's on the schedule, the story of a finished game, your fantasy column, another day's picks and results, the full write-up behind a pick, a team's recent games, and your record over a stretch. Don't look anything up when you're just talking. Before a lookup, say at most a few natural words, a little different each time ("Hang on.", "Gimme a sec.", "Let me check the desk.") and nothing else; never read dates out to yourself.`;
+Your notebook below has your picks for this slate, your write-ups and how things stand. Your lookups have the rest, so use them whenever a question about sports goes past the notebook: today's injury report for any team, the prop lines on any game, your desk for a game you've picked (the injuries, who's playing, stats, schemes, weather and news you read before picking), a player's card, what's on the schedule with its lines, the story of a finished game, your fantasy column, another day's picks and results, the full write-up behind a pick, a team's recent games, and your record over a stretch. Don't look anything up when you're just talking. Before a lookup, say at most a few natural words, a little different each time ("Hang on.", "Gimme a sec.", "Let me check the desk.") and nothing else; never read dates out to yourself.`;
 
 const TOOLS = [
   {
@@ -104,8 +104,22 @@ const TOOLS = [
     input_schema: { type: "object", properties: { name: { type: "string", description: "The player's name" } }, required: ["name"], additionalProperties: false },
   },
   {
+    name: "injuries",
+    description: "Today's injury report for a team, live, whether or not you've picked its game. There's no feed for college.",
+    input_schema: {
+      type: "object",
+      properties: { league: { type: "string", enum: ["NFL", "NBA", "MLB", "NCAAF", "NHL", "NCAAB"] }, team: { type: "string", description: "Team name, e.g. Lakers" } },
+      required: ["league", "team"], additionalProperties: false,
+    },
+  },
+  {
+    name: "prop_board",
+    description: "The player prop lines on a team's next game, whether or not you've picked it: each player's lines, over prices, and how many of his recent games cleared each line. Use it to look for bets.",
+    input_schema: { type: "object", properties: { team: { type: "string", description: "Either team, e.g. Lakers" } }, required: ["team"], additionalProperties: false },
+  },
+  {
     name: "whats_on",
-    description: "The schedule, with times and betting lines, whether or not you have a pick on the game. Name a team to find its next game; leave the date out for the next 7 days.",
+    description: "The schedule, with times, spreads, totals and moneylines, whether or not you have a pick on the game. Name a team to find its next game; leave the date out for the next 7 days.",
     input_schema: {
       type: "object",
       properties: {
@@ -137,6 +151,14 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n[cut f
 /** A name for a PostgREST "ilike" filter: its own characters only, so it can't change the query. */
 const nameFilter = (s: unknown) => encodeURIComponent(String(s ?? "").replace(/[^\p{L}\p{N} .'&-]/gu, " ").replace(/\s+/g, " ").trim());
 const SEASON_START = "2026-08-01";
+const price = (n: number) => `${n > 0 ? "+" : ""}${n}`;
+const BDL_ROOT: Record<string, string> = { NBA: "nba/v1", NFL: "nfl/v1", NHL: "nhl/v1", MLB: "mlb/v1" };
+
+async function bdl(path: string): Promise<any[]> {
+  const res = await fetch(`https://api.balldontlie.io/${path}`, { headers: { Authorization: Deno.env.get("BALLDONTLIE_API_KEY") ?? "" }, signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`feed returned ${res.status}`);
+  return (await res.json()).data ?? [];
+}
 
 export async function runTool(db: Db, slate: string, name: string, input: any): Promise<string> {
   if (!input || typeof input !== "object") throw new Error("bad input");
@@ -192,7 +214,10 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     const rows = await db.rpc("get_team_games", { p_league: String(input.league), p_team: String(input.team) });
     const list = Array.isArray(rows) ? rows : rows?.games ?? [];
     if (!list.length) return `No games found for ${input.team}.`;
-    return clip(JSON.stringify(list.slice(-12)), 5000);
+    // Newest first, and the list reaches back into last season.
+    const season = list.filter((g: any) => g.cur !== false);
+    if (!season.length) return `No games yet this season for ${input.team}.`;
+    return clip(JSON.stringify(season.slice(0, 12)), 5000);
   }
   if (name === "my_record") {
     const days = Math.max(1, Math.min(60, Number(input.days) || 7));
@@ -238,17 +263,54 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     if (form?.length) out.push(`On your ${form[0].kind} list: ${form.map((f: any) => `${f.detail} (${f.team}${f.next_game ? `, next ${f.next_game}` : ""})`).join("; ")}`);
     return clip(out.join("\n"), 3500);
   }
+  if (name === "injuries") {
+    const root = BDL_ROOT[String(input.league ?? "").toUpperCase()];
+    if (!root) return `There's no injury feed for ${input.league}. If you've picked the game, check its desk.`;
+    const needle = String(input.team ?? "").toLowerCase().trim();
+    if (needle.length < 2) throw new Error("team too short");
+    const team = (await bdl(`${root}/teams`)).find((t: any) =>
+      String(t.full_name ?? t.display_name ?? t.name ?? "").toLowerCase().includes(needle) || String(t.abbreviation ?? "").toLowerCase() === needle);
+    if (!team) return `Couldn't find a ${input.league} team called ${input.team}.`;
+    const rows = await bdl(`${root}/player_injuries?team_ids[]=${team.id}&per_page=100`);
+    if (!rows.length) return `Nobody on the injury report for ${input.team} right now.`;
+    return clip(rows.map((r: any) => {
+      const p = r.player ?? {};
+      const note = String(r.comment ?? r.description ?? "").slice(0, 280);
+      return `- ${p.first_name ?? ""} ${p.last_name ?? ""}, ${p.position_abbreviation ?? p.position ?? "?"}: ${r.status ?? "listed"}${r.return_date ? `, return ${r.return_date}` : ""}. ${note}`;
+    }).join("\n"), 6000);
+  }
+  if (name === "prop_board") {
+    const team = nameFilter(input.team);
+    if (team.length < 3) throw new Error("team too short");
+    const game = (await db.get(`daily_slate?date=gte.${slate}&date=lte.${addDays(slate, 7)}&bdl_game_id=not.is.null&or=(away_team.ilike."*${team}*",home_team.ilike."*${team}*")&select=date,league,away_team,home_team,bdl_game_id&order=commence_time&limit=1`))?.[0];
+    if (!game) return `No game coming up for ${input.team} in the next 7 days.`;
+    const cards: any[] = await db.get(`player_insight_cards?league=eq.${encodeURIComponent(game.league)}&game_id=eq.${game.bdl_game_id}&date=gte.${addDays(slate, -7)}&select=player_name,team_abbr,payload->props&order=date.desc&limit=80`) ?? [];
+    const seen = new Set<string>();
+    const rows: string[] = [];
+    for (const c of cards) {
+      if (seen.has(c.player_name) || !Array.isArray(c.props) || !c.props.length) continue;
+      seen.add(c.player_name);
+      rows.push(`${c.player_name} (${c.team_abbr}): ${c.props.map((p: any) => `${String(p.label).toLowerCase()} ${p.line}${p.odds ? ` over ${p.odds}` : ""}${p.rate ? `, cleared ${String(p.rate).replace(/ over$/, "")}` : ""}`).join("; ")}`);
+    }
+    const match = `${game.away_team} at ${game.home_team}, ${dayName(game.date)}`;
+    if (!rows.length) return `No player prop lines saved for ${match}.`;
+    return clip(`${match}. Prices are from this morning's board and show the over only.\n${rows.join("\n")}`, 7000);
+  }
   if (name === "whats_on") {
     if (input.date && !YMD.test(input.date)) throw new Error("date must be YYYY-MM-DD");
     const on = input.date ? `date=eq.${input.date}` : `date=gte.${slate}&date=lte.${addDays(slate, 7)}`;
     const league = typeof input.league === "string" ? `&league=eq.${encodeURIComponent(input.league)}` : "";
     const name = nameFilter(input.team);
     const team = name.length >= 3 ? `&or=(away_team.ilike."*${name}*",home_team.ilike."*${name}*")` : "";
-    const rows: any[] = await db.get(`daily_slate?${on}${league}${team}&select=date,league,away_team,home_team,commence_time,spread,total&order=commence_time`) ?? [];
+    const rows: any[] = await db.get(`daily_slate?${on}${league}${team}&select=date,league,away_team,home_team,commence_time,spread,total,ml_home,ml_away&order=commence_time`) ?? [];
     const asked = [input.team, input.league].filter(Boolean).join(" ");
     if (!rows.length) return `No games on the schedule${asked ? ` for ${asked}` : ""}${input.date ? ` on ${dayName(input.date)}` : " in the next 7 days"}.`;
     return clip(rows.map((g) => {
-      const line = [g.spread != null ? `${g.home_team} ${g.spread > 0 ? "+" : ""}${g.spread}` : null, g.total != null ? `total ${g.total}` : null].filter(Boolean).join(", ");
+      const line = [
+        g.spread != null ? `${g.home_team} ${price(g.spread)}` : null,
+        g.total != null ? `total ${g.total}` : null,
+        g.ml_home != null && g.ml_away != null ? `moneyline ${g.home_team} ${price(g.ml_home)}, ${g.away_team} ${price(g.ml_away)}` : null,
+      ].filter(Boolean).join(", ");
       return `- ${dayName(g.date)}: ${g.league} ${g.away_team} at ${g.home_team}, ${etTime(g.commence_time) ?? "time not set"} ET${line ? ` (${line})` : ""}`;
     }).join("\n"), 6000);
   }
