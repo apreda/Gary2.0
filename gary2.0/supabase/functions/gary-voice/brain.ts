@@ -103,11 +103,15 @@ const TOOLS = [
   },
   {
     name: "whats_on",
-    description: "Every game on a date, with its time and betting line, whether or not you have a pick on it.",
+    description: "The schedule, with times and betting lines, whether or not you have a pick on the game. Name a team to find its next game; leave the date out for the next 7 days.",
     input_schema: {
       type: "object",
-      properties: { date: { type: "string", description: "YYYY-MM-DD" }, league: { type: "string", enum: ["NFL", "NBA", "MLB", "NCAAF", "NHL", "NCAAB"] } },
-      required: ["date"], additionalProperties: false,
+      properties: {
+        team: { type: "string", description: "A team, e.g. Chiefs" },
+        date: { type: "string", description: "YYYY-MM-DD" },
+        league: { type: "string", enum: ["NFL", "NBA", "MLB", "NCAAF", "NHL", "NCAAB"] },
+      },
+      additionalProperties: false,
     },
   },
   {
@@ -233,14 +237,18 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     return clip(out.join("\n"), 3500);
   }
   if (name === "whats_on") {
-    if (!YMD.test(input.date)) throw new Error("date must be YYYY-MM-DD");
+    if (input.date && !YMD.test(input.date)) throw new Error("date must be YYYY-MM-DD");
+    const on = input.date ? `date=eq.${input.date}` : `date=gte.${slate}&date=lte.${addDays(slate, 7)}`;
     const league = typeof input.league === "string" ? `&league=eq.${encodeURIComponent(input.league)}` : "";
-    const rows: any[] = await db.get(`daily_slate?date=eq.${input.date}${league}&select=league,away_team,home_team,commence_time,spread,total&order=commence_time`) ?? [];
-    if (!rows.length) return `No games on the schedule for ${dayName(input.date)}${input.league ? ` in the ${input.league}` : ""}.`;
-    return clip(`${dayName(input.date)}:\n${rows.map((g) => {
+    const name = nameFilter(input.team);
+    const team = name.length >= 3 ? `&or=(away_team.ilike."*${name}*",home_team.ilike."*${name}*")` : "";
+    const rows: any[] = await db.get(`daily_slate?${on}${league}${team}&select=date,league,away_team,home_team,commence_time,spread,total&order=commence_time`) ?? [];
+    const asked = [input.team, input.league].filter(Boolean).join(" ");
+    if (!rows.length) return `No games on the schedule${asked ? ` for ${asked}` : ""}${input.date ? ` on ${dayName(input.date)}` : " in the next 7 days"}.`;
+    return clip(rows.map((g) => {
       const line = [g.spread != null ? `${g.home_team} ${g.spread > 0 ? "+" : ""}${g.spread}` : null, g.total != null ? `total ${g.total}` : null].filter(Boolean).join(", ");
-      return `- ${g.league} ${g.away_team} at ${g.home_team}, ${etTime(g.commence_time) ?? "time not set"} ET${line ? ` (${line})` : ""}`;
-    }).join("\n")}`, 6000);
+      return `- ${dayName(g.date)}: ${g.league} ${g.away_team} at ${g.home_team}, ${etTime(g.commence_time) ?? "time not set"} ET${line ? ` (${line})` : ""}`;
+    }).join("\n"), 6000);
   }
   if (name === "game_story") {
     const team = nameFilter(input.team);
