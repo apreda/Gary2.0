@@ -430,7 +430,7 @@
   pointer-events: none;
   z-index: 0;
 }
-.native-front > .native-payout {
+.native-front > div.native-payout {
   position: absolute;
   right: 16px;
   top: 12px;
