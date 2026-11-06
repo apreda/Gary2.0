@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { CaptionFilter, jersey, longIsland, SpeechChunker, speakable, withoutDelivery } from "./speech.ts";
+import { accentFor, CaptionFilter, jersey, longIsland, SpeechChunker, speakable, withoutDelivery } from "./speech.ts";
 
 Deno.test("his chuckle reaches the voice; anything else in brackets doesn't", () => {
   assertEquals(speakable("[Chuckles] Listen, [winks] I took Miami] and a stray [ mark"), "[chuckles] Listen, I took Miami and a stray mark");
@@ -45,4 +45,8 @@ Deno.test("Long Island drops the r and draws out the aw, word for word", () => {
   const said = longIsland(plain);
   assertEquals(said, "Ya want the ovah? Nevah. I'm tawkin' cawfee, they covah undah the numbah, and Miller is bettah than the Packers. You're welcome, beer and career.");
   assertEquals(said.split(/\s+/).length, plain.split(/\s+/).length);
+});
+
+Deno.test("the live voice is cued for the accent and says the words as written, as it was picked", () => {
+  assertEquals(accentFor("n6z5BP3f6BLdUmqfxvaY")!("Never talking coffee."), "[strong Long Island accent] Never talking coffee.");
 });

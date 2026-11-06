@@ -163,5 +163,7 @@ const ACCENTS: Record<string, (s: string) => string> = {
   // #35, Long Island 1 (picked Oct 31). The respelling alone barely moves Eleven v4 Turbo (it reads "cawfee"
   // as coffee); the delivery tag is what rounds the "aw" (measured: talk's F2 1328 Hz respelled, 892 tagged).
   HajairViv4XpOfGXskuF: (s) => "[strong Long Island accent] " + longIsland(s),
+  // Clear take 1 (picked Nov 6 2026), the full-range redo of #35's guy. Kept as he heard and picked it: the tag, no respelling.
+  n6z5BP3f6BLdUmqfxvaY: (s) => "[strong Long Island accent] " + s,
 };
 export const accentFor = (voiceId: string) => ACCENTS[voiceId] ?? null;
