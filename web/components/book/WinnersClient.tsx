@@ -150,10 +150,10 @@ export function WinnersClient({initialDate}:{initialDate?:string}={}) {
                       </span>
                     </div>
                     {t.kind === 'prop' ? (
-                      <PropRow prop={{ ...t.pick_snapshot, league: t.league }} finish="silver" date={date} shareHref={`/winners?date=${date}`} />
+                      <PropRow prop={{ ...t.pick_snapshot, league: t.league }} finish="silver" date={date} shareHref={`/winners?date=${date}`} stakeUnits={t.stake_units} />
                     ) : (
                       <div className="pb-4">
-                        <PickCard pick={{ ...t.pick_snapshot, league: t.league }} finish="gold" date={date} shareHref={`/winners?date=${date}`} />
+                        <PickCard pick={{ ...t.pick_snapshot, league: t.league }} finish="gold" date={date} shareHref={`/winners?date=${date}`} stakeUnits={t.stake_units} />
                         <TailFadeRow
                           pickText={t.pick_snapshot.pick ?? ''}
                           pickId={t.pick_snapshot.pick_id}

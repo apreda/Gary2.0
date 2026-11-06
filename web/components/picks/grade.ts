@@ -60,6 +60,7 @@ export function applyCardResult(
   p: GaryPick | PropPick,
   data: CardResults | null,
   now = Date.now(),
+  stakeUnits?: number | null,
 ): CardPick {
   if (!data) return card;
   const start = parseGameTime(p.commence_time);
@@ -194,6 +195,11 @@ export function applyCardResult(
         ? odds
         : 10000 / Math.abs(odds)
       : null;
+  // A unit is $100, so this matches the bankroll's own number for the bet.
+  const won =
+    profit != null && stakeUnits != null && stakeUnits > 0
+      ? Math.round(profit * stakeUnits)
+      : null;
   return {
     ...card,
     result: result as CardPick["result"],
@@ -204,8 +210,8 @@ export function applyCardResult(
       .filter(Boolean)
       .join(" · "),
     payout:
-      result === "won" && profit != null
-        ? `+$${Math.round(profit)}`
+      result === "won" && won != null
+        ? `+$${won.toLocaleString("en-US")}`
         : undefined,
   };
 }

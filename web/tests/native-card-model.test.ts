@@ -149,19 +149,30 @@ describe("shared native card data", () => {
     });
     expect(gameCardPick(pick).result).toBeUndefined();
   });
-  it("shows exact grade and flat $100 profit only on an actual win", () => {
+  it("shows the exact grade and the real win amount for the stake", () => {
     expect(
       applyCardResult(
         gameCardPick(pick),
         pick,
         data,
         Date.parse("2026-09-08T10:00:00Z"),
+        4,
       ),
     ).toMatchObject({
       result: "won",
       resultLine: "CASHED · NYM 9 · MIA 4",
-      payout: "+$108",
+      payout: "+$432",
     });
+  });
+  it("shows no win amount without a stake", () => {
+    expect(
+      applyCardResult(
+        gameCardPick(pick),
+        pick,
+        data,
+        Date.parse("2026-09-08T10:00:00Z"),
+      ).payout,
+    ).toBeUndefined();
   });
   it("never borrows a prior result for an upcoming game or different date", () => {
     const p = { ...pick, commence_time: "2026-09-08T23:00:00Z" };

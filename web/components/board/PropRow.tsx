@@ -20,9 +20,9 @@ export function KeyStats({ stats, max = 3 }: { stats?: string[]; max?: number })
 }
 
 /** The shared native prop card, with Book actions outside the flip target. */
-export function PropRow({ prop, finish='dark',date,shareHref }: { prop: PropPick; finish?:CardFinish;date?:string;shareHref?:string }) {
+export function PropRow({ prop, finish='dark',date,shareHref,stakeUnits }: { prop: PropPick; finish?:CardFinish;date?:string;shareHref?:string;stakeUnits?:number|null }) {
   const longShot=isLongShot(prop);
-  return <article className="min-w-0"><PropCard prop={prop} finish={finish} date={date} shareHref={shareHref}/>
+  return <article className="min-w-0"><PropCard prop={prop} finish={finish} date={date} shareHref={shareHref} stakeUnits={stakeUnits}/>
     {Array.isArray(prop.key_stats)&&prop.key_stats.length>0&&<details className="mt-4 text-sm text-mid"><summary className="cursor-pointer text-gold">Stats Behind the Pick</summary><KeyStats stats={prop.key_stats} max={prop.key_stats.length}/></details>}
     {!longShot && <PropTailFadeRow player={prop.player ?? ''} prop={prop.prop ?? ''} commence={prop.commence_time}
       gameId={prop.game_id != null || prop.bdl_game_id != null ? String(prop.game_id ?? prop.bdl_game_id) : null}

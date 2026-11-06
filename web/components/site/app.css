@@ -234,7 +234,7 @@
 .app-page {
   max-width: 1120px;
   margin-inline: auto;
-  padding: 26px var(--app-gutter) 72px;
+  padding: 26px var(--app-gutter) 48px;
 }
 .app-section {
   margin-top: 56px;
@@ -954,4 +954,58 @@
 /* The journal tiles sit in the app's page width. */
 .app-section .site-journal {
   margin-top: 0;
+}
+
+/* Desktop: everything under the hero runs at the hero's scale, on the same
+   three columns as the app screens. Phones keep the sizes above. */
+@media (min-width: 1000px) {
+  .app-home .app-page {
+    --app-card: 400px;
+    --home-gap: clamp(20px, 4vw, 60px);
+    max-width: calc(1320px + var(--app-gutter) * 2);
+    padding-bottom: 56px;
+  }
+  .app-home .app-section { margin-top: 96px; }
+  .app-home .app-page > .app-section:first-child { margin-top: 40px; }
+  .app-home .app-section-head { margin-bottom: 24px; }
+  .app-home .app-section-head h2 { font-size: 40px; }
+  .app-home .app-section-head > span { font-size: 18px; }
+  .app-home .app-head-link { font-size: 21px; }
+  .app-home .app-note { margin-top: 16px; font-size: 16px; }
+  .app-home .app-tabs { font-size: 21px; }
+
+  .app-home .lab-reasons { padding: 32px 36px; }
+  .app-home .lab-reasons ol { column-gap: var(--home-gap); }
+  .app-home .lab-reasons li { gap: 16px; padding-block: 20px; }
+  .app-home .lab-reason-n { font-size: 20px; }
+  .app-home .lab-reason-claim { font-size: 22px; }
+  .app-home .lab-reason-why { margin-top: 6px; font-size: 19px; }
+
+  .app-home .site-pick-grid {
+    gap: var(--home-gap);
+    justify-content: center;
+  }
+  .app-home .site-pick-grid > *,
+  .app-home .site-pick-grid > .native-card-shell {
+    width: min(calc((100% - var(--home-gap) * 2) / 3), 400px);
+  }
+
+  .app-home .app-record { gap: var(--home-gap); }
+  .app-home .app-record-tile { padding: 32px 36px; }
+  .app-home .app-record-tile strong { font-size: 88px; }
+  .app-home .app-record-tile > span { margin-top: 12px; font-size: 22px; }
+  .app-home .app-record-tile p { margin-top: 8px; font-size: 17px; }
+
+  .app-home .site-journal { gap: var(--home-gap); }
+  .app-home .site-feature-story { min-height: 600px; }
+  .app-home .site-feature-story > div { padding: 56px; }
+  .app-home .site-feature-story h3 { font-size: 68px; }
+  .app-home .site-feature-story > div > span:last-child { font-size: 20px; }
+  .app-home .site-story-stack { gap: var(--home-gap); }
+  .app-home .site-story-stack > a { padding: 36px 40px; }
+  .app-home .site-story-stack h3 { font-size: 48px; }
+  .app-home .site-story-stack p { font-size: 19px; }
+
+  .app-home .app-closing-plate { padding: 36px 40px; }
+  .app-home .app-closing-plate p { max-width: 46rem; font-size: 21px; }
 }
