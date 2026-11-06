@@ -11,7 +11,7 @@ const periodName = (q) => (q <= 4 ? `${ord(q)} quarter` : q === 5 ? 'overtime' :
 const mins = (m) => (m > 0 && m < 0.5 ? '<1' : String(Math.round(m)));
 const possessive = (name) => (/s$/.test(name) ? `${name}'` : `${name}'s`);
 const signed = (n) => (n == null ? '' : n > 0 ? `+${n}` : String(n));
-import { samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
+import { playerKey, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
 
 export const sideOf = (rec, teamId) => (String(rec.home.id) === String(teamId) ? 'home' : 'away');
 const other = (s) => (s === 'home' ? 'away' : 'home');
@@ -89,14 +89,22 @@ const clockWord = (c) => (/:/.test(String(c)) ? c : `${c} seconds`);
  * Markkanen's and Jackson's injuries the second system named). */
 export function nextListed(byTeam, teamId, date, name) {
   const n = byTeam ? (byTeam.get(String(teamId)) || []).find((r) => r.game_date > String(date).slice(0, 10)) : null;
-  const rows = n ? (n.summary.listed?.[summarySide(n.summary, teamId)] || []) : [];
-  const hit = rows.find((x) => x.status !== 'Available' && !/g league - two-way/i.test(x.reason || '') && samePlayerIn(name, [x.name]) === x.name);
+  if (!n) return null;
+  const side = summarySide(n.summary, teamId);
+  const rows = n.summary.listed?.[side] || [];
+  // Against every name the team has played under, and never Out for a game he played (Nov 4 2026 data check: Jaylin
+  // Williams, 26 minutes on Oct 31, read Jalen Williams's "Out for the next game: Left Ankle Surgery").
+  const peers = [...new Set([name, ...(byTeam.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[summarySide(r.summary, teamId)] || [])])];
+  const playedNext = (n.summary.played?.[side] || []).some((p) => playerKey(p) === playerKey(name));
+  const hit = rows.find((x) => x.status !== 'Available' && !/g league - two-way/i.test(x.reason || '') && samePlayerIn(name, [x.name], peers) === x.name);
+  if (hit?.status === 'Out' && playedNext) return null;
   return hit ? `${hit.status} for the next game, ${etDay(n.game_date)}: ${String(hit.reason || 'reason not on file').replace(/^Injury\/Illness - /, '')}` : null;
 }
 /** When a player last left the floor, from a stored game ("last left in the 2nd quarter with 3:19 left"); null when the
  * game is not stored, he has no exit on file, or he sat at a quarter's end that the record did not follow to the second. */
 export function lastLeft(rec, name) {
-  const k = rec?.lastOff ? samePlayerIn(name, Object.keys(rec.lastOff)) : null;
+  // Against the game's own names: one with no exit on file does not take a teammate's (Jaylin and Jalen Williams).
+  const k = rec?.lastOff ? samePlayerIn(name, Object.keys(rec.lastOff), Object.keys(rec.lastOff)) : null;
   const o = k ? rec.lastOff[k] : null;
   if (!o) return null;
   if (o.clock === 'end') return (rec.wholeMinuteQuarters || []).some((x) => x > o.period) ? null : `on the floor to the end of the ${periodName(o.period)}`;

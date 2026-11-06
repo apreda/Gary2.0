@@ -81,6 +81,15 @@ export function currentNflInjuries(rows = [], gameEnds = new Map()) {
   });
 }
 
+// A note past the league's file: the club has ruled him out or put him on a list since the report (Nov 1 2026 data check:
+// A.J. Brown, Divine Deablo and Billy Bowman Jr. read "Questionable" beside "has been ruled out", L'Jarius Sneed beside
+// "placed on injured reserve Saturday", Marcus Bryant "No game designation"). "Has been", never "was": a note can look back
+// at the last game.
+export function noteRulesOut(status, note) {
+  return /^(questionable|doubtful|probable|no game designation)$/i.test(String(status || '').trim())
+    && /\bhas been ruled out\b|\b(?:placed|put|moved)\b[^.]*\bon (?:injured reserve|IR)\b|\bwill remain on injured reserve\b/i.test(String(note || ''));
+}
+
 /**
  * The status this week's note gives when it disagrees with the feed's status word (round 2 audit, Oct 13 2026).
  * BDL keeps a player's last status word and re-dates the row with each new note, so Monday's "limited participant
@@ -98,6 +107,7 @@ export function reconcileNflStatus(row) {
     const down = row?.noteCurrent === true && /^(questionable|doubtful)$/i.test(status)
       && note.match(/\bdowngraded\s+(?:from\s+(?:questionable|doubtful)\s+)?to\s+(out|doubtful)\b/i);
     if (down && down[1].toLowerCase() !== status.toLowerCase()) return { status: down[1][0].toUpperCase() + down[1].slice(1).toLowerCase(), feed: status, official: true };
+    if (row?.noteCurrent === true && noteRulesOut(status, note)) return { status: 'Out', feed: status, official: true };
     return { status, feed: null };
   }
   // Before the week's final report no game statuses are issued: a weekly word is the feed's placeholder, unless this
@@ -148,6 +158,14 @@ export function finalReportDay(kickoff) {
   const kEt = new Date(k.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const due = new Date(kEt); due.setDate(due.getDate() - (kEt.getDay() === 4 ? 1 : 2));
   return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+}
+
+/** A feed row with a note from this week's report days: filed no earlier than two days before the final report (props and
+ * darts read the feed's rows raw, without the read's noteCurrent). */
+export function filedThisWeek(row, kickoff) {
+  const day = kickoff ? finalReportDay(kickoff) : null;
+  const filed = Date.parse(row?.date || '');
+  return Boolean(day) && Number.isFinite(filed) && filed >= Date.parse(`${day}T00:00:00Z`) - 2 * 86_400_000;
 }
 
 /** The week's final report is in when a player on it has a game status, or when the league's file carries the final

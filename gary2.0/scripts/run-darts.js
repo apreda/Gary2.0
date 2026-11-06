@@ -190,7 +190,7 @@ async function throwLeague(league) {
         const week = Number(scheduleRowFor(schedule, board.season, nflverseCode(f.homeFull), nflverseCode(f.awayFull), f.commence)?.week) || null;
         const pending = finalReportNotDue(f.commence);
         return week ? [f.homeFull, f.awayFull].map((team) => getPracticeReport(team, board.season, week)
-          .then((report) => ({ team, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, f.commence) })).catch(() => ({ team, report: null, pending }))) : [];
+          .then((report) => ({ team, kickoff: f.commence, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, f.commence) })).catch(() => ({ team, report: null, pending }))) : [];
       })) : [];
       const injuries = withOfficialReport(feedInjuries, reports, roster && !roster.unavailable ? roster.rows : null);
       const priorByName = new Map(), defPrev = null, history = null;

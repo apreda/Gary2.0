@@ -57,7 +57,7 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 20;
+const LEDGER_SCHEMA = 21;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -742,8 +742,10 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const starters = {};
     for (const [team, top] of byTeam) {
       // The starter: the first passer of the game with at least three pass plays (a trick-play pass by a
-      // receiver is not a quarterback start).
-      const first = (g.qbOrder.get(team) || []).find((name) => (g.qbs.get(`${team}|${name}`) || 0) >= 3) || top.name;
+      // receiver is not a quarterback start), or one hurt for good before he got there (Nov 5 2026 data check: Lamar
+      // Jackson, hurt on Baltimore's first pass at Buffalo, read as relief and Tyler Huntley as the starter).
+      const hurtOut = (name) => (g.hurt || []).some((h) => h.team === team && h.who === name && !h.later);
+      const first = (g.qbOrder.get(team) || []).find((name) => (g.qbs.get(`${team}|${name}`) || 0) >= 3 || hurtOut(name)) || top.name;
       starters[team] = { name: top.name, share: Number((top.plays / (total.get(team) || 1)).toFixed(3)),
         ...(first !== top.name ? { started: first, startedShare: Number(((g.qbs.get(`${team}|${first}`) || 0) / (total.get(team) || 1)).toFixed(3)) } : {}) };
     }

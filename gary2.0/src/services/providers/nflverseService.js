@@ -160,24 +160,6 @@ const PRACTICE_SHORT = {
   'Full Participation in Practice': 'Full'
 };
 
-// The practice words seen for a week, by the published day of the file that carried them, kept on disk:
-// Map(player key -> [{ day, practice }]) in the order the files came.
-function practiceDays(season, week, entries, day) {
-  const path = join(DISK_DIR, `practice_days_${season}.json`);
-  let store = {};
-  try { store = JSON.parse(readFileSync(path, 'utf8')); } catch { /* first file of the season */ }
-  const out = new Map();
-  for (const [k, word] of entries) {
-    const key = `${week}|${k}`; const list = store[key] || [];
-    // A later file for the same report day replaces its word.
-    const at = list.findIndex((x) => x.day === day);
-    if (word && at >= 0) list[at] = { day, practice: word }; else if (word) list.push({ day, practice: word });
-    store[key] = list; out.set(k, list);
-  }
-  try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(path, JSON.stringify(store)); } catch { /* a convenience */ }
-  return out;
-}
-
 /**
  * The practice report for one team's week.
  *
@@ -204,22 +186,19 @@ export async function getPracticeReport(teamName, season, week = null, opts = {}
     return { unavailable: true, reason: `No ${season} week ${targetWeek} practice rows for ${teamName} — that week's report may not be filed yet.` };
   }
 
-  // Each practice word with the day the league's file that carried it was published, kept across the week's daily files
-  // (round 10: the read gave one undated word; on Thursday night it was Wednesday's practice). The file holds one word
-  // per player, so the days are the files this machine has read.
+  // Each practice with its real day (nflPracticeDays.js); a stand-in file in a test never reaches the feed.
+  const seasonType = String(rows[0]?.game_type || 'REG') === 'REG' ? 2 : 3;
+  const days = file.real ? await import('../sports/nfl/nflPracticeDays.js').then((m) => m.practiceDaysByName(teamName, season, targetWeek, rows.map((r) => r.full_name), { seasonType })).catch(() => new Map()) : new Map();
   // The report day a file carries: nflverse uploads about 10 AM ET, before that day's practice and the afternoon report, so
   // a file published before 4 PM ET holds the previous day's report (round 11: Wednesday's words read as Thursday's).
   const published = file.modified && !Number.isNaN(Date.parse(file.modified)) ? Date.parse(file.modified) : null;
   const etHour = published ? Number(new Date(published).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })) % 24 : null;
-  const reportDay = published ? new Date(published - (etHour < 16 ? 86_400_000 : 0)).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' }) : null;
-  // Kept only for the league's real file with a known publish time (a test's stand-in rows never reach the store).
-  const days = file.real && reportDay ? practiceDays(season, targetWeek, rows.map((r) => [r.gsis_id || r.full_name, PRACTICE_SHORT[r.practice_status] || r.practice_status || null]), reportDay) : new Map();
   const players = rows.map((r) => ({
     name: r.full_name,
     position: r.position || null,
     game_status: r.report_status || null,
     practice: PRACTICE_SHORT[r.practice_status] || r.practice_status || null,
-    practiceDays: days.get(r.gsis_id || r.full_name) || null,
+    practiceDays: days.get(r.full_name) || null,
     injury: r.report_primary_injury || r.practice_primary_injury || null,
     // The practice rows carry the second injury too (Oct 29 2026 hunt, round 7: Golden's foot, Evans' knee, Brents'
     // concussion, Chase's ankle behind "resting player"); the league id joins a report name the feed spells otherwise.

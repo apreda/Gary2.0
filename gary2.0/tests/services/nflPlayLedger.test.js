@@ -214,6 +214,15 @@ describe('a parsed season', () => {
     expect(timeline[0].qb).toBe('A.Passer');
   });
 
+  it('names a starter hurt on his first pass as the starter (Lamar Jackson at Buffalo, Nov 1 2026)', async () => {
+    const backup = { passer_player_name: 'B.Backup' };
+    const body = [HEADER.join(','),
+      row({ passer_player_name: 'S.Starter', desc: '(10:04) 8-S.Starter pass incomplete. AAA-8-S.Starter was injured during the play.' }),
+      row(backup), row(backup), row(backup), row(backup)].join('\n');
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
+    expect(led.games[0].starters.AAA).toMatchObject({ name: 'B.Backup', started: 'S.Starter' });
+  });
+
   it('carries a per-game line, not only the season aggregate', async () => {
     const body = [HEADER.join(','), row({ epa: '1' }), row({ epa: '-1' })].join('\n');
     const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });

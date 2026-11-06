@@ -8,6 +8,7 @@ import { RELEASE_BASE, fetchCsv, TEAM_NAMES } from './nflStreaksService.js';
 import { normName } from '../../gary/darts/dartsCommon.js';
 import { withOfficialBox } from './espnNflBox.js';
 import { loadNflverseFile, nflverseCode } from '../../providers/nflverseService.js';
+import { filedThisWeek, noteRulesOut } from './nflAvailability.js';
 
 // PFR's charting files through the desk's disk-cached loader, asked twice (round 16: a fresh download failed in one of
 // two identical darts builds, and every drop note vanished as if no receiver had dropped a ball). Null when both fail.
@@ -535,7 +536,7 @@ export function withOfficialReport(injuries, reports, roster = null) {
   const practiceSquad = new Set((roster || []).filter((r) => Number(r.week) === latest && String(r.status).toUpperCase() === 'DEV').map((r) => `${r.team}|${normName(r.full_name)}`));
   const rows = (injuries || []).filter((i) => !practiceSquad.has(`${nflverseCode(i?.player?.team?.full_name || i?.team?.full_name)}|${full(i)}`));
   // `final` (finalReportIn): the week's final report is in even when it designated no one (round 18).
-  for (const { team, report, pending = false, final = null } of reports || []) {
+  for (const { team, report, pending = false, final = null, kickoff = null } of reports || []) {
     // A report not filed yet, before the final report is due: the feed's weekly word is its placeholder (round 8).
     if (!report?.players?.length) {
       if (pending) for (let k = 0; k < rows.length; k++) { const i = rows[k]; if ((i?.player?.team?.full_name || i?.team?.full_name) === team && /^(questionable|doubtful|probable)$/i.test(String(i.status || ''))) rows[k] = { ...i, status: 'no game status yet' }; }
@@ -559,7 +560,12 @@ export function withOfficialReport(injuries, reports, roster = null) {
       // The report's injury and practice days ride with the row (round 13: the frames gave a status only), and before the
       // game statuses are filed every player on the report is listed, not only the feed's (Mahomes and Andrews were missing).
       // On a final report a listed player with no status has no designation, as the read says (round 18).
-      if (listed) { rows[rows.indexOf(listed)] = { ...listed, ...(r.game_status ? { status: r.game_status } : designated ? { status: 'no game designation' } : {}), report: r }; continue; }
+      // Out when this week's note says the club has ruled him out since the report (noteRulesOut).
+      if (listed) {
+        const word = r.game_status || (designated ? 'no game designation' : null);
+        rows[rows.indexOf(listed)] = { ...listed, ...(word ? { status: word && filedThisWeek(listed, kickoff) && noteRulesOut(word, listed.comment) ? 'Out' : word } : {}), report: r };
+        continue;
+      }
       // A player on the final report with no designation stays, as "no game designation" (Nov 2 2026: Charbonnet and
       // Price, both back tonight, were on Seattle's report and dropped here because the feed no longer carried them).
       if (!r.game_status && designated) { rows.push({ player: { first_name: r.name.split(' ')[0], last_name: r.name.split(' ').slice(1).join(' '), position_abbreviation: r.position, team: { full_name: team } }, status: 'no game designation', report: r }); continue; }

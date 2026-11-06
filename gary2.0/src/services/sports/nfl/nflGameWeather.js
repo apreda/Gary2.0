@@ -10,6 +10,9 @@ import { weatherCodeWords } from '../../providers/weatherService.js';
 const API = 'https://historical-forecast-api.open-meteo.com/v1/forecast';
 const TTL_MS = 12 * 60 * 60_000;
 const OUTSIDE = new Set(['outdoors', 'open']);
+// Rain over a game's hours from two hundredths of an inch (Nov 5 2026 read check: Colts-Jaguars on Nov 1, drizzle over two
+// of its hours, 0.04 in., read as a dry game under the heading "a game without one was indoors or dry and calm").
+const WET_INCHES = 0.02;
 
 async function stadiumHours(site, start, end, fetchImpl, attempt = 1) {
   const params = new URLSearchParams({ latitude: String(site.lat), longitude: String(site.lon), start_date: start, end_date: end,
@@ -75,10 +78,10 @@ export function gameWeatherLine(row, w) {
   const temp = row.temp === '' || row.temp == null ? w.temp ?? null : Number(row.temp);
   const wind = row.wind === '' || row.wind == null ? w.wind ?? null : Number(row.wind);
   if (temp == null || wind == null) {
-    const wet = w.precip >= 0.05 || w.snow > 0;
+    const wet = w.precip >= WET_INCHES || w.snow > 0;
     if (!wet && !(wind >= 15) && !(Number.isFinite(temp) && temp <= 32)) return `weather: ${[temp == null ? 'temperature' : null, wind == null ? 'wind' : null].filter(Boolean).join(' and ')} not on file`;
   }
-  const wet = w && (w.precip >= 0.05 || w.snow > 0);
+  const wet = w && (w.precip >= WET_INCHES || w.snow > 0);
   if (!wet && !(wind >= 15) && !(Number.isFinite(temp) && temp <= 32)) return null;
   return `weather: ${[wet ? `${w.snow > 0 ? `${w.snow.toFixed(1)} in. of snow, ` : ''}${w.precip.toFixed(2)} in. of precipitation over the game's first four hours${w.conditions.length ? ` (${w.conditions.join(', then ')})` : ''}` : null,
     Number.isFinite(temp) ? `${temp}°F` : null, Number.isFinite(wind) ? `wind ${wind} mph` : null].filter(Boolean).join(', ')}`;

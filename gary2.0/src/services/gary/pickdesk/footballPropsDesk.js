@@ -250,7 +250,7 @@ async function loadNflSheetContext({ season, game, players }) {
   const week = schedule && !schedule.unavailable ? Number(scheduleRowFor(schedule, season, nflverseCode(game.home_team), nflverseCode(game.away_team), game.commence_time)?.week) || null : null;
   const pending = finalReportNotDue(game.commence_time);
   const reports = week ? await Promise.all([game.home_team, game.away_team].map((team) => getPracticeReport(team, season, week)
-    .then((report) => ({ team, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, game.commence_time) })).catch(() => ({ team, report: null, pending })))) : [];
+    .then((report) => ({ team, kickoff: game.commence_time, report: report?.unavailable ? null : report, pending, final: report?.unavailable ? null : finalReportIn(report, game.commence_time) })).catch(() => ({ team, report: null, pending })))) : [];
   const reported = withOfficialReport(injuries, reports, roster && !roster.unavailable ? roster.rows : null);
   // Who each game's defense is this season, beside the player's games (Oct 26 2026); a schedule that did not load
   // leaves the rows as they were.

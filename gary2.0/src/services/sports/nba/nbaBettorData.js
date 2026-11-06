@@ -132,9 +132,13 @@ const fold = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 function whoPlayed(box, others, out, starters, scoring, official, ownOut = '', sideThere = false) {
   if (!box) return ['      who played: box score not on file', scoring, out].filter(Boolean).join('\n');
   const played = box.filter((p) => p.min > 0).sort((a, b) => b.min - a.min);
-  // Not one the row's own Out line already names with his reason (round 16: Curry, Green and Podziemski twice a row).
+  // Not one the row's own Out line already names with his reason (round 16: Curry, Green and Podziemski twice a row), in
+  // the report's spelling or the box's (Nov 4 2026 data check: the box's Alexandre Sarr and Terrence Shannon Jr. read "not
+  // Out on the report" under the report's Alex Sarr and Terrence Shannon).
+  const outNames = [...String(ownOut).replace(/\([^)]*\)/g, '').replace(/^.*? report:/s, '').matchAll(/\p{Lu}[\p{L}.'’-]*(?: (?:\p{Lu}[\p{L}.'’-]*|Jr\.|Sr\.|II|III|IV))+/gu)].map((m) => m[0]);
+  const boxNames = [...new Set([...box, ...others.flatMap((o) => o || [])].map((p) => p.name))];
   const missed = [...new Set(others.flatMap((o) => (o || []).filter((p) => p.min >= 20).map((p) => p.name)))]
-    .filter((nm) => !played.some((p) => p.name === nm) && !fold(ownOut).includes(fold(nm)));
+    .filter((nm) => !played.some((p) => p.name === nm) && !fold(ownOut).includes(fold(nm)) && !samePlayerIn(nm, outNames, boxNames));
   // Everyone who played, the first eight with points, rebounds, assists, turnovers and shooting; the opponent's players
   // with 15+ minutes and their points (the top five left out a starter at 24 minutes; Oct 23 2026 audit). Rebounds,
   // assists and turnovers reached Gary only through the news until Oct 27 2026 ("16 Cunningham turnovers", Towns' 14
@@ -217,16 +221,20 @@ async function opponentOut(g, team, opp, oppId, who = 'their') {
 export async function outLastGame(ts, tonight) {
   if (!ts?.games?.length || !tonight || tonight === 'unfiled') return [];
   const lists = [];
-  for (const g of ts.games.slice(0, BOX_GAMES)) {
+  // Back as far as one returning tonight has been Out in every game so far (Nov 4 2026 data check: Kon Knueppel, out all
+  // eight, and Dylan Cardwell, out all seven, read "its last 5 games").
+  const returning = (k) => !tonight.has(k) || tonight.get(k).status === 'Available';
+  for (const g of ts.games) {
     if (!g.datetime) break;
     const tip = new Date(g.datetime);
     const opp = g.home_team?.id === ts.id ? g.visitor_team?.full_name : g.home_team?.full_name;
     const side = gameListing(await latestOfficialReport({ now: tip, lookbackHours: 6 }), reportDate(tip), ts.team, opp)[ts.team];
     if (side === 'unfiled') break;
     lists.push(new Map(outRows(side).map((r) => [playerKey(r.name), r])));
+    if (![...lists[0].keys()].some((k) => returning(k) && lists.every((l) => l.has(k)))) break;
   }
   if (!lists.length) return [];
-  return [...lists[0]].filter(([k]) => !tonight.has(k) || tonight.get(k).status === 'Available').map(([k, r]) => {
+  return [...lists[0]].filter(([k]) => returning(k)).map(([k, r]) => {
     let games = 0;
     while (games < lists.length && lists[games].has(k)) games += 1;
     return { name: r.name, reason: ailment(r.reason), games, allGames: games === ts.games.length, available: tonight.has(k) };
