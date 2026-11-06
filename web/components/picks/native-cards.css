@@ -430,16 +430,6 @@
   pointer-events: none;
   z-index: 0;
 }
-.native-front > div.native-payout {
-  position: absolute;
-  right: 16px;
-  top: 12px;
-  font:
-    38.88px "Gary Display",
-    sans-serif;
-  color: var(--ink);
-  z-index: 2;
-}
 .native-gold .native-result-mark,
 .native-silver .native-result-mark {
   color: #1e6b33;
@@ -459,10 +449,6 @@
 .native-silver.native-lost .native-hero {
   opacity: 0.5;
 }
-.native-has-payout .native-hero {
-  padding-right: 96px;
-}
-
 .native-dark .native-footer > svg {
   color: #c9a227;
 }
@@ -517,9 +503,6 @@
 }
 .native-gold.native-lost .native-game-headline {
   opacity: 0.5;
-}
-.native-has-payout .native-game-headline {
-  width: calc(100% - 132px);
 }
 /* Optical positions measured from the approved 392 × 232 native game card.
    Native text padding ends at its glyph bounds, not a CSS line-box edge. */

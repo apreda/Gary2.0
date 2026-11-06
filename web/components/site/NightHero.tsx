@@ -1,21 +1,24 @@
 import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { PickCard } from "@/components/PickCard";
 import { PropCard } from "@/components/PropCard";
 import { NativeTeasedCard } from "@/components/picks/native-teased";
 import { FreeTicket } from "@/components/site/FreePick";
 import { AppIconLink, NightFace } from "@/components/site/NightFace";
+import { AppStoreButton } from "@/components/AppStoreButton";
 import { etDateLabel } from "@/lib/gary/format";
 import type { FreePick } from "@/lib/gary/free-pick";
 import type { FreePickCard } from "@/lib/gary/free-pick-card";
 import type { GaryMood, WinnersNight } from "@/lib/gary/winners-recap";
 
 // The home page's opening (founder, Oct 14 2026, mock 16 "Night Sunrise"):
-// Gary in last night's face and its weather, last night's Winners under him,
-// the app's tab icons saying what's inside, the app icon as the way in, today's
-// free pick and yesterday's stacked on the app's real pick cards, and the app's
-// own screens in a row underneath, big enough to read without zooming (founder,
-// Nov 5 2026: "it has to be visible nobody can zoom in and they shouldnt have to").
+// Gary large in last night's face and its weather, last night's Winners under
+// him, the name and the way in beside him, today's free pick on the app's real
+// card with yesterday's result under it, and the app's own screens in a row
+// underneath, each with its name, big enough to read without zooming (founder,
+// Nov 5 2026: "it has to be visible nobody can zoom in and they shouldnt have to";
+// restyled Nov 6 once those screens had moved out of the hero).
 
 const MOOD_RGB: Record<GaryMood, string> = {
   fire: "255, 120, 30",
@@ -25,17 +28,32 @@ const MOOD_RGB: Record<GaryMood, string> = {
   doomsday: "110, 120, 140",
 };
 
-const FEATURES = [
-  { icon: "picks", name: "Picks", line: "Every game and its best props" },
-  { icon: "winners", name: "Winners", line: "His best bets, sealed until you open them" },
-  { icon: "darts", name: "Darts", line: "Player props on the board" },
-  { icon: "billfold", name: "Billfold", line: "Every result, win or loss" },
+const TABS = [
+  { icon: "picks", name: "Picks", href: "/picks" },
+  { icon: "winners", name: "Winners", href: "/winners" },
+  { icon: "darts", name: "Darts", href: "/props" },
+  { icon: "billfold", name: "Billfold", href: "/results" },
 ] as const;
 
 const SCREENS = [
-  { src: "/site/hero/screen-home.webp", alt: "Home in the app: tonight’s big game, last night’s result and what Gary has on today" },
-  { src: "/site/hero/screen-darts.webp", alt: "Darts in the app: the parlay of the day and the Anytime TD board, each dart with how it finished" },
-  { src: "/site/hero/screen-billfold.webp", alt: "Billfold in the app: Gary’s bankroll, record and win rate, with every result charted" },
+  {
+    name: "Home",
+    line: "Tonight’s big game and last night’s result",
+    src: "/site/hero/screen-home.webp",
+    alt: "Home in the app: tonight’s big game, last night’s result and what Gary has on today",
+  },
+  {
+    name: "Darts",
+    line: "Player props on the board",
+    src: "/site/hero/screen-darts.webp",
+    alt: "Darts in the app: the parlay of the day and the Anytime TD board, each dart with how it finished",
+  },
+  {
+    name: "Billfold",
+    line: "Every result, win or loss",
+    src: "/site/hero/screen-billfold.webp",
+    alt: "Billfold in the app: Gary’s bankroll, record and win rate, with every result charted",
+  },
 ] as const;
 
 const dollars = (n: number) => `$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
@@ -60,6 +78,25 @@ function FreeCard({ free, card }: { free: FreePick; card: FreePickCard | null })
   return <FreeTicket pick={free} />;
 }
 
+/** Yesterday's free pick on one line, the way Winners lists a settled play. */
+function LastResult({ pick, label }: { pick: FreePick; label: string }) {
+  const word = pick.result === "won" ? "Win" : pick.result === "lost" ? "Loss" : pick.result === "push" ? "Push" : "Pending";
+  const mark = pick.direction === "over" ? " ▲" : pick.direction === "under" ? " ▼" : "";
+  return (
+    <Link href={`/archive/${pick.date}`} className="night-last">
+      <span className="night-last-head">
+        <b>{label}</b>
+        <span>{etDateLabel(pick.date)}</span>
+      </span>
+      <span className="night-last-row">
+        <b className={pick.result ?? "pending"}>{word}</b>
+        <strong>{pick.title}{mark}</strong>
+        {pick.score && <span>{pick.score}</span>}
+      </span>
+    </Link>
+  );
+}
+
 export function NightHero({
   date,
   yesterday,
@@ -68,7 +105,6 @@ export function NightHero({
   todayCard,
   teaser,
   last,
-  lastCard,
 }: {
   /** Today's ET date. */
   date: string;
@@ -81,7 +117,6 @@ export function NightHero({
   /** The first game today, for the card that waits on today's pick. */
   teaser: { league: string | null; time: string | null };
   last: FreePick | null;
-  lastCard: FreePickCard | null;
 }) {
   const mood = night?.mood ?? null;
   return (
@@ -92,20 +127,22 @@ export function NightHero({
     >
       <div className="night-inner">
         <div className="night-copy">
-          <span className="night-dateline">{etDateLabel(date).toUpperCase()}</span>
           <h1 id="night-title" className="night-title">Bet with Gary.</h1>
-          <ul className="night-features">
-            {FEATURES.map((f) => (
-              <li key={f.icon} data-f={f.icon}>
-                <Image src={`/site/hero/tab-${f.icon}.png`} alt="" width={48} height={48} />
-                <b>{f.name}</b>
-                <span>{f.line}</span>
-              </li>
+          <nav className="night-tabs" aria-label="Inside Gary">
+            {TABS.map((t) => (
+              <Link key={t.icon} href={t.href} data-f={t.icon}>
+                <Image src={`/site/hero/tab-${t.icon}.png`} alt="" width={48} height={48} />
+                <span>{t.name}</span>
+              </Link>
             ))}
-          </ul>
+          </nav>
           <div className="night-get">
-            <AppIconLink surface="home_hero_icon" />
-            <Image className="night-qr" src="/site/hero/qr-app-store.svg" alt="" width={33} height={33} aria-hidden="true" unoptimized />
+            <AppStoreButton surface="home_hero" className="app-action-lg" />
+            <div className="night-get-tiles">
+              <AppIconLink surface="home_hero_icon" />
+              <Image className="night-qr" src="/site/hero/qr-app-store.svg" alt="" width={33} height={33} aria-hidden="true" unoptimized />
+              <span className="night-qr-note">Scan with your phone</span>
+            </div>
           </div>
         </div>
 
@@ -140,11 +177,17 @@ export function NightHero({
         <div className="night-fan" aria-label="Inside the app">
           <div className="night-fan-deck">
             {SCREENS.map((s) => (
-              <div key={s.src} className="night-phone">
-                <div className="night-phone-screen">
-                  <Image src={s.src} alt={s.alt} width={1206} height={2622} unoptimized />
+              <figure key={s.src} className="night-shot">
+                <figcaption>
+                  <b>{s.name}</b>
+                  <span>{s.line}</span>
+                </figcaption>
+                <div className="night-phone">
+                  <div className="night-phone-screen">
+                    <Image src={s.src} alt={s.alt} width={1206} height={2622} unoptimized />
+                  </div>
                 </div>
-              </div>
+              </figure>
             ))}
           </div>
         </div>
@@ -157,11 +200,7 @@ export function NightHero({
               <NativeTeasedCard league={teaser.league} time={teaser.time} />
             )}
           </Slot>
-          {last && (
-            <Slot label={last.date === yesterday ? "Yesterday" : "Last free pick"} date={last.date}>
-              <FreeCard free={last} card={lastCard} />
-            </Slot>
-          )}
+          {last && <LastResult pick={last} label={last.date === yesterday ? "Yesterday" : "Last free pick"} />}
         </div>
       </div>
     </section>

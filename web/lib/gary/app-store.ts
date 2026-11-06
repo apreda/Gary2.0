@@ -2,6 +2,8 @@ const APP_STORE_BASE_URL = 'https://apps.apple.com/us/app/gary-ai/id6751238914';
 const EXISTING_CUSTOM_PRODUCT_PAGE_ID = '3c207d81-dc0d-4cc3-a50d-b5f47e29b18f';
 
 const FIXED_SURFACES = new Set([
+  'home_hero',
+  'home_hero_icon',
   'home_app_section',
   'pricing_footer',
   'pricing_plan',

@@ -11,7 +11,6 @@ export function PickCard({
   date,
   shareHref,
   initialResults,
-  stakeUnits,
 }: {
   pick: GaryPick;
   expanded?: boolean;
@@ -20,15 +19,12 @@ export function PickCard({
   date?: string;
   shareHref?: string;
   initialResults?: CardResults;
-  stakeUnits?: number | null;
 }) {
   const result = useCardResults(cardDate(pick, date));
   const card = applyCardResult(
     gameCardPick(pick, analysisHref),
     pick,
     result ?? initialResults ?? null,
-    undefined,
-    stakeUnits,
   );
   return (
     <NativePickCard

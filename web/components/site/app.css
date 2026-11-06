@@ -391,8 +391,9 @@
   max-width: 1320px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) var(--night-card);
-  grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) var(--night-card);
+  grid-template-rows: auto auto;
+  align-items: center;
   column-gap: clamp(28px, 3.2vw, 44px);
 }
 .night-copy,
@@ -404,66 +405,63 @@
   z-index: 1;
 }
 
-/* the words: one line, then the app's own icons for what's inside */
+/* the name, the app's own tabs, and the way in */
 .night-copy {
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   display: grid;
-  align-content: start;
-  gap: 26px;
-  padding-top: 22px;
-}
-.night-dateline {
-  font: 400 18px/1 var(--display);
-  letter-spacing: 0.14em;
-  color: var(--app-gold);
+  align-content: center;
+  gap: 30px;
 }
 .night-title {
-  font: 400 clamp(60px, 6.6vw, 100px) / 0.92 var(--display);
+  font: 400 clamp(72px, 8vw, 124px) / 0.92 var(--display);
   letter-spacing: 0.005em;
   text-transform: uppercase;
   color: var(--app-warm);
   text-wrap: balance;
 }
-.night-features {
-  display: grid;
-  gap: 18px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
+.night-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
 }
-.night-features li {
+.night-tabs a {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  column-gap: 14px;
-  align-items: center;
+  justify-items: center;
+  gap: 7px;
+  color: var(--app-warm);
+  transition: color 0.15s ease-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.night-features img {
-  grid-row: 1 / 3;
+.night-tabs a:hover {
+  color: var(--app-gold);
+  transform: translateY(-2px);
+}
+.night-tabs img {
   width: 40px;
   height: 40px;
   object-fit: contain;
 }
-.night-features li[data-f="winners"] img {
-  width: 46px;
-  height: 46px;
-  margin-left: -3px;
-}
-.night-features b {
-  font: 400 22px/1.05 var(--display);
+.night-tabs span {
+  font: 400 19px/1 var(--display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--app-warm);
-}
-.night-features span {
-  font: 400 16px/1.35 var(--ui);
-  color: var(--app-dim);
 }
 .night-get {
+  display: grid;
+  justify-items: start;
+  gap: 18px;
+}
+.night-get-tiles {
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-top: 4px;
+  gap: 16px;
+}
+.night-qr-note {
+  max-width: 7em;
+  font: 400 18px/1.15 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-dim);
 }
 .night-app-icon {
   position: relative;
@@ -516,20 +514,23 @@
   box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.45);
   image-rendering: pixelated;
 }
+@media (max-width: 1180px) {
+  .night-qr-note { display: none; }
+}
 @media (max-width: 980px), (hover: none) {
-  .night-qr { display: none; }
+  .night-qr, .night-qr-note { display: none; }
 }
 
 /* Gary and last night's Winners */
 .night-stage {
   grid-column: 2;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   display: grid;
   align-content: center;
   justify-items: center;
 }
 .night-face {
-  width: clamp(200px, 21vw, 300px);
+  width: clamp(220px, 29vw, 440px);
   aspect-ratio: 1;
 }
 .night-face::before {
@@ -576,14 +577,14 @@
   border-left: 1px solid rgba(201, 162, 39, 0.3);
 }
 .night-recap-stats b {
-  font: 400 clamp(28px, 2.6vw, 34px) / 1 var(--display);
+  font: 400 clamp(32px, 3.3vw, 46px) / 1 var(--display);
   color: var(--app-warm);
   font-variant-numeric: tabular-nums;
 }
 .night-recap-stats b.down { color: var(--app-loss); }
 .night-recap-stats b.up { color: var(--app-win); }
 .night-recap-stats span {
-  font: 400 15px/1 var(--display);
+  font: 400 17px/1 var(--display);
   letter-spacing: 0.16em;
   color: var(--app-dim);
 }
@@ -592,7 +593,7 @@
    hero: all one size, straight on, big enough to read without zooming */
 .night-fan {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 2;
   margin-top: clamp(44px, 5vw, 72px);
 }
 .night-fan-deck {
@@ -600,6 +601,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 400px));
   justify-content: center;
+  align-items: end;
   gap: clamp(20px, 4vw, 60px);
   padding-bottom: 22px;
 }
@@ -613,6 +615,28 @@
   transform: translateX(-50%);
   background: radial-gradient(50% 50% at 50% 50%, rgba(var(--mood), 0.3), rgba(var(--mood), 0) 70%);
   filter: blur(6px);
+}
+.night-shot {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+}
+.night-shot figcaption {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  text-align: center;
+}
+.night-shot figcaption b {
+  font: 400 34px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.night-shot figcaption span {
+  font: 400 18px/1.3 var(--ui);
+  color: var(--app-dim);
 }
 .night-phone {
   position: relative;
@@ -639,11 +663,63 @@
 /* today's free pick and yesterday's, stacked */
 .night-picks {
   grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   display: grid;
-  align-content: start;
-  gap: 24px;
-  padding-top: 22px;
+  align-content: center;
+  gap: 20px;
+}
+.night-last {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px 15px;
+  background: linear-gradient(#1c1914, #131110);
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 16px;
+  transition: border-color 0.15s ease-out;
+}
+.night-last:hover { border-color: rgba(232, 212, 139, 0.9); }
+.night-last-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.night-last-head b {
+  font: 400 20px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.night-last-head span {
+  font: 500 16px/1 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+.night-last-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.night-last-row b {
+  font: 400 23px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-silver);
+}
+.night-last-row b.won { color: var(--app-win); }
+.night-last-row b.lost { color: var(--app-loss); }
+.night-last-row strong {
+  font: 400 27px/1.05 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+}
+.night-last-row > span {
+  margin-left: auto;
+  font: 500 16px/1.3 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
 }
 .night-slot-head {
   display: flex;
@@ -669,7 +745,7 @@
 @media (max-width: 999px) {
   .night-inner {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto auto;
   }
   .night-copy { grid-column: 1; grid-row: 1; }
   .night-stage { grid-column: 2; grid-row: 1; }
@@ -678,6 +754,7 @@
     grid-row: 2;
     grid-template-columns: repeat(2, minmax(0, var(--app-card)));
     justify-content: center;
+    align-items: center;
     column-gap: 24px;
     padding-top: 36px;
   }
@@ -699,7 +776,7 @@
   }
   .night-fan-deck::-webkit-scrollbar { display: none; }
   .night-fan-deck::before { display: none; }
-  .night-phone { scroll-snap-align: center; }
+  .night-shot { scroll-snap-align: center; }
 }
 /* Phones: Gary first, then the words, the picks, and the app. */
 @media (max-width: 760px) {
@@ -707,16 +784,14 @@
   .night-inner { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .night-stage, .night-copy, .night-picks, .night-fan { grid-column: 1; }
   .night-stage { grid-row: 1; }
-  .night-copy { grid-row: 2; padding-top: 22px; gap: 22px; }
+  .night-copy { grid-row: 2; padding-top: 22px; gap: 22px; justify-items: center; text-align: center; }
+  .night-tabs { justify-content: center; }
+  .night-get { justify-items: center; }
   .night-picks { grid-row: 3; grid-template-columns: minmax(0, 1fr); padding-top: 30px; max-width: none; }
   .night-fan { grid-row: 4; margin-top: 40px; }
   .night-face { width: 170px; }
   .night-title { font-size: clamp(56px, 17vw, 84px); }
-  .night-features { gap: 14px; }
-  .night-features li { grid-template-columns: 34px minmax(0, 1fr); column-gap: 12px; }
-  .night-features img { width: 34px; height: 34px; }
-  .night-features li[data-f="winners"] img { width: 40px; height: 40px; }
-  .night-features b { font-size: 20px; }
+  .night-shot figcaption b { font-size: 28px; }
   .night-recap-stats > div { padding: 0 14px; }
   .night-recap-stats b { font-size: 30px; }
 }

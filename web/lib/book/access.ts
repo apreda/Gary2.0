@@ -20,15 +20,27 @@ export interface WinnersAccess {
 export interface WinnersBoard {
   access: WinnersAccess;
   boards: { league: string; kind: string; count: number; locked: boolean }[];
+  /** The day's free pick: the one play everybody gets, member or not. */
+  free_candidate_id?: number | null;
   tickets: {
     id?: string;
-    candidate_id: string;
+    candidate_id: string | number;
     game_date: string;
     league: string;
     kind: string;
+    game_id?: string | number | null;
     admitted_at: string;
-    stake_units?: number | null;
+    stake_units?: number | string | null;
     bankroll_policy?: string | null;
+    scratched_at?: string | null;
+    reasons?: { claim?: string; why?: string; stat?: string; note?: string }[] | null;
+    result?: {
+      result?: string;
+      away_score?: number;
+      home_score?: number;
+      final_score?: string;
+      actual_value?: number;
+    } | null;
     pick_snapshot: GaryPick & PropPick;
   }[];
 }

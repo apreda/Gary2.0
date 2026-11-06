@@ -89,9 +89,9 @@ function boardDates(items: HomeBoardItem[]): string {
 }
 
 // Home opens on Gary's Night (founder, Oct 14 2026): Gary in last night's
-// Winners face, the app's screens, the app icon as the way in, and today's
-// free pick and the one before it on the app's pick cards; then the picks
-// on the app's cards and the record.
+// Winners face, the way into the app, today's free pick on the app's pick card
+// with the one before it as a result, and the app's screens; then the picks on
+// the app's cards and the record.
 export default async function Home() {
   const date = todayEST();
   const [free, picks, results, night, teaser] = await Promise.all([
@@ -101,16 +101,13 @@ export default async function Home() {
     fetchWinnersNight(daysBefore(date, 1)).catch(() => null),
     firstGame(date),
   ]);
-  const [todayCard, lastCard] = await Promise.all([
-    fetchFreePickCard(free?.today ?? null).catch(() => null),
-    fetchFreePickCard(free?.last ?? null).catch(() => null),
-  ]);
+  const todayCard = await fetchFreePickCard(free?.today ?? null).catch(() => null);
   // Keep the product visible before today's picks publish, using the actual
   // previous boards with their own dates and grades, never illustrative
   // picks. They start the day before the active board, which rolls over at
   // 6 AM Eastern.
   const previousDate = hubGradedDateEST();
-  const skip = isFreeCard([todayCard, lastCard]);
+  const skip = isFreeCard([todayCard]);
   const showcase: HomeBoardItem[] = picks.length
     ? picks.map((pick) => ({ pick, date })).filter((item) => !skip(item))
     : await previousBoard(previousDate, skip);
@@ -129,7 +126,6 @@ export default async function Home() {
         todayCard={todayCard}
         teaser={teaser}
         last={free?.last ?? null}
-        lastCard={lastCard}
       />
       <div className="app-page">
       {featured && <FreePickReasons pick={featured} />}

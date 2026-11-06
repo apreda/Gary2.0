@@ -1,7 +1,8 @@
 import { rest } from '@/lib/gary/supabase';
-import { cardTeamName } from '@/components/picks/model';
-import { nativeTeamLabel } from '@/components/picks/score-labels';
 import { normalizeLeague } from '@/lib/gary/leagues';
+import { bookName, num, propTicket, scoreLine, shortTitle, splitDirection, str, ticketBody } from '@/lib/gary/ticket-format';
+
+export { bookName, marketWords, shortMatchup, shortTitle, splitDirection, ticketBody } from '@/lib/gary/ticket-format';
 
 // Gary's free pick of the day, read the way the app's Winners page reads it:
 // get_streak names the ticket and the run, get_winners_board carries the
@@ -87,102 +88,6 @@ interface WinnersBoard {
   tickets: BoardTicket[];
 }
 
-const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
-const num = (v: unknown): number | null => {
-  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
-  return Number.isFinite(n) ? n : null;
-};
-
-/** "Giants +6.5 -102" → "Giants +6.5". */
-export function ticketBody(text: string): string {
-  return text.replace(/\s*[+-]\d{3,4}\s*$/, '').trim();
-}
-
-/** "Nick Martinez over 4.5 hits" → over, "Nick Martinez 4.5 hits"; a bare total gets the league's word. */
-export function splitDirection(body: string, league: string): { direction: 'over' | 'under' | null; body: string } {
-  const m = body.match(/\b(over|under)\s+(?=[0-9])/i);
-  if (!m || m.index === undefined) return { direction: null, body };
-  const direction = m[1].toLowerCase() === 'over' ? 'over' : 'under';
-  let rest = (body.slice(0, m.index) + body.slice(m.index + m[0].length)).trim();
-  if (/^[0-9]+(\.[0-9]+)?$/.test(rest)) {
-    const l = league.toUpperCase();
-    rest += l === 'MLB' ? ' runs' : ['NFL', 'NCAAF', 'NBA', 'NCAAB'].includes(l) ? ' points' : ' goals';
-  }
-  return { direction, body: rest };
-}
-
-/** "pitcher_earned_runs 2.5" → "earned runs". */
-export function marketWords(raw: string | null): string {
-  if (!raw) return '';
-  let s = raw.toLowerCase().replace(/\s*[0-9]+(\.[0-9]+)?$/, '');
-  s = s.replace('pitcher_', '').replace('batter_', '').replace(/_/g, ' ');
-  if (s === 'hits runs rbis') return 'hits + runs + RBI';
-  if (s === 'hits allowed') return 'hits';
-  if (s === 'rbi' || s === 'rbis') return 'RBI';
-  return s;
-}
-
-function propTicket(snap: Record<string, unknown>): string | null {
-  const player = str(snap.player);
-  const prop = str(snap.prop);
-  const bet = (str(snap.bet) ?? '').toLowerCase();
-  if (prop && /^(first|1st)_inning/i.test(prop)) return bet === 'under' ? 'No Run 1st Inning' : 'Yes Run 1st Inning';
-  const line = str(snap.line) ?? (prop?.match(/[0-9]+(\.[0-9]+)?$/)?.[0] ?? null);
-  const parts = [player, bet || null, line, marketWords(prop) || null].filter(Boolean);
-  return parts.length ? parts.join(' ') : null;
-}
-
-/** The book as it writes its own name. */
-export function bookName(raw: string | null): string | null {
-  switch ((raw ?? '').toLowerCase()) {
-    case 'fanduel': return 'FanDuel';
-    case 'draftkings': return 'DraftKings';
-    case 'betmgm': return 'BetMGM';
-    case 'caesars': return 'Caesars';
-    case 'betrivers': return 'BetRivers';
-    case 'fanatics': return 'Fanatics';
-    case '': return null;
-    default: return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : null;
-  }
-}
-
-/** "New York Giants @ Los Angeles Rams" → "Giants @ Rams"; colleges by school. */
-export function shortMatchup(matchup: string, league: string): string {
-  const sides = matchup.split(' @ ');
-  if (sides.length !== 2) return matchup;
-  return sides.map(s => cardTeamName(s, league)).join(' @ ');
-}
-
-function countWords(value: number, market: string | null): string {
-  let words = marketWords(market);
-  if (value === 1) {
-    const singular: Record<string, string> = {
-      hits: 'hit', strikeouts: 'strikeout', outs: 'out', walks: 'walk', runs: 'run', rbis: 'RBI',
-      'home runs': 'home run', 'total bases': 'total base', 'earned runs': 'earned run',
-      receptions: 'reception', touchdowns: 'touchdown', 'receiving yards': 'receiving yard',
-      'rushing yards': 'rushing yard', 'passing yards': 'passing yard',
-    };
-    words = singular[words.toLowerCase()] ?? words;
-  }
-  return words ? `${value} ${words}` : String(value);
-}
-
-function scoreLine(ticket: BoardTicket, league: string, kind: string): string | null {
-  const r = ticket.result;
-  const snap = ticket.pick_snapshot ?? {};
-  if (!r) return null;
-  if (kind === 'prop') {
-    const actual = num(r.actual_value);
-    return actual === null ? null : countWords(actual, str(snap.prop));
-  }
-  const away = str(snap.awayTeam), home = str(snap.homeTeam);
-  const a = num(r.away_score), h = num(r.home_score);
-  if (away && home && a !== null && h !== null) {
-    return `${nativeTeamLabel(away, league)} ${a} · ${nativeTeamLabel(home, league)} ${h}`;
-  }
-  return str(r.final_score);
-}
-
 function resultWord(raw: string | null | undefined): FreePick['result'] {
   const r = (raw ?? '').toLowerCase();
   if (r === 'won') return 'won';
@@ -194,25 +99,6 @@ function resultWord(raw: string | null | undefined): FreePick['result'] {
 async function freeTicket(date: string, candidateId: number): Promise<BoardTicket | null> {
   const board = await rest<WinnersBoard>(`rpc/get_winners_board?p_date=${date}`, { revalidate: 120 });
   return board.tickets.find(t => Number(t.candidate_id) === candidateId) ?? null;
-}
-
-/**
- * The pick with the player's first name or the club's city dropped, the way
- * the app's ticket reads on a phone ("BUCCANEERS +8.5", "KIM 0.5 HITS").
- * A first-inning ticket names no player and is never shortened.
- */
-export function shortTitle(full: string, player: string | null, matchup: string, league: string): string {
-  if (/run 1st inning$/i.test(full)) return full;
-  if (player && full.toLowerCase().startsWith(player.toLowerCase())) {
-    const last = player.trim().split(/\s+/).at(-1) ?? player;
-    return last + full.slice(player.length);
-  }
-  for (const side of matchup.split(' @ ')) {
-    const nick = cardTeamName(side.trim(), league);
-    const at = nick ? full.toLowerCase().indexOf(nick.toLowerCase()) : -1;
-    if (at > 0) return full.slice(at);
-  }
-  return full;
 }
 
 function shape(day: StreakDay, ticket: BoardTicket | null, state: StreakState, which: FreePick['day']): FreePick {

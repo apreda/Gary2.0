@@ -1,5 +1,6 @@
 import type { FreePick as FreePickData } from "@/lib/gary/free-pick";
 import { shortMatchup } from "@/lib/gary/free-pick";
+import { BOOK_TINT, clockET as clock, money, priceText as price, stampOpacity } from "@/lib/gary/ticket-format";
 
 // The free pick, drawn the way the app's Winners page draws a ticket
 // (LabTicketPlate in ios/GaryApp/WinnersLab/LabDesign.swift): the league
@@ -10,37 +11,6 @@ import { shortMatchup } from "@/lib/gary/free-pick";
 // Gary's reasons follow as the play page shows them (WHY IT MADE THE BOARD).
 
 const ET = "America/New_York";
-
-function money(units: number | null): string {
-  if (!units || units <= 0) return "";
-  const dollars = units * 100;
-  const whole = Math.round(dollars) === dollars;
-  return `$${dollars.toLocaleString("en-US", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 })}`;
-}
-
-/** Bigger money, brighter gold: $500 and up is full, $250 and up is most of it. */
-function stampOpacity(units: number | null): number {
-  if (!units) return 0.5;
-  if (units >= 5) return 1;
-  if (units >= 2.5) return 0.85;
-  return 0.7;
-}
-
-function price(odds: number | null): string {
-  if (odds === null) return "";
-  return odds > 0 ? `+${odds}` : String(odds);
-}
-
-function clock(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("en-US", {
-    timeZone: ET,
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 /** TNF / SNF / MNF / SNB for a night game, as the app's ticket says it. */
 function primetime(iso: string | null, league: string): string | null {
@@ -81,15 +51,6 @@ function stateLine(pick: FreePickData): { text: string; tone: string } {
   const night = primetime(pick.commence, pick.league);
   return { text: night ? `${time} · ${night}` : time, tone: "open" };
 }
-
-const BOOK_TINT: Record<string, string> = {
-  fanduel: "#1493FF",
-  draftkings: "#61B510",
-  betmgm: "#C0A971",
-  caesars: "#BB9D5E",
-  betrivers: "#FDB61B",
-  fanatics: "#F6F1E7",
-};
 
 /** The reasons the board wrote; a ticket stored without them lists the first sentence of each paragraph of Gary's case. */
 function reasonsFor(pick: FreePickData) {

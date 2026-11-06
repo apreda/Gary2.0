@@ -60,7 +60,6 @@ export function applyCardResult(
   p: GaryPick | PropPick,
   data: CardResults | null,
   now = Date.now(),
-  stakeUnits?: number | null,
 ): CardPick {
   if (!data) return card;
   const start = parseGameTime(p.commence_time);
@@ -188,18 +187,6 @@ export function applyCardResult(
       ? `ACTUAL ${(row as PropResultRow).actual_value}`
       : ""
     : scoreLine || nativeFinalScore(row as GameResultRow);
-  const odds = Number(card.odds.replace("−", "-"));
-  const profit =
-    Number.isFinite(odds) && Math.abs(odds) >= 100
-      ? odds > 0
-        ? odds
-        : 10000 / Math.abs(odds)
-      : null;
-  // A unit is $100, so this matches the bankroll's own number for the bet.
-  const won =
-    profit != null && stakeUnits != null && stakeUnits > 0
-      ? Math.round(profit * stakeUnits)
-      : null;
   return {
     ...card,
     result: result as CardPick["result"],
@@ -209,9 +196,5 @@ export function applyCardResult(
     ]
       .filter(Boolean)
       .join(" · "),
-    payout:
-      result === "won" && won != null
-        ? `+$${won.toLocaleString("en-US")}`
-        : undefined,
   };
 }

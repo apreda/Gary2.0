@@ -1,0 +1,914 @@
+/* The app's Winners page on the web. Colors, foil, strip and type come from
+   ios/GaryApp/WinnersLab (LabFoil, LabPackSkin, LabPack, LabDayBar); design.md
+   applies: tabs and actions are words, never capsules. */
+.win-page {
+  --win-gap: clamp(20px, 4vw, 60px);
+  min-height: 70vh;
+  padding: 24px var(--app-gutter) 56px;
+  background:
+    radial-gradient(70% 520px at 50% -60px, rgba(120, 92, 30, 0.24), rgba(11, 10, 9, 0) 72%),
+    var(--app-bg);
+}
+.win-inner {
+  max-width: 1320px;
+  margin-inline: auto;
+}
+
+/* ── The header ─────────────────────────────────────────────────────────── */
+.win-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 14px;
+}
+.win-face {
+  flex: none;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.55));
+}
+.win-head h1 {
+  font: 400 68px/0.95 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+}
+.win-date {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  color: var(--app-dim);
+}
+.win-date button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  color: var(--app-gold);
+}
+.win-date button:first-child svg { transform: rotate(180deg); }
+.win-date button:disabled { color: var(--app-dimmer); }
+.win-date label {
+  position: relative;
+  padding: 8px 4px;
+  font: 500 20px/1 var(--ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.win-date label:hover { color: var(--app-warm); }
+.win-date input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.win-date input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.win-head-side {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  margin-left: auto;
+}
+.win-spark {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.win-spark polyline {
+  fill: none;
+  stroke: rgba(246, 241, 231, 0.6);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.win-spark circle.won { fill: var(--app-win); }
+.win-spark circle.lost { fill: var(--app-loss); }
+.win-spark circle.push { fill: var(--app-silver); }
+.win-spark b {
+  font: 400 18px/1 var(--display);
+  letter-spacing: 0.06em;
+}
+.win-page .won { color: var(--app-win); }
+.win-page .lost { color: var(--app-loss); }
+.win-page .push { color: var(--app-silver); }
+.win-bank {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  justify-content: end;
+  column-gap: 10px;
+  row-gap: 5px;
+}
+.win-bank strong {
+  font: 400 44px/1 var(--display);
+  color: var(--app-warm);
+  font-variant-numeric: tabular-nums;
+}
+.win-bank > span {
+  font: 400 26px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.win-bank em {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  font: 400 17px/1 var(--display);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.win-bank:hover em { color: #e8d48b; }
+
+/* the gold rule: one piece a play, as long as its bet */
+.win-daybar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 5px;
+}
+.win-daybar i {
+  flex: 0 1 calc(var(--u, 1) * 64px);
+  min-width: 8px;
+  height: 5px;
+  border-radius: 2px;
+}
+.win-daybar i.won { background: var(--app-win); }
+.win-daybar i.lost { background: var(--app-loss); }
+.win-daybar i.push { background: rgba(203, 199, 193, 0.7); }
+.win-daybar i.open {
+  background: repeating-linear-gradient(90deg, rgba(201, 162, 39, 0.75) 0 6px, transparent 6px 10px);
+}
+.win-daybar span {
+  flex: 1 0 30%;
+  height: 1px;
+  background: rgba(201, 162, 39, 0.35);
+}
+
+/* ── TODAY, the tabs, the day's money ───────────────────────────────────── */
+.win-today {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  min-height: 84px;
+}
+.win-today h2 {
+  font: 400 38px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+  white-space: nowrap;
+}
+.win-tabs {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.win-tabs::-webkit-scrollbar { display: none; }
+.win-tabs button {
+  font: 400 25px/1 var(--display);
+  letter-spacing: 0.08em;
+  color: var(--app-dimmer);
+  transition: color 0.15s ease-out;
+}
+.win-tabs button:hover { color: var(--app-warm); }
+.win-tabs button.on { color: var(--app-gold); }
+.win-today-side {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-left: auto;
+}
+.win-reveal {
+  font: 400 22px/1 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+  white-space: nowrap;
+}
+.win-reveal:disabled { opacity: 0.45; }
+.win-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.win-numbers small {
+  font: 400 18px/1 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-dim);
+}
+.win-numbers b {
+  font: 400 40px/1 var(--display);
+  color: var(--app-warm);
+}
+.win-numbers b.won { color: var(--app-win); text-shadow: 0 0 12px rgba(63, 185, 80, 0.45); }
+.win-numbers b.lost { color: var(--app-loss); text-shadow: 0 0 12px rgba(229, 72, 77, 0.45); }
+.win-numbers b.push { color: var(--app-silver); }
+.win-filter { position: relative; }
+.win-filter > button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--app-dim);
+}
+.win-filter > button:hover,
+.win-filter > button.on { color: var(--app-gold); }
+.win-filter-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: 220px;
+  padding: 12px 16px 14px;
+  background: var(--app-raised);
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+}
+.win-filter-menu p {
+  margin-top: 10px;
+  font: 400 16px/1 var(--display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--app-dim);
+}
+.win-filter-menu p:first-child { margin-top: 2px; }
+.win-filter-menu button {
+  padding: 8px 0;
+  text-align: left;
+  font: 500 16px/1.2 var(--ui);
+  color: var(--app-reading);
+}
+.win-filter-menu button:hover { color: var(--app-warm); }
+.win-filter-menu button.on { color: var(--app-gold); }
+.win-note {
+  margin-bottom: 18px;
+  font: 500 16px/1.4 var(--ui);
+  color: var(--app-gold);
+}
+.win-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  font: 500 16px/1.4 var(--ui);
+  color: var(--app-loss);
+  background: var(--app-plate);
+  border: 1px solid var(--app-hair);
+  border-radius: 12px;
+}
+.win-none {
+  padding: 28px 0;
+  text-align: center;
+  font: 400 22px/1 var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-dimmer);
+}
+
+/* ── The cards: every play in the pack's foil, every card one size ─────── */
+.win-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--win-gap);
+}
+.win-grid > * {
+  flex: 0 0 calc((100% - var(--win-gap) * 2) / 3);
+  min-width: 0;
+}
+.win-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 204px;
+  text-align: left;
+  background: linear-gradient(103deg, #0d0c0b 0%, #2a2416 26%, #0f0e0c 50%, #3a3018 76%, #0d0c0b 100%);
+  border: 1px solid rgba(201, 162, 39, 0.5);
+  border-radius: 16px;
+  transition: border-color 0.15s ease-out, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.win-card:has(.win-card-hit:hover),
+button.win-card:hover {
+  border-color: rgba(232, 212, 139, 0.9);
+  transform: translateY(-2px);
+}
+.win-card-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.win-card-hit:focus-visible,
+button.win-card:focus-visible {
+  outline: 2px solid var(--app-gold);
+  outline-offset: -2px;
+}
+.win-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 10px 20px;
+}
+.win-card-head b {
+  font: 400 19px/1 var(--display);
+  letter-spacing: 0.1em;
+  color: var(--app-gold);
+  white-space: nowrap;
+}
+.win-card-matchup,
+.win-card-clock {
+  font: 500 16px/1.2 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+.win-card-matchup {
+  overflow: hidden;
+  min-width: 0;
+}
+.win-card-clock {
+  flex: none;
+  margin-left: auto;
+}
+/* a sealed pack: the strip tears along the top, closed by its dashed line */
+.win-card.is-sealed .win-card-head {
+  background: linear-gradient(90deg, #1b1712, #3a3018, #1b1712);
+  border-bottom: 1.5px dashed rgba(201, 162, 39, 0.5);
+}
+.win-pack {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 154px;
+}
+.win-pack b {
+  font: 400 34px/1 var(--display);
+  letter-spacing: 0.14em;
+  color: #e8d48b;
+  white-space: nowrap;
+}
+.win-pack-mark {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+.win-pack-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6));
+}
+.win-pack-lock {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2315110A'%3E%3Cpath d='M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 0 1 6 0v3H9Z'/%3E%3C/svg%3E") center / 14px no-repeat,
+    var(--app-gold);
+}
+.win-pack-wait {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(232, 212, 139, 0.25);
+  border-top-color: #e8d48b;
+  border-radius: 50%;
+  animation: win-turn 0.9s linear infinite;
+}
+@keyframes win-turn { to { transform: rotate(360deg); } }
+
+/* an open play: the pick with the stake, the state with the price */
+.win-card-body {
+  flex: 1;
+  display: flex;
+  padding: 6px 20px 20px;
+  animation: win-settle 0.42s ease-out both;
+}
+.win-card-ticket {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+.win-card-pick {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 14px;
+}
+.win-card-pick h3 {
+  flex: 1;
+  min-width: 0;
+  font: 400 42px/1.05 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+}
+.win-title-line {
+  display: inline-block;
+  white-space: nowrap;
+}
+.win-stamp {
+  flex: none;
+  font: 400 36px/1 var(--display);
+  color: var(--app-gold);
+  font-variant-numeric: tabular-nums;
+}
+.win-card-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.win-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  font: 600 16px/1.2 var(--ui);
+  color: var(--app-dim);
+}
+.win-word {
+  font: 400 22px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.win-page .win-word.sealed { color: var(--app-gold); }
+.win-page .win-word.live { color: var(--app-win); }
+.win-page .win-word.pending,
+.win-page .win-word.scratched { color: var(--app-dimmer); }
+.win-seals { color: rgba(201, 162, 39, 0.85); }
+.win-stub {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+.win-direction,
+.win-price {
+  font: 400 22px/1 var(--display);
+  letter-spacing: 0.06em;
+}
+.win-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-gold);
+}
+.win-direction i {
+  font-size: 15px;
+  font-style: normal;
+}
+.win-direction i.over { color: var(--app-win); }
+.win-direction i.under { color: var(--app-loss); }
+.win-book { font: 700 18px/1 var(--ui); }
+.win-stub-rule {
+  width: 1px;
+  height: 22px;
+  background: rgba(201, 162, 39, 0.35);
+}
+.win-price { color: var(--app-silver); }
+
+/* the free pick leads, as wide as the page, Gary's reasons beside it */
+.win-card.is-free {
+  margin-bottom: var(--win-gap);
+  min-height: 0;
+  background: linear-gradient(103deg, #0d0c0b 0%, #2a2416 26%, #0f0e0c 50%, #3a3018 76%, #0d0c0b 100%);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.45);
+}
+.win-free-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 8px 20px;
+  background: linear-gradient(90deg, #1b1712, #3a3018, #1b1712);
+  border-bottom: 1.5px dashed rgba(201, 162, 39, 0.5);
+}
+.win-free-strip img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+.win-free-strip b {
+  font: 400 30px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f2d27a;
+}
+.win-free-strip span {
+  margin-left: auto;
+  font: 400 22px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+.win-free-strip em {
+  font-style: normal;
+  color: var(--app-dim);
+}
+.win-free-strip em.on { color: var(--app-win); }
+.win-card.is-free.is-sealed .win-card-head {
+  background: none;
+  border-bottom: 0;
+}
+.win-card.is-free .win-pack { min-height: 150px; }
+.win-card.is-free .win-pack b { font-size: 44px; }
+.win-card.is-free .win-card-body { gap: var(--win-gap); }
+.win-card.is-free .win-card-pick h3 { font-size: 72px; }
+.win-card.is-free .win-stamp { font-size: 52px; }
+.win-free-reasons {
+  flex: 0 0 calc((100% - var(--win-gap) * 2) / 3);
+  align-self: center;
+  counter-reset: why;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0 0 0 var(--win-gap);
+  list-style: none;
+  border-left: 1px solid rgba(201, 162, 39, 0.3);
+}
+.win-free-reasons li {
+  counter-increment: why;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  font: 500 17px/1.35 var(--ui);
+  color: var(--app-reading);
+}
+.win-free-reasons li::before {
+  content: counter(why);
+  font-weight: 600;
+  color: var(--app-gold);
+}
+
+/* the wrapper comes off the ticket */
+.win-tear {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  background: linear-gradient(103deg, #0d0c0b 0%, #2a2416 26%, #0f0e0c 50%, #3a3018 76%, #0d0c0b 100%);
+  animation: win-tear 0.52s cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+@keyframes win-tear {
+  to { transform: translateY(-104%); opacity: 0.4; }
+}
+@keyframes win-settle {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+/* ── Settled and yesterday: one line each ───────────────────────────────── */
+.win-lower {
+  display: grid;
+  gap: var(--win-gap);
+  margin-top: 48px;
+}
+.win-lower.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.win-plate {
+  padding: 14px 28px 6px;
+  background: linear-gradient(#1c1914, #131110);
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: 16px;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
+}
+.win-inner > .win-plate { margin-bottom: 48px; }
+.win-plate-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 14px;
+}
+.win-plate-head h2,
+.win-empty h2 {
+  font: 400 32px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.win-plate-head span {
+  font: 500 18px/1 var(--ui);
+  color: var(--app-dim);
+  white-space: nowrap;
+}
+.win-empty { padding: 28px; }
+.win-empty p {
+  margin-top: 10px;
+  font: 400 17px/1.5 var(--ui);
+  color: var(--app-reading);
+}
+.win-recap { padding-bottom: 16px; }
+.win-recap p {
+  font: 500 17px/1.4 var(--ui);
+  color: var(--app-dim);
+}
+.win-recap-line {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.win-recap-line b {
+  font: 400 44px/1 var(--display);
+  color: var(--app-warm);
+  font-variant-numeric: tabular-nums;
+}
+.win-recap-line b.won { color: var(--app-win); }
+.win-recap-line b.lost { color: var(--app-loss); }
+.win-rows { display: grid; }
+.win-inner > .win-plate .win-rows,
+.win-lower.one .win-rows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--win-gap);
+}
+.win-row {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 16px;
+  width: 100%;
+  padding: 17px 0;
+  text-align: left;
+  border-top: 1px solid var(--app-hair);
+  transition: background 0.15s ease-out;
+}
+.win-row .win-word { font-size: 23px; }
+.win-row:hover .win-row-title { color: #e8d48b; }
+.win-row:focus-visible {
+  outline: 2px solid var(--app-gold);
+  outline-offset: 2px;
+}
+.win-row-title {
+  font: 400 27px/1.1 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+  transition: color 0.15s ease-out;
+}
+.win-row-money {
+  font: 400 29px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.win-fine {
+  max-width: 62rem;
+  margin-top: 40px;
+  font: 400 15px/1.55 var(--ui);
+  color: var(--app-dim);
+}
+
+/* ── A play, opened: a panel beside the board ───────────────────────────── */
+.win-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(620px, 100vw);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--app-reading);
+  background: #100e0c;
+  border: 0;
+  border-left: 1px solid rgba(201, 162, 39, 0.45);
+  box-shadow: -30px 0 60px rgba(0, 0, 0, 0.6);
+  animation: win-slide 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.win-panel:focus { outline: none; }
+.win-panel::backdrop { background: rgba(5, 4, 3, 0.66); }
+@keyframes win-slide {
+  from { transform: translateX(40px); opacity: 0; }
+}
+.win-panel-inner { padding: 14px 32px 48px; }
+.win-panel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  margin-bottom: 8px;
+  color: var(--app-gold);
+}
+.win-panel-bar button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  font: 400 34px/1 var(--ui);
+}
+.win-panel-bar button:hover { color: #e8d48b; }
+.win-panel-bar span {
+  font: 500 16px/1 var(--ui);
+  color: var(--app-dim);
+}
+.win-panel-ticket {
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  background: linear-gradient(103deg, #0d0c0b 0%, #2a2416 26%, #0f0e0c 50%, #3a3018 76%, #0d0c0b 100%);
+  border: 1px solid rgba(201, 162, 39, 0.6);
+  border-radius: 18px;
+}
+.win-panel-ticket h2 {
+  padding: 6px 20px 18px;
+  font: 400 52px/1.02 var(--display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--app-warm);
+  text-wrap: balance;
+}
+.win-panel-ticket .win-card-state { padding-inline: 20px; }
+.win-panel-money {
+  display: flex;
+  gap: 40px;
+  margin: 18px 20px 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(201, 162, 39, 0.28);
+}
+.win-panel-money dt {
+  font: 400 17px/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--app-dim);
+}
+.win-panel-money dd {
+  margin-top: 6px;
+  font: 400 40px/1 var(--display);
+  color: var(--app-warm);
+  font-variant-numeric: tabular-nums;
+}
+.win-panel-money dd.won { color: var(--app-win); }
+.win-panel-money dd.lost { color: var(--app-loss); }
+.win-panel section { margin-bottom: 36px; }
+.win-panel section h3 {
+  margin-bottom: 14px;
+  font: 400 30px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-gold);
+}
+.win-panel-reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.win-panel-reasons li {
+  display: flex;
+  gap: 14px;
+  padding-block: 18px;
+  border-top: 1px solid var(--app-hair);
+}
+.win-panel-reasons li:first-child { border-top: 0; padding-top: 0; }
+.win-panel-n {
+  flex: none;
+  min-width: 14px;
+  font: 600 18px/1.45 var(--ui);
+  color: var(--app-gold);
+}
+.win-panel-reasons strong {
+  display: block;
+  font: 600 19px/1.35 var(--ui);
+  color: var(--app-warm);
+}
+.win-panel-reasons p {
+  margin-top: 6px;
+  font: 400 17px/1.55 var(--ui);
+  color: var(--app-reading);
+}
+.win-panel-reasons p.win-panel-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: 10px;
+  color: var(--app-dim);
+}
+.win-panel-stat b {
+  font: 400 30px/1 var(--display);
+  color: var(--app-gold);
+}
+.win-panel-take p {
+  margin-bottom: 14px;
+  font: 400 18px/1.6 var(--ui);
+  color: var(--app-reading);
+}
+.win-panel-stats {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.win-panel-stats li {
+  padding-block: 10px;
+  font: 400 17px/1.45 var(--ui);
+  border-top: 1px solid var(--app-hair);
+}
+
+/* ── Smaller windows ────────────────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  .win-grid > * { flex-basis: calc((100% - var(--win-gap)) / 2); }
+  .win-lower.two { grid-template-columns: minmax(0, 1fr); }
+  .win-card.is-free .win-card-pick h3 { font-size: 56px; }
+}
+@media (max-width: 900px) {
+  .win-card.is-free .win-card-body { flex-direction: column; gap: 22px; }
+  .win-free-reasons {
+    flex-basis: auto;
+    align-self: stretch;
+    padding: 18px 0 0;
+    border-left: 0;
+    border-top: 1px solid rgba(201, 162, 39, 0.3);
+  }
+  .win-inner > .win-plate .win-rows,
+  .win-lower.one .win-rows { grid-template-columns: minmax(0, 1fr); }
+  .win-head-side { gap: 18px; }
+  .win-bank strong { font-size: 34px; }
+  .win-bank > span { font-size: 20px; }
+}
+/* A phone is the app. */
+@media (max-width: 720px) {
+  .win-page { --win-gap: 12px; padding-top: 12px; padding-bottom: 48px; }
+  .win-head { flex-wrap: wrap; gap: 8px 12px; padding-bottom: 12px; }
+  .win-face { width: 60px; height: 60px; }
+  .win-head h1 { font-size: 42px; }
+  .win-date { margin-left: 0; }
+  .win-date label { font-size: 16px; }
+  .win-date button { width: 26px; }
+  .win-head-side { width: 100%; justify-content: space-between; margin: 0; }
+  .win-today { flex-wrap: wrap; gap: 6px 16px; min-height: 0; padding: 14px 0; }
+  .win-today h2 { font-size: 26px; }
+  .win-tabs { gap: 16px; }
+  .win-tabs button { font-size: 19px; }
+  .win-today-side { width: 100%; justify-content: space-between; gap: 14px; margin: 0; }
+  .win-reveal { font-size: 18px; }
+  .win-numbers b { font-size: 28px; }
+  .win-grid > * { flex-basis: 100%; }
+  .win-card { min-height: 158px; border-radius: 14px; }
+  .win-card-head { min-height: 40px; padding: 8px 16px; }
+  .win-card-head b { font-size: 16px; }
+  .win-card-matchup, .win-card-clock { font-size: 14px; }
+  .win-pack { min-height: 116px; gap: 14px; }
+  .win-pack b { font-size: 26px; }
+  .win-pack-mark { width: 44px; height: 44px; }
+  .win-card-body { padding: 2px 16px 14px; }
+  .win-card-ticket { gap: 12px; }
+  .win-card-pick { padding-top: 8px; gap: 10px; }
+  .win-card-pick h3 { font-size: 32px; }
+  .win-stamp { font-size: 26px; }
+  .win-card.is-free .win-card-pick h3 { font-size: 40px; }
+  .win-card.is-free .win-stamp { font-size: 32px; }
+  .win-card.is-free .win-pack b { font-size: 30px; }
+  .win-free-strip { padding: 6px 14px; min-height: 48px; }
+  .win-free-strip b { font-size: 23px; }
+  .win-free-strip span { font-size: 16px; }
+  .win-word, .win-direction, .win-price { font-size: 18px; }
+  .win-state { font-size: 14px; }
+  .win-lower { margin-top: 24px; }
+  .win-plate { padding: 8px 16px 4px; }
+  .win-plate-head h2, .win-empty h2 { font-size: 24px; }
+  .win-plate-head span { font-size: 15px; }
+  .win-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 13px 0; }
+  .win-row .win-word { font-size: 17px; }
+  .win-row-title { font-size: 20px; }
+  .win-row-money { font-size: 21px; }
+  .win-panel { width: 100vw; border-left: 0; }
+  .win-panel-inner { padding: 8px 16px 40px; }
+  .win-panel-ticket h2 { font-size: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .win-card, .win-card-body, .win-panel, .win-tear { animation: none; transition: none; }
+  .win-tear { display: none; }
+  .win-pack-wait { animation-duration: 3s; }
+}

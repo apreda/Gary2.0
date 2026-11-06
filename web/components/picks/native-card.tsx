@@ -166,7 +166,7 @@ export function NativePickCard({
     >
       <div
         ref={card}
-        className={`native-card native-${finish} ${pick.kind === "prop" ? "native-prop" : "native-game"} ${pick.result ? `native-${pick.result}` : ""} ${pick.payout ? "native-has-payout" : ""}`}
+        className={`native-card native-${finish} ${pick.kind === "prop" ? "native-prop" : "native-game"} ${pick.result ? `native-${pick.result}` : ""}`}
         role="group"
         tabIndex={-1}
         aria-label={title}
@@ -199,9 +199,6 @@ export function NativePickCard({
               />
             )}
             {pick.result === "won" && <NativeWinMark />}
-            {pick.payout && finish !== "dark" && (
-              <div className="native-payout">{pick.payout}</div>
-            )}
             {pick.result === "lost" && (
               <svg
                 className="native-crack"

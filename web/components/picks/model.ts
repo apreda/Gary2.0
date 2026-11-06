@@ -25,7 +25,6 @@ export type CardPick = {
   away?: boolean;
   result?: "won" | "lost" | "push";
   resultLine?: string;
-  payout?: string;
   href?: string;
   shareHref?: string;
   eyebrow?: string;

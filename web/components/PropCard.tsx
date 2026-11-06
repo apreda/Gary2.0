@@ -10,7 +10,6 @@ export function PropCard({
   date,
   shareHref,
   initialResults,
-  stakeUnits,
 }: {
   prop: PropPick;
   expanded?: boolean;
@@ -18,15 +17,12 @@ export function PropCard({
   date?: string;
   shareHref?: string;
   initialResults?: CardResults;
-  stakeUnits?: number | null;
 }) {
   const result = useCardResults(cardDate(prop, date));
   const card = applyCardResult(
     propCardPick(prop),
     prop,
     result ?? initialResults ?? null,
-    undefined,
-    stakeUnits,
   );
   return (
     <NativePickCard
