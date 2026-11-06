@@ -5,6 +5,9 @@
  *
  * One-game boards only for now (founder GO on the order: the one-game Monday first, then check usage before a Sunday): a
  * 12-game morning could spend the Claude weekly limit before the picks run. GARY_DARTS_PACKET_MAX_GAMES moves the limit.
+ *
+ * No fallback that gives different data (founder, Oct 23 2026, and Nov 6 on this one: "it really shouldnt fail to build"):
+ * three tries here, then the league's run fails before any ask and the next run tries again, as a failed desk does on props.
  */
 import { oddsService } from '../../providers/oddsService.js';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
@@ -13,8 +16,21 @@ import { etDate } from './dartsCommon.js';
 
 export const packetOn = (games) => games <= Number(process.env.GARY_DARTS_PACKET_MAX_GAMES ?? 1);
 
-/** The game as the side pick reads it, for one frame of the NFL board. Throws when the game or its desk can't be built. */
-export async function nflGamePacket(frame) {
+const TRIES = 3;
+const TRY_GAP_MS = 60 * 1000;
+
+/** The game as the side pick reads it, for one frame of the NFL board. Throws when three tries can't build it. */
+export async function nflGamePacket(frame, { log = console.log, gapMs = TRY_GAP_MS } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try { return await buildPacket(frame); } catch (e) {
+      if (attempt >= TRIES) throw new Error(`game packet for ${frame.matchup}: ${e.message}`);
+      log(`NFL: game packet for ${frame.matchup}, try ${attempt} failed (${e.message}); trying again`);
+      await new Promise((done) => setTimeout(done, gapMs));
+    }
+  }
+}
+
+async function buildPacket(frame) {
   const date = etDate(Date.parse(frame.commence));
   const games = await oddsService.getUpcomingGames('americanfootball_nfl', { targetDate: date, gameId: String(frame.gameId) });
   const game = (games || []).find((g) => String(g.bdl_game_id ?? g.id) === String(frame.gameId));

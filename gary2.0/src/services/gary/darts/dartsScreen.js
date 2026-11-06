@@ -308,10 +308,11 @@ const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB
 export function nflGameBlock(frame, injuries = null, weeksByName = null, snaps = null) {
   const sp = frame.spreadHome;
   const spread = sp == null ? null : sp < 0 ? `${frame.homeFull?.replace(/^.* /, '')} ${sp}` : sp > 0 ? `${frame.awayFull?.replace(/^.* /, '')} ${-sp}` : 'pick em';
-  const head = [`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, spread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ');
+  const headWith = (shownSpread) => [`${frame.matchup} · ${new Date(frame.commence).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} ${etClock(frame.commence)}`, shownSpread, frame.total != null ? `total ${frame.total}` : null].filter(Boolean).join(' · ');
   // The game packet (nflGamePacket.js) carries the reports, the weather and the roster moves; the header and the news stay.
-  if (frame.packet) return [head, frame.packet, frame.news ? `TODAY'S NEWS\n${frame.news}` : null].filter(Boolean).join('\n\n');
-  const lines = [head];
+  // One spread: the packet's, when it has one (this frame's book can differ, Nov 5 2026: darts read Ravens +10, the pick +9.5).
+  if (frame.packet) return [headWith(/^Spread: /m.test(frame.packet) ? null : spread), frame.packet, frame.news ? `TODAY'S NEWS\n${frame.news}` : null].filter(Boolean).join('\n\n');
+  const lines = [headWith(spread)];
   for (const extra of frame.extra || []) lines.push(extra);
   if (injuries) for (const team of [frame.awayFull, frame.homeFull].filter(Boolean)) lines.push(outAroundLine(injuries, team, '', { weeksByName, snaps, label: `${team} report` }) || `${team} report: nobody listed`);
   return lines.join('\n    ');

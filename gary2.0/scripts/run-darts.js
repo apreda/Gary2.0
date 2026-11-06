@@ -219,12 +219,12 @@ async function throwLeague(league) {
       // TODAY'S NEWS in each frame, from the news desk the game read and the props desk read (founder, Nov 2 2026, MNF:
       // the darts read no news, so Zach Charbonnet's first game since a torn ACL, and Jadarian Price off IR, were a bare
       // "no games yet" row; the Wilson TD dart read the backfield as Wilson's). The desk reads the frame as Gary has it.
-      // The game packet first, when the board is small enough (nflGamePacket.js). A game whose packet can't be built keeps
-      // the frame it had, and the log says so.
+      // The game packet first, when the board is small enough (nflGamePacket.js). One that can't be built fails this league's
+      // run here, before any ask; the next run tries again until kickoff (REFILL_GAP_MS).
       if (packetOn(board.games)) {
         for (const f of board.frames) {
-          f.packet = await nflGamePacket(f).catch((e) => { log(`${league}: no game packet for ${f.matchup} (${e.message}); its frame stays as it was`); return null; });
-          if (f.packet) log(`${league}: game packet for ${f.matchup} (${f.packet.length} chars)`);
+          f.packet = await nflGamePacket(f, { log });
+          log(`${league}: game packet for ${f.matchup} (${f.packet.length} chars)`);
         }
       }
       const NEWS_AT_ONCE = 4;
