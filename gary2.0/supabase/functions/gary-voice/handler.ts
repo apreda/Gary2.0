@@ -138,7 +138,9 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         send({ t: "start", rate, speed: eleven ? Number(admitted.speed) || 1 : 1 });
 
         let answer = "", error: string | null = null, tools: string[] = [];
-        let usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+        // A web search can run quiet for a while, and the app gives up after 60 seconds of silence.
+        const hold = setInterval(() => send({ t: "hold" }), 15_000);
+        let usage: { input: number; cacheRead: number; cacheWrite: number; output: number; searches?: number } = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
         try {
           if (!admitted.ok) {
             answer = LINES[admitted.reason] ?? LINES.limit;
@@ -190,6 +192,7 @@ export function createVoiceHandler(cfg: VoiceConfig) {
         } catch (e) {
           send({ t: "voice_error", m: (e as Error).message });
         }
+        clearInterval(hold);
         voice.close();
         send(error && !answer ? { t: "error", m: "failed" } : { t: "end" });
         open = false;

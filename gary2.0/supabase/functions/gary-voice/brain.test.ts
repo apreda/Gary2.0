@@ -19,6 +19,18 @@ Deno.test("prop_board marks a bet he's already on, so he can't call it a new ide
   assertStringIncludes(out, "Ty Jerome (MEM): rebounds");
 });
 
+Deno.test("stats says it can't find a player instead of handing back someone with the same last name", async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ data: [{ id: 1, first_name: "Anthony", last_name: "Simpson", position: "WR" }] }))) as any;
+  try {
+    const db = { get: async () => [], rpc: async () => null, userRpc: async () => null } as any;
+    const out = await runTool(db, "2026-11-06", "stats", { league: "NCAAF", kind: "player_games", player: "Ty Simpson" });
+    assertStringIncludes(out, "Couldn't find");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
 Deno.test("team_games keeps the newest games of this season and leaves last season out", async () => {
   // The function returns newest first, then last season's games.
   const season = Array.from({ length: 14 }, (_, i) => ({ d: `2026-10-${String(30 - i).padStart(2, "0")}`, cur: true }));
