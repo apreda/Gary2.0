@@ -563,7 +563,7 @@ enum SupabaseAPI {
         var query = [
             URLQueryItem(name: "select", value: "play_key,who,market,price,when_label,play,kind,dance,team,number,ready_at,assets"),
             URLQueryItem(name: "league", value: "eq.\(league)"),
-            URLQueryItem(name: "status", value: "eq.ready"),
+            URLQueryItem(name: "status", value: "in.(ready,ready_nobet)"),
             URLQueryItem(name: "order", value: "ready_at.desc"),
             URLQueryItem(name: "limit", value: "\(limit)")
         ]

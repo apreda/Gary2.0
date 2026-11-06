@@ -66,14 +66,14 @@ out([live.hero!.key])`);
     expect(r).toEqual(['1057|anytime_td|1']);
   });
 
-  it('a hit replays a celebration only when its own bet earned it, never a yardage bet on the same touchdown', () => {
+  it('a touchdown replays from its touchdown bets, never a yardage bet on the run; any other big play from every bet on it', () => {
     const r = swiftJSON(`${celebrationKit}
 let known = ["518@3165": cele("518@3165", "td", 575, "2026-11-06T03:56:00Z"), "33@2350": cele("33@2350", "big", 1720, "2026-11-06T03:18:00Z")]
 func replays(_ h: CashRailHit) -> String { h.celebration(in: known)?.play_key ?? "none" }
 out([replays(hit("518|anytime_td|1", 575, 3165)), replays(hit("518|first_td", 600, 3165)), replays(hit("518|rushing_yards", 3200, 3165)), replays(hit("518|longest_rush", 186, 3165)),
      replays(hit("33|receiving_yards", 1720, 2350)), replays(hit("33|receptions", 198, 2350)),
      replays(hit("9|anytime_td|1", 200, 100)), replays(hit("game|ml|home", 900, 3600))])`);
-    expect(r).toEqual(['518@3165', '518@3165', 'none', 'none', '33@2350', 'none', 'none', 'none']);
+    expect(r).toEqual(['518@3165', '518@3165', 'none', 'none', '33@2350', '33@2350', 'none', 'none']);
   });
 
   it('plays only the latest play on its own, and only while it is news; older ones wait for a tap', () => {

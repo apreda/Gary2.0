@@ -26,12 +26,16 @@ const clockSecs = c => {
   const [m, s] = String(c || '0:00').split(':').map(Number);
   return (Number.isFinite(m) ? m : 0) * 60 + (Number.isFinite(s) ? s : 0);
 };
-const elapsedOf = p => (p.period <= 4
+export const elapsedOf = p => (p.period <= 4
   ? (p.period - 1) * 900 + (900 - clockSecs(p.clock_display))
   : 3600 + (p.period - 5) * 600 + (600 - clockSecs(p.clock_display)));
-const whenOf = p => (p.period <= 4 ? `Q${p.period} ${p.clock_display}` : `OT ${p.clock_display}`);
+export const whenOf = p => (p.period <= 4 ? `Q${p.period} ${p.clock_display}` : `OT ${p.clock_display}`);
 const ordinal = n => `${n}${(n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th')}`;
-const ids = (p, type) => (p.participants || []).filter(x => x.type === type).map(x => x.player_id);
+export const ids = (p, type) => (p.participants || []).filter(x => x.type === type).map(x => x.player_id);
+
+/** The player a touchdown play scored for: the receiver on a pass, else whoever carried it in. */
+export const tdScorer = p => (p.type_slug === 'passing-touchdown' ? ids(p, 'receiver') : [])[0]
+  ?? (p.participants || []).find(x => SCORER_TYPES.includes(x.type))?.player_id;
 
 /** The stat lines one play adds: [playerId, stat, value, 'add'|'max']. */
 function statLines(p) {
@@ -57,8 +61,7 @@ function statLines(p) {
     }
   }
   if (td) {
-    const scorer = (slug === 'passing-touchdown' ? ids(p, 'receiver') : [])[0]
-      ?? (p.participants || []).find(x => SCORER_TYPES.includes(x.type))?.player_id;
+    const scorer = tdScorer(p);
     if (scorer != null) out.push([scorer, 'tds', 1, 'add']);
   }
   return out;

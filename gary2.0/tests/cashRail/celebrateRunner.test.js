@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { runCelebrations } from '../../src/services/cashRail/celebrateRunner.js';
 import { pickDance, DANCES, danceUniqueFrames } from '../../src/services/cashRail/celebrations.js';
 
+const krafttd = { period: 1, clock_display: '5:08', type_slug: 'passing-touchdown', scoring_play: true, stat_yardage: 12, participants: [{ type: 'receiver', player_id: 935 }, { type: 'passer', player_id: 2 }] };
 const board = { league: 'NFL', game_id: '1392323', status: 'live', hits: [
   { key: '935|first_td', who: 'Tucker Kraft', market: 'First TD scorer', price: 1100, elapsed: 592, when: 'Q1 5:08', play: '12-yd TD catch' },
   { key: '935|anytime_td|1', who: 'Tucker Kraft', market: 'Anytime TD', price: 195, elapsed: 592, when: 'Q1 5:08', play: '12-yd TD catch' },
@@ -17,10 +18,10 @@ function fakes({ existing = [], bgExists = false, failArt = false } = {}) {
       boards: async () => [board],
       existingPlayKeys: async () => [...rows.keys()],
       claim: async (row) => { if (rows.has(row.play_key)) return false; rows.set(row.play_key, row); writes.claims.push(row); return true; },
-      markReady: async (key, assets) => { writes.ready.push({ key, assets }); },
+      markReady: async (key, assets, status) => { writes.ready.push({ key, assets, status }); },
       markFailed: async (key) => { writes.failed.push(key); },
     },
-    bdl: { player: async (id) => ({ number: '85', team: 'GB' }) },
+    bdl: { plays: async () => [krafttd], player: async () => ({ name: 'Tucker Kraft', number: '85', team: 'GB' }) },
     art: async ({ prompt, slug }) => { if (failArt) throw new Error('boom'); writes.art.push(slug); return Buffer.from(slug); },
     store: {
       exists: async () => bgExists,
@@ -42,15 +43,27 @@ describe('runCelebrations', () => {
     expect(a.bg).toBe('https://cdn/bg/GB-td.webp');
     expect(Object.keys(a.frames).sort()).toEqual(danceUniqueFrames(dance).map(x => x.slug).sort());
     expect(a.seq).toEqual(dance.seq);
+    expect(a.stat).toBeUndefined();
+    expect(f.writes.ready[0].status).toBe('ready');
   });
 
-  it('draws the biggest play first when the pass cannot draw them all', async () => {
+  it('a play with no bet behind it has no price, says so on the card, and stays out of older apps', async () => {
     const f = fakes();
-    const big = { key: '77|receptions', who: 'Chuba Hubbard', market: 'Receptions', price: 1520, rungs: [{ label: '7+', price: 1520 }], elapsed: 3169, when: 'Q4 7:11', play: '9-yd catch' };
-    f.db.boards = async () => [{ ...board, hits: [...board.hits, big] }];
+    f.bdl.plays = async () => [{ period: 2, clock_display: '4:12', type_slug: 'fumble-recovery-opponent', stat_yardage: 0, participants: [{ type: 'fumbler', player_id: 5 }, { type: 'recoverer', player_id: 66 }] }];
+    f.bdl.player = async id => ({ name: id === 5 ? 'Kay Black' : 'Bob Lee', number: '91', team: 'DAL' });
+    await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 2 });
+    expect(f.writes.claims[0]).toMatchObject({ play_key: '66@1548', hit_key: null, price: null, who: 'Bob Lee', market: 'Fumble recovery', play: 'Kay Black fumbled', when_label: 'Q2 4:12', kind: 'fumble', team: 'DAL' });
+    expect(f.writes.ready[0].status).toBe('ready_nobet');
+    expect(f.writes.ready[0].assets.stat).toEqual({ big: 'FUMBLE', small: 'RECOVERED' });
+    expect(f.writes.ready[0].assets.bg).toBe('https://cdn/bg/DAL-fumble.webp');
+  });
+
+  it('draws the latest play first when the pass cannot draw them all', async () => {
+    const f = fakes();
+    const long = { period: 4, clock_display: '7:11', type_slug: 'rush', stat_yardage: 44, participants: [{ type: 'rusher', player_id: 77 }] };
+    f.bdl.plays = async () => [krafttd, long];
     await runCelebrations({ db: f.db, bdl: f.bdl, art: f.art, store: f.store, limit: 1 });
     expect(f.writes.claims.map(c => c.play_key)).toEqual(['77@3169']);
-    expect(f.writes.claims[0].market).toBe('Receptions 7+');
   });
 
   it('only draws plays from the last five minutes of game clock, so a celebration is never old news', async () => {

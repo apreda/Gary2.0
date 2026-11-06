@@ -1,38 +1,85 @@
 import { describe, expect, it } from 'vitest';
-import { celebrationPlays, pickDance, DANCES, danceUniqueFrames, posePrompt, bgSpec, TEAM_LOOKS } from '../../src/services/cashRail/celebrations.js';
+import { celebrationPlays, cardWords, pickDance, DANCES, danceUniqueFrames, posePrompt, bgSpec, TEAM_LOOKS } from '../../src/services/cashRail/celebrations.js';
 
 const hit = (key, who, market, price, elapsed, extra = {}) => ({ key, who, market, price, elapsed, when: 'Q1 5:08', play: '12-yd TD catch', ...extra });
 
-describe('which hits get a celebration', () => {
-  it('celebrates every touchdown play and any hit +800 or longer, once per play, with the best price on that play', () => {
-    const plays = celebrationPlays([
-      hit('935|first_td', 'Tucker Kraft', 'First TD scorer', 1100, 592),
-      hit('935|anytime_td|1', 'Tucker Kraft', 'Anytime TD', 195, 592),
-      hit('935|anytime_td_1q|1', 'Tucker Kraft', 'Anytime TD · 1st quarter', 900, 592),
-      hit('480|receiving_yards', 'Matthew Golden', 'Rec yards', 414, 2715, { rungs: [{ label: '100+', price: 414 }] }),
-      hit('77|receptions', 'Chuba Hubbard', 'Receptions', 1520, 3100, { rungs: [{ label: '7+', price: 1520 }] }),
-      hit('game|spread|home|-3.5', 'Packers', 'Spread −3.5', -102, 3600),
-    ]);
-    expect(plays.map(p => [p.playKey, p.hit.key, p.kind])).toEqual([
-      ['935@592', '935|first_td', 'td'],
-      ['77@3100', '77|receptions', 'big'],
-    ]);
-    expect(plays[0].playerId).toBe('935');
+const q1 = { period: 1, clock_display: '5:08' }; // 592 seconds in
+const part = (type, player_id) => ({ type, player_id });
+const play = (type_slug, participants, extra = {}) => ({ ...q1, type_slug, participants, stat_yardage: 0, text: '', ...extra });
+
+describe('which plays get a celebration', () => {
+  const tdRun = play('rushing-touchdown', [part('rusher', 518), part('xp_kicker', 9)], { scoring_play: true, stat_yardage: 65 });
+
+  it('celebrates a touchdown of any kind, a 40-yard pass or run, an interception and a lost fumble', () => {
+    const kinds = plays => celebrationPlays(plays).map(p => [p.playKey, String(p.playerId), p.kind]);
+    expect(kinds([tdRun])).toEqual([['518@592', '518', 'td']]);
+    expect(kinds([play('kickoff-return-touchdown', [part('kickoff_returner', 3), part('kickoff_kicker', 4)], { scoring_play: true })])).toEqual([['3@592', '3', 'td']]);
+    expect(kinds([play('pass-reception', [part('receiver', 7), part('passer', 2)], { stat_yardage: 40 })])).toEqual([['7@592', '7', 'long']]);
+    expect(kinds([play('rush', [part('rusher', 8)], { stat_yardage: 52 })])).toEqual([['8@592', '8', 'long']]);
+    // Gary wears the defender's number; the key is the quarterback's, whose bet is the row on the board.
+    expect(kinds([play('pass-interception-return', [part('interception_returner', 44), part('passer', 2)])])).toEqual([['2@592', '44', 'int']]);
+    expect(kinds([play('fumble-recovery-opponent', [part('fumbler', 5), part('recoverer', 66)])])).toEqual([['66@592', '66', 'fumble']]);
+    expect(kinds([play('muffed-punt-recovery-opponent', [part('fumbler', 5), part('recoverer', 67)])])).toEqual([['67@592', '67', 'fumble']]);
   });
 
-  it('names a touchdown play for the touchdown, even when a yardage bet on the same run paid more', () => {
+  it('leaves out everything else, however long the price', () => {
+    const none = [
+      play('pass-reception', [part('receiver', 7)], { stat_yardage: 39 }),
+      play('rush', [part('rusher', 8)], { stat_yardage: 12 }),
+      play('fumble-recovery-own', [part('fumbler', 5), part('recoverer', 6)]),
+      play('sack', [part('sacker', 90), part('passer', 2)]),
+      play('field-goal-good', [part('field_goal_kicker', 1)], { scoring_play: true }),
+      play('rush', [part('rusher', 8)], { stat_yardage: 70, text: 'J.Hill for 70 yards. PENALTY on BLT, Holding - No Play.' }),
+    ];
+    const pricey = [hit('7|receptions', 'Chuba Hubbard', 'Receptions', 1520, 592)];
+    expect(celebrationPlays(none, pricey)).toEqual([]);
+  });
+
+  it('names a touchdown for its best touchdown bet, even when a yardage bet on the same run paid more', () => {
     const run = [
-      hit('518|anytime_td|1', 'Justice Hill', 'Anytime TD', 575, 3165),
-      hit('518|longest_rush', 'Justice Hill', 'Longest run', 186, 3165),
-      hit('518|rushing_yards', 'Justice Hill', 'Rush yards', 3200, 3165, { rungs: [{ label: '70+', price: 3200 }] }),
+      hit('518|anytime_td|1', 'Justice Hill', 'Anytime TD', 575, 592),
+      hit('518|first_td', 'Justice Hill', 'First TD scorer', 600, 592),
+      hit('518|longest_rush', 'Justice Hill', 'Longest run', 186, 592),
+      hit('518|rushing_yards', 'Justice Hill', 'Rush yards', 3200, 592),
     ];
     for (const hits of [run, [...run].reverse()]) {
-      expect(celebrationPlays(hits).map(p => [p.playKey, p.hit.key, p.kind])).toEqual([['518@3165', '518|anytime_td|1', 'td']]);
+      expect(celebrationPlays([tdRun], hits)[0].hit.key).toBe('518|first_td');
     }
   });
 
-  it('never celebrates a game line', () => {
-    expect(celebrationPlays([hit('game|ml|away', 'Panthers', 'Moneyline', 900, 3600)])).toEqual([]);
+  it('finds the bet a long gain or an interception paid, and only on that play', () => {
+    const long = play('pass-reception', [part('receiver', 7), part('passer', 2)], { stat_yardage: 45 });
+    const hits = [
+      hit('7|receptions', 'Tee Higgins', 'Receptions', 900, 592),
+      hit('7|receiving_yards', 'Tee Higgins', 'Rec yards', 414, 592),
+      hit('7|longest_reception', 'Tee Higgins', 'Longest catch', 300, 700),
+      hit('2|interceptions', 'Drake Maye', 'Interceptions thrown', 140, 592),
+    ];
+    expect(celebrationPlays([long], hits)[0].hit.key).toBe('7|receiving_yards');
+    const pick = play('pass-interception-return', [part('interception_returner', 44), part('passer', 2)]);
+    expect(celebrationPlays([pick], hits)[0].hit.key).toBe('2|interceptions');
+    expect(celebrationPlays([play('rush', [part('rusher', 8)], { stat_yardage: 50 })], hits)[0].hit).toBeNull();
+  });
+});
+
+describe('what the card says', () => {
+  const said = (kind, slug, yards, h, name, other) => cardWords({ kind, slug, yards, hit: h }, name, other);
+
+  it('with a bet, shows that bet and never credits one it is not', () => {
+    const td = hit('518|anytime_td|1', 'Justice Hill', 'Anytime TD', 575, 592, { play: '65-yd TD run' });
+    expect(said('td', 'rushing-touchdown', 65, td, 'Justice Hill')).toEqual({ who: 'Justice Hill', market: 'Anytime TD', play: '65-yd TD run' });
+    const yards = hit('7|receiving_yards', 'Tee Higgins', 'Rec yards', 414, 592, { rungs: [{ label: '100+', price: 414 }], play: '45-yd catch · 110 yds' });
+    expect(said('long', 'pass-reception', 45, yards, 'Tee Higgins')).toEqual({ who: 'Tee Higgins', market: 'Rec yards 100+', play: '45-yd catch' });
+    const thrown = hit('2|interceptions', 'Drake Maye', 'Interceptions thrown', 140, 592);
+    expect(said('int', 'pass-interception-return', 0, thrown, "D'Marco Jackson", 'Drake Maye')).toEqual({ who: "D'Marco Jackson", market: 'Interception', play: 'Drake Maye interceptions thrown' });
+    expect(said('td', 'interception-return-touchdown', 40, thrown, "D'Marco Jackson", 'Drake Maye')).toEqual({ who: "D'Marco Jackson", market: 'Pick six', play: 'Drake Maye interceptions thrown' });
+  });
+
+  it('without a bet, puts the play where the price would sit', () => {
+    expect(said('long', 'rush', 52, null, 'Bob Lee')).toEqual({ who: 'Bob Lee', market: '52-yd run', play: null, stat: { big: '52', small: 'YARDS' } });
+    expect(said('int', 'pass-interception-return', 0, null, 'Bob Lee', 'Drake Maye')).toEqual({ who: 'Bob Lee', market: 'Interception', play: 'Picked off Drake Maye', stat: { big: 'INT', small: 'PICKED OFF' } });
+    expect(said('fumble', 'fumble-recovery-opponent', 0, null, 'Bob Lee', 'Kay Black')).toEqual({ who: 'Bob Lee', market: 'Fumble recovery', play: 'Kay Black fumbled', stat: { big: 'FUMBLE', small: 'RECOVERED' } });
+    expect(said('td', 'kickoff-return-touchdown', 98, null, 'Bob Lee')).toEqual({ who: 'Bob Lee', market: 'Kickoff return TD', play: '98 yards', stat: { big: 'TD', small: 'SCORED' } });
   });
 });
 

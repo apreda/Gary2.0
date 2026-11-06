@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Cash Rail celebrations: draws Gary dancing in the scorer's number and team
- * colors for every touchdown and every +800-or-longer hit on today's live
- * boards (src/services/cashRail/celebrateRunner.js), using gpt-image with
+ * Cash Rail celebrations: draws Gary dancing in the player's number and team
+ * colors for every big play on today's live boards: touchdowns, 40-yard gains,
+ * turnovers (src/services/cashRail/celebrateRunner.js), using gpt-image with
  * Gary's real art as the reference, and stores the frames in the public
  * `celebrations` bucket. One pass per run.
  *
@@ -37,15 +37,28 @@ const db = {
   },
   existingPlayKeys: async (league, gameId) => must(await supabase.from('celebrations').select('play_key').eq('league', league).eq('game_id', gameId)).map(r => r.play_key),
   claim: async row => (must(await supabase.from('celebrations').upsert(row, { onConflict: 'league,game_id,play_key', ignoreDuplicates: true }).select('play_key')) ?? []).length > 0,
-  markReady: async (playKey, assets) => { must(await supabase.from('celebrations').update({ status: 'ready', assets, ready_at: new Date().toISOString() }).eq('play_key', playKey).eq('status', 'generating')); },
+  markReady: async (playKey, assets, status = 'ready') => { must(await supabase.from('celebrations').update({ status, assets, ready_at: new Date().toISOString() }).eq('play_key', playKey).eq('status', 'generating')); },
   markFailed: async playKey => { must(await supabase.from('celebrations').update({ status: 'failed' }).eq('play_key', playKey).eq('status', 'generating')); },
 };
 
+const bdlHeaders = { Authorization: process.env.BALLDONTLIE_API_KEY };
 const bdl = {
   player: async id => {
-    const r = await fetch(`https://api.balldontlie.io/nfl/v1/players?player_ids[]=${id}`, { headers: { Authorization: process.env.BALLDONTLIE_API_KEY } });
+    const r = await fetch(`https://api.balldontlie.io/nfl/v1/players?player_ids[]=${id}`, { headers: bdlHeaders });
     const p = r.ok ? (await r.json()).data?.[0] : null;
-    return p ? { number: p.jersey_number ?? null, team: p.team?.abbreviation ?? null } : null;
+    return p ? { name: `${p.first_name} ${p.last_name}`.trim(), number: p.jersey_number ?? null, team: p.team?.abbreviation ?? null } : null;
+  },
+  plays: async id => {
+    const out = [];
+    let cursor;
+    do {
+      const r = await fetch(`https://api.balldontlie.io/nfl/v1/plays?game_id=${id}&per_page=100${cursor ? `&cursor=${cursor}` : ''}`, { headers: bdlHeaders });
+      if (!r.ok) throw new Error(`plays ${id}: ${r.status}`);
+      const j = await r.json();
+      out.push(...(j.data ?? []));
+      cursor = j.meta?.next_cursor;
+    } while (cursor);
+    return out;
   },
 };
 

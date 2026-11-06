@@ -1,9 +1,10 @@
 /**
- * Cash Rail celebrations (Oct 29 2026): when a big bet cashes, Gary celebrates
- * it ESPN-style, in the scorer's number and his team's colors, doing one of ten
- * end-zone dances. This module decides which plays qualify, which dance, and
- * the art prompts; scripts/cash-rail-celebrate.js generates and stores the art.
+ * Cash Rail celebrations (Oct 29 2026): on a big play, Gary celebrates ESPN-style,
+ * in the player's number and team colors, doing one of sixteen dances. This module
+ * decides which plays qualify, what the card says, which dance, and the art prompts;
+ * scripts/cash-rail-celebrate.js generates and stores the art.
  */
+import { elapsedOf, whenOf, ids, tdScorer } from './settle.js';
 
 /** Uniform and backdrop per NFL team: colors only, never a logo. */
 export const TEAM_LOOKS = {
@@ -155,30 +156,102 @@ export const DANCES = [
 ];
 
 const TD_KEY = /\|(first_td|anytime_td)/;
-const BIG = 800;
+const YARDS_KEY = /\|(receiving_yards|rushing_yards|rushing_receiving_yards|longest_reception|longest_rush)/;
+const INT_KEY = /\|interceptions/;
+const LONG_GAIN = 40;
+
+/** The big play this is, if it is one, and who wears the jersey. `keyId` matches the play to its row on the board. */
+function bigPlay(p) {
+  const slug = p.type_slug || '';
+  const first = type => ids(p, type)[0];
+  // The league can leave a wiped-out play on the feed.
+  if (/\bno play\b|nullified/i.test(p.text || '')) return null;
+  if (p.scoring_play && slug.includes('touchdown')) {
+    const passer = slug.includes('interception') ? first('passer') : null;
+    return { kind: 'td', playerId: tdScorer(p), otherId: passer, keyId: passer ?? tdScorer(p) };
+  }
+  if (slug.includes('interception')) {
+    return { kind: 'int', playerId: first('interception_returner'), otherId: first('passer'), keyId: first('passer') ?? first('interception_returner') };
+  }
+  // fumble-recovery-opponent, muffed-punt-recovery-opponent: the ball changed hands. -own did not.
+  if (slug.endsWith('recovery-opponent')) return { kind: 'fumble', playerId: first('recoverer'), otherId: first('fumbler'), keyId: first('recoverer') };
+  if ((slug === 'rush' || slug === 'pass-reception') && Number(p.stat_yardage) >= LONG_GAIN) {
+    const who = first(slug === 'rush' ? 'rusher' : 'receiver');
+    return { kind: 'long', playerId: who, otherId: null, keyId: who };
+  }
+  return null;
+}
+
+/** The bet to show on the card: the one this play actually paid. A fumble recovery never has one. */
+function betOn({ kind, playerId, otherId }, elapsed, hits) {
+  const on = (id, key) => hits.filter(h => h?.key && h.elapsed === elapsed && h.key.split('|')[0] === String(id) && (!key || key.test(h.key)));
+  const best = list => list.reduce((a, b) => (!a || b.price > a.price ? b : a), null);
+  if (kind === 'td') return best(on(playerId, TD_KEY)) ?? (otherId != null ? best(on(otherId, INT_KEY)) : null);
+  if (kind === 'int') return otherId != null ? best(on(otherId, INT_KEY)) : null;
+  if (kind === 'long') return best(on(playerId, YARDS_KEY)) ?? best(on(playerId));
+  return null;
+}
 
 /**
- * Plays worth a celebration: any touchdown scorer bet, or any player bet that
- * cashed at +800 or longer. One per play (player + moment). A touchdown play is
- * named for its best touchdown bet, even when a yardage bet on the same run paid
- * more (founder, Nov 5 2026: "Rush yards 70+" under TOUCHDOWN! read as a mismatch);
- * any other play for its best price. Game lines never celebrate.
- * @returns {Array<{playKey:string, playerId:string, kind:'td'|'big', hit:object}>}
+ * Plays worth a celebration, by what happened and not by a price (founder, Nov 6 2026): a touchdown of any
+ * kind, a 40-yard pass or run, an interception, a fumble recovered by the other team. Each carries the bet it
+ * cashed when there is one; a touchdown is named for its best touchdown bet, never a pricier yardage bet on
+ * the same run (founder, Nov 5 2026).
+ * @returns {Array<{playKey:string, playerId:string|number, otherId:string|number|null, kind:'td'|'long'|'int'|'fumble',
+ *   elapsed:number, when:string, slug:string, yards:number, hit:object|null}>}
  */
-export function celebrationPlays(hits = []) {
-  const plays = new Map();
-  for (const h of hits) {
-    if (!h?.key || h.key.startsWith('game|')) continue;
-    const td = TD_KEY.test(h.key);
-    if (!td && !(h.price >= BIG)) continue;
-    const playerId = h.key.split('|')[0];
-    const playKey = `${playerId}@${h.elapsed}`;
-    const cur = plays.get(playKey);
-    if (!cur) plays.set(playKey, { playKey, playerId, kind: td ? 'td' : 'big', hit: h });
-    else if (td && cur.kind !== 'td') { cur.kind = 'td'; cur.hit = h; }
-    else if (td === (cur.kind === 'td') && h.price > cur.hit.price) cur.hit = h;
+export function celebrationPlays(plays = [], hits = []) {
+  const out = new Map();
+  for (const p of plays) {
+    if (!Number.isFinite(p?.period) || p.period < 1) continue;
+    const big = bigPlay(p);
+    if (big?.playerId == null) continue;
+    const elapsed = elapsedOf(p);
+    const playKey = `${big.keyId}@${elapsed}`;
+    if (out.has(playKey)) continue;
+    out.set(playKey, { playKey, playerId: big.playerId, otherId: big.otherId ?? null, kind: big.kind, elapsed, when: whenOf(p),
+      slug: p.type_slug, yards: Number(p.stat_yardage) || 0, hit: betOn(big, elapsed, hits) });
   }
-  return [...plays.values()].sort((a, b) => a.hit.elapsed - b.hit.elapsed);
+  return [...out.values()].sort((a, b) => a.elapsed - b.elapsed);
+}
+
+/** A ladder is named by its top cashed rung, as the card names it ("Receptions 7+"). */
+function ladderMarket(hit) {
+  const top = hit.rungs?.at(-1)?.label;
+  if (!top) return hit.market;
+  return top.startsWith('O ') ? `${hit.market} over ${top.slice(2)}` : `${hit.market} ${top}`;
+}
+
+const TD_NAMES = [['passing', 'TD catch'], ['rushing', 'TD run'], ['interception', 'Pick six'], ['fumble', 'Fumble return TD'],
+  ['kickoff', 'Kickoff return TD'], ['punt', 'Punt return TD'], ['blocked', 'Blocked kick TD']];
+
+/**
+ * What the card says. With a bet: its name, price and payout, and never words that credit a bet it isn't (an
+ * interception pays the "interceptions thrown" bet on the quarterback, so the sub-line names that bet). Without
+ * one: `stat`, the big words where the price would sit.
+ */
+export function cardWords({ kind, slug, yards, hit }, name, otherName) {
+  const gain = `${yards}-yd ${slug === 'rush' ? 'run' : 'catch'}`;
+  if (kind === 'long') {
+    return hit
+      ? { who: hit.who, market: ladderMarket(hit), play: gain }
+      : { who: name, market: gain, play: null, stat: { big: String(yards), small: 'YARDS' } };
+  }
+  if (kind === 'int') {
+    return hit
+      ? { who: name, market: 'Interception', play: `${otherName ?? hit.who} interceptions thrown` }
+      : { who: name, market: 'Interception', play: otherName ? `Picked off ${otherName}` : null, stat: { big: 'INT', small: 'PICKED OFF' } };
+  }
+  if (kind === 'fumble') {
+    const muffed = slug.startsWith('muffed');
+    return { who: name, market: muffed ? 'Muffed punt recovery' : 'Fumble recovery',
+      play: otherName ? `${otherName} ${muffed ? 'muffed it' : 'fumbled'}` : null, stat: { big: 'FUMBLE', small: 'RECOVERED' } };
+  }
+  if (hit && TD_KEY.test(hit.key)) return { who: hit.who, market: hit.market, play: hit.play };
+  const market = TD_NAMES.find(([k]) => slug.includes(k))?.[1] ?? 'Touchdown';
+  if (hit) return { who: name, market, play: `${otherName ?? hit.who} interceptions thrown` };
+  const play = otherName ? `Off ${otherName}` : yards > 0 ? `${yards} yards` : null;
+  return { who: name, market, play, stat: { big: 'TD', small: 'SCORED' } };
 }
 
 /** The same play always gets the same dance. */
@@ -202,7 +275,7 @@ export function posePrompt(pose, look, number) {
 Character: the golden bear from the reference image drawn FULL BODY as a polished 3D-animated character (Pixar-quality render, muscular cartoon build), same face, same dark sunglasses reading GARY A.I., same curled mustache and cigar, wearing ${look.uniform}, with the number ${number} on the chest and both shoulders, and black football cleats on both feet. No logos, no names, no other text. Family-friendly: no rude or obscene gestures, never a raised middle finger; his hands are fists, open paws, or a pointing index finger only when the pose asks for it. Full body, whole figure in frame, on a fully transparent background, no ground, no shadow, no scenery.`;
 }
 
-const WORDS = { td: ['TOUCH', 'DOWN!', 'TOUCHDOWN!'], int: ['PICKED', 'OFF!', 'PICKED OFF!'], big: ['CASH', 'ED!', 'CASHED!'] };
+const WORDS = { td: ['TOUCH', 'DOWN!', 'TOUCHDOWN!'], int: ['PICKED', 'OFF!', 'PICKED OFF!'], long: ['BIG', 'PLAY!', 'BIG PLAY!'], fumble: ['TURN', 'OVER!', 'TURNOVER!'], big: ['CASH', 'ED!', 'CASHED!'] };
 
 /** The backdrop behind the dance: the word, in the team's color, cached per team and kind. */
 export function bgSpec(kind, team) {

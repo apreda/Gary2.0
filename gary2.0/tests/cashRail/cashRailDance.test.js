@@ -98,6 +98,14 @@ out([hill.shareCaption, hill.shareFilename, odd.shareFilename])`);
       'A B  C Rush yards 70+.mp4',
     ]);
   });
+
+  it('a play with no bet behind it decodes without a price, and its caption claims no payout', () => {
+    const json = JSON.stringify({ play_key: '13877780@2385', who: 'Teddye Buchanan', market: 'Fumble recovery', price: null, when_label: 'Q3 5:15', play: 'Travis Hunter fumbled', kind: 'fumble', dance: 'boom', team: 'BAL', number: '40', ready_at: '2026-11-06T06:22:39Z',
+      assets: { bg: 'b', frames: {}, seq: [], name: 'BRING THE BOOM', stat: { big: 'FUMBLE', small: 'RECOVERED' } } });
+    const r = swiftJSON(`let c = try! JSONDecoder().decode(CashRailCelebration.self, from: ${JSON.stringify(json)}.data(using: .utf8)!)
+out([c.price == nil, c.assets.stat!.big, c.shareCaption])`);
+    expect(r).toEqual([true, 'FUMBLE', 'Teddye Buchanan, fumble recovery. Travis Hunter fumbled. betwithgary.ai']);
+  });
 });
 
 describe.skipIf(!hasSwiftCompiler)('trimming Gary out of his canvas', () => {

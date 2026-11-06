@@ -222,11 +222,18 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
         let name: String
         /// A piece of the field drawn behind Gary ("goalpost" for the dunk).
         var prop: String? = nil
+        /// A play with no bet behind it: the big words where the price would sit ("FUMBLE", "RECOVERED").
+        var stat: Stat? = nil
+    }
+    struct Stat: Codable, Equatable {
+        let big: String
+        let small: String
     }
     let play_key: String
     let who: String
     let market: String
-    let price: Int
+    /// What the bet paid; nil for a big play no bet cashed on (a fumble recovery, most defensive touchdowns).
+    let price: Int?
     let when_label: String?
     let play: String?
     let kind: String
@@ -255,7 +262,8 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
 
     /// What goes along with the video when it's shared.
     var shareCaption: String {
-        "\(headline) \(CashRailFormat.price(price)). $10 paid \(CashRailFormat.payout10(price)). betwithgary.ai"
+        guard let price else { return ([headline] + [play].compactMap { $0 } + ["betwithgary.ai"]).joined(separator: ". ") }
+        return "\(headline) \(CashRailFormat.price(price)). $10 paid \(CashRailFormat.payout10(price)). betwithgary.ai"
     }
 
     /// The video's file name; a name with a slash in it can't be a path.
@@ -286,11 +294,11 @@ extension CashRailHit {
     /// A bet on the player scoring: first TD, anytime, 2+, 3+.
     var isTouchdown: Bool { key.contains("|first_td") || key.contains("|anytime_td") }
 
-    /// The celebration this bet earned, if one was drawn: a touchdown bet gets its play's, and a +800-or-longer
-    /// bet gets a play that wasn't a touchdown (the backend's rule, celebrations.js). A yardage bet on the same
-    /// run as a touchdown has none of its own; the touchdown bet's row replays it (founder, Nov 5 2026).
+    /// The celebration this bet's play earned, if one was drawn (celebrations.js decides by the play, not the
+    /// price). On a touchdown only the touchdown bet replays it, and on a pick six the interceptions-thrown bet;
+    /// a yardage bet on the same run has none of its own (founder, Nov 5 2026). Any other big play, every bet on it.
     func celebration(in known: [String: CashRailCelebration]) -> CashRailCelebration? {
         guard let playKey, let c = known[playKey] else { return nil }
-        return isTouchdown || (c.kind == "big" && price >= 800) ? c : nil
+        return c.kind != "td" || isTouchdown || key.contains("|interceptions") ? c : nil
     }
 }

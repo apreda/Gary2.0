@@ -208,6 +208,10 @@ struct CashRailCelebrationView: View {
 
     private var c: CashRailCelebration { reel.celebration }
     private var player: CashRailCelebrations { .shared }
+    private var spoken: String {
+        guard let price = c.price else { return ["\(c.who), \(c.market)", c.play].compactMap { $0 }.joined(separator: ". ") }
+        return "\(c.who), \(c.market), \(CashRailFormat.price(price)). Ten dollars paid \(CashRailFormat.payout10(price))."
+    }
 
     var body: some View {
         // Measured inside the safe area: the card starts under the status bar
@@ -223,7 +227,7 @@ struct CashRailCelebrationView: View {
                         .shadow(color: .black.opacity(0.6), radius: 30, y: 30)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(c.who), \(c.market), \(CashRailFormat.price(c.price)). Ten dollars paid \(CashRailFormat.payout10(c.price)).")
+                .accessibilityLabel(spoken)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Closes the celebration")
                 shareButton
@@ -342,12 +346,12 @@ struct CashRailCelebrationCard: View {
         let punch = pt < 0 || pt >= 1 ? 0 : 1 - CashRailDance.Ease.punch(pt)
         return HStack(spacing: 14) {
             VStack(spacing: 5) {
-                Text(CashRailFormat.price(c.price))
+                Text(c.price.map(CashRailFormat.price) ?? c.assets.stat?.big ?? "")
                     .font(CR.bebas(44))
                     .foregroundColor(punch > 0.02 ? .white : GaryColors.lightGold)
                     .scaleEffect(1 + 0.4 * punch)
                     .fitsOneLine()
-                Text("PAID")
+                Text(c.price == nil ? c.assets.stat?.small ?? "" : "PAID")
                     .font(.system(size: 9.5, weight: .heavy)).tracking(1.6)
                     .foregroundColor(CR.ink.opacity(0.75))
             }
@@ -358,9 +362,7 @@ struct CashRailCelebrationCard: View {
                     .font(.system(size: 14.5, weight: .bold))
                     .foregroundColor(CR.ink)
                     .fitsLines(2)
-                (Text([c.play, c.when_label].compactMap { $0 }.map { $0 + " · " }.joined() + "$10 → ")
-                    .foregroundColor(CR.ink.opacity(0.7))
-                 + Text(CashRailFormat.payout10(c.price)).foregroundColor(GaryColors.win).fontWeight(.bold))
+                detailLine
                     .font(.system(size: 12, weight: .semibold))
                     .fitsOneLine()
             }
@@ -370,6 +372,13 @@ struct CashRailCelebrationCard: View {
         .padding(.vertical, 11).padding(.horizontal, 14)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: "#090808").opacity(0.55)))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GaryColors.lightGold.opacity(0.25), lineWidth: 1))
+    }
+
+    private var detailLine: Text {
+        let facts = [c.play, c.when_label].compactMap { $0 }
+        guard let price = c.price else { return Text(facts.joined(separator: " · ")).foregroundColor(CR.ink.opacity(0.7)) }
+        return Text(facts.map { $0 + " · " }.joined() + "$10 → ").foregroundColor(CR.ink.opacity(0.7))
+            + Text(CashRailFormat.payout10(price)).foregroundColor(GaryColors.win).fontWeight(.bold)
     }
 
     // MARK: Scene
