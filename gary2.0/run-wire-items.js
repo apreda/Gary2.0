@@ -38,7 +38,7 @@ import axios from 'axios';
 import { getESTDate } from './src/utils/dateUtils.js';
 import { callWireModel, supportedWireSources, verifiedWireMovement } from './src/services/content/insights/wireModel.js';
 import { wireLeagueWindow, wireRunExitCode } from './src/services/content/insights/wireBudget.js';
-import { WRITING_RULES, readerCopyTells } from './src/services/content/copy/writingRules.js';
+import { noDashes } from './supabase/functions/_shared/noDashes.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -515,9 +515,7 @@ function buildPrompt({ date, league, todayFinals, ydayFinals, allowNames, recent
     `(a morning run), and its copy MUST say when it happened ("Tuesday night") — never present an ` +
     `old game as if it just happened.\n` +
     `- NOTHING older than yesterday. No season retrospectives, no "earlier this week".\n` +
-    `- Plain, professional copy. No hype, no clickbait, no exclamation marks.\n` +
     `- Only include items you can ground in real, current information. Fewer real items beats padding.\n\n` +
-    `${WRITING_RULES}\n\n` +
     `Output ONLY the JSON array.`;
 }
 
@@ -618,6 +616,7 @@ function toRow(item, league, date) {
   if (!item || typeof item !== 'object') return null;
   const kind = String(item.kind || '').trim().toLowerCase();
   if (!VALID_KINDS.has(kind)) return null;
+  for (const k of ['headline', 'subline', 'body']) item[k] = noDashes(item[k]);
   // Moments are written from the notes alone, and the notes carry no
   // handedness — any that appears is invented.
   if (kind === 'moment') {
@@ -766,13 +765,6 @@ async function run() {
           if (!row) return null;
           if (row.kind === 'line_move' && !verifiedWireMovement(item, { date: targetDate })) {
             console.warn('   [Wire] Dropped line_move: verified same-book timestamped receipts were not supplied.');
-            return null;
-          }
-          // writing.md (Adam, Sep 21 2026): an item written with a dash or
-          // another AI tell is a defect, and the feed runs without it.
-          const tells = readerCopyTells([row.headline, row.subline, row.body].filter(Boolean).join(' '));
-          if (tells.length) {
-            console.warn(`   [Wire] Dropped ${row.kind}: writing rule (${tells.join(', ')}).`);
             return null;
           }
           const sources = supportedWireSources(item, sourceUrls);

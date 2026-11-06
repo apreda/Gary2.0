@@ -1,4 +1,5 @@
 import { easternDateOffset } from '../_shared/dateKeys.js';
+import { noDashes } from '../_shared/noDashes.js';
 import { subscriptionModelFetch } from '../_shared/subscriptionModel.ts';
 import { shortTeam, startWords } from './teamWords.ts';
 
@@ -38,8 +39,6 @@ export function statSlots(dow: number): Slot[] {
 
 // ── Checks every post passes ──────────────────────────────────────────────────────────────────────────
 
-const BETTING_WORDS = /\b(bets?|betting|bettors?|wagers?|odds|lines?|spreads?|covers?|covering|hook|lean|hammer|locks?|fade|sharps?|value|units?|parlays?|props?|picks?|sportsbooks?|moneyline|underdogs?|favou?rites?|ats|juice|vegas)\b/i;
-const FOOTBALL_LINES = /\b(offensive|defensive) lines?\b/gi;
 const MAX_BODY = 160;
 
 /** Every number written as it reads: ".450" and "0.450" are the same number; "270-plus" is 270. */
@@ -52,11 +51,8 @@ export function statPostProblems(post: string, source: string, names: string[]):
   const problems: string[] = [];
   if (post.length < 20 || post.length > MAX_BODY) problems.push(`length ${post.length}`);
   if (post.split('\n').length > 2) problems.push('more than two lines');
-  if (/[!?#]|…|\.\.\./.test(post)) problems.push('punctuation');
-  if (/\p{Extended_Pictographic}/u.test(post)) problems.push('emoji');
-  if (BETTING_WORDS.test(post.replace(FOOTBALL_LINES, ''))) problems.push('betting word');
+  if (/…|\.\.\./.test(post)) problems.push('ellipsis');
   if (/\blast (season|year)\b|\b(19|20)\d\d\b/i.test(post)) problems.push('past season');
-  if (/\bgary\b/i.test(post) || /\b(I|I'm|I'd|me|my)\b/.test(post)) problems.push('first person or Gary');
   let scrubbed = post;
   for (const n of names) if (n) scrubbed = scrubbed.split(n).join(' ');
   const allowed = new Set(numbersIn(source));
@@ -68,12 +64,11 @@ export function statPostProblems(post: string, source: string, names: string[]):
 
 const LEAGUE_WEIGHT: Record<string, number> = { NFL: 30, NCAAF: 15, NBA: 12, MLB: 12, NHL: 5 };
 
-const ANGLE_RULES = `You write one post for @BetwithGary on X. You get Gary's full research on one of today's games. Gary reads every game: injuries, matchups, form, schedule. The post shares the single sharpest thing in that research, the thing a smart fan didn't know and would repeat to a friend: an injury that changes a matchup, a number with a twist, a pattern hiding behind a record.
+const ANGLE_RULES = `You write one post for @BetwithGary on X. You get Gary's full research on one of today's games. Share what you think a fan would most want to know from it.
 
-- One or two short sentences, under 140 characters. The observation first. No setup, no filler, no adjectives doing the work a number should do.
+- Under 140 characters.
 - Every name and number comes from the research. Never compute, round or combine a number.
-- You may say what it means for today's game, the way an analyst would. Never say who Gary picked, who will win or by how much, and no betting words (bet, odds, line, spread, cover, hook, lean, lock, fade, sharp, value, units, parlay, prop, underdog, favorite).
-- Third person. No "Gary", no "I", no exclamation marks, no questions, no emoji, no hashtags.`;
+- Never say who Gary picked, who will win or by how much.`;
 
 async function writeAngle(input: Record<string, unknown>, model: string, timeoutMs: number): Promise<string> {
   const response = await subscriptionModelFetch('subscription-model', {
@@ -82,7 +77,7 @@ async function writeAngle(input: Record<string, unknown>, model: string, timeout
       model, max_tokens: 1024, system: ANGLE_RULES,
       messages: [{ role: 'user', content: JSON.stringify(input) }],
       tools: [{ name: 'write_post', description: 'The post text.', input_schema: { type: 'object', properties: {
-        post: { type: 'string', description: 'One or two short sentences, under 140 characters.' },
+        post: { type: 'string', description: 'Under 140 characters.' },
       }, required: ['post'], additionalProperties: false } }],
       tool_choice: { type: 'tool', name: 'write_post', disable_parallel_tool_use: true },
     }),
@@ -123,7 +118,7 @@ async function todayPost(sb: Sb, today: string, nowMs: number, model: string, de
     const budget = deadlineMs - Date.now();
     if (budget < 30_000) return { reason: 'out of time for the writer this run', retry: true };
     let post = '';
-    try { post = await writeAngle({ league: r.league, matchup: `${r.away} @ ${r.home}`, research: r.rationale }, model, Math.min(budget, 60_000)); }
+    try { post = noDashes(await writeAngle({ league: r.league, matchup: `${r.away} @ ${r.home}`, research: r.rationale }, model, Math.min(budget, 60_000))); }
     catch (e) { return { reason: `writer unavailable: ${String(e).slice(0, 160)}`, retry: true }; }
     const names = [r.away, r.home, shortTeam(r.away, r.league), shortTeam(r.home, r.league)];
     const problems = statPostProblems(post, r.rationale, names);

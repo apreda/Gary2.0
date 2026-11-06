@@ -17,7 +17,7 @@ import { createHash } from 'crypto';
 import { appendFileSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
-import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { DART_CATEGORIES, SIDED_KINDS, FLEX_MIN, fmtOdds, etDate } from './dartsCommon.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
@@ -35,13 +35,11 @@ export const buildDartsSystemPrompt = (dateLong) => `Today is ${dateLong}. You a
 
 Your training data is old; the board is current.
 
-No emojis. Never mention data feeds, tools, or missing data.`;
+Never mention data feeds, tools, or missing data.`;
 
 /** On a one-game night each club gets one of these (founder, Sep 24 2026). */
 export const PER_CLUB_ONE_GAME = ['passtd', 'int'];
 
-export const PRICED_IN = "Every price on this board was set after each player's and each club's season and recent form were known.";
-export const REASON_WORDS = 'Each reason names what you see and why, in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.';
 
 const sideWord = (kind) => (kind === 'first_inning' ? 'yes or no' : SIDED_KINDS.has(kind) ? 'over or under' : null);
 const unitOf = (kind) => (kind === 'first_inning' ? 'games' : 'players');
@@ -102,8 +100,6 @@ export function buildBoardAsk({ kind, menu, dateLong, look = SHEETS_WANTED, note
   const unit = unitOf(kind);
   return `${intro(label, dateLong)}
 
-${PRICED_IN}
-
 The ${label} board, one line each.${note ? ` ${note}` : ''}
 
 ${menu.map((m) => `[${m.id}] ${m.line}`).join('\n')}
@@ -127,20 +123,18 @@ export function buildCategoryAsk({ kind, count, sheets, dateLong, perClub = fals
   const side = sideWord(kind);
   const head = afterLook
     ? 'Their sheets, game by game:'
-    : `${intro(label, dateLong)}\n\n${PRICED_IN}\n\nThe ${label} board, game by game, each game's frame and then each ${unit === 'games' ? 'game' : 'player'}'s sheet.${note ? ` ${note}` : ''}`;
+    : `${intro(label, dateLong)}\n\nThe ${label} board, game by game, each game's frame and then each ${unit === 'games' ? 'game' : 'player'}'s sheet.${note ? ` ${note}` : ''}`;
   return `${head}
 
 ${sheets}
 
-${flex ? `Throw a dart on each ${unit === 'games' ? 'game' : 'player'} you think will ${FLEX_VERB[kind] || 'hit'} today: at least ${FLEX_MIN}, at most ${count}, best first${afterLook ? ', from anywhere on the board' : ''}.` : `Which ${count} are the best bets in ${label} today? Best first, ${count} different ${unit}${perClub ? ', one from each club' : ''}${afterLook ? ', from anywhere on the board' : ''}.`}${side ? ` ${side[0].toUpperCase() + side.slice(1)}, your call on each.` : ''} For each one, two or three sentences on why, from what is in front of you. ${REASON_WORDS}
+${flex ? `Throw a dart on each ${unit === 'games' ? 'game' : 'player'} you think will ${FLEX_VERB[kind] || 'hit'} today: at least ${FLEX_MIN}, at most ${count}, best first${afterLook ? ', from anywhere on the board' : ''}.` : `Which ${count} are the best bets in ${label} today? Best first, ${count} different ${unit}${perClub ? ', one from each club' : ''}${afterLook ? ', from anywhere on the board' : ''}.`}${side ? ` ${side[0].toUpperCase() + side.slice(1)}, your call on each.` : ''} For each one, two or three sentences on why.
 
 JSON only:
 
 \`\`\`json
 { "darts": [ { "id": "[id from the board]"${side ? `, "side": "${side.replace(' or ', '|')}"` : ''}, "reason": "[two or three sentences]" } ] }
-\`\`\`
-
-${RATIONALE_WRITING_RULE}`;
+\`\`\``;
 }
 
 export const DARTS_PROMPT_SHA = createHash('sha256')
@@ -179,7 +173,7 @@ export function accept(answer, { kind, menu, count, taken, perClub = false, boar
     const id = cleanId(d?.id);
     if (!menuIds.has(id)) { problems.push(`${id} is not on the board`); continue; }
     if (taken.some((t) => t.id === id)) { problems.push(`${id} twice`); continue; }
-    const reason = String(d?.reason || '').trim();
+    const reason = noDashes(String(d?.reason || '').trim());
     if (!reason) { problems.push(`${id} has no reason`); continue; }
     if (perClub) {
       const club = board.candidates.get(id)?.team;

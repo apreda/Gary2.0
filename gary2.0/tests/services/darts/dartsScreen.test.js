@@ -32,7 +32,6 @@ describe('the throw', () => {
     expect(ask).toContain('Which 2 are the best bets in HOME RUN today?');
     expect(ask).toContain('GAME · Rays @ Yankees\n\n  [B1] Player One');
     expect(ask).not.toContain('LAST THREE DAYS');
-    expect(ask).toContain('set after each player\'s and each club\'s season and recent form were known');
     for (const banned of ['value', 'edge', 'favorite', 'underdog', 'always', 'never pick', '%']) expect(ask.toLowerCase()).not.toContain(banned);
     expect(buildBoardAsk({ kind: 'hr', menu: entries, dateLong: 'Thursday' })).toContain('[B3] line B3');
     const sided = buildCategoryAsk({ kind: 'recyds', count: 3, sheets: 'x', dateLong: 'Sunday' });

@@ -1,4 +1,5 @@
 import { easternDateOffset as estDate } from '../_shared/dateKeys.js';
+import { noDashes } from '../_shared/noDashes.js';
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
 // A searched story needs more than the queue's two-minute default; one attempt
 // walks every account, so the recap no longer retries on top of it.
@@ -290,9 +291,7 @@ function recapDescribeBet(pick: any): string {
 function recapBuildPrompt(args: { pick: any; result: string; evidence: string }): string {
   const { pick, result, evidence } = args;
   return (
-    `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
-    `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
-    `woven into one tight story.\n\n` +
+    `Write a short recap of this finished game and how the bet did.\n\n` +
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
     `THE BET: ${recapDescribeBet(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
@@ -308,23 +307,9 @@ function recapBuildPrompt(args: { pick: any; result: string; evidence: string })
     `invent innings, sequences, stats, players, or anything neither source states. If both are thin, ` +
     `write a shorter recap around the score and the price.\n` +
     `- The only betting price you know is the one in THE BET line. Do not invent other odds.\n` +
-    `- Weave the bet's fate into the story (a +102 dog winning outright, a favorite that never ` +
-    `showed up, a sweat that held on late). State prices naturally ("as a -130 favorite", "at +102").\n` +
-    `- Voice: sharp, conversational, confident. No hedging, no exclamation points, no emojis, ` +
-    `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n\n` +
     `OUTPUT:\n` +
-    `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 5-8 words and at most 52 characters counting spaces: it must fit a small card, ` +
-    `so write the complete thought short. Lead with the team and what they actually did. First look ` +
-    `for the most newsworthy VERIFIED individual performance in the evidence (home runs, RBI, ` +
-    `strikeouts, a scoreless start); if there is none, use a verified team feat such as a shutout ` +
-    `or a huge hit total. A score-only result is the last resort when the evidence truly contains ` +
-    `nothing else. ` +
-    `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
-    `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
-    `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
-    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". No ending period.\n` +
+    `- "headline": the result and what decided it, in the 5-8 words that fit a small card: at most 52 characters counting spaces. No odds, prices or betting terms, and no ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 short stat lines from the game — the night's hard numbers. ` +
     `Each bullet is at most ${RECAP_MAX_BULLET_CHARS} characters. Facts STRICTLY from the evidence above. ` +
@@ -430,14 +415,14 @@ async function recapGenerate(args: { pick: any; result: string; evidence: string
   const parsed = recapParseResponse(text);
   if (!parsed) return null;
 
-  const headline = gameOnlyHeadline(parsed.headline, evidence, RECAP_MAX_HEADLINE_CHARS);
+  const headline = noDashes(gameOnlyHeadline(parsed.headline, evidence, RECAP_MAX_HEADLINE_CHARS));
   const recap = parsed.recap != null
-    ? String(parsed.recap).trim().slice(0, RECAP_MAX_RECAP_CHARS) : "";
+    ? noDashes(String(parsed.recap).trim()).slice(0, RECAP_MAX_RECAP_CHARS) : "";
   if (!headline || !recap) return null;
 
   const bullets = Array.isArray(parsed.bullets)
     ? parsed.bullets
-        .map((b: any) => String(b).trim())
+        .map((b: any) => noDashes(String(b).trim()))
         .map((b: string) => recapSanitizeBulletPrices(b, evidence))
         .filter(Boolean)
         .map((b: string) => (b.length > RECAP_MAX_BULLET_CHARS ? b.slice(0, RECAP_MAX_BULLET_CHARS).trimEnd() : b))

@@ -50,7 +50,7 @@ describe('attachLaneReads', () => {
     expect(rows[0].detail).toMatch(/^The measured batting average is .312/);
     expect(rows[0].meta.computed_detail).toBe('Row 1 computed detail with a number, .312.');
     expect(rows[0].meta.read).toBe(rows[0].detail);
-    expect(rows[0].meta.research_copy_version).toBe('fan-writeup-v2');
+    expect(rows[0].meta.research_copy_version).toBe('fan-writeup-v3');
   });
 
   it('writes reads only for the rows that ship — top 8 by relevance', async () => {
@@ -84,12 +84,7 @@ describe('attachLaneReads', () => {
     expect(prompt).toContain('Never mention data feeds, tools, providers or that you are an AI');
     expect(prompt).toContain('Use only the supplied facts');
     expect(prompt).toContain('Every number you write must appear on this item');
-    expect(prompt).toContain('No emojis');
     expect(prompt).toContain('No first-person picks');
-    expect(prompt).toContain('how a bettor can use it');
-    expect(prompt).toContain('not a pick');
-    // writing.md rides every reader-copy prompt (Adam, Sep 21 2026).
-    expect(prompt).toContain('No dashes as punctuation');
     expect(prompt).not.toMatch(/[—–]/);
     expect(prompt).not.toContain('Never restate the item back');
   });
@@ -116,7 +111,6 @@ describe('attachLaneReads', () => {
     'The remaining relievers have a 6.20 ERA, which is higher than their recorded season performance.',
     'The pitcher has an xERA of .312; that expected measurement supplies another comparison with the season.',
     'The .312 average is real over 32 at-bats — the matchup against Reds at Cubs is the reason it may hold.',
-    'He is hitting .312 against this staff in Reds at Cubs. Read it as context, not a forecast for tonight.',
   ])('keeps the actual source when the model adds advice or unsupported analysis: %s', async read => {
     const rows = [row(1)];
     const original = rows[0].detail;

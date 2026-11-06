@@ -9,6 +9,7 @@
 // answer also names which picks on the card, the new one included, are in his book today, money on them. The latest
 // answer is the day's cut; a pick on the card goes to Winners when the cut includes it, 75 minutes before its kickoff
 // (SQL seat_the_card). A seat is final. He sees no stakes, results or counts, and no mention of Winners' mechanics.
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { generateSolText } from '../content/insights/solText.js';
 import { APP_WRITING_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
@@ -71,7 +72,7 @@ export function parseCardPlacement(raw, cardSize) {
     const book = Array.isArray(v?.book)
       ? [...new Set(v.book.filter((b) => typeof b === 'number' && Number.isInteger(b) && b >= 1 && b <= cardSize + 1))]
       : null;
-    return { slot, book, why: String(v?.why ?? '').trim(), reasons: selectionReasons(v?.reasons) };
+    return { slot, book, why: noDashes(String(v?.why ?? '').trim()), reasons: selectionReasons(v?.reasons) };
   } catch {
     return null;
   }

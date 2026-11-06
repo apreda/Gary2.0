@@ -64,12 +64,11 @@ describe('props prompt surface', () => {
 
 Your training data is old; the desk is current.
 
-Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`);
+Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. Never mention data feeds, tools, or missing data.`);
   });
 
   it('the ask is the approved contract and allows passing', () => {
     expect(THE_PROPS_ASK).toContain('Take two prop bets from tonight\'s board — two prop cards is what this game publishes.');
-    expect(THE_PROPS_ASK).toContain('fresh news — today\'s scratch — is the exception');
     expect(THE_PROPS_ASK).toContain('"prop_type": "[key from the board]"');
     expect(THE_PROPS_ASK).toContain('confidence_score (0.50–1.00)');
     // No steering, no strategy, no menu explanations beyond the output contract.

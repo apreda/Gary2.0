@@ -5,6 +5,8 @@ style guide; everything else follows his current request.
 
 ## Never
 
+- **No dashes as punctuation in anything a reader sees.** Adam, Nov 6 2026: "i still wnat no dashed". The
+  models aren't told; code swaps them after they write (`gary2.0/supabase/functions/_shared/noDashes.js`).
 - **No filled oval bubbles.** Never use capsule pills (filled or bordered
   ovals) for filters, tabs, chips, tags or badges. Adam, Sep 21 2026:
   "I fucking hate these oval filled in bubbles... I never want those used

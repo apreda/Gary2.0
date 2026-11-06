@@ -130,7 +130,7 @@ describe('tomorrow board doubleheader identity', () => {
     expect(mocks.sendToSessionWithRetry).toHaveBeenCalledOnce();
   });
 
-  it('carries the writing rules and leaves a take written with a dash pending', async () => {
+  it('keeps a take written with a dash and swaps the dash out', async () => {
     const board = [boardRow(101, gameOneTime)];
     const starters = [starter('First Away', 'STL', gameOneTime, 3.11), starter('First Home', 'CIN', gameOneTime, 3.22)];
     let systemPrompt = '';
@@ -138,9 +138,9 @@ describe('tomorrow board doubleheader identity', () => {
     mocks.sendToSessionWithRetry.mockResolvedValue({ content: JSON.stringify([{ game_key: 'bdl:101', matchup: 'STL @ CIN',
       take: 'First Away has a 3.11 ERA — the best stretch of his year.\n\nFirst Home sits at 3.22 and has been steady at home.' }]) });
     await attachArmsTakes(board, starters);
-    expect(systemPrompt).toContain('No dashes as punctuation');
-    expect(board[0].arms_take).toBeNull();
-    expect(board[0].arms_take_status).toBe('pending');
+    expect(systemPrompt).not.toContain('No dashes');
+    expect(board[0].arms_take).toContain('a 3.11 ERA, the best stretch');
+    expect(board[0].arms_take_status).toBe('available');
   });
 
   it('preserves singleton starter behavior for a non-doubleheader game', async () => {

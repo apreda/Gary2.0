@@ -56,13 +56,15 @@ describe('Wire publication storage', () => {
     expect(posted[0].meta.generation.input_recap_ids).toEqual([20]);
     expect(process.exit).toHaveBeenCalledWith(0);
   });
-  it('carries the writing rules and drops an item written with a dash', async () => {
+  it('keeps an item written with a dash and swaps the dash out', async () => {
     state.extraItems=[{kind:'moment',headline:'Athletics 7-6 — a walk-off',subline:null,body:'Seven runs — the most all week.',game:'Athletics @ Royals',sources:[]}];
     await run();
-    expect(state.prompt).toContain('No dashes as punctuation');
+    expect(state.prompt).not.toContain('No dashes');
     const posted=state.calls.find(call=>call.method==='POST').data;
-    expect(posted).toHaveLength(1);
-    expect(JSON.stringify(posted)).not.toMatch(/[—–]/);
+    expect(posted).toHaveLength(2);
+    const item=posted.find(row=>/walk-off/.test(row.headline));
+    expect(item.headline).toBe('Athletics 7-6, a walk-off');
+    expect(item.meta.body).toBe('Seven runs, the most all week.');
     expect(process.exit).toHaveBeenCalledWith(0);
   });
   it('a rejected insert preserves every existing row and never attempts cleanup', async () => {

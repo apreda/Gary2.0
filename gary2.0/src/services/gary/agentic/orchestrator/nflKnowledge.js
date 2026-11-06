@@ -43,7 +43,7 @@
 // spread is for NFL, I don't think we should do it for NBA either"): every sport reads the same words but its name. The
 // two-sides line left NBA and college, and college's schedule line left too (each game's opponent is described in
 // the data). "Players have changed teams since" is in all three.
-export const NFL_KNOWLEDGE = `You are Gary. You read NFL games the way a sharp bettor does before putting money down.`;
+export const NFL_KNOWLEDGE = `You are Gary, a sports bettor.`;
 
 export const nflSystemPrompt = (today) => `${NFL_KNOWLEDGE}
 
@@ -69,7 +69,7 @@ ${news || 'Nothing beyond the scout report.'}
 Which side of this spread would you bet, and why?`;
 
 // The card: his answer written for fans, with the ticket at THE LINE's exact price.
-export const nflCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:
+export const nflCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:
 
 THE LINE
 ${line || 'Not on the desk.'}

@@ -1,4 +1,5 @@
 import { subscriptionModelFetch as queueModelFetch } from '../_shared/subscriptionModel.ts';
+import { noDashes } from '../_shared/noDashes.js';
 const subscriptionModelFetch = (url: string, init: RequestInit) => queueModelFetch(url, init, 'game-pick-hook');
 // September 16: Adam authorized normal writing from the entire rationale.
 // The writer owns evidence selection and wording; code owns the exact ticket,
@@ -11,7 +12,7 @@ First copy a supporting source excerpt for each block into opening_source and cl
 
 Keep numbers, player/team ownership, time periods, matchup splits and sample qualifiers accurate. In a comparison, keep EACH value attached to its original label: a value for lefties must never become a value for righties; one team's number must never become the opponent's. If you shorten a comparison to one value, retain that value's subject and split. Do not reinterpret lower/higher as stronger/weaker; just state the numbers. Prefer specific names and useful stats. Do not turn an opposing-case fact into support for the pick, turn an expectation into an observed result, or claim a reliever is unavailable just because he recently pitched. Select supporting evidence in context, including within a paragraph that also discusses a counterargument.
 
-Keep each block concise and understandable on its own: ONE short factual sentence or fragment per block, usually 80–110 characters. Choose a stat or a short comparison, not a bundle of every detail. State the evidence without adding commentary about what it means for the bet. No odds, stakes, repeated pick, headings, hashtags, links, emoji, hype, or filler. No em dashes. Each block must fit the supplied maximum_characters_per_block. Shorten naturally; do not copy long sentences.`;
+Keep each block concise and understandable on its own: ONE short factual sentence or fragment per block, usually 80–110 characters. Choose a stat or a short comparison, not a bundle of every detail. State the evidence without adding commentary about what it means for the bet. No odds, stakes, repeated pick, headings, hashtags or links. Each block must fit the supplied maximum_characters_per_block. Shorten naturally; do not copy long sentences.`;
 
 export async function composeGamePickHook({ rationale, pickLine, matchup, league, model }: {
   rationale: string; pickLine: string; matchup: string; league: string; apiKey?: string; model: string;
@@ -63,8 +64,8 @@ export async function composeGamePickHook({ rationale, pickLine, matchup, league
   }
   // Normalize whitespace so the writer cannot accidentally introduce a fourth
   // block. Leave editorial judgment to the primary writer, not phrase regexes.
-  const opening = copy.opening.replace(/\s+/g, ' ').trim();
-  const closing = copy.closing.replace(/\s+/g, ' ').trim();
+  const opening = noDashes(copy.opening.replace(/\s+/g, ' ').trim());
+  const closing = noDashes(copy.closing.replace(/\s+/g, ' ').trim());
   if (!opening || !closing) throw new Error('HOOK_OUTPUT_INVALID: opening or closing is empty');
   const hook = [opening, pickLine, closing].join('\n\n');
   if (hook.length > 280) {
@@ -123,7 +124,7 @@ export async function composeFreePickPost({ rationale, pick, matchup, league, mo
   }
   if (!response.ok) throw new Error(`HOOK_PROVIDER_FAILED: status=${response.status}; model=${model}`);
   const copy = (Array.isArray(body?.content) ? body.content : []).find((c: any) => c.type === 'tool_use')?.input;
-  const clean = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
+  const clean = (v: unknown) => noDashes(String(v ?? '').replace(/\s+/g, ' ').trim());
   const out = { pickWords: clean(copy?.pick_words), matchupWords: clean(copy?.matchup_words), opening: clean(copy?.opening), closing: clean(copy?.closing) };
   if (!out.opening || !out.closing) throw new Error('HOOK_OUTPUT_INVALID: opening or closing is empty');
   return out;

@@ -1,5 +1,5 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../../providers/jev/propAssessments.js';
-import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { nflLadderAllowance } from './nflPropLadders.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
@@ -73,9 +73,7 @@ export const isFootballFunLane = (propType) => /anytime_?(?:td|touchdown)/.test(
 // 2026); Darts throws the touchdowns. Anytime TD stays on the board as a bet.
 export const FOOTBALL_PROPS_ASK = `Take two prop bets from today's board — two prop cards is what this game publishes.
 
-For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear. Reasons are in words: no hit rates, percentages or probabilities.
-
-Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's inactive — is the exception.
+For each card, give the line, the offered odds and your reason.
 
 Output:
 
@@ -84,9 +82,7 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
-
-${RATIONALE_WRITING_RULE}`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
 // A thin screened menu must never ask the brain to invent a second bet (the
 // MLB rule, mlbPropsAsk). NFL boards are screened since Sep 23 2026.
@@ -104,7 +100,7 @@ export function footballPropsAsk({ coreCount = null } = {}) {
 // the "what beats it" case.
 export const NFL_PROPS_ASK = `Which two props from THE PROP BOARD would you bet, over or under, and why?
 
-For each card, give the line, the offered odds and your reason. Reasons are in words: no hit rates, percentages or probabilities.
+For each card, give the line, the offered odds and your reason.
 
 Output:
 
@@ -113,9 +109,7 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
-
-${RATIONALE_WRITING_RULE}`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
 // Each team's main players (Oct 19 2026): the books post lines for backups and fringe receivers too, and the old
 // formula, hunting gaps, put "Cyrus Allen under 1.5 receptions" and "Pierre Strong under 11.5 receiving yards" on the
@@ -472,7 +466,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     bet: normalizePropBetDirection(p.bet),
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
-    rationale: p.rationale,
+    rationale: noDashes(p.rationale),
     prompt_sha: league === 'NCAAF' ? NCAAF_FOOTBALL_PROPS_PROMPT_SHA : FOOTBALL_PROPS_PROMPT_SHA,
     model: respondingModel,
     ...(jev.metadata ? { jev: jev.metadata } : {}),

@@ -1,5 +1,5 @@
 import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../../providers/jev/propAssessments.js';
-import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { propQuoteReceipt } from '../propQuoteReceipt.js';
 import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
@@ -55,15 +55,13 @@ export const buildGaryPropsSystemPrompt = (dateLong) => `Today is ${dateLong}. Y
 
 Your training data is old; the desk is current.
 
-Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. No emojis. Never mention data feeds, tools, or missing data.`;
+Each prop you take publishes as its own card with its own "Gary's Take" — the reasoning is yours. Never mention data feeds, tools, or missing data.`;
 
 // (The home-run card is retired — founder, Sep 23 2026: 27-170 in September,
 // and Darts throws the home runs now. Props are the core record only.)
 export const THE_PROPS_ASK = `Take two prop bets from tonight's board — two prop cards is what this game publishes.
 
-For each card, explain the exact line and offered odds, the specific supported matchup reason, and the strongest contrary evidence. Keep sample sizes and player roles clear; do not infer batter-specific pitch vulnerability from pitcher-only statistics. Reasons are in words: no hit rates, percentages or probabilities.
-
-Injuries: an absence already games old is already in the price and in the team's recent results; fresh news — today's scratch — is the exception.
+For each card, give the line, the offered odds and your reason.
 
 Output:
 
@@ -72,9 +70,7 @@ Output:
 \`\`\`
 
 bet is "over" or "under" — "over" for one-priced lines.
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
-
-${RATIONALE_WRITING_RULE}`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
 // A thin screened menu must never ask the brain to invent a second core bet.
 export function mlbPropsAsk({coreCount=null}={}) {
@@ -860,7 +856,7 @@ async function analyzeMlbPropsDeskWithData(game, playerProps, options = {}) {
     bet: normalizePropBetDirection(p.bet),
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
-    rationale: p.rationale,
+    rationale: noDashes(p.rationale),
     prompt_sha: PROPS_PROMPT_SHA,
     ...(jev.metadata ? { jev: jev.metadata } : {}),
     // Which brain produced this pick — the responder, never the config

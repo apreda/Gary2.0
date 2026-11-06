@@ -20,7 +20,7 @@
  * scripts/run-game-recaps.js (manual/backfill).
  */
 
-import { WRITING_RULES, readerCopyTells } from './copy/writingRules.js';
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 import { matchupIncludesBothTeams } from '../gary/teamIdentity.js';
 
 // The Home headline card fits about 52 characters at its font (founder, Sep 23 2026).
@@ -50,9 +50,7 @@ function describeBetForPrompt(pick) {
 
 function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
   return (
-    `You write a short, ESPN-style recap of a finished game FROM THE BETTING PERSPECTIVE — ` +
-    `the voice of a sharp friend recapping last night: the drama, the prices, and how the bet fared, ` +
-    `woven into one tight story.\n\n` +
+    `Write a short recap of this finished game and how the bet did.\n\n` +
     `GAME: ${pick.awayTeam} (away) @ ${pick.homeTeam} (home) — ${pick.league}\n` +
     `THE BET: ${describeBetForPrompt(pick)}\n` +
     `BET RESULT: ${String(result).toUpperCase()}\n\n` +
@@ -68,12 +66,9 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
     // all reached for "rout". A newsroom of five writers would not file that;
     // they can see each other's copy. Now so can this one.
     (usedHeadlines.length
-      ? `HEADLINES ALREADY FILED FOR THIS SLATE — every one of these is taken:\n`
+      ? `HEADLINES ALREADY FILED FOR THIS SLATE, so don't repeat them:\n`
         + usedHeadlines.map((h) => `- ${h}`).join('\n')
-        + `\nWrite as a different writer in the same room would: do NOT reuse the lead verb or the `
-        + `sentence shape of any headline above. If they all lean on the margin ("beats X by 24", `
-        + `"rout"), find another true angle from the evidence — who did it, what decided it, what `
-        + `the defense did. Same facts, different sentence.\n\n`
+        + `\n\n`
       : '') +
     `RULES:\n` +
     `- Every number (scores, stat lines, who homered, pitching lines, prices) must appear in the box ` +
@@ -81,29 +76,10 @@ function buildPrompt({ pick, result, evidence, usedHeadlines = [] }) {
     `invent innings, sequences, stats, players, or anything neither source states. If both are thin, ` +
     `write a shorter recap around the score and the price.\n` +
     `- The only betting price you know is the one in THE BET line. Do not invent other odds.\n` +
-    `- Weave the bet's fate into the story (a +102 dog winning outright, a favorite that never ` +
-    `showed up, a sweat that held on late). State prices naturally ("as a -130 favorite", "at +102").\n` +
-    `- Voice: sharp, conversational, confident. No hedging, no exclamation points, no emojis, ` +
-    `no cliches like "in a thrilling contest".\n` +
     `- Never use the words "we", "our", or "I" — the bettor is "Gary" if named at all.\n` +
-    `${WRITING_RULES}\n\n` +
+    `\n` +
     `OUTPUT:\n` +
-    `- "headline": a clean, professional game headline in plain English — the result and the one ` +
-    `thing that decided it. 5-8 words and at most 52 characters counting spaces: it must fit a small card, ` +
-    `so write the complete thought short. Lead with the team and what they actually did. First look ` +
-    `for the most newsworthy VERIFIED individual performance in the evidence — in baseball home ` +
-    `runs, RBI, strikeouts or a scoreless start; in football a multi-touchdown passing line, a ` +
-    `100-yard rusher, a big receiving day or a multi-sack game; if there is none, use a verified ` +
-    `team feat such as a shutout, a huge hit total or a defense that took the ball away. ` +
-    `A score-only result is the last resort when the evidence truly contains ` +
-    `nothing else. ` +
-    `NO betting jargon ("dogs", "chalk", "cover", "cashes"), NO hype verbs ("explodes", "erupts", ` +
-    `"power show", "roll"), NO odds or prices in the headline, NO cliches or clickbait. ` +
-    `Good: "Tigers take down the Astros behind Colt Keith's three homers". ` +
-    `Good: "Josh Allen throws three as the Bills hold off the Lions". ` +
-    `Bad: "Tigers roll as +106 dogs behind Colt Keith power show". ` +
-    `Bad: "Bills Beat Lions by 10 in Buffalo" — that restates the scoreboard and names no one. ` +
-    `No ending period.\n` +
+    `- "headline": the result and what decided it, in the 5-8 words that fit a small card: at most 52 characters counting spaces. No odds, prices or betting terms, and no ending period.\n` +
     `- "recap": the 2-4 sentence body.\n` +
     `- "bullets": 2-4 BETTING EVENTS that hit during the game — the markets that would have cashed: ` +
     `a home run, a strikeout / total prop, a goal scorer, the over/under total result, a player ` +
@@ -347,22 +323,15 @@ export async function generateRecap({ pick, result, evidence, usedHeadlines = []
   const parsed = parseRecapResponse(text);
   if (!parsed) return null;
 
-  const headline = gameOnlyHeadline(parsed.headline, evidence);
+  const headline = noDashes(gameOnlyHeadline(parsed.headline, evidence));
   const recap = parsed.recap != null
-    ? String(parsed.recap).trim().slice(0, MAX_RECAP_CHARS)
+    ? noDashes(String(parsed.recap).trim()).slice(0, MAX_RECAP_CHARS)
     : '';
   if (!headline || !recap) return null;
-  // writing.md (Adam, Sep 21 2026): a recap written with a dash or another AI
-  // tell does not ship; the backfill asks again on its next pass.
-  const tells = readerCopyTells(`${headline} ${recap}`);
-  if (tells.length) {
-    console.warn(`    [GameRecap] recap withheld: writing rule (${tells.join(', ')})`);
-    return null;
-  }
 
   const bullets = Array.isArray(parsed.bullets)
     ? parsed.bullets
-        .map((b) => String(b).trim())
+        .map((b) => noDashes(String(b).trim()))
         .map((b) => sanitizeBulletPrices(b, evidence)) // strip any price the evidence can't source
         .filter(Boolean)
         .map((b) => (b.length > MAX_BULLET_CHARS ? b.slice(0, MAX_BULLET_CHARS).trimEnd() : b))

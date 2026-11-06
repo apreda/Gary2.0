@@ -66,7 +66,7 @@ describe('MLB Hub research copy integrity', () => {
     const [result] = await applyGaryVoice([row()], { league: 'MLB' });
     expect(result.detail).toBe('Over the last 8 games, Fixture Hitter has a .312 AVG on 10-for-32 hitting.');
     expect(result.meta.evidence).toBe(row().detail);
-    expect(result.meta.research_copy_version).toBe('fan-writeup-v2');
+    expect(result.meta.research_copy_version).toBe('fan-writeup-v3');
     expect(sessions.create.mock.calls[0][0].systemPrompt).toContain('No first-person picks');
   });
 

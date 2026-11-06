@@ -4,6 +4,7 @@
 // and the same cash-on-hand picture as his bet step. $100 minimum, no maximum, no default; $100 only when he cannot
 // be reached before kickoff. The judge's grade is recorded on the board, never shown to him here.
 // SQL: claim_big_game_stakes / set_big_game_stake (the gate marks the pick needs_gary_number).
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 import { generateSolText } from '../content/insights/solText.js';
 import { APP_WRITING_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 import { BET_MIN_DOLLARS } from './garyBet.js';
@@ -35,7 +36,6 @@ export function buildBigGameAsk({ league, ticket, bankroll }) {
     ticket.case_home ? `THE HOME SIDE'S CASE:\n${String(ticket.case_home).trim()}` : null,
     '',
     'How much goes on it, and why?',
-    'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     `Answer with JSON only: {"stake_dollars":${BET_MIN_DOLLARS},"why":"one or two sentences in your voice"}. No fact, number or name that is not in your case.`,
   ].filter((l) => l !== null).join('\n');
 }
@@ -49,7 +49,7 @@ export function parseBigGameStake(raw) {
     const v = JSON.parse(body.trim());
     const stake = v?.stake_dollars;
     if (!(typeof stake === 'number' && Number.isInteger(stake) && stake >= BET_MIN_DOLLARS)) return null;
-    return { stake_dollars: stake, why: String(v?.why ?? '').trim() };
+    return { stake_dollars: stake, why: noDashes(String(v?.why ?? '').trim()) };
   } catch { return null; }
 }
 

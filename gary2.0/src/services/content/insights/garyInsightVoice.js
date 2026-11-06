@@ -4,6 +4,7 @@
  */
 import { createModelSession, sendToSessionWithRetry } from '../../gary/agentic/orchestrator/sessionManager.js';
 import { APP_WRITING_MODEL } from '../../gary/agentic/orchestrator/orchestratorConfig.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 import { RESEARCH_FACTS_VERSION } from './researchFacts.js';
 
@@ -116,7 +117,7 @@ export async function applyGaryVoice(rows, { league = 'mlb' } = {}) {
       if (!slot || !researchCopyIsSupported(take, JSON.stringify(facts))) continue;
       const row = slot.r;
       row.meta = { ...(row.meta || {}), evidence: row.detail, research_copy_version: HUB_RESEARCH_COPY_VERSION };
-      row.detail = take;
+      row.detail = noDashes(take);
       applied++;
     }
   }

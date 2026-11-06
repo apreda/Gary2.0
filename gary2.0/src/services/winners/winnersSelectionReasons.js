@@ -1,3 +1,4 @@
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 // "Why it made the board" comes from the selection itself (founder, Sep 23
 // 2026: "if we're going to select what makes the board, we should be able to say
 // the reasons why it made the board at the same time"). Each selector asks for
@@ -63,7 +64,7 @@ export function selectionReasons(raw) {
   if (!Array.isArray(raw)) return null;
   const rows = raw
     .map((r) => {
-      const row = { claim: String(r?.claim ?? '').trim(), why: String(r?.why ?? '').trim() };
+      const row = { claim: noDashes(String(r?.claim ?? '').trim()), why: noDashes(String(r?.why ?? '').trim()) };
       const [stat, rest] = splitStat(r?.stat);
       const note = noteFor(rest, String(r?.note ?? '').trim());
       if (stat && note && stat.length <= STAT_MAX) Object.assign(row, { stat, note });

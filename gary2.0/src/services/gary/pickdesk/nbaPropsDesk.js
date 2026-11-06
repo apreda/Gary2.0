@@ -16,7 +16,7 @@ import { createHash } from 'crypto';
 import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { buildScoutReport } from '../agentic/scoutReport/scoutReportBuilder.js';
 import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
-import { RATIONALE_WRITING_RULE } from '../../content/copy/writingRules.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
 import { teamRecords, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
@@ -57,7 +57,7 @@ export function nbaMenu(markets, { homeTeam, awayTeam } = {}) {
 // Oct 23) and the "what beats it" case went; the line, the odds and the reason stay for the card.
 export const NBA_PROPS_ASK = `Which two props from THE PROP BOARD would you bet, over or under, and why?
 
-For each card, give the line, the offered odds and your reason. Reasons are in words: no hit rates, percentages or probabilities.
+For each card, give the line, the offered odds and your reason.
 
 Output:
 
@@ -66,9 +66,7 @@ Output:
 \`\`\`
 
 bet is "over" or "under".
-confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.
-
-${RATIONALE_WRITING_RULE}`;
+confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
 export const NBA_PROPS_PROMPT_SHA = createHash('sha256')
   .update(buildGaryPropsSystemPrompt('{date}') + NBA_PROPS_ASK + nbaMenu.toString() + JSON.stringify([MAIN_LINE, MARKET_FLOOR]))
@@ -179,7 +177,7 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
     bet: normalizePropBetDirection(p.bet),
     odds: p.odds != null ? String(p.odds) : null,
     confidence: p.confidence_score ?? null,
-    rationale: p.rationale,
+    rationale: noDashes(p.rationale),
     prompt_sha: NBA_PROPS_PROMPT_SHA,
     model: respondingModel,
     lane: 'CORE',

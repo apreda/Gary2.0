@@ -8,6 +8,7 @@
 // No parlay question (founder, Oct 28 2026: "keep it simple"): the parlay of
 // the day is built once, at the day pass, from every pick, prop and dart still
 // to start (gary_private.parlay_enqueue).
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 import { generateSolText } from '../content/insights/solText.js';
 import { APP_WRITING_MODEL } from '../gary/agentic/orchestrator/orchestratorConfig.js';
 
@@ -39,7 +40,6 @@ export function buildBetAsk({ league, tickets, bankroll }) {
     lines.join('\n\n'),
     '',
     'For each ticket, decide as the bettor: are you putting your money on it, and how much?',
-    'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     `Answer with JSON only: {"bets":[{"id":"...","play":true,"stake_dollars":${BET_MIN_DOLLARS},"why":"one or two sentences in your voice"}]}. For a pass, "play": false and no stake. No fact, number or name that is not in your case.`,
   ].join('\n');
 }
@@ -73,7 +73,7 @@ export function parseBets(raw, tickets) {
     const ticket = ticketFor(b, tickets);
     if (!ticket) continue;
     const id = ticket.id;
-    const why = String(b?.why ?? '').trim();
+    const why = noDashes(String(b?.why ?? '').trim());
     const stake = b?.stake_dollars;
     const play = b?.play === true && typeof stake === 'number' && Number.isInteger(stake) && stake >= BET_MIN_DOLLARS;
     out.set(id, play ? { play: true, stake_dollars: stake, why } : pass(why));

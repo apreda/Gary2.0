@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-// writing.md (Adam, Sep 21 2026): no dashes as punctuation in anything a fan
+// Adam, Sep 21 2026: no dashes as punctuation in anything a fan
 // reads. The computers write headlines and details straight into the Hub, so
 // their template strings are reader copy. Comments, console lines, model
 // asks and the bare "—" placeholder for an empty cell are not.

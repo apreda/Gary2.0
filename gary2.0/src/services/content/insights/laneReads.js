@@ -8,6 +8,7 @@
 // collector's detail. This does not write Gary's picks or Fantasy decisions.
 import { generateSolText } from './solText.js';
 import { APP_WRITING_MODEL } from '../../gary/agentic/orchestrator/orchestratorConfig.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { HUB_RESEARCH_COPY_RULES, HUB_RESEARCH_COPY_VERSION, researchCopyIsSupported, uniqueResearchEntries } from './researchCopyPolicy.js';
 import { cachedLaneRead, laneReadKey, pruneLaneReads, storeLaneRead } from './laneReadCache.js';
 
@@ -92,7 +93,6 @@ export async function attachLaneReads(lane, rows, factFor, { ask, sentences = '3
   const promptFor = (items) => `You write the research write-ups in Gary's app: the reads a fan opens under each headline.
 
 Angle for this lane: ${question}.
-Take that angle as far as the supplied facts allow. Aim for ${sentences} compact sentences, with fewer when there is less evidence.
 
 ${HUB_RESEARCH_COPY_RULES}
 
@@ -101,7 +101,8 @@ Return STRICT JSON only: {"reads":[{"i":0,"read":"..."}]}
 ITEMS:
 ${items.map((x, i) => `${i}. ${x.fact}`).join('\n')}`;
 
-  const attach = (x, read) => {
+  const attach = (x, written) => {
+    const read = noDashes(written);
     x.r.meta = { ...(x.r.meta || {}), computed_detail: x.r.meta?.computed_detail || x.r.detail, read,
       research_copy_version: HUB_RESEARCH_COPY_VERSION };
     x.r.detail = read;

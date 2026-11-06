@@ -2,6 +2,7 @@
  * Gary Picks Service — game-pick storage and lookups for MLB, NBA and NCAAF
  * (daily_picks) and NFL (weekly_nfl_picks).
  */
+import { noDashes } from '../../../supabase/functions/_shared/noDashes.js';
 import { supabase, supabaseAdmin } from '../../supabaseClient.js';
 import { withTransientRetry, isTransientDbError } from '../../utils/transientRetry.js';
 import { assertGamePickPublication, assertAtomicPickReceipt, assertExistingGamePublications, isPublishedGamePick, gamePickId, gamePickIdValue } from './gamePickPublication.js';
@@ -208,7 +209,7 @@ async function pickAlreadyStoredByGameId(league, gameDate, gameId) {
 async function storeDailyPicksInDatabase(picks, overrideDate = null, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0)
     return { success: false, message: 'No picks provided' };
-  try { picks.forEach(pick => { assertGamePickPublication(pick); }); }
+  try { picks.forEach(pick => { if (pick?.rationale) pick.rationale = noDashes(pick.rationale); assertGamePickPublication(pick); }); }
   catch (error) { return { success: false, error: error.message }; }
 
   // Prevent multiple simultaneous storage operations
@@ -511,7 +512,7 @@ async function storeWeeklyNFLPicks(picks, options = {}) {
   if (!picks || !Array.isArray(picks) || picks.length === 0) {
     return { success: false, message: 'No NFL picks provided' };
   }
-  try { picks.forEach(pick => assertGamePickPublication(pick, 'NFL')); }
+  try { picks.forEach(pick => { if (pick?.rationale) pick.rationale = noDashes(pick.rationale); assertGamePickPublication(pick, 'NFL'); }); }
   catch (error) { return { success: false, error: error.message }; }
   
   const writer = supabaseAdmin || supabase;

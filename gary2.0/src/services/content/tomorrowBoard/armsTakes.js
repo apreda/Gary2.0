@@ -1,5 +1,5 @@
 /** Gary's take on the starting pitchers (MLB) and quarterbacks (NFL) (split from tomorrowService.js, Oct 13 2026). */
-import { WRITING_RULES, readerCopyIsClean } from '../copy/writingRules.js';
+import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import { DESK_FALLBACK_MODELS, PROPS_DESK_MODEL } from '../../gary/agentic/orchestrator/orchestratorConfig.js';
@@ -66,7 +66,7 @@ const ARMS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in 
 
 Your training data is old; the pitcher data provided is current — say nothing it can't back.
 
-For each game: TWO short paragraphs, one per starting pitcher — the away arm first, then the home arm — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that arm tonight. No emojis.`;
+For each game: TWO short paragraphs, one per starting pitcher — the away arm first, then the home arm — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that arm tonight.`;
 
 // THE QUARTERBACKS (founder, Sep 21 2026): the NFL card runs MLB's Arms
 // system with the sport's nouns swapped — the same batched voice call, the
@@ -75,10 +75,10 @@ const QUARTERBACKS_VOICE_CONTRACT = `You are Gary — the bettor whose picks pub
 
 Your training data is old; the quarterback data provided is current — say nothing it can't back.
 
-For each game: TWO short paragraphs, one per starting quarterback — the away quarterback first, then the home quarterback — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that quarterback this week. No emojis.`;
+For each game: TWO short paragraphs, one per starting quarterback — the away quarterback first, then the home quarterback — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that quarterback this week.`;
 
 function armsVoiceContract(league) {
-  return `${league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT}\n\n${WRITING_RULES}`;
+  return league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT;
 }
 
 /** One quarterback's facts as a compact line, off the day's quarterback row. Omits what the row lacks. */
@@ -138,8 +138,7 @@ export async function readNflQuarterbacks(etDateStr, { supabaseUrl: url, adminKe
 // every paired take on the first two-paragraph board.
 function validArmsTake(take) {
   return typeof take === 'string' && take.trim().length >= 40 && take.trim().length <= 760
-    && !take.includes('…') && !take.includes('...')
-    && readerCopyIsClean(take); // writing.md: a dash or another AI tell is a defect
+    && !take.includes('…') && !take.includes('...');
 }
 
 function armsProviderScope(modelName) {
@@ -350,7 +349,7 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
         // An explicit different game key or matchup must never attach here.
         ?? (pending.length === 1 && inOrder.length === 1 ? inOrder[i] : undefined);
       if (validArmsTake(take)) {
-        j.row.arms_take = take.trim();
+        j.row.arms_take = noDashes(take.trim());
         j.row.arms_take_status = 'available';
       }
     }
