@@ -46,6 +46,10 @@ struct HomeGaryOpening: View {
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
     /// He's been talked to once: the ASK label stops wearing NEW.
     @AppStorage("garyTalkSeen") private var talkSeen = false
+    /// They've said yes to where their words go, once (Apple guideline 5.1.2: permission before personal data goes
+    /// to a third-party AI). Until then, ASK GARY asks them this first.
+    @AppStorage("garyTalkAgreed") private var talkAgreed = false
+    @State private var talkPermission: TalkPermission?
     /// Talking to him (HomeGaryTalk): the labels step back and the captions run under him.
     @State private var talkOn = false
     @StateObject private var talkHolder = GaryTalkHolder()
@@ -209,12 +213,28 @@ struct HomeGaryOpening: View {
         .onChange(of: live) { isLive in
             if !isLive { markSeen(prompts.compactMap(\.key)); endTalk() }
         }
+        .alert("Before you talk to Gary", isPresented: Binding(get: { talkPermission != nil }, set: { if !$0 { talkPermission = nil } }), presenting: talkPermission) { asked in
+            Button("Not Now", role: .cancel) {}
+            Button("Agree") {
+                talkAgreed = true
+                startTalk(first: asked.first)
+            }
+        } message: { _ in
+            Text("Gary is an AI. Your phone turns what you say into text, and that text goes to Anthropic, whose AI writes his answer. ElevenLabs turns his answer into his voice. We keep your questions and his answers with your account or device ID to run this and check his answers. Don't share anything private.")
+        }
     }
 
     // MARK: - Talking to him
 
+    /// What they were about to say when ASK GARY stopped to ask their permission.
+    private struct TalkPermission { let first: String? }
+
     /// He listens (or answers `first` straight away) right where he stands.
     private func startTalk(first: String?) {
+        guard talkAgreed else {
+            talkPermission = TalkPermission(first: first)
+            return
+        }
         talkSeen = true
         if !talkOn {
             talkOn = true
