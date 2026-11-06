@@ -15,6 +15,7 @@ const COLUMNS: {
       { href: "/picks/mlb", label: "MLB Picks" },
       { href: "/picks/nfl", label: "NFL Picks" },
       { href: "/picks/ncaaf", label: "College Football Picks" },
+      { href: "/teams", label: "Picks by Team" },
       { href: "/today", label: "Today's Desk" },
       { href: "/picks", label: "Today's Picks" },
       { href: "/archive", label: "Pick Archive" },

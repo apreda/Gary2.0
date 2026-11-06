@@ -1,7 +1,9 @@
 import archiveSitemap from '@/lib/seo/archive-sitemap';
 import gameSitemap from '@/lib/seo/game-sitemap';
+import { fetchArchiveDayIndex } from '@/lib/gary/archive';
 import { fetchPickIndex } from '@/lib/gary/gamepage';
-import { gameSitemapEntries, sitemapIndexXml, sitemapXml } from '@/lib/seo/sitemap';
+import { teamsFromIndex } from '@/lib/gary/teams';
+import { gameSitemapEntries, sitemapIndexXml, sitemapXml, teamSitemapEntries } from '@/lib/seo/sitemap';
 
 // Generate each inventory on its first request, never during next build.
 // An ordinary parameterized route retains ISR on Vercel (metadata .xml
@@ -22,6 +24,10 @@ export async function GET(
   let xml: string;
   if (inventory === 'archive') {
     xml = sitemapXml(await archiveSitemap());
+  } else if (inventory === 'teams') {
+    const [rows, dayIndex] = await Promise.all([fetchPickIndex(), fetchArchiveDayIndex().catch(() => [])]);
+    const published = new Map(dayIndex.flatMap(d => (d.published_at ? [[d.date, d.published_at] as const] : [])));
+    xml = sitemapXml(teamSitemapEntries(teamsFromIndex(rows), published));
   } else if (inventory === 'index') {
     const rows = await fetchPickIndex();
     xml = sitemapIndexXml(gameSitemapEntries(rows).length);

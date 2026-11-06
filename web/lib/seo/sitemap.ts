@@ -1,10 +1,23 @@
 import type { MetadataRoute } from 'next';
 import { todayEST } from '@/lib/gary/dates';
 import { gamePagePaths, type PickIndexRow } from '@/lib/gary/gamepage';
+import { teamPath, type TeamEntry } from '@/lib/gary/teams';
 
 export const BASE_URL = 'https://www.betwithgary.ai';
 export const GAME_SITEMAP_SIZE = 40_000;
 export const SITEMAP_INDEX_PATH = '/sitemap-index.xml';
+/**
+ * Days of past boards we ask Google to crawl. Nobody searches a game long after
+ * it ends, and Google had left 3,688 of these pages uncrawled (Nov 2026), so the
+ * inventory holds what can still be found. Older pages stay live and linked.
+ */
+export const SITEMAP_WINDOW_DAYS = 30;
+
+export function sitemapCutoff(today = todayEST()): string {
+  return new Date(new Date(`${today}T12:00:00Z`).getTime() - SITEMAP_WINDOW_DAYS * 86400000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 function escapeXml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -59,7 +72,8 @@ export function gameSitemapEntries(
     const stored = publishedByDate.get(date);
     return stored === undefined ? {} : { lastModified: new Date(stored) };
   };
-  const paths = gamePagePaths(rows, today);
+  const fresh = sitemapCutoff(today);
+  const paths = gamePagePaths(rows, today).filter(path => path.date >= fresh);
   const days = new Set<string>();
   const dayEntries: MetadataRoute.Sitemap = [];
 
@@ -86,6 +100,22 @@ export function gameSitemapEntries(
   ];
 }
 
+/** Every team page, as fresh as the board its latest game was on. */
+export function teamSitemapEntries(
+  teams: TeamEntry[],
+  publishedByDate: ReadonlyMap<string, string> = new Map(),
+): MetadataRoute.Sitemap {
+  return teams.map(team => {
+    const stored = publishedByDate.get(team.lastDate);
+    return {
+      url: `${BASE_URL}${teamPath(team)}`,
+      changeFrequency: 'daily' as const,
+      priority: 0.7,
+      ...(stored === undefined ? {} : { lastModified: new Date(stored) }),
+    };
+  });
+}
+
 export function sitemapIdsForCount(count: number) {
   const total = Math.max(1, Math.ceil(count / GAME_SITEMAP_SIZE));
   return Array.from({ length: total }, (_, id) => ({ id }));
@@ -98,6 +128,7 @@ export function sitemapUrlsForCount(count: number): string[] {
   return [
     `${BASE_URL}/sitemap.xml`,
     `${BASE_URL}/archive/sitemap.xml`,
+    `${BASE_URL}/teams/sitemap.xml`,
     ...sitemapIdsForCount(count).map(({ id }) => `${BASE_URL}/picks/sitemap/${id}.xml`),
   ];
 }

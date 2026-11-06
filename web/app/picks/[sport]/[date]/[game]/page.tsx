@@ -23,6 +23,7 @@ import { etDateLabel, etTime, injuryLines, marketLine, scoutSectionsExcluding } 
 import {
   fetchGameDay,
   fetchGameProps,
+  fetchPickIndex,
   findGamePicks,
   gameSlug,
   matchPickResult,
@@ -30,8 +31,10 @@ import {
   pageSummary,
   propsForGame,
   slateForGame,
+  teamSlug,
 } from '@/lib/gary/gamepage';
 import { sportBySlug } from '@/lib/gary/leagues';
+import { teamPath, teamsFromIndex } from '@/lib/gary/teams';
 import { isMlbHomeRun, isNflAnytimeTdPick } from '@/lib/gary/prop-lanes';
 import type { GaryPick } from '@/lib/gary/types';
 import { SITE_URL, pageMetadata } from '@/lib/seo/metadata';
@@ -133,6 +136,16 @@ export default async function GamePage({ params }: { params: Params }) {
   // THE RESEARCH: the same dated rows the app shows under the card. Optional —
   // a failed read leaves the page without the section, never without the pick.
   const research = await fetchArchiveInsights(date).catch(() => []);
+
+  // The day's other games and this game's team pages, so no game page is a dead end.
+  const otherGames = [...new Map(
+    day.picks
+      .filter(p => gameSlug(p.awayTeam, p.homeTeam) !== canonicalSlug)
+      .map(p => [gameSlug(p.awayTeam, p.homeTeam), p] as const),
+  ).values()];
+  const playing = [teamSlug(lead.awayTeam), teamSlug(lead.homeTeam)];
+  const pageTeams = teamsFromIndex(await fetchPickIndex().catch(() => []))
+    .filter(t => t.code === cfg.code && playing.includes(t.slug));
 
   const pageUrl = `${SITE_URL}/picks/${cfg.slug}/${date}/${canonicalSlug}`;
   const imageUrl = `${pageUrl}/card`;
@@ -326,6 +339,30 @@ export default async function GamePage({ params }: { params: Params }) {
         </section>
       )}
 
+      {otherGames.length > 0 && (
+        <section className="mt-12" aria-labelledby="more-games-heading">
+          <h2 id="more-games-heading" className="font-display text-[1.7rem] uppercase leading-none text-hi">
+            More {cfg.code} picks, {label}
+          </h2>
+          <StitchRule tone="faint" className="mb-5 mt-4" />
+          <ul className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
+            {otherGames.map(p => (
+              <li key={`${p.awayTeam}-${p.homeTeam}-${p.pick}`}>
+                <Link
+                  href={`/picks/${cfg.slug}/${date}/${gameSlug(p.awayTeam, p.homeTeam)}`}
+                  className="block border-t border-line py-3 transition-colors hover:text-gold"
+                >
+                  <span className="block font-display text-[1.25rem] uppercase leading-tight text-hi">
+                    {p.awayTeam} at {p.homeTeam}
+                  </span>
+                  <span className="mt-0.5 block text-[15px] text-mid">{callOf(p)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <WinnersInvitation className="mt-12" />
 
       <StitchRule className="mt-12" />
@@ -341,6 +378,9 @@ export default async function GamePage({ params }: { params: Params }) {
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">The {cfg.code} record</Link>
         <Link href={`/picks/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s {cfg.code} picks</Link>
         <Link href={`/archive/${date}`} className="text-gold underline decoration-gold/40 underline-offset-4">Every sport this day</Link>
+        {pageTeams.map(t => (
+          <Link key={t.slug} href={teamPath(t)} className="text-gold underline decoration-gold/40 underline-offset-4">{t.name} picks</Link>
+        ))}
         {isToday && <Link href="/props" className="text-gold underline decoration-gold/40 underline-offset-4">Today&apos;s player props</Link>}
       </p>
     </main>

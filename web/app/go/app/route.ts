@@ -1,3 +1,4 @@
+import { isLikelyBot } from '@/lib/gary/visit-count';
 import { after, NextResponse } from 'next/server';
 import { campaignToken, normalizeAppStoreSurface, websiteAppStoreUrl } from '@/lib/gary/app-store';
 import { linkAttributionFromRequest, shouldTrackStandardHandoff } from '@/lib/gary/link-attribution';
@@ -21,7 +22,7 @@ export function GET(request: Request) {
   // Standard no-JS handoffs are unmeasured. The browser attaches both values
   // only after consent. Dedicated /get and /c campaign URLs remain aggregate
   // tracked-link endpoints by design.
-  if (shouldTrackStandardHandoff(requestUrl, request.headers.get('cookie'))) {
+  if (!isLikelyBot(request) && shouldTrackStandardHandoff(requestUrl, request.headers.get('cookie'))) {
     after(async () => {
       try {
         await storeWebLinkClick(click, requestRateFingerprint(request));

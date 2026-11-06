@@ -1,3 +1,4 @@
+import { isLikelyBot } from '@/lib/gary/visit-count';
 import { NextResponse, after } from 'next/server';
 import { campaignToken, xBioAppStoreUrl } from '@/lib/gary/app-store';
 import { hasInternalAnalyticsCookie, linkAttributionFromRequest } from '@/lib/gary/link-attribution';
@@ -15,7 +16,7 @@ export function GET(request: Request) {
   // Snapshot the request bits we want before responding, then log AFTER the redirect is sent. after() keeps the
   // serverless instance alive to finish the write without blocking the 302, and still runs through a redirect.
   // This is the real-time click signal (download intent) that Apple's delayed, thresholded install data can't show.
-  if (!hasInternalAnalyticsCookie(request.headers.get('cookie'))) {
+  if (!isLikelyBot(request) && !hasInternalAnalyticsCookie(request.headers.get('cookie'))) {
     after(async () => {
       try {
         await storeWebLinkClick(click, requestRateFingerprint(request));

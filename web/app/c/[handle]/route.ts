@@ -1,3 +1,4 @@
+import { isLikelyBot } from '@/lib/gary/visit-count';
 import { NextResponse, after } from 'next/server';
 import { campaignToken, creatorAppStoreUrl, normalizeCreatorHandle } from '@/lib/gary/app-store';
 import { hasInternalAnalyticsCookie, linkAttributionFromRequest } from '@/lib/gary/link-attribution';
@@ -12,7 +13,7 @@ export async function GET(request: Request, context: { params: Promise<{ handle:
   const destination = creatorAppStoreUrl(rawHandle);
   const ct = campaignToken(new URL(destination).searchParams.get('ct'));
   const click = linkAttributionFromRequest(request, 'creator', ct);
-  if (!hasInternalAnalyticsCookie(request.headers.get('cookie'))) {
+  if (!isLikelyBot(request) && !hasInternalAnalyticsCookie(request.headers.get('cookie'))) {
     after(async () => {
       try {
         await storeWebLinkClick(click, requestRateFingerprint(request));

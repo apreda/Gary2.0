@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     return [
       { source: '/archive/sitemap.xml', destination: '/sitemap-data/archive' },
       { source: '/archive/inventory.xml', destination: '/sitemap-data/archive' },
+      { source: '/teams/sitemap.xml', destination: '/sitemap-data/teams' },
       { source: '/sitemap-index.xml', destination: '/sitemap-data/index' },
       { source: '/picks/sitemap/:id.xml', destination: '/sitemap-data/games-:id' },
     ];

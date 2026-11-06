@@ -62,6 +62,7 @@ const FIXED = [
   '/today',
   '/picks',
   ...SPORTS.filter(sport => sport.slug !== 'world-cup').map(sport => `/picks/${sport.slug}`),
+  '/teams',
   '/props',
   '/props/home-runs',
   '/props/touchdowns',
@@ -229,6 +230,7 @@ describe('sitemap', () => {
     expect(sitemapUrlsForCount(40_001)).toEqual([
       'https://www.betwithgary.ai/sitemap.xml',
       'https://www.betwithgary.ai/archive/sitemap.xml',
+      'https://www.betwithgary.ai/teams/sitemap.xml',
       'https://www.betwithgary.ai/picks/sitemap/0.xml',
       'https://www.betwithgary.ai/picks/sitemap/1.xml',
     ]);
@@ -245,6 +247,22 @@ describe('sitemap', () => {
     index.push({ date: '2026-08-30', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' });
     const result = await robots();
     expect(result.sitemap).toBe('https://www.betwithgary.ai/sitemap-index.xml');
+  });
+
+  it('keeps crawlers off page-data requests and tracked redirects', async () => {
+    const rules = (await robots()).rules;
+    for (const rule of Array.isArray(rules) ? rules : [rules]) {
+      expect(rule.disallow).toEqual(expect.arrayContaining(['/*?_rsc=', '/c/', '/go/', '/get']));
+    }
+  });
+
+  it('asks Google to crawl only the last thirty days of boards', () => {
+    const rows = [
+      { date: '2026-08-05', league: 'MLB', sport: null, away_team: 'Cubs', home_team: 'Reds' },
+      { date: '2026-07-01', league: 'MLB', sport: null, away_team: 'Mets', home_team: 'Braves' },
+    ];
+    const urls = gameSitemapEntries(rows, '2026-09-01').map(e => pathOf(e.url));
+    expect(urls).toEqual(['/picks/mlb/2026-08-05', '/picks/mlb/2026-08-05/cubs-at-reds']);
   });
 
   it('fails archive regeneration instead of returning a successful empty inventory', async () => {

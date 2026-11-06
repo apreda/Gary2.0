@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { fetchArchiveDateSummaries } from '@/lib/gary/archive';
 import { todayEST } from '@/lib/gary/dates';
+import { sitemapCutoff } from '@/lib/seo/sitemap';
 
 const BASE_URL = 'https://www.betwithgary.ai';
 
@@ -35,7 +36,7 @@ export default async function archiveSitemap(): Promise<MetadataRoute.Sitemap> {
         ...(newest === undefined ? {} : { lastModified: new Date(newest) }),
       };
     }),
-    ...summaries.map(summary => ({
+    ...summaries.filter(summary => summary.date >= sitemapCutoff(today)).map(summary => ({
       url: `${BASE_URL}/archive/${summary.date}`,
       changeFrequency: summary.date >= cutoff ? 'daily' as const : 'yearly' as const,
       priority: 0.5,

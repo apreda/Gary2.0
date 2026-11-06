@@ -4,6 +4,7 @@ const EXISTING_CUSTOM_PRODUCT_PAGE_ID = '3c207d81-dc0d-4cc3-a50d-b5f47e29b18f';
 const FIXED_SURFACES = new Set([
   'home_hero',
   'home_hero_icon',
+  'home_picks',
   'home_app_section',
   'pricing_footer',
   'pricing_plan',
@@ -29,7 +30,7 @@ export function normalizeAppStoreSurface(raw: string | null | undefined): string
     .slice(0, 64);
 
   if (FIXED_SURFACES.has(value)) return value;
-  if (/^(league_day|game_page)_[a-z0-9_]{1,24}$/.test(value)) return value;
+  if (/^(league_day|game_page|team_page)_[a-z0-9_]{1,24}$/.test(value)) return value;
   return 'unknown';
 }
 

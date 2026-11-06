@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { TEAM_LEAGUES } from '@/lib/gary/teams';
 import { notFound } from 'next/navigation';
 import { GameRow } from '@/components/board/GameRow';
 import { BoardGrid } from '@/components/board/BoardGrid';
@@ -73,6 +74,11 @@ function SportGuide({ cfg, lastBoard }: { cfg: NonNullable<ReturnType<typeof spo
         <Link href={`/results/${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">complete {cfg.name} record</Link>
         {lastBoard ? <>, or revisit the <Link href={`/picks/${cfg.slug}/${lastBoard}`} className="text-gold underline decoration-gold/40 underline-offset-4">latest completed picks</Link></> : null}.
       </p>
+      {TEAM_LEAGUES.includes(cfg.code) && (
+        <p className="mt-2 text-[13.5px] leading-relaxed text-low">
+          <Link href={`/teams#${cfg.slug}`} className="text-gold underline decoration-gold/40 underline-offset-4">{cfg.name} picks by team</Link>
+        </p>
+      )}
     </section>
   );
 }

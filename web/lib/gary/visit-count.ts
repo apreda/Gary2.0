@@ -44,6 +44,15 @@ function botName(userAgent: string): string | null {
   return GENERIC_BOT.test(userAgent) ? 'other' : null;
 }
 
+/**
+ * A browser navigating to a page says so (Sec-Fetch-Dest, in every browser since
+ * Safari 16.4). A request that doesn't, or names itself a crawler, isn't a person.
+ */
+export function isLikelyBot(request: Request): boolean {
+  const h = request.headers;
+  return botName(h.get('user-agent') ?? '') !== null || !h.get('sec-fetch-dest');
+}
+
 function token(value: string | null, max = 64): string | null {
   const clean = (value ?? '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, max);
   return clean || null;
@@ -61,7 +70,7 @@ export function countableVisit(request: Request): Visit | null {
   const path = url.pathname;
   if (/^\/(api|_next|c|go|get|auth|sitemap-data)(\/|$)/.test(path) || /\.[a-z0-9]{2,5}$/i.test(path)) return null;
 
-  const bot = botName(h.get('user-agent') ?? '');
+  const bot = botName(h.get('user-agent') ?? '') ?? (dest ? null : 'other');
   if (bot) return { path: path.slice(0, 200), source: bot, medium: 'crawler', bot };
 
   const utm = token(url.searchParams.get('utm_source'));
