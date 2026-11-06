@@ -70,13 +70,11 @@ out([a.sy == b.sy, abs(a.sy - 1) < 0.03])`);
 });
 
 describe.skipIf(!hasSwiftCompiler)('which celebration plays', () => {
-  it('plays the biggest fresh one not yet seen, and never one older than 20 minutes', () => {
+  it('reads the fractional seconds Postgres writes on ready_at', () => {
     const r = swiftJSON(`let now = ISO8601DateFormatter().date(from: "2026-10-30T04:00:00Z")!
-let rows = [${cel('a@1', 1100, '2026-10-30T03:45:39.873+00:00')}, ${cel('b@2', 1500, '2026-10-30T03:30:00+00:00')}, ${cel('c@3', 900, '2026-10-30T03:58:00.1+00:00')}, ${cel('d@4', 5000, null)}]
-out([CashRailCelebration.next(rows, seen: [], now: now)?.play_key ?? "nil",
-     CashRailCelebration.next(rows, seen: ["a@1"], now: now)?.play_key ?? "nil",
-     CashRailCelebration.next(rows, seen: ["a@1", "c@3"], now: now)?.play_key ?? "nil"])`);
-    expect(r).toEqual(['a@1', 'c@3', 'nil']);
+let rows = [${cel('c@3', 900, '2026-10-30T03:58:00.1+00:00')}]
+out([CashRailCelebration.next(rows, seen: [], now: now)?.play_key ?? "nil"])`);
+    expect(r).toEqual(['c@3']);
   });
 
   it('finds the play a hit came from, but never for a game line', () => {

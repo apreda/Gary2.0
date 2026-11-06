@@ -47,6 +47,45 @@ out([f.hero!.key, f.ranked.first!.key])`);
     expect(r).toEqual(['sanders|first_td', 'kraft|anytime_td']);
   });
 
+  const celebrationKit = `
+func hit(_ key: String, _ price: Int, _ elapsed: Int) -> CashRailHit {
+  CashRailHit(key: key, who: "x", market: "m", price: price, rungs: nil, elapsed: elapsed, when: "Q1", play: nil, gary: nil)
+}
+func cele(_ key: String, _ kind: String, _ price: Int, _ ready: String) -> CashRailCelebration {
+  CashRailCelebration(play_key: key, who: "x", market: "m", price: price, when_label: nil, play: nil, kind: kind, dance: "d", team: nil, number: nil, ready_at: ready,
+                      assets: .init(bg: "b", frames: [:], seq: [], name: "n"))
+}
+let now = ISO8601DateFormatter().date(from: "2026-11-06T04:00:00Z")!
+`;
+
+  it('on a touchdown play the hero is the touchdown, even when another bet on that play paid more', () => {
+    const r = swiftJSON(`${celebrationKit}
+let live = CashRailBoard(league: "NFL", game_id: "1", status: "live", possession: nil, situation: nil, elapsed_s: 1742, clock: "Q2 0:58",
+  hits: [hit("1057|longest_reception", 445, 1742), hit("1057|anytime_td|1", 170, 1742), hit("1057|receiving_yards", -114, 1742), hit("42|passing_yards", 900, 1000)])
+out([live.hero!.key])`);
+    expect(r).toEqual(['1057|anytime_td|1']);
+  });
+
+  it('a hit replays a celebration only when its own bet earned it, never a yardage bet on the same touchdown', () => {
+    const r = swiftJSON(`${celebrationKit}
+let known = ["518@3165": cele("518@3165", "td", 575, "2026-11-06T03:56:00Z"), "33@2350": cele("33@2350", "big", 1720, "2026-11-06T03:18:00Z")]
+func replays(_ h: CashRailHit) -> String { h.celebration(in: known)?.play_key ?? "none" }
+out([replays(hit("518|anytime_td|1", 575, 3165)), replays(hit("518|first_td", 600, 3165)), replays(hit("518|rushing_yards", 3200, 3165)), replays(hit("518|longest_rush", 186, 3165)),
+     replays(hit("33|receiving_yards", 1720, 2350)), replays(hit("33|receptions", 198, 2350)),
+     replays(hit("9|anytime_td|1", 200, 100)), replays(hit("game|ml|home", 900, 3600))])`);
+    expect(r).toEqual(['518@3165', '518@3165', 'none', 'none', '33@2350', 'none', 'none', 'none']);
+  });
+
+  it('plays only the latest play on its own, and only while it is news; older ones wait for a tap', () => {
+    const r = swiftJSON(`${celebrationKit}
+let older = cele("7@100", "big", 3200, "2026-11-06T03:59:30Z")
+let latest = cele("8@900", "td", 170, "2026-11-06T03:59:00Z")
+let stale = cele("8@900", "td", 170, "2026-11-06T03:54:59Z")
+func next(_ rows: [CashRailCelebration], _ seen: Set<String> = []) -> String { CashRailCelebration.next(rows, seen: seen, now: now)?.play_key ?? "none" }
+out([next([older, latest]), next([older, latest], ["8@900"]), next([older, stale]), next([])])`);
+    expect(r).toEqual(['8@900', 'none', 'none', 'none']);
+  });
+
   it('decodes a celebration with its dance routine', () => {
     const json = JSON.stringify({ play_key: '935@592', who: 'Tucker Kraft', market: 'First TD scorer', price: 1100, when_label: 'Q1 5:08', play: '12-yd TD catch', kind: 'td', dance: 'bird', team: 'GB', number: '85', ready_at: '2026-10-30T03:45:39Z',
       assets: { bg: 'https://x/bg.webp', name: 'THE DIRTY BIRD', frames: { db1: 'https://x/1.webp', db2: 'https://x/2.webp' }, seq: [['db1', 420, ''], ['db2', 230, 'rise']] } });

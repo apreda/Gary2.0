@@ -57,6 +57,8 @@ struct CashRailSheet: View {
             }
         }
         .background(GaryColors.darkBg.ignoresSafeArea())
+        // The app's own host sits under this sheet; a replay tapped here plays here.
+        .overlay { CashRailCelebrationHost() }
         .presentationDragIndicator(.visible)
     }
 

@@ -30,6 +30,8 @@ final class CashRailCelebrations: ObservableObject {
     @Published private(set) var reel: CashRailReel?
     /// Every ready celebration seen this session, by play key, for replays.
     @Published private(set) var known: [String: CashRailCelebration] = [:]
+    /// The play being fetched for a replay, so its row can say so.
+    @Published private(set) var loadingKey: String?
 
     private var loading = false
     private static let seenKey = "cashRail.celebrated"
@@ -42,7 +44,7 @@ final class CashRailCelebrations: ObservableObject {
         UserDefaults.standard.set(Array(list.suffix(200)), forKey: Self.seenKey)
     }
 
-    /// Called with each poll's rows: plays the biggest fresh one not yet seen.
+    /// Called with each poll's rows: plays the latest play if it's fresh and not yet seen.
     func consider(_ rows: [CashRailCelebration]) {
         for c in rows { known[c.play_key] = c }
         guard reel == nil, !loading, let next = CashRailCelebration.next(rows, seen: seen, now: Date()) else { return }
@@ -50,13 +52,21 @@ final class CashRailCelebrations: ObservableObject {
         play(next)
     }
 
+    /// A tap on a hit: plays its celebration now, and it won't play again on its own.
+    func replay(_ c: CashRailCelebration) {
+        markSeen(c.play_key)
+        play(c)
+    }
+
     /// Plays one now, seen or not (a tap on the hit, or the tour).
     func play(_ c: CashRailCelebration) {
         guard !loading else { return }
         loading = true
+        loadingKey = c.play_key
         Task {
             let reel = await Self.load(c)
             loading = false
+            loadingKey = nil
             if let reel { self.reel = reel }
         }
     }

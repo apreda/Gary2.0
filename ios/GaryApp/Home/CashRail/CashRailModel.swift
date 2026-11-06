@@ -73,15 +73,17 @@ struct CashRailBoard: Codable, Equatable {
 }
 
 extension CashRailBoard {
-    /// The latest landing owns the hero (a tie goes to the longer price); once
-    /// the game is final the night's biggest hit takes it back.
+    /// The latest landing owns the hero. On one play a touchdown goes first, so the card says what Gary is
+    /// dancing for (founder, Nov 5 2026), then the longer price. Once the game is final the night's biggest
+    /// hit takes it back.
     var hero: CashRailHit? {
         if status == "final" {
             return hits.max { CashRailFormat.decimal($0.price) < CashRailFormat.decimal($1.price) }
         }
         return hits.max { a, b in
-            a.elapsed != b.elapsed ? a.elapsed < b.elapsed
-                : CashRailFormat.decimal(a.price) < CashRailFormat.decimal(b.price)
+            if a.elapsed != b.elapsed { return a.elapsed < b.elapsed }
+            if a.isTouchdown != b.isTouchdown { return b.isTouchdown }
+            return CashRailFormat.decimal(a.price) < CashRailFormat.decimal(b.price)
         }
     }
 
@@ -235,8 +237,8 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
     let assets: Assets
     var id: String { play_key }
 
-    /// A celebration is news for 20 minutes after its art is ready.
-    static let freshFor: TimeInterval = 20 * 60
+    /// A celebration plays on its own for 5 minutes after its art is ready; after that it waits for a tap.
+    static let freshFor: TimeInterval = 5 * 60
 
     var readyDate: Date? {
         guard let s = ready_at else { return nil }
@@ -245,13 +247,15 @@ struct CashRailCelebration: Codable, Equatable, Identifiable {
         return ISO8601DateFormatter().date(from: trimmed)
     }
 
-    /// The one to play now: the biggest price among fresh ones not yet seen.
+    /// When in the game the play happened: the seconds in its play key ("935@592").
+    private var gameSeconds: Int { Int(play_key.split(separator: "@").last ?? "") ?? 0 }
+
+    /// The one to play on its own: the game's latest play, if it's still news and not yet seen. Older plays never
+    /// jump in behind a newer one (founder, Nov 5 2026: the animations weren't matching up); they replay on a tap.
     static func next(_ rows: [CashRailCelebration], seen: Set<String>, now: Date) -> CashRailCelebration? {
-        rows.filter { c in
-            guard !seen.contains(c.play_key), let d = c.readyDate else { return false }
-            return now.timeIntervalSince(d) <= freshFor
-        }
-        .max { $0.price < $1.price }
+        guard let latest = rows.max(by: { $0.gameSeconds < $1.gameSeconds }), !seen.contains(latest.play_key),
+              let d = latest.readyDate, now.timeIntervalSince(d) <= freshFor else { return nil }
+        return latest
     }
 }
 
@@ -261,5 +265,16 @@ extension CashRailHit {
     var playKey: String? {
         guard let id = key.split(separator: "|").first, id != "game" else { return nil }
         return "\(id)@\(elapsed)"
+    }
+
+    /// A bet on the player scoring: first TD, anytime, 2+, 3+.
+    var isTouchdown: Bool { key.contains("|first_td") || key.contains("|anytime_td") }
+
+    /// The celebration this bet earned, if one was drawn: a touchdown bet gets its play's, and a +800-or-longer
+    /// bet gets a play that wasn't a touchdown (the backend's rule, celebrations.js). A yardage bet on the same
+    /// run as a touchdown has none of its own; the touchdown bet's row replays it (founder, Nov 5 2026).
+    func celebration(in known: [String: CashRailCelebration]) -> CashRailCelebration? {
+        guard let playKey, let c = known[playKey] else { return nil }
+        return isTouchdown || (c.kind == "big" && price >= 800) ? c : nil
     }
 }

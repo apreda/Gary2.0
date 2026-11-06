@@ -181,7 +181,7 @@ struct CashRailCard: View {
                 .contentShape(Rectangle())
                 // A hit Gary danced for plays his dance again on a tap.
                 .onTapGesture {
-                    if let key = hero.playKey, let c = celebrations.known[key] { celebrations.play(c) }
+                    if let c = hero.celebration(in: celebrations.known) { celebrations.replay(c) }
                 }
             // After the final the card keeps the night's biggest hit and the
             // door to every hit; the next three wait behind ALL HITS (Home was
@@ -277,6 +277,21 @@ struct CashRailLabelRow: View {
     }
 }
 
+/// "▶ REPLAY" on a hit with a celebration to watch again.
+struct CashRailReplayMark: View {
+    let loading: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "play.fill").font(.system(size: 7.5, weight: .bold))
+            Text(loading ? "LOADING" : "REPLAY").font(CR.sys(9, .bold)).tracking(1.1)
+        }
+        .foregroundStyle(GaryColors.gold)
+        .fitsOneLine()
+        .accessibilityHidden(true)
+    }
+}
+
 /// The latest cash, big: price and what $10 returned on the left, who and what on the right.
 struct CashRailHeroView: View {
     let hit: CashRailHit
@@ -284,6 +299,7 @@ struct CashRailHeroView: View {
     let space: Namespace.ID
     let glowKey: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var celebrations = CashRailCelebrations.shared
     @State private var blink = false
 
     var body: some View {
@@ -292,6 +308,10 @@ struct CashRailHeroView: View {
                 Text(title)
                     .foregroundStyle(blink ? CR.mute : GaryColors.gold)
                 Spacer()
+                if let c = hit.celebration(in: celebrations.known) {
+                    CashRailReplayMark(loading: celebrations.loadingKey == c.play_key)
+                        .padding(.trailing, 10)
+                }
                 Text(hit.when).tracking(0.8)
                     .foregroundStyle(CR.mute)
             }
@@ -334,6 +354,7 @@ struct CashRailHeroView: View {
         }
         .id(hit.key)
         .transition(.opacity.combined(with: .offset(y: 10)))
+        .accessibilityHint(hit.celebration(in: celebrations.known) == nil ? "" : "Replays the celebration")
         .onAppear { blinkTwice() }
     }
 
@@ -361,8 +382,10 @@ struct CashRailRow: View {
     let hit: CashRailHit
     let space: Namespace.ID?
     var strip = true
+    @ObservedObject private var celebrations = CashRailCelebrations.shared
 
     var body: some View {
+        let replay = hit.celebration(in: celebrations.known)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
                 price
@@ -374,17 +397,27 @@ struct CashRailRow: View {
                         .foregroundStyle(CR.mute)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(CashRailFormat.payout10(hit.price))
-                    .font(CR.sys(13))
-                    .foregroundStyle(GaryColors.win)
-                    .fitsOneLine()
-                    .frame(width: 58, alignment: .trailing)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(CashRailFormat.payout10(hit.price))
+                        .font(CR.sys(13))
+                        .foregroundStyle(GaryColors.win)
+                        .fitsOneLine()
+                    if let replay {
+                        CashRailReplayMark(loading: celebrations.loadingKey == replay.play_key)
+                    }
+                }
+                .frame(width: 58, alignment: .trailing)
             }
             if strip && hit.showsStrip {
                 CashRailRungStrip(rungs: hit.climb, big: false).padding(.leading, 64)
             }
         }
         .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        .onTapGesture { if let replay { celebrations.replay(replay) } }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(replay == nil ? [] : .isButton)
+        .accessibilityHint(replay == nil ? "" : "Replays the celebration")
     }
 
     @ViewBuilder private var price: some View {
