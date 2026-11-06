@@ -115,6 +115,15 @@ export default function PrivacyPage() {
               notification permission in your device&rsquo;s Settings.
             </li>
             <li>
+              Talking to Gary on the Home screen is optional, and the App asks your permission
+              first. Apple&rsquo;s speech recognition turns what you say into text, on your device
+              where it&rsquo;s supported; Gary does not store your voice recording. The text goes to
+              Gary&rsquo;s server and to Anthropic, whose AI writes his answer, and ElevenLabs
+              receives that answer to speak it in his voice. Gary keeps each question and answer
+              with your account ID, or a random installation ID when signed out, to run the feature,
+              limit use and check his answers. Please don&rsquo;t share anything private with him.
+            </li>
+            <li>
               Starting with iOS version 2.25 (build 899), the App&rsquo;s Settings include <strong className="text-hi">Share product analytics</strong>{' '}
               which is off by default. If you turn it on, Gary sends allowlisted plan-view, plan-choice
               and checkout-step events to Supabase. Signed-in events include your account ID;
