@@ -33,14 +33,16 @@ struct AuthView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
-                    Spacer(minLength: 40)
+                    // Tighter top and a smaller mark so Forgot Password shows without scrolling (Nov 6 2026: it was cut off
+                    // under the home indicator on a regular iPhone).
+                    Spacer(minLength: 8)
 
                     // Logo
                     VStack(spacing: 0) {
                         Image(GaryBrand.mark)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 180, height: 180)
+                            .frame(width: 140, height: 140)
 
                         Text("GARY A.I.")
                             .font(GaryFonts.mono(23))
