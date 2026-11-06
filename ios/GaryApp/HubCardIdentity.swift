@@ -38,8 +38,8 @@ enum HubCardIdentity {
         }
         let lower = name.lowercased()
         guard !lower.isEmpty else { return nil }
-        let hits = map.filter { _, words in words.contains { lower.contains($0) } }.map(\.key)
-        return hits.count == 1 ? hits[0] : nil
+        let hits = map.filter { _, words in words.contains { teamName(lower, holds: $0) } }.map(\.key)
+        return hits.count == 1 ? hits[0] : hits.first { preferredTeamCodes.contains($0) }
     }
 
     static func matchesTeam(_ query: String, name: String?, abbr: String?, league: String) -> Bool {

@@ -1,5 +1,7 @@
 import AVFoundation
 import CoreImage
+import Metal
+import QuartzCore
 import SwiftUI
 
 /// THE GARY OPENING — Home's first thing (founder, Oct 30 2026: "the Gary mascot in the middle, not in a
@@ -30,6 +32,7 @@ struct HomeGaryOpening: View {
     @Environment(\.readingPageActive) private var activePage
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var figureOnScreen = true
     @State private var bankroll: GaryBankrollSnapshot?
     @State private var tonight: LabBoard?
     @State private var darts: DartsBoard?
@@ -105,10 +108,18 @@ struct HomeGaryOpening: View {
                 }
                 // Tapped, he opens Winners; while you talk to him, he listens, or stops to let you cut in.
                 Button { talkOn ? talk.micTapped() : onOpen(.winners) } label: {
-                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live, lives: !talkOn) { up in
+                    GaryIdleFigure(mood: moodPreview ?? lastNight?.face, height: gh, active: live && figureOnScreen, lives: !talkOn) { up in
                         withAnimation(.easeInOut(duration: 0.3)) { performing = up }
                     }
                         .frame(width: gw + 60, height: gh + 30)
+                        // Scrolled off the top of Home, he rests: nobody's watching the video.
+                        .background(GeometryReader { geo in
+                            Color.clear.preference(key: GaryFigureBottom.self, value: geo.frame(in: .global).maxY)
+                        })
+                        .onPreferenceChange(GaryFigureBottom.self) { bottom in
+                            let shown = bottom > 0
+                            if shown != figureOnScreen { figureOnScreen = shown }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -698,7 +709,8 @@ struct GaryIdleFigure: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion)) { ctx in
+        // While a clip plays nothing around it moves (no breath, no smoke, no fade), so the page doesn't redraw for it.
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !active || reduceMotion || life.clipHoldsStill)) { ctx in
             figure(at: reduceMotion ? Date(timeIntervalSinceReferenceDate: 0) : ctx.date)
         }
         .allowsHitTesting(false)
@@ -740,7 +752,7 @@ struct GaryIdleFigure: View {
                 // Two clip layers that take turns, both always mounted, so the next clip's first frame is up
                 // before it shows. Their smoke fades out over the top before it reaches the scoreboard.
                 ForEach(0..<2, id: \.self) { i in
-                    GaryClipView(player: life.players[i], output: life.outputs[i], board: life.boards[i])
+                    GaryClipView(player: life.players[i], output: life.outputs[i], board: life.boards[i], running: active)
                         .frame(width: vw, height: vh)
                         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.13)],
                                              startPoint: .top, endPoint: .bottom))
@@ -794,8 +806,13 @@ final class GaryLife: ObservableObject {
 
     let players = [AVPlayer(), AVPlayer()]
     /// Each player's frames, attached to every item before it loads so its first frame is never missed.
+    /// In the video's own format, so nothing converts each frame on the CPU; Core Image reads it on the GPU.
     let outputs = (0..<2).map { _ in
-        AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+        AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            kCVPixelBufferMetalCompatibilityKey as String: true,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
+        ])
     }
     var mood: String?
     /// The layer showing: 0 or 1 while a clip plays, -1 for the stance frame he stands in between them.
@@ -826,6 +843,9 @@ final class GaryLife: ObservableObject {
             p.preventsDisplaySleepDuringVideoPlayback = false
         }
     }
+
+    /// A clip is playing with no fade under way: the figure's own frames are all that change.
+    var clipHoldsStill: Bool { playing && handOver == nil && settle == nil }
 
     /// A layer's opacity: the next one fades in on top while the one under it stays whole, so the figure
     /// never thins out mid-way.
@@ -1038,16 +1058,42 @@ final class GaryBoardInk {
 /// A clip with its see-through kept. Each clip is one plain video, the picture over its alpha (a video's own
 /// alpha doesn't show in the simulator or on every device), put back together here every frame. A paused
 /// player keeps its last frame up.
+/// Where Gary's figure ends on screen, to tell when he's scrolled off the top of Home.
+private struct GaryFigureBottom: PreferenceKey {
+    static let defaultValue: CGFloat = .greatestFiniteMagnitude
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 private struct GaryClipView: UIViewRepresentable {
     let player: AVPlayer
     let output: AVPlayerItemVideoOutput
     let board: GaryBoardInk?
+    /// Off (he's off screen or Home is hidden), it stops checking for frames altogether.
+    let running: Bool
 
+    /// Frames go straight to the screen through the GPU. They used to come back to the CPU as a new image 30 times
+    /// a second, which is what made Home the one busy page in the app (32% of a core, sitting idle).
     final class ClipView: UIView {
-        private static let context = CIContext(options: [.cacheIntermediates: false])
+        private static let device = MTLCreateSystemDefaultDevice()
+        private static let queue = device?.makeCommandQueue()
+        private static let context = device.map { CIContext(mtlDevice: $0, options: [.cacheIntermediates: false]) }
+        private static let sRGB = CGColorSpace(name: CGColorSpace.sRGB)
         private var link: CADisplayLink?
         var output: AVPlayerItemVideoOutput?
         var board: GaryBoardInk?
+        var running = true { didSet { link?.isPaused = !running } }
+
+        override class var layerClass: AnyClass { CAMetalLayer.self }
+        private var metal: CAMetalLayer { layer as! CAMetalLayer }
+
+        func configure() {
+            metal.device = Self.device
+            metal.pixelFormat = .bgra8Unorm
+            metal.colorspace = Self.sRGB
+            metal.isOpaque = false
+            metal.framebufferOnly = false
+            metal.contentsGravity = .resize
+        }
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
@@ -1056,6 +1102,7 @@ private struct GaryClipView: UIViewRepresentable {
             guard window != nil else { return }
             let l = CADisplayLink(target: self, selector: #selector(tick))
             l.preferredFramesPerSecond = 30
+            l.isPaused = !running
             l.add(to: .main, forMode: .common)
             link = l
         }
@@ -1077,8 +1124,23 @@ private struct GaryClipView: UIViewRepresentable {
             let frame = picture.applyingFilter("CIBlendWithMask", parameters: [
                 kCIInputBackgroundImageKey: CIImage.empty(), kCIInputMaskImageKey: alpha,
             ])
-            guard let image = Self.context.createCGImage(frame, from: CGRect(x: 0, y: 0, width: w, height: h)) else { return }
-            layer.contents = image
+            present(frame, width: w, height: h)
+        }
+
+        private func present(_ frame: CIImage, width: CGFloat, height: CGFloat) {
+            let size = CGSize(width: width, height: height)
+            if metal.drawableSize != size { metal.drawableSize = size }
+            guard let context = Self.context, let drawable = metal.nextDrawable(),
+                  let commands = Self.queue?.makeCommandBuffer() else { return }
+            let target = CIRenderDestination(width: Int(width), height: Int(height), pixelFormat: metal.pixelFormat,
+                                             commandBuffer: commands) { drawable.texture }
+            target.colorSpace = Self.sRGB
+            target.alphaMode = .premultiplied
+            target.isFlipped = true
+            _ = try? context.startTask(toClear: target)
+            _ = try? context.startTask(toRender: frame, to: target)
+            commands.present(drawable)
+            commands.commit()
         }
 
         /// The ink laid along the board's corners, only where the board is white: his fingers stay over it.
@@ -1105,15 +1167,17 @@ private struct GaryClipView: UIViewRepresentable {
         v.isOpaque = false
         v.backgroundColor = .clear
         v.isUserInteractionEnabled = false
-        v.layer.contentsGravity = .resize
+        v.configure()
         v.output = output
         v.board = board
+        v.running = running
         return v
     }
 
     func updateUIView(_ v: ClipView, context: Context) {
         v.output = output
         v.board = board
+        v.running = running
     }
 }
 

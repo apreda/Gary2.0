@@ -120,10 +120,12 @@ struct LabGameTracker: View {
         let n = LabFormat.trim(abs(m))
         switch market {
         case .spread:
-            if m == 0 { return "Pushing on the number" }
+            if m == 0 { return isFinal ? "Pushed on the number" : "Pushing on the number" }
+            if isFinal { return m > 0 ? "Covered by \(n)" : "Missed by \(n)" }
             return m > 0 ? "Covering by \(n)" : "Down \(n) against the number"
         case .moneyline:
             if m == 0 { return "Tied" }
+            if isFinal { return m > 0 ? "Won by \(n)" : "Lost by \(n)" }
             return m > 0 ? "Leading by \(n)" : "Trailing by \(n)"
         case .total(_, let over):
             if m == 0 { return "On the number" }

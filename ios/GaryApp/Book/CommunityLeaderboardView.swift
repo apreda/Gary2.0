@@ -149,7 +149,7 @@ struct ClassicLeaderboardView: View {
             Text("\(row.rank)").font(GaryFonts.mono(12, bold: true)).foregroundStyle(isMe ? GaryColors.gold : .white.opacity(0.45)).frame(minWidth: 18, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.name).font(GaryFonts.text(14, .semibold)).foregroundStyle(isMe ? GaryColors.gold : GaryColors.warmWhite).fitsLines(2)
-                Text(isMe ? "YOU · BEST W\(row.best_streak)" : "BEST W\(row.best_streak)").font(GaryFonts.mono(8, bold: true)).foregroundStyle(.white.opacity(0.4))
+                Text([isMe ? "YOU" : nil, row.best_streak > 0 ? "BEST W\(row.best_streak)" : nil].compactMap { $0 }.joined(separator: " · ")).font(GaryFonts.mono(8, bold: true)).foregroundStyle(.white.opacity(0.4))
             }.frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 4) {
                 Text(row.record).font(GaryFonts.mono(13, bold: true)).foregroundStyle(.white.opacity(0.85))

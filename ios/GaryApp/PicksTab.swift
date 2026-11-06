@@ -26,6 +26,7 @@ struct PicksCarouselView: View {
     }
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.readingPageActive) private var tabActive
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @StateObject private var store = PropsSlateStore(includeNFLWeek: true)
     @ObservedObject private var liveCache = LiveScoreCache.shared
@@ -1168,6 +1169,9 @@ struct PicksCarouselView: View {
                     }
                     .refreshable { await refreshRollingPicks() }
                     .clipped()
+                    // The pager is UIKit underneath, so the root's hidden-tab setting doesn't reach in: VoiceOver could
+                    // land on invisible picks from any other tab, or on the games either side of this one.
+                    .accessibilityHidden(!tabActive || page != idx + 1)
                     .id(Self.gameIdentityKey(g.matchup, g.commence))
                     .tag(idx + 1)
                 }

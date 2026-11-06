@@ -637,11 +637,11 @@ struct HotColdSheet: View {
 
     /// The four lists in the league's own words.
     private var lists: [(kind: String, title: String, hot: Bool)] {
-        league == "NFL"
-            ? [("hot", "HOT PLAYERS", true), ("cold", "COLD PLAYERS", false),
-               ("hot_arm", "HOT QBS", true), ("cold_arm", "COLD QBS", false)]
-            : [("hot", "HOT BATS", true), ("cold", "COLD BATS", false),
+        league == "MLB"
+            ? [("hot", "HOT BATS", true), ("cold", "COLD BATS", false),
                ("hot_arm", "HOT ARMS", true), ("cold_arm", "COLD ARMS", false)]
+            : [("hot", "HOT PLAYERS", true), ("cold", "COLD PLAYERS", false),
+               ("hot_arm", "HOT QBS", true), ("cold_arm", "COLD QBS", false)]
     }
 
     var body: some View {

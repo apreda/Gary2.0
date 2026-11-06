@@ -476,14 +476,15 @@ export function formatRecentFormWithBoxScores(teamName, recentGames, boxScoreMap
   completedGames.slice(0, count).forEach(game => {
     const homeTeamName = game.home_team?.name || game.home_team?.full_name || '';
     const awayTeamName = game.visitor_team?.name || game.visitor_team?.full_name || game.away_team?.name || game.away_team?.full_name || '';
-    const isHome = homeTeamName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop()) ||
-                   teamName.toLowerCase().includes(homeTeamName.toLowerCase().split(' ').pop());
+    // Whole-name match (see namesRefer): the last-word join read "nets" inside "hornets", so a Hornets-Nets game put
+    // both clubs at home, swapped the score, and dropped the game from each club's form.
+    const isHome = namesRefer(homeTeamName, teamName);
 
     const teamScore = isHome ? (game.home_team_score ?? game.home_score ?? 0) : (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0);
     const oppScore = isHome ? (game.visitor_team_score ?? game.away_team_score ?? game.away_score ?? 0) : (game.home_team_score ?? game.home_score ?? 0);
     const oppName = isHome ? awayTeamName : homeTeamName;
 
-    if (!oppName || oppName.toLowerCase().includes(teamName.toLowerCase().split(' ').pop())) return;
+    if (!oppName || namesRefer(oppName, teamName)) return;
 
     const wl = teamScore > oppScore ? 'W' : 'L';
     if (wl === 'W') wins++; else losses++;

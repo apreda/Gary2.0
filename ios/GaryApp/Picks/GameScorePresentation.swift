@@ -34,7 +34,8 @@ func teamAbbrevFromName(_ name: String, league: String? = nil) -> String {
         default: maps = [mlbTeamKeywords, nbaTeamKeywords, nhlTeamKeywords, nflTeamKeywords, wcTeamKeywords]
         }
         for map in maps {
-            for (ab, kws) in map where kws.contains(where: { lower.contains($0) }) { return ab }
+            let hits = map.filter { _, kws in kws.contains { teamName(lower, holds: $0) } }.keys
+            if let ab = hits.first(where: { preferredTeamCodes.contains($0) }) ?? hits.sorted().first { return ab }
         }
         let last = lower.split(separator: " ").last.map(String.init) ?? lower
         return String(last.prefix(3)).uppercased()

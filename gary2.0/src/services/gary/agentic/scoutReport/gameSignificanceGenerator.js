@@ -353,7 +353,7 @@ export function generateGameSignificance(game, sport, standings = []) {
       const bdlFullName = (s.team?.full_name || '').toLowerCase();
       // Match by last word (team nickname)
       const lastWord = nameLower.split(' ').pop();
-      return bdlName.includes(lastWord) || bdlFullName.includes(lastWord) || lastWord.includes(bdlName.split(' ').pop());
+      return namesTeam(bdlName, lastWord) || namesTeam(bdlFullName, lastWord);
     });
   };
 

@@ -1,5 +1,22 @@
 import Foundation
 
+/// Whether a lowercased team name or matchup holds a keyword as whole words: "charlotte hornets" doesn't hold
+/// "nets", and "minnesota vikings" doesn't hold "kings". Every keyword lookup below goes through this.
+func teamName(_ lower: String, holds keyword: String) -> Bool {
+    var from = lower.startIndex
+    while let hit = lower.range(of: keyword, range: from..<lower.endIndex) {
+        let before = hit.lowerBound > lower.startIndex ? lower[lower.index(before: hit.lowerBound)] : " "
+        let after = hit.upperBound < lower.endIndex ? lower[hit.upperBound] : " "
+        if !before.isLetter, !before.isNumber, !after.isLetter, !after.isNumber { return true }
+        from = lower.index(after: hit.lowerBound)
+    }
+    return false
+}
+
+/// Teams with two codes in the maps below (a keyword lookup used to pick one at random on each launch). These are
+/// the ones the score feed uses.
+let preferredTeamCodes: Set<String> = ["JAX", "WSH", "CWS", "ATH"]
+
 /// MLB BDL team abbreviation -> name keywords, so insight_connections rows
 /// (whose `game` is "DET @ TB") can be matched to slate matchups (full names).
 let mlbTeamKeywords: [String: [String]] = [
@@ -126,7 +143,7 @@ func matchupAbbrKeys(_ matchup: String) -> [String] {
         var seen = Set<String>()
         // Longest keywords first so "white sox" wins over a bare token.
         for (kw, abset) in reverseTeamKeywordIndex.sorted(by: { $0.key.count > $1.key.count }) {
-            guard hay.contains(kw) else { continue }
+            guard teamName(hay, holds: kw) else { continue }
             for ab in abset where !seen.contains(ab) { seen.insert(ab); hits.append(ab) }
         }
         return hits

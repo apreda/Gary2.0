@@ -313,7 +313,7 @@ struct MLBGameIntelView: View {
     /// Resolve a displayed team name to its real colours via the shared keyword map.
     private static func teamColor(forName name: String) -> MLBTeamColor {
         let n = name.lowercased()
-        if let abbr = mlbTeamKeywords.first(where: { $0.value.contains { n.contains($0) } })?.key,
+        if let abbr = mlbTeamKeywords.first(where: { $0.value.contains { teamName(n, holds: $0) } })?.key,
            let c = teamColors[abbr] { return c }
         return MLBTeamColor(primary: Color(hex: "#12284B"), numberOnWhite: Color(hex: "#12284B"), accent: Color(hex: "#12284B"), hasPinstripes: false)
     }

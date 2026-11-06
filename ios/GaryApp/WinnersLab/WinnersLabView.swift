@@ -906,11 +906,14 @@ struct WinnersLabView: View {
             todayRow(tab: 14, spacing: 12, numbers: 18)
             todayRow(tab: 12.5, spacing: 8, numbers: 16)
             todayRow(tab: 12.5, spacing: 6, numbers: 14)
+            // REVEAL ALL on a normal phone (Nov 6 2026): the row ran wide and pushed the money and the filter off the
+            // screen. The numbers give way, and yesterday's are in the card further down the page.
+            todayRow(tab: 12.5, spacing: 6, numbers: 14, showNumbers: false)
         }
         .padding(.top, 2)
     }
 
-    private func todayRow(tab: CGFloat, spacing: CGFloat, numbers: CGFloat) -> some View {
+    private func todayRow(tab: CGFloat, spacing: CGFloat, numbers: CGFloat, showNumbers: Bool = true) -> some View {
         HStack(alignment: .center, spacing: spacing) {
             Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).fixedSize()
             Spacer(minLength: 4)
@@ -929,7 +932,7 @@ struct WinnersLabView: View {
                 .disabled(revealTask != nil)
                 .accessibilityLabel("Reveal all of today's plays")
             }
-            dayNumbers(size: numbers)
+            if showNumbers { dayNumbers(size: numbers) }
             filterMenu
         }
     }

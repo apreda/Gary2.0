@@ -9,6 +9,18 @@ import UserNotifications
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate {
     @MainActor private var notificationSettingsGeneration = UUID()
     
+    /// Clears finished downloads out of the app's temp folder: anything an hour old, so nothing running is touched.
+    private nonisolated static func removeLeftoverDownloads() {
+        let temp = FileManager.default.temporaryDirectory
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: temp.path) else { return }
+        let cutoff = Date().addingTimeInterval(-3600)
+        for name in names where name.hasPrefix("CFNetworkDownload_") {
+            let file = temp.appendingPathComponent(name)
+            let changed = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let changed, changed < cutoff { try? FileManager.default.removeItem(at: file) }
+        }
+    }
+
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Set notification center delegate
@@ -16,6 +28,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         // Winners' board goes out first, ahead of every page's launch reads.
         Task { @MainActor in await SupabaseAPI.prewarmLabBoards() }
+
+        // Downloads an earlier build's X show left behind, once launch has settled. Only temporary files, none in use.
+        Task.detached(priority: .background) {
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            Self.removeLeftoverDownloads()
+        }
 
         // Firebase Installations raises an Objective-C exception (not a Swift
         // Error) when a redacted/malformed API key is bundled. That exception

@@ -23,6 +23,67 @@ struct XWirePost: Decodable, Identifiable, Equatable {
     var link: URL? { URL(string: "https://x.com/\(username)/status/\(id)") }
 }
 
+/// Each post's pictures, loaded once and kept while the show goes round. The show used AsyncImage, which keeps
+/// nothing: every time a post came back around (one every 7 seconds) its pictures were downloaded again, and a
+/// temporary file could be left behind each time (Nov 6 2026: 45,000 files, 2.3 GB, in a week on the test phone).
+@MainActor
+final class XWireImages {
+    static let shared = XWireImages()
+    private let kept: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>(); cache.countLimit = 60; return cache
+    }()
+    private var loading: [String: Task<UIImage?, Never>] = [:]
+
+    func image(for url: String) -> UIImage? { kept.object(forKey: url as NSString) }
+
+    func load(_ url: String) async -> UIImage? {
+        if let image = image(for: url) { return image }
+        if let running = loading[url] { return await running.value }
+        guard let address = URL(string: url) else { return nil }
+        let task = Task.detached(priority: .utility) { () -> UIImage? in
+            guard let (data, response) = try? await URLSession.shared.data(from: address),
+                  (response as? HTTPURLResponse)?.statusCode == 200,
+                  let image = UIImage(data: data) else { return nil }
+            return await image.byPreparingForDisplay() ?? image
+        }
+        loading[url] = task
+        let image = await task.value
+        loading[url] = nil
+        if let image { kept.setObject(image, forKey: url as NSString) }
+        return image
+    }
+
+    /// The next post's pictures, so it doesn't slide in empty.
+    func prepare(_ post: XWirePost) {
+        for url in [post.avatar_url, post.media?.url].compactMap({ $0 }) where image(for: url) == nil {
+            Task { _ = await load(url) }
+        }
+    }
+}
+
+private struct XWirePicture: View {
+    let url: String
+    @State private var image: UIImage?
+
+    init(url: String) {
+        self.url = url
+        _image = State(initialValue: XWireImages.shared.image(for: url))
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                Color.white.opacity(0.06)
+            }
+        }
+        .task(id: url) {
+            if image == nil { image = await XWireImages.shared.load(url) }
+        }
+    }
+}
+
 /// The show's touches, in UIKit: a SwiftUI drag that tracks from the first touch kept the page from scrolling
 /// wherever a finger landed on or beside the show (founder, Nov 5 2026: "will not scroll back up"). Here an up and
 /// down pan fails at once so the page scrolls, and a sideways one holds the page still while the card moves.
@@ -183,6 +244,7 @@ struct HomeXWire: View {
     @MainActor private func advance(count: Int) async {
         progress = 0
         guard count > 1, !holding, activePage, scenePhase == .active else { return }
+        if posts.indices.contains((index + 1) % count) { XWireImages.shared.prepare(posts[(index + 1) % count]) }
         withAnimation(.linear(duration: Self.dwell)) { progress = 1 }
         do { try await Task.sleep(for: .seconds(Self.dwell)) } catch { return }
         step(1)
@@ -304,9 +366,7 @@ struct XPostCard: View {
         if measuring || url == nil {
             Color.white.opacity(0.06)
         } else {
-            AsyncImage(url: URL(string: url!)) { phase in
-                if let image = phase.image { image.resizable().scaledToFill() } else { Color.white.opacity(0.06) }
-            }
+            XWirePicture(url: url!)
         }
     }
 

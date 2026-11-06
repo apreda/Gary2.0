@@ -13,7 +13,7 @@ func abbrGameMatches(_ abbrGame: String, matchup: String) -> Bool {
     guard abbrevs.count >= 2 else { return false }
     return abbrevs.allSatisfy { ab in
         let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
-        return kws.contains { hay.contains($0) }
+        return kws.contains { teamName(hay, holds: $0) }
     }
 }
 
@@ -25,7 +25,7 @@ func orientedFinalScores(_ ls: LiveScore, awayTeam: String?, homeTeam: String?) 
     func matches(_ abbr: String?, _ team: String?) -> Bool {
         guard let ab = abbr?.uppercased(), let hay = team?.lowercased(), !hay.isEmpty else { return false }
         let kws = (mlbTeamKeywords[ab] ?? []) + (nbaTeamKeywords[ab] ?? []) + (nhlTeamKeywords[ab] ?? []) + (nflTeamKeywords[ab] ?? []) + (wcTeamKeywords[ab] ?? [])
-        return kws.contains { hay.contains($0) }
+        return kws.contains { teamName(hay, holds: $0) }
     }
     if matches(ls.away_abbr, awayTeam) || matches(ls.home_abbr, homeTeam) { return (a, h) }
     if matches(ls.away_abbr, homeTeam) || matches(ls.home_abbr, awayTeam) { return (h, a) }
