@@ -4,6 +4,11 @@
  * Uses BDL standings data + hardcoded division/rivalry mappings
  */
 
+/** A team's name holds a keyword as whole words only: the Charlotte Hornets aren't the "nets". */
+function namesTeam(teamName, keyword) {
+  return new RegExp(`(^|[^a-z0-9])${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`).test(String(teamName ?? '').toLowerCase());
+}
+
 // NBA Division mappings
 const NBA_DIVISIONS = {
   atlantic: ['celtics', 'nets', 'knicks', '76ers', 'raptors'],
@@ -146,10 +151,8 @@ function findDivision(teamName, sport) {
     default: return null;
   }
 
-  const teamLower = teamName.toLowerCase();
-
   for (const [divName, teams] of Object.entries(divisions)) {
-    if (teams.some(t => teamLower.includes(t))) {
+    if (teams.some(t => namesTeam(teamName, t))) {
       return divName;
     }
   }
@@ -197,13 +200,11 @@ function checkRivalry(homeTeam, awayTeam, sport) {
   if (sport === 'NCAAF') return null;
 
   const sportRivalries = RIVALRIES[sport] || [];
-  const homeLower = homeTeam.toLowerCase();
-  const awayLower = awayTeam.toLowerCase();
 
   for (const rivalry of sportRivalries) {
     const [team1, team2] = rivalry.teams;
-    if ((homeLower.includes(team1) || homeLower.includes(team2)) &&
-        (awayLower.includes(team1) || awayLower.includes(team2))) {
+    if ((namesTeam(homeTeam, team1) || namesTeam(homeTeam, team2)) &&
+        (namesTeam(awayTeam, team1) || namesTeam(awayTeam, team2))) {
       return rivalry.name;
     }
   }
