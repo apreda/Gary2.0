@@ -80,7 +80,7 @@ export function clock(now = new Date()): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: ET, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" }).format(now);
 }
 
-const etTime = (iso?: string | null) => {
+export const etTime = (iso?: string | null) => {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : new Intl.DateTimeFormat("en-US", { timeZone: ET, hour: "numeric", minute: "2-digit" }).format(d);

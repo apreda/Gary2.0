@@ -9,9 +9,41 @@ export function speakable(text: string): string {
     .replace(/^\s*[-•]\s+/gm, "")
     .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
     .replace(/\s*—\s*/g, ", ")
-    .replace(/[[\]]/g, "")
+    // His chuckle, laugh and sigh stay for the voice to do; anything else in brackets would be read out.
+    .replace(/\[([^\]]*)\]/g, (tag, word) => (DELIVERY.test(word) ? tag.toLowerCase() : ""))
+    .replace(/\[(?![^\]]*\])|(?<!\[[^\]]*)\]/g, "")
     .replace(/[ \t]+/g, " ");
 }
+
+const DELIVERY = /^(chuckles|laughs|sighs)$/i;
+
+/**
+ * His words for the captions: what's in brackets is how he says it, not what he says, and the captions follow the
+ * voice by counting words. A tag can arrive in two pieces, so an unclosed one waits for the next.
+ */
+export class CaptionFilter {
+  private held = "";
+
+  push(delta: string): string {
+    const text = (this.held + delta).replace(/\[[^\]]*\]\s*/g, "");
+    const open = text.lastIndexOf("[");
+    if (open >= 0 && text.length - open < 40) {
+      this.held = text.slice(open);
+      return text.slice(0, open);
+    }
+    this.held = "";
+    return text;
+  }
+
+  flush(): string {
+    const rest = this.held.replace(/[[\]]/g, "");
+    this.held = "";
+    return rest;
+  }
+}
+
+/** A whole answer as the captions and the log show it. */
+export const withoutDelivery = (text: string) => text.replace(/\[[^\]]*\]\s*/g, "").replace(/[[\]]/g, "").trim();
 
 /**
  * Hands out the finished part of a growing answer. A piece ends at a sentence end (or, for a long run

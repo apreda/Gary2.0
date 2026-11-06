@@ -13,7 +13,7 @@
 // gary_voice_config (on/off, per-person and per-day dollar caps) before any model is called.
 import { ask, boardFor, costUSD, type Turn } from "./brain.ts";
 import { makeDb, readScoreboard, slateDate } from "./notebook.ts";
-import { accentFor, SpeechChunker } from "./speech.ts";
+import { accentFor, CaptionFilter, SpeechChunker, withoutDelivery } from "./speech.ts";
 import { ElevenVoice, GaryVoice, type Speaker, VOICE_SAMPLE_RATE, type VoiceOptions } from "./voice.ts";
 
 export interface VoiceConfig {
@@ -33,10 +33,10 @@ const boards = new Map();
 
 // Said in his voice when he can't answer, so the room never goes silent.
 const LINES: Record<string, string> = {
-  limit: "That's all I've got in me today. Come find me tomorrow.",
-  budget: "I'm done talking for tonight. Catch me tomorrow.",
-  failed: "I lost my train of thought there. Ask me that one more time.",
-  refused: "That one's not for me. Ask me about the games.",
+  limit: "You talked my ear off. That's all I got in me today. Come find me tomorrow.",
+  budget: "I'm done for tonight, my throat's shot. Catch me tomorrow.",
+  failed: "Hang on, I lost my train of thought. Say that again for me.",
+  refused: "Nah, that one I'm staying out of. Ask me something else.",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -148,10 +148,15 @@ export function createVoiceHandler(cfg: VoiceConfig) {
             const db = makeDb(cfg.supabaseURL, cfg.serviceKey, cfg.anonKey, who.bearer, f);
             const [board, scoreboard] = await Promise.all([boardFor(db, date, boards), readScoreboard(db, date)]);
             const chunker = new SpeechChunker();
+            const captions = new CaptionFilter();
             const said = (pieces: string[]) => pieces.forEach((p) => voice.say(p).catch(() => {}));
             const result = await ask({
               apiKey: cfg.anthropicKey, db, slate: date, board, scoreboard, history, question,
-              onText: (d) => { send({ t: "text", s: d }); said(chunker.push(d)); },
+              onText: (d) => {
+                const shown = captions.push(d);
+                if (shown) send({ t: "text", s: shown });
+                said(chunker.push(d));
+              },
               onLookup: () => {
                 const rest = chunker.flush();
                 if (rest) voice.say(rest).catch(() => {});
@@ -159,7 +164,9 @@ export function createVoiceHandler(cfg: VoiceConfig) {
               },
               signal: gone.signal,
             });
-            usage = result.usage; tools = result.tools; answer = result.answer;
+            usage = result.usage; tools = result.tools; answer = withoutDelivery(result.answer);
+            const leftover = captions.flush();
+            if (leftover) send({ t: "text", s: leftover });
             const rest = chunker.flush();
             if (rest) await voice.say(rest);
             if (result.refused || !answer) {

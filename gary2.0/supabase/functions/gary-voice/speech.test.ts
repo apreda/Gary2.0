@@ -1,5 +1,17 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { jersey, longIsland, SpeechChunker, speakable } from "./speech.ts";
+import { CaptionFilter, jersey, longIsland, SpeechChunker, speakable, withoutDelivery } from "./speech.ts";
+
+Deno.test("his chuckle reaches the voice; anything else in brackets doesn't", () => {
+  assertEquals(speakable("[Chuckles] Listen, [winks] I took Miami] and a stray [ mark"), "[chuckles] Listen, I took Miami and a stray mark");
+  assertEquals(longIsland("[chuckles] Over"), "[chuckles] Ovah");
+});
+
+Deno.test("the captions never show how he says it, even when a tag comes in two pieces", () => {
+  const c = new CaptionFilter();
+  const shown = [c.push("[chuck"), c.push("les] You kidding me? "), c.push("I took "), c.push("[sighs]"), c.push(" Miami."), c.flush()].join("");
+  assertEquals(shown.trim().split(/\s+/), ["You", "kidding", "me?", "I", "took", "Miami."]);
+  assertEquals(withoutDelivery("[sighs] It lost. [laughs] What are you gonna do."), "It lost. What are you gonna do.");
+});
 
 Deno.test("pieces end at sentences, never inside a line or a price", () => {
   const c = new SpeechChunker();
