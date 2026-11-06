@@ -10,6 +10,8 @@ free-pick post, and per-channel links that already work. See §5 and §8.
 
 ## 1. What Gary is
 
+> **Out of date, Nov 6, 2026.** Don't reuse the description or sample copy in this document. Describe Gary from the app and live picks. Adam's angle: Gary is a really informed character built to think like a bettor and a gambler, inspired by Mike Ditka and Pete Rose. He makes picks that are fun to tail when you're watching a game and want action on it. Don't sell the record, a formula or an edge.
+
 **Game and prop picks for every game, with the reasoning behind each one, and every result on the record.**
 
 Gary A.I. is an iPhone app. Gary, the app's named character, makes game and prop picks for every MLB and NFL game and
