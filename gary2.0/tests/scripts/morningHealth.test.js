@@ -31,16 +31,43 @@ describe('morning output health', () => {
     const evening = {date:day,now:'2026-09-19T23:00:00Z',data};
     expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('ok');
     data.slate[0].commence_time = '2026-09-20T02:00:00Z';
-    expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('fail');
+    expect(check(evaluateMorningHealth(evening),'component:NCAAF:quarterback').status).toBe('pending');
   });
-  it('keeps a college gap pending until the game\'s first pick attempt, four hours before kickoff (Oct 9 2026)', () => {
-    const day = '2026-10-09';
-    const data = snapshot([{...game(457351,'NCAAF','2026-10-10T02:15:00Z'),date:day}]);
+  it('keeps a college gap pending while pick attempts remain; only kickoff without evidence fails (Nov 6 2026: 3:03 PM mail, evidence written 3:07 PM)', () => {
+    const day = '2026-11-06';
+    const data = snapshot([{...game(457436,'NCAAF','2026-11-07T00:00:00Z'),date:day}]);
     data.components = [];
-    // 6:36 AM ET: the morning pass has not reached the 10:15 PM game yet.
-    expect(check(evaluateMorningHealth({date:day,now:'2026-10-09T10:36:00Z',data}),'component:NCAAF:quarterback').status).toBe('pending');
-    // 6:30 PM ET, past the 6:15 PM first attempt, still unverified: a failure.
-    expect(check(evaluateMorningHealth({date:day,now:'2026-10-09T22:30:00Z',data}),'component:NCAAF:quarterback').status).toBe('fail');
+    // 3:03 PM ET, three minutes into the 3:00 PM first attempt of the 7 PM game.
+    expect(check(evaluateMorningHealth({date:day,now:'2026-11-06T20:03:03Z',data}),'component:NCAAF:quarterback').status).toBe('pending');
+    // 6:45 PM ET, the final T-30 attempt is still running.
+    expect(check(evaluateMorningHealth({date:day,now:'2026-11-06T23:45:00Z',data}),'component:NCAAF:quarterback').status).toBe('pending');
+    // Kicked off with no evidence: every attempt is over and a person has something to fix.
+    expect(check(evaluateMorningHealth({date:day,now:'2026-11-07T00:01:00Z',data}),'component:NCAAF:quarterback').status).toBe('fail');
+  });
+  it('keeps the evidence a saved college pick was made on, however long before kickoff (Oct 31 2026: verified 10:34 AM, mailed 6:36 PM)', () => {
+    const day = '2026-10-31';
+    const data = snapshot([{...game(457411,'NCAAF','2026-11-01T00:00:00Z'),date:day}]);
+    data.components = ['quarterback','availability','coaching'].flatMap(component => [1,2].map(team_id => ({league:'NCAAF',game_id:'457411',team_id,component,status:'ok',observed_at:'2026-10-31T14:34:00Z'})));
+    const evening = {date:day,now:'2026-10-31T22:36:00Z',data};
+    data.picks = [{date:day,picks:[{league:'NCAAF',game_id:457411,pick:'Iowa State -3 -110'}]}];
+    expect(check(evaluateMorningHealth(evening),'component:NCAAF:coaching').status).toBe('ok');
+    // Past kickoff with no saved pick, the same aged evidence does not cover the game.
+    data.picks = [];
+    expect(check(evaluateMorningHealth({date:day,now:'2026-11-01T00:10:00Z',data}),'component:NCAAF:coaching').status).toBe('fail');
+  });
+  it('keeps morning evidence for a college game the 23-point rule sets aside, which never gets a pick attempt', () => {
+    const day = '2026-10-31';
+    const data = snapshot([{...game(457500,'NCAAF','2026-11-01T00:00:00Z'),date:day,spread:-31.5}]);
+    data.components = ['quarterback','availability','coaching'].flatMap(component => [1,2].map(team_id => ({league:'NCAAF',game_id:'457500',team_id,component,status:'ok',observed_at:'2026-10-31T09:30:00Z'})));
+    expect(check(evaluateMorningHealth({date:day,now:'2026-11-01T00:10:00Z',data}),'component:NCAAF:coaching').status).toBe('ok');
+  });
+  it('still fails a saved college pick whose research could not verify the data, once it kicks off', () => {
+    const day = '2026-10-31';
+    const data = snapshot([{...game(458079,'NCAAF','2026-10-31T19:30:00Z'),date:day}]);
+    data.picks = [{date:day,picks:[{league:'NCAAF',game_id:458079,pick:'Utah State +6 -110'}]}];
+    data.components = [1,2].map(team_id => ({league:'NCAAF',game_id:'458079',team_id,component:'availability',status:'fail',reason:'Current availability report not established',observed_at:'2026-10-31T14:00:00Z'}));
+    expect(check(evaluateMorningHealth({date:day,now:'2026-10-31T15:34:00Z',data}),'component:NCAAF:availability').status).toBe('pending');
+    expect(check(evaluateMorningHealth({date:day,now:'2026-10-31T19:31:00Z',data}),'component:NCAAF:availability').status).toBe('fail');
   });
   it('waits for the ordinary 06:30 content deadline, then reports missing coverage', () => {
     const data = snapshot([game(1, 'NCAAF')]);

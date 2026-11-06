@@ -192,8 +192,6 @@ export async function loadMorningHealth({ url, key, date, fetchImpl = fetch, sig
 /** Output health, not betting quality. Frozen valid results remain valid even
  * when graded before 2AM; absence is assessed against the actual saved picks.
  */
-// College picks make their first attempt four hours before kickoff (scheduler FOOTBALL_RETRY_LEAD_TIMES_MINUTES).
-const FOOTBALL_FIRST_ATTEMPT_MS = 240 * 60 * 1000;
 export function evaluateMorningHealth({ date, now = new Date(), data = {}, errors = {}, maxAgeHours = 8, cardsLeadHours = 2, stageHistory = [], heldLeagues = heldPickLeagues() }) {
   const nowMs = new Date(now).getTime();
   // The first ordinary content run starts at 06:00 ET; overnight is cards only.
@@ -252,6 +250,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
   const daily = readPicks('picks', (pick, row) => ({ ...pick, saved_date: row.date }));
   const weekly = readPicks('weekly', pick => ({ ...pick, league: 'NFL' }));
   const allPicks = [...daily, ...weekly];
+  const hasSavedPick = game => allPicks.some(pick => keyOf(pick) === keyOf(game) && (pick.saved_date === date || (pick.commence_time && etDate(pick.commence_time) === date)));
   for (const league of leagues) {
     const games = slate.filter(row => leagueOf(row) === league);
     const insights = rowsOf(data.insights).filter(row => leagueOf(row) === league);
@@ -260,10 +259,15 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       for (const component of ['quarterback','availability','coaching']) {
         // Completed games keep their pregame evidence. It does not become a
         // new collection failure simply because the evening clock advances.
+        // NOTHING WILL REFRESH IT (Nov 6 2026): a saved pick is never re-run and
+        // a 23-point game never gets a pick, so that evidence is final however
+        // old it gets. Oct 31: verified at 10:34 AM, aged out and mailed at
+        // 6:36 PM, then stayed open until midnight on three Saturdays.
+        const evidenceIsFinal = game => hasSavedPick(game) || ncaafSpreadExcluded(game);
         const current = (game, statuses) => {
           const kickoff = Date.parse(game.commence_time);
           const referenceAt = Number.isFinite(kickoff) ? Math.min(nowMs, kickoff) : nowMs;
-          return records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && statuses.includes(r.status) && nowMs-Date.parse(r.observed_at) >= 0 && referenceAt-Date.parse(r.observed_at) < 8*HOUR);
+          return records.filter(r => r.league === league && r.component === component && String(r.game_id) === String(idOf(game)) && statuses.includes(r.status) && nowMs-Date.parse(r.observed_at) >= 0 && (evidenceIsFinal(game) || referenceAt-Date.parse(r.observed_at) < 8*HOUR));
         };
         const bothTeams = rows => new Set(rows.map(r => r.team_id)).size === 2;
         // UNRESOLVED IS COVERED (Oct 9 2026): the research ran and current
@@ -273,21 +277,21 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
         const unresolved = games.filter(game => !missing.includes(game) && !bothTeams(current(game, ['ok'])));
         const verified = games.length - missing.length - unresolved.length;
         const reasonsFor = (list, status) => records.filter(r => r.component === component && r.status === status && list.some(g => String(idOf(g)) === String(r.game_id))).slice(0, 6).map(r => `Game ${r.game_id}: ${r.reason}`);
-        // A college game's pick rebuilds this evidence from fresh reporting at its
-        // first attempt, four hours before kickoff. Until then a gap is pending:
-        // the morning insight pass may not have reached a late game yet (Oct 9
-        // 2026: Iowa State @ BYU, 10:15 PM, left for the next pass), and starters
-        // and availability reports are often named later in the day.
-        const firstAttemptAhead = game => { const k = Date.parse(game.commence_time); return Number.isFinite(k) && k - FOOTBALL_FIRST_ATTEMPT_MS > nowMs; };
-        const overdue = missing.filter(game => !firstAttemptAhead(game));
-        const pending = missing.filter(game => firstAttemptAhead(game));
+        // A college game's pick rebuilds this evidence from fresh reporting on
+        // each attempt (T-240, T-180, T-90, T-30), so a gap is pending until
+        // kickoff ends the ladder. Failing at T-240 mailed a false alarm whenever
+        // the check landed before the running attempt wrote its rows (Nov 6
+        // 2026: attempt 3:00 PM, mail 3:03 PM, rows 3:07 PM, recovery 3:13 PM).
+        const attemptsAhead = game => { const k = Date.parse(game.commence_time); return Number.isFinite(k) && k > nowMs; };
+        const overdue = missing.filter(game => !attemptsAhead(game));
+        const pending = missing.filter(game => attemptsAhead(game));
         const status = overdue.length && !beforeContentDeadline ? 'fail'
           : missing.length ? 'pending'
           : unresolved.length ? 'warn' : 'ok';
         const parts = [`${verified}/${games.length} games have verified ${component} data for both teams.`];
         if (unresolved.length) parts.push(`Not yet named or published in current reporting: ${reasonsFor(unresolved, 'unresolved').join('; ')}.`);
         if (overdue.length) parts.push(`Missing/failed game IDs: ${overdue.map(idOf).join(', ')}. ${reasonsFor(overdue, 'fail').join('; ')}`);
-        if (pending.length) parts.push(`Pending, first attempt not yet due: ${pending.map(idOf).join(', ')}.`);
+        if (pending.length) parts.push(`Pending, still before kickoff: ${pending.map(idOf).join(', ')}.`);
         add(`component:NCAAF:${component}`, status, parts.join(' ').trim(), { missing_game_ids: missing.map(idOf), unresolved_game_ids: unresolved.map(idOf) });
       }
     }
@@ -326,7 +330,7 @@ export function evaluateMorningHealth({ date, now = new Date(), data = {}, error
       add(`wire:${league}`, wire.some(fresh) ? 'ok' : 'warn', `${wire.length} current-date items; ${wire.length ? 'check freshness' : 'empty feed: inspect Wire stage status before diagnosing provider failure'}`);
     }
     if (!heldLeagues.has(league) && !errors.picks && !invalidPickSources.has('picks') && (league !== 'NFL' || (!errors.weekly && !invalidPickSources.has('weekly')))) {
-      const picked = games.filter(game => allPicks.some(pick => keyOf(pick) === keyOf(game) && (pick.saved_date === date || (pick.commence_time && etDate(pick.commence_time) === date))));
+      const picked = games.filter(hasSavedPick);
       // A college game the spread rule (23+) sets aside gets no pick on purpose; it is not missing (Oct 10 2026).
       const setAside = league === 'NCAAF' ? games.filter(game => !picked.includes(game) && ncaafSpreadExcluded(game)) : [];
       const missing = games.filter(game => !picked.includes(game) && !setAside.includes(game));
