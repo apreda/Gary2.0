@@ -1,7 +1,23 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { runTool } from "./brain.ts";
 
 const dbWith = (games: any[]) => ({ get: async () => [], rpc: async () => games, userRpc: async () => null }) as any;
+
+Deno.test("prop_board marks a bet he's already on, so he can't call it a new idea", async () => {
+  const props = [{ label: "REBOUNDS", line: "10.5", odds: "-110", rate: "5/8" }];
+  const db = {
+    get: async (path: string) => {
+      if (path.startsWith("daily_slate")) return [{ date: "2026-11-06", league: "NBA", away_team: "Oklahoma City Thunder", home_team: "Memphis Grizzlies", bdl_game_id: 1 }];
+      if (path.startsWith("player_insight_cards")) return [{ player_name: "Isaiah Hartenstein", team_abbr: "OKC", props }, { player_name: "Ty Jerome", team_abbr: "MEM", props }];
+      return [{ picks: [{ player: "Isaiah Hartenstein", bet: "over", prop: "rebounds 10.5" }] }];
+    },
+    rpc: async () => ({ today: [] }),
+    userRpc: async () => null,
+  } as any;
+  const out = await runTool(db, "2026-11-06", "prop_board", { team: "Grizzlies" });
+  assertStringIncludes(out, "Isaiah Hartenstein (OKC) [already your bet: over rebounds 10.5]: rebounds 10.5 over -110, cleared 5/8");
+  assertStringIncludes(out, "Ty Jerome (MEM): rebounds");
+});
 
 Deno.test("team_games keeps the newest games of this season and leaves last season out", async () => {
   // The function returns newest first, then last season's games.

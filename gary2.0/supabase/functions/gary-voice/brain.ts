@@ -284,13 +284,21 @@ export async function runTool(db: Db, slate: string, name: string, input: any): 
     if (team.length < 3) throw new Error("team too short");
     const game = (await db.get(`daily_slate?date=gte.${slate}&date=lte.${addDays(slate, 7)}&bdl_game_id=not.is.null&or=(away_team.ilike."*${team}*",home_team.ilike."*${team}*")&select=date,league,away_team,home_team,bdl_game_id&order=commence_time&limit=1`))?.[0];
     if (!game) return `No game coming up for ${input.team} in the next 7 days.`;
-    const cards: any[] = await db.get(`player_insight_cards?league=eq.${encodeURIComponent(game.league)}&game_id=eq.${game.bdl_game_id}&date=gte.${addDays(slate, -7)}&select=player_name,team_abbr,payload->props&order=date.desc&limit=80`) ?? [];
+    const [cardRows, props, darts] = await Promise.all([
+      db.get(`player_insight_cards?league=eq.${encodeURIComponent(game.league)}&game_id=eq.${game.bdl_game_id}&date=gte.${addDays(slate, -7)}&select=player_name,team_abbr,payload->props&order=date.desc&limit=80`),
+      db.get(`prop_picks?date=eq.${game.date}&select=picks`).catch(() => null),
+      db.rpc("get_darts", { p_date: game.date }).catch(() => null),
+    ]);
+    const cards: any[] = cardRows ?? [];
+    // Marked so he never passes one of his own bets off as a new idea.
+    const mine: any[] = [...(props ?? []).flatMap((r: any) => r.picks ?? []), ...(darts?.today ?? []).filter((d: any) => !d.scratched)];
     const seen = new Set<string>();
     const rows: string[] = [];
     for (const c of cards) {
       if (seen.has(c.player_name) || !Array.isArray(c.props) || !c.props.length) continue;
       seen.add(c.player_name);
-      rows.push(`${c.player_name} (${c.team_abbr}): ${c.props.map((p: any) => `${String(p.label).toLowerCase()} ${p.line}${p.odds ? ` over ${p.odds}` : ""}${p.rate ? `, cleared ${String(p.rate).replace(/ over$/, "")}` : ""}`).join("; ")}`);
+      const yours = mine.filter((m) => String(m.player).toLowerCase() === String(c.player_name).toLowerCase()).map((m) => `${m.bet} ${String(m.prop).replace(/_/g, " ")}`);
+      rows.push(`${c.player_name} (${c.team_abbr})${yours.length ? ` [already your bet: ${yours.join(", ")}]` : ""}: ${c.props.map((p: any) => `${String(p.label).toLowerCase()} ${p.line}${p.odds ? ` over ${p.odds}` : ""}${p.rate ? `, cleared ${String(p.rate).replace(/ over$/, "")}` : ""}`).join("; ")}`);
     }
     const match = `${game.away_team} at ${game.home_team}, ${dayName(game.date)}`;
     if (!rows.length) return `No player prop lines saved for ${match}.`;
