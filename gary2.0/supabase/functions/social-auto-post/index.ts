@@ -268,9 +268,11 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
   if (logErr) throw logErr;
   if (already?.length && !dryRun) return { posted: false, reason: "free pick already posted today" };
 
+  // Nov 9 2026, founder on the first clip: "decent for instagram but not X". The clip stays on Instagram; on X it
+  // is attached only with GARY_CLIP_ON_X=1, so the call posts as text and never waits.
   const clip = clipName(today, sp);
-  const hasClip = await clipReady(clip);
-  if (!dryRun && !hasClip && leadMin > CLIP_MIN_LEAD_MIN) {
+  const hasClip = Deno.env.get("GARY_CLIP_ON_X") === "1" && await clipReady(clip);
+  if (!dryRun && !hasClip && Deno.env.get("GARY_CLIP_ON_X") === "1" && leadMin > CLIP_MIN_LEAD_MIN) {
     const waitedMin = (nowMs - await pickedAtMs(sp)) / 60_000;
     if (waitedMin >= 0 && waitedMin < CLIP_WAIT_MIN) return { posted: false, reason: `waiting for Gary's clip (${Math.round(waitedMin)} of ${CLIP_WAIT_MIN} min)` };
   }
