@@ -351,6 +351,15 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         bigs.push(row);
         networksById.set(String(row.bdl_game_id ?? row.id), networks);
       }
+      // A night with no national game still gets one game on Winners: its best matchup by ESPN's BPI (Nov 9 2026;
+      // Gary's own NBA board, which used to fill those nights, no longer runs).
+      if (!bigs.length) {
+        try {
+          const { fetchPowerRatings, bestMatchup } = await import('../winners/powerRatings.js');
+          const best = bestMatchup(list, await fetchPowerRatings('NBA'));
+          if (best) { bigs.push(best); reasonById.set(idOf(best), "the best game of the night by ESPN's BPI"); }
+        } catch (e) { console.warn(`[Daily Slate] NBA game of the night unavailable: ${e.message}`); }
+      }
     }
     // A big game is decided before it starts, and a choice made once stays (Oct 29 2026 hunt, round 7: Monday's rerun of
     // the NFL week stored Bengals @ Ravens as a second "best game of the 1 PM window" for Oct 25, by FPI that already held
@@ -366,7 +375,7 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
         : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball');
       const known = stored.some((r) => String(r.game_id) === gameId);
-      if (!known && /by ESPN's FPI$/.test(reason) && stored.some((r) => r.reason === reason)) continue;
+      if (!known && /by ESPN's (FPI|BPI)$/.test(reason) && stored.some((r) => r.reason === reason)) continue;
       if (!known && sport.league === 'NBA' && stored.filter((r) => /^national TV/.test(r.reason || '')).length >= 2) continue;
       await picksService.storeWinnersBigGame({
         game_date: etDateStr,

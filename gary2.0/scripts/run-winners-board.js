@@ -12,8 +12,6 @@ import { runPropsSelection } from '../src/services/winners/winnersProps.js';
 import { runBigGameStakes } from '../src/services/winners/garyBigGameStake.js';
 import { placeOnCard } from '../src/services/winners/garyCard.js';
 import { runLateNewsChecks } from '../src/services/winners/lateNews.js';
-import { runNflBoard } from '../src/services/winners/nflBoard.js';
-import { runNbaBoard } from '../src/services/winners/nbaBoard.js';
 
 const todayET = () => new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
 // Every pass looks again every two minutes (founder, Oct 13 2026; it was 30 seconds). The tightest window it serves is
@@ -136,7 +134,7 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 // THE BIG GAMES AND A FEW OF GARY'S BEST (founder, Oct 23 2026): Winners game bets are the day's big games
 // (winners_big_games: MLB playoff games, TNF/SNF/MNF, college's top two, the NBA's national-TV games), each at Gary's
 // amount or his number once the late-news check has cleared it (the sweep), plus his top picks from his boards: two a
-// day for the NFL, two a night for the NBA, none for college since Nov 9 2026 (SQL seat_*_board, migration
+// day for the NFL, two a night for the NBA, three for college until Nov 9 2026, none since (SQL seat_*_board, migration
 // 20261023230000_winners_boards_back_small.sql). Big games and the two worst matchups stay off the boards
 // (winners/powerRatings.js). Gary's card seats nothing (seat_the_card is not called).
 // Props: the reader compares each window's published props and selects the clear ones with its own stake
@@ -144,13 +142,13 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=big games + boards (NFL 2, NBA 2, college none); props=daily-props-v1; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=the watched games only (no board runs); props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await runPropsSelection(supabase,todayET());
     await runLateNewsChecks(supabase,todayET());
-    for (const [league,run,seat] of [['NFL',runNflBoard,'seat_nfl_board'],['NBA',runNbaBoard,'seat_nba_board'],['college',null,'seat_ncaaf_board']]) {
-      if(run)await run(supabase,todayET());   // college has no board of its own since Nov 9 2026: the watched games only
+    // No league runs Gary's own board since Nov 9 2026: the seat calls only finish plays seated before that.
+    for (const [league,seat] of [['NFL','seat_nfl_board'],['NBA','seat_nba_board'],['college','seat_ncaaf_board']]) {
       const seated=check(await supabase.rpc(seat,{p_date:todayET()}));
       if(seated)console.log(`[Winners] ${league} board seated ${seated}`);
     }
@@ -207,15 +205,18 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  // GARY'S NFL BOARD (Oct 19 2026, nflBoard.js): about 110 minutes before a slate's first kickoff he picks his bets
-  // from the board fresh; his bets on the same side as the pick seat when the board names them (Oct 25 2026) (SQL
-  // seat_nfl_board). The card no longer seats NFL. Its late-news checks run in the card loop above.
+  // GARY NO LONGER CHOOSES WHICH GAMES GO ON WINNERS (founder, Nov 9 2026: "he probably shouldnt be in charge of what
+  // goes to the winners page ... hes good at making picks bad at picking those picks"). Since Sep 16 the extra games
+  // he named himself went 61-60 outside college and 15-26 in college, with no pattern by the size of his bet, while
+  // his picks on every game were about even or better. Winners games are the watched games (winners_big_games:
+  // prime time, the game of each Sunday window, national TV, college's five), at the amount he names. The NFL, NBA
+  // and college boards (nflBoard.js, nbaBoard.js, ncaafBoard.js) are not run; the seat calls below stay so a play a
+  // board seated before this change still goes on when its number arrives. To bring a board back, call its run
+  // function ahead of its seat call again.
   const nflBoard=async()=>{
     while(true) {
       try {
         await pass(async()=>{
-          const did=await runNflBoard(supabase,todayET());
-          if(did && !['no_games','nothing_open','waiting','busy'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NFL board: ${did}`);
           const seated=check(await supabase.rpc('seat_nfl_board',{p_date:todayET()}));
           if(seated)console.log(`[Winners] ${new Date().toISOString()} NFL board seated ${seated}`);
         });
@@ -223,15 +224,10 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  // GARY'S NBA BOARD (Oct 19 2026, from Oct 21, nbaBoard.js): about 50 minutes before the first tip he hasn't boarded
-  // he picks his bets from the picked games still to tip; his bets on the pick's side seat when the board names them (Oct 25 2026), not after the
-  // late-news check (SQL seat_nba_board).
   const nbaBoard=async()=>{
     while(true) {
       try {
         await pass(async()=>{
-          const did=await runNbaBoard(supabase,todayET());
-          if(did && !['no_games','nothing_open','waiting','busy','opening_night'].includes(did))console.log(`[Winners] ${new Date().toISOString()} NBA board: ${did}`);
           const seated=check(await supabase.rpc('seat_nba_board',{p_date:todayET()}));
           if(seated)console.log(`[Winners] ${new Date().toISOString()} NBA board seated ${seated}`);
         });

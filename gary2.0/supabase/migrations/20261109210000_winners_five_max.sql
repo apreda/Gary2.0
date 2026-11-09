@@ -1,5 +1,4 @@
--- NOT YET APPLIED as of Nov 9 2026: the apply to the live database was blocked and waits for Adam's OK. Remove this
--- line once it has run. The college cap already holds without it (the college board no longer runs).
+-- Applied to the live database Nov 9 2026 at Adam's word.
 -- WINNERS: THE WATCHED GAMES ARE THE BOARD, FIVE GAME PLAYS A DAY AT MOST (founder, Nov 9 2026: "it has to be with a
 -- fan and gamblers mindset"; "i just really hate when the winners picks are games i could really care less about";
 -- "i want 5 max"). By how a play got on the board since Sep 16, outside college, the watched games (prime time, the

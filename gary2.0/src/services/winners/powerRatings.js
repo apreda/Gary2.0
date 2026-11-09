@@ -102,3 +102,18 @@ export function nflAfternoonBigGames(slate, ratings) {
   }
   return out;
 }
+
+/**
+ * THE NBA GAME OF THE NIGHT when none is on national TV (founder, Nov 9 2026: Gary no longer chooses which games go
+ * on Winners, and from Oct 23 to Nov 8 nine of fifteen NBA nights had no national game). Of the games still to tip,
+ * the one whose weaker team has the best power rating (ESPN's BPI), the combined rating breaking a tie: the night's
+ * best matchup, by the same rule as the NFL's Sunday windows. Null when the ratings cover no game still to start.
+ */
+export function bestMatchup(slate, ratings, { now = Date.now() } = {}) {
+  const ratingOf = (name) => ratings.find((r) => espnNbaTeamIs(r.team, name))?.rating;
+  return (slate || []).map((row) => {
+    const h = ratingOf(row.home_team), a = ratingOf(row.away_team);
+    const starts = Date.parse(row.commence_time);
+    return Number.isFinite(h) && Number.isFinite(a) && Number.isFinite(starts) && starts > now ? { row, weaker: Math.min(h, a), sum: h + a } : null;
+  }).filter(Boolean).sort((x, y) => y.weaker - x.weaker || y.sum - x.sum)[0]?.row ?? null;
+}
