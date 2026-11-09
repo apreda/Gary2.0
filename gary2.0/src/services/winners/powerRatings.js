@@ -54,8 +54,56 @@ export function worstMatchups(games, ratings, { league, max = 2 } = {}) {
 }
 
 /**
+ * GAMES NOBODY IS WATCHING (founder, Nov 9 2026: "it cant be jets titans"; a Winners game has to be one fans care
+ * about): every game ({ gameId, home, away }) whose two teams are BOTH in the bottom half of the ratings. Gary still
+ * picks them for the Picks page; they are never shown to him as a game to bet for Winners. It was only the slate's
+ * two worst matchups of bottom-third teams (worstMatchups, Oct 23 2026), which let Texans at Chargers through on
+ * Nov 8. Returns Map gameId → the reason, in words.
+ */
+export function weakMatchups(games, ratings, { league } = {}) {
+  const ranked = [...ratings].sort((a, b) => b.rating - a.rating);
+  const half = Math.ceil(ranked.length / 2);
+  const find = (name) => {
+    const i = ranked.findIndex((r) => espnNbaTeamIs(r.team, name));
+    return i < 0 ? null : { ...ranked[i], rank: i + 1 };
+  };
+  const label = INDEX[league]?.toUpperCase() || 'power index';
+  const out = new Map();
+  for (const g of games || []) {
+    const h = find(g.home), a = find(g.away);
+    if (!h || !a || h.rank <= half || a.rank <= half) continue;
+    out.set(String(g.gameId), `both teams in the bottom half by ESPN's ${label}: ${a.team.shortDisplayName || a.team.displayName} (${a.rank} of ${ranked.length}), ${h.team.shortDisplayName || h.team.displayName} (${h.rank} of ${ranked.length})`);
+  }
+  return out;
+}
+
+/**
+ * HIS PICK IS ON ONE OF THE WORST TEAMS (founder, Nov 9 2026, on Dolphins +6.5 against the Lions: "those picks are
+ * hard for gary to predict becuase the spread is such a guess due to how bad one of the teams is"; he wanted the Rams
+ * and the Texans laying a fair number against a bad team, and not the Dolphins getting points). A game
+ * ({ gameId, home, away, pick }) whose pick names a team in the bottom third of the ratings is never shown to Gary as
+ * a game to bet for Winners. The pick itself stays on the Picks page. Returns Map gameId → the reason, in words.
+ */
+export function ridesAWeakTeam(games, ratings, { league } = {}) {
+  const ranked = [...ratings].sort((a, b) => b.rating - a.rating);
+  const cut = ranked.length - Math.floor(ranked.length / 3);
+  const rankOf = (name) => { const i = ranked.findIndex((r) => espnNbaTeamIs(r.team, name)); return i < 0 ? null : i + 1; };
+  const label = INDEX[league]?.toUpperCase() || 'power index';
+  const out = new Map();
+  for (const g of games || []) {
+    const pick = String(g.pick || '').toLowerCase();
+    const side = [g.home, g.away].filter((t) => t && pick.startsWith(String(t).toLowerCase()));
+    if (side.length !== 1) continue;
+    const rank = rankOf(side[0]);
+    if (rank && rank > cut) out.set(String(g.gameId), `his pick is on a bottom-third team by ESPN's ${label}: ${side[0]} (${rank} of ${ranked.length})`);
+  }
+  return out;
+}
+
+/**
  * What stays off a board today, Map gameId → reason: the day's big games (they go on Winners through the sweep, never
- * from a board) and, for the NFL and NBA, the slate's two worst matchups. `slate`: [{ gameId, home, away }] for the
+ * from a board) and, for the NFL and NBA, every game between two bottom-half teams and every game where his pick is on a bottom-third
+ * team. `slate` rows carry the pick's text as `pick`. `slate`: [{ gameId, home, away }] for the
  * whole day, so a board boarded in batches leaves the same games off each time.
  */
 export async function offTheBoard(client, { date, league, slate, log = console } = {}) {
@@ -66,7 +114,8 @@ export async function offTheBoard(client, { date, league, slate, log = console }
   if (!PATH[league]) return off;
   try {
     const ratings = await fetchPowerRatings(league);
-    for (const [id, why] of worstMatchups(slate.filter((g) => !off.has(String(g.gameId))), ratings, { league })) off.set(id, why);
+    for (const [id, why] of weakMatchups(slate.filter((g) => !off.has(String(g.gameId))), ratings, { league })) off.set(id, why);
+    for (const [id, why] of ridesAWeakTeam(slate.filter((g) => !off.has(String(g.gameId))), ratings, { league })) off.set(id, why);
   } catch (e) {
     log.warn?.(`[${league} Board] power ratings unavailable (${e?.message || e}); no matchup is left off for it`);
   }
@@ -80,6 +129,7 @@ const etClock = (iso) => {
 };
 
 /**
+ * NOT USED SINCE NOV 9 2026 (the Sunday afternoon windows are no longer locked; see dailySlateService.js).
  * NFL SUNDAY'S BIG AFTERNOON GAMES (founder, Oct 23 2026: "always include like a 4:25 big game" beside the prime-time
  * games): of Sunday's 1 PM games and of its 4:05/4:25 games, the one fans would call the game of the window. That is
  * the game whose WEAKER team has the best power rating (ESPN's FPI), so both teams are good; the combined rating
@@ -101,19 +151,4 @@ export function nflAfternoonBigGames(slate, ratings) {
     if (best) out.push({ row: best.row, window });
   }
   return out;
-}
-
-/**
- * THE NBA GAME OF THE NIGHT when none is on national TV (founder, Nov 9 2026: Gary no longer chooses which games go
- * on Winners, and from Oct 23 to Nov 8 nine of fifteen NBA nights had no national game). Of the games still to tip,
- * the one whose weaker team has the best power rating (ESPN's BPI), the combined rating breaking a tie: the night's
- * best matchup, by the same rule as the NFL's Sunday windows. Null when the ratings cover no game still to start.
- */
-export function bestMatchup(slate, ratings, { now = Date.now() } = {}) {
-  const ratingOf = (name) => ratings.find((r) => espnNbaTeamIs(r.team, name))?.rating;
-  return (slate || []).map((row) => {
-    const h = ratingOf(row.home_team), a = ratingOf(row.away_team);
-    const starts = Date.parse(row.commence_time);
-    return Number.isFinite(h) && Number.isFinite(a) && Number.isFinite(starts) && starts > now ? { row, weaker: Math.min(h, a), sum: h + a } : null;
-  }).filter(Boolean).sort((x, y) => y.weaker - x.weaker || y.sum - x.sum)[0]?.row ?? null;
 }

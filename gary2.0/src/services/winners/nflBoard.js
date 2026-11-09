@@ -75,8 +75,9 @@ export async function runNflBoard(client, date, { now = new Date(), log = consol
     if (e2) throw e2;
     const done = new Set((boarded || []).map((b) => String(b.game_id)));
     // Off the board (Oct 23 2026, winners/powerRatings.js): the day's big games, which go on Winners as big games, and
-    // for the NFL and NBA the slate's two worst matchups of bottom-third teams. Worked out from the whole day's slate.
-    const slate = [...new Map(cands.filter((c) => c.home && c.away).map((c) => [String(c.game_id), { gameId: String(c.game_id), home: c.home, away: c.away }])).values()];
+    // for the NFL and NBA every game between two bottom-half teams and every game where his pick is on a bottom-third
+    // team (Nov 9 2026). Worked out from the whole day's slate.
+    const slate = [...new Map(cands.filter((c) => c.home && c.away).map((c) => [String(c.game_id), { gameId: String(c.game_id), home: c.home, away: c.away, pick: c.pick_text }])).values()];
     const off = await offTheBoard(client, { date, league: 'NFL', slate, log });
     for (const [id, why] of off) if (!offLogged.has(`${date}|${id}`)) { offLogged.add(`${date}|${id}`); const g = slate.find((x) => x.gameId === id); if (g) log.log(`[NFL Board] ${g.away} @ ${g.home} stays off the board: ${why}`); }
     const open = cands.filter((c) => !done.has(String(c.game_id)) && !off.has(String(c.game_id)) && Date.parse(c.commence_time) > now.getTime() + LAST_CALL_MS && c.home && c.away);
