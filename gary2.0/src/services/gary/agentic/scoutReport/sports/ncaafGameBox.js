@@ -51,6 +51,116 @@ function withoutRepeatedDrives(summary) {
   return kept.length === list.length ? summary : { ...summary, drives: { ...summary.drives, previous: kept } };
 }
 
+/**
+ * How the turnovers of a game happened, from ESPN's play-by-play (Nov 9 2026 college review: the game rows gave turnovers
+ * as a count, Gary read the count as a team habit ("Kentucky takes it", "Turnovers favour Missouri"), and across the
+ * season's 685 FBS games the team with the better turnover margin coming in won the turnover battle 156 times, lost it
+ * 125 and tied 104). Per team: the fumbles it put on the ground, the ones it lost, the interceptions it threw, and the
+ * points it scored off the other team's turnovers (on the return, or on the possession that followed).
+ * Who had the ball is the play's own start team (the other team on a kick or after an interception); who recovered is
+ * the play's words ("recovered by FLA #8"), with the stat crew's short names placed by where kickoffs land and where
+ * offenses score, else the team with the ball after the play. A snap ESPN lists twice is one fumble.
+ * Checked against the box score in all 685 games: lost fumbles matched in 1,348 of 1,370 team-games and interceptions
+ * in 1,368; the caller prints these only for a game where both teams' counts match the box.
+ * Returns { [teamId]: { fumbles, lost, picks, pointsOff, takeaways, unsure } } or null without plays.
+ */
+const finalRuling = (text) => String(text || '').split(/\(Original Play/i)[0].split(/The previous play is under|is challenging the ruling|The ruling on the field/i)[0];
+const fumblerName = (s) => String(s || '').replace(/#\d+/g, ' ').replace(/\b(?:jr|sr|ii|iii|iv)\b\.?/gi, ' ').trim().split(/[\s.]+/).filter(Boolean).pop()?.toLowerCase() || '';
+export function turnoverDetail(summary) {
+  const comp = summary?.header?.competitions?.[0];
+  const sides = (comp?.competitors || []).map((c) => ({ id: String(c?.team?.id ?? c?.id ?? ''), homeAway: c?.homeAway })).filter((s) => s.id);
+  if (sides.length !== 2) return null;
+  const ids = sides.map((s) => s.id), other = (id) => ids.find((x) => x !== id);
+  const home = sides.find((s) => s.homeAway === 'home')?.id;
+  const all = (summary?.drives?.previous || []).flatMap((d) => (d?.plays || []).map((p) => ({ ...p, driveTeam: String(d?.team?.id ?? '') })));
+  if (!all.length) return null;
+  // The same snap listed twice (same quarter, clock and opening words) is one play.
+  const plays = [];
+  for (const p of all) {
+    const k = `${p?.period?.number}|${p?.clock?.displayValue}|${finalRuling(p.text).replace(/forced by.*$/i, '').slice(0, 70)}`;
+    const prev = plays.at(-1);
+    if (prev && prev.key === k && p?.clock?.displayValue && !/^0:00$|^15:00$/.test(String(p.clock.displayValue)) && finalRuling(p.text).length > 20) { prev.homeScore = p.homeScore; prev.awayScore = p.awayScore; if (p.end) prev.end = p.end; continue; }
+    plays.push({ ...p, key: k });
+  }
+  const scoreOf = (p, id) => Number(id === home ? p?.homeScore : p?.awayScore);
+  // Whose side of the field each of the stat crew's short names is: a kickoff lands on the receiving team's side, and an
+  // offense scores in the other team's end zone.
+  const votes = new Map();
+  const vote = (abbr, id) => { if (!abbr || !id) return; const key = abbr.trim().toLowerCase(); const v = votes.get(key) || {}; v[id] = (v[id] || 0) + 1; votes.set(key, v); };
+  for (const p of plays) {
+    const said = finalRuling(p.text), st = String(p?.start?.team?.id ?? '');
+    if (!ids.includes(st) || /\bno play\b/i.test(said)) continue;
+    const ko = said.match(/kickoff \d+ yards? to the ([A-Za-z&.' ]+?)\s?(\d{1,2})\b/i);
+    if (ko && Number(ko[2]) <= 40) vote(ko[1], other(st));
+    const td = !/intercept|fumbl|kickoff|punt/i.test(said) && said.match(/to the ([A-Za-z&.' ]+?)\s?00\b[^A-Za-z]*TOUCHDOWN/i);
+    if (td) vote(td[1], other(st));
+  }
+  const teamOf = (abbr) => { const v = votes.get(String(abbr || '').trim().toLowerCase()); if (!v) return null; const [a, b] = ids.map((id) => v[id] || 0); return a === b ? null : a > b ? ids[0] : ids[1]; };
+  const out = Object.fromEntries(ids.map((id) => [id, { fumbles: 0, lost: 0, picks: 0, pointsOff: 0, takeaways: 0, unsure: false }]));
+  let lastFumble = null;
+  for (let i = 0; i < plays.length; i++) {
+    const p = plays[i], said = finalRuling(p.text);
+    if (/\bno play\b/i.test(said)) continue;
+    const startT = String(p?.start?.team?.id ?? p.driveTeam ?? ''), endT = String(p?.end?.team?.id ?? '');
+    if (!ids.includes(startT)) continue;
+    const prev = i > 0 ? plays[i - 1] : null;
+    const rose = (id) => (prev ? scoreOf(p, id) - scoreOf(prev, id) : scoreOf(p, id));
+    const events = [];
+    const at = said.search(/\b(?:fumble[sd]?|muff(?:ed|s)?)\b/i);
+    const hasPick = /\bintercept(?:ed|ion)\b/i.test(said);
+    const pickFirst = hasPick && (at < 0 || said.search(/\bintercept(?:ed|ion)\b/i) < at);
+    if (hasPick) out[startT].picks += 1;
+    if (at >= 0) {
+      const before = said.slice(0, at);
+      const kick = /\b(?:kickoff|punts?|kicks? off)\b/i.test(before);
+      const fumbler = (kick || pickFirst) ? other(startT) : startT;
+      const who = fumblerName((said.match(/fumbled? by ([^,]*?)(?: at |,| forced| recovered|$)/i) || said.match(/([A-Z]\.\s?[A-Za-z'’-]+(?: [JS]r\.?| I+)?) fumbled/))?.[1]);
+      // Told twice only when the two tellings do not carry different clocks (the same back can fumble on back-to-back snaps).
+      const clock = said.match(/^\s*\((\d{1,2}:\d{2})\)/)?.[1] ?? null;
+      const again = lastFumble && lastFumble.who && lastFumble.who === who && lastFumble.period === p?.period?.number && i - lastFumble.i <= 2
+        && (!clock || !lastFumble.clock || clock === lastFumble.clock);
+      const rec = said.slice(at).match(/recovered by ([A-Za-z&.' ]+?)\s?#\d+/i) || said.slice(at).match(/recovered by ([A-Za-z&.' ]+?) at\b/i);
+      const recTeam = rec ? teamOf(rec[1]) : null;
+      let lost, sure = true;
+      if (rose(other(fumbler)) >= 6) lost = true;
+      else if (rose(fumbler) >= 6) lost = false;
+      else if (recTeam) lost = recTeam !== fumbler;
+      else if (/out of bounds/i.test(said.slice(at)) && !rec) lost = false;
+      else if (ids.includes(endT)) { lost = endT !== fumbler; sure = Boolean(rec) === false ? true : false; }
+      else { lost = /Opponent|Return Touchdown/i.test(String(p?.type?.text || '')); sure = false; }
+      if (again) {
+        // The same fumble told twice: the fuller telling (the one that says who recovered it, else the longer one) stands.
+        const fuller = (rec && !lastFumble.rec) || (!rec && !lastFumble.rec && said.length > lastFumble.len);
+        if (fuller && lost !== lastFumble.lost) {
+          if (lastFumble.lost) { out[lastFumble.fumbler].lost -= 1; if (lastFumble.credit) { out[lastFumble.credit.to].takeaways -= 1; out[lastFumble.credit.to].pointsOff -= lastFumble.credit.pts; } }
+          else { out[lastFumble.fumbler].lost += 1; events.push({ by: fumbler, fumble: lastFumble }); }
+          lastFumble.lost = lost;
+        }
+        if (fuller) { lastFumble.rec = lastFumble.rec || Boolean(rec); lastFumble.len = said.length; }
+      } else {
+        lastFumble = { who, period: p?.period?.number, i, clock, fumbler, lost, rec: Boolean(rec), len: said.length, credit: null };
+        out[fumbler].fumbles += 1; if (lost) { out[fumbler].lost += 1; events.push({ by: fumbler, fumble: lastFumble }); }
+        if (!sure) out[fumbler].unsure = true;
+      }
+    }
+    if (hasPick) { if (at >= 0 && pickFirst && events.length) events.length = 0; else events.push({ by: startT }); }
+    for (const e of events) {
+      const to = other(e.by), base = prev ? scoreOf(prev, to) : 0;
+      let last = scoreOf(p, to), j = i;
+      while (j + 1 < plays.length) {
+        const n = plays[j + 1], nStart = String(n?.start?.team?.id ?? '');
+        if (nStart && nStart !== to) break;
+        if (/end of (?:half|game|regulation)|end (?:of )?(?:2nd|4th) quarter/i.test(String(n?.type?.text || ''))) break;
+        j += 1; if (Number.isFinite(scoreOf(n, to))) last = scoreOf(n, to);
+      }
+      const pts = last - base;
+      out[to].takeaways += 1;
+      if (Number.isFinite(pts) && pts >= 0 && pts <= 8) { out[to].pointsOff += pts; if (e.fumble) e.fumble.credit = { to, pts }; } else out[to].unsure = true;
+    }
+  }
+  return out;
+}
+
 export function gameBoxFromSummary(summary, eventId) {
   summary = withoutRepeatedDrives(summary);
   const competition = summary?.header?.competitions?.[0];
@@ -315,7 +425,7 @@ export function gameBoxFromSummary(summary, eventId) {
       .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}\\b[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
     if (hit) starterQb[t.id] = hit.name;
   }
-  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null };
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary) };
 }
 
 const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9-21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9-21'], ['behindBig', 'behind by 22+']];
@@ -506,7 +616,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v12 (Oct 29 2026 hunt, round 7): the short "46 yd FG GOOD" kicker and kneel-down drive endings; v13-14: plays of 20+; v15 (round 8): drive starts by yard line, quarter ends, box kickers; v16 (round 9): big-play names, strip-sacks, red zone, blocked-kick returns; v17 (round 10): snaps by the drive's team, overtime drives, overturned sacks, kick-fumble drives.
   // v27 (round 18): a drive ESPN logs twice is one; early exits judged by the score when the player left.
   // v28 (Nov 5 2026): runs and pass plays by the score at the snap.
-  return cachedResearch(`espn_cfb_box_v28:${eventId}`, async () => {
+  // v29 (Nov 9 2026): how the turnovers happened (fumbles on the ground, the ones lost, points off them).
+  return cachedResearch(`espn_cfb_box_v29:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

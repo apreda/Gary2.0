@@ -372,7 +372,7 @@ async function teamBoxBuilder(season, weeks) {
   };
   // ESPN's team totals over CFBD's where ESPN has them (round 8: CFBD's box was wrong in games where the official
   // school box agrees with ESPN); CFBD's sacks and tackles for loss, which ESPN's team totals lack, stay.
-  const lines = (team, result, sackPlays = null, espn = null) => {
+  const lines = (team, result, sackPlays = null, espn = null, turnoverPlays = null) => {
     const found = find(team, result);
     // The official box's sacks alone are not a unit line (Nov 3 2026 college data check: with CFBD's week missing,
     // Nebraska's Sep 5 game read "— runs for — (2 of them sacks) · passing — for — · — giveaways ..."). Its counts stay.
@@ -403,13 +403,28 @@ async function teamBoxBuilder(season, weeks) {
     // 2 interceptions). In CFBD's box `interceptions` are the ones a team threw and `passesIntercepted` the ones its
     // defense made: turnovers equal fumblesLost plus interceptions in all 358 team-games of weeks 5-7. The split shows
     // only when it adds up to the total.
+    // How the turnovers happened, from the play-by-play (Nov 9 2026 college review: a count alone read as a team habit).
+    // Beside each count: the points scored off them, and every fumble that side put on the ground, kept or lost. Only
+    // for a game where both teams' lost fumbles and interceptions in the plays match this box; NCAAF_TURNOVER_DETAIL=0
+    // turns it off.
+    const sameAsBox = (d, box) => d && Number(box.get('fumblesLost')) === d.lost && Number(box.get('interceptions')) === d.picks;
+    const detail = process.env.NCAAF_TURNOVER_DETAIL !== '0' && sameAsBox(turnoverPlays?.mine, own) && sameAsBox(turnoverPlays?.theirs, opp) ? turnoverPlays : null;
+    const times = (n) => (n === 1 ? 'once' : `${n} times`);
     const lost = (box, word) => {
       const total = box.get('turnovers');
       if (total == null) return `— ${word}s`;
       const fumbles = Number(box.get('fumblesLost')), picks = Number(box.get('interceptions'));
       const split = Number(total) > 0 && Number.isFinite(fumbles) && Number.isFinite(picks) && fumbles + picks === Number(total)
         ? ` (${[fumbles ? `${plural(fumbles, 'fumble')} ${word === 'giveaway' ? 'lost' : 'recovered'}` : null, picks ? `${picks} INT` : null].filter(Boolean).join(', ')})` : '';
-      return `${count(total, word)}${split}`;
+      if (!detail) return `${count(total, word)}${split}`;
+      // The side that turned it over, and the side that scored off it.
+      const gave = word === 'giveaway' ? detail.mine : detail.theirs, took = word === 'giveaway' ? detail.theirs : detail.mine;
+      const scored = Number(total) > 0 && !took.unsure && took.takeaways === Number(total)
+        ? `, ${word === 'giveaway' ? `${took.pointsOff} opponent ${took.pointsOff === 1 ? 'point' : 'points'}` : plural(took.pointsOff, 'point')} off ${Number(total) === 1 ? 'it' : 'them'}` : '';
+      const ground = word === 'giveaway'
+        ? (gave.fumbles ? `fumbled ${times(gave.fumbles)} in all` : 'no fumbles')
+        : (gave.fumbles ? `opponent fumbled ${times(gave.fumbles)} in all` : 'opponent did not fumble');
+      return `${count(total, word)}${split}${scored} · ${ground}`;
     };
     // Penalties and fourth downs from the same box (Oct 23 2026 data audit: SMU went 4-for-5 on fourth down against
     // Virginia; third downs alone undercounted how drives were kept alive). Penalties are the whole team's, every unit.
@@ -448,7 +463,7 @@ async function playerGames(sides, boxes) {
     const teamId = s.results.map((r) => boxes.find(s.team, r)?.teamId).find((id) => id != null);
     const roster = teamId != null ? await getNcaafRosterPositions(teamId).catch(() => null) : null;
     const positions = roster?.positions || {};
-    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map(), flow = new Map(), unitTotals = new Map();
+    const rows = [], onFile = new Set(), points = new Map(), kicking = new Map(), drives = new Map(), oppQb = new Map(), named = new Map(), sackPlays = new Map(), flow = new Map(), unitTotals = new Map(), turnoverPlays = new Map();
     for (const r of s.results) {
       const found = boxes.find(s.team, r);
       const box = found ? byId.get(found.game.id) : null;
@@ -460,6 +475,9 @@ async function playerGames(sides, boxes) {
         sackPlays.set(String(r.gameId), { mine: box.sacks[String(found.teamId)] || none, theirs: (oppSide && box.sacks[oppSide]) || none });
       }
       const oppSideId = (box.teams || []).find((t) => t.id && t.id !== String(found.teamId))?.id;
+      if (box.turnovers && oppSideId && box.turnovers[String(found.teamId)] && box.turnovers[oppSideId]) {
+        turnoverPlays.set(String(r.gameId), { mine: box.turnovers[String(found.teamId)], theirs: box.turnovers[oppSideId] });
+      }
       const ownT = espnUnitTotals(box, found.teamId), oppT = oppSideId ? espnUnitTotals(box, oppSideId) : null;
       if (ownT && oppT) unitTotals.set(String(r.gameId), { own: ownT, opp: oppT });
       if (boxAddsUp(box, found.teamId, found.own)) {
@@ -541,7 +559,7 @@ async function playerGames(sides, boxes) {
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }
-    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, flow, unitTotals, jerseys: roster?.jerseys || {},
+    return { rows, onFile, points, kicking, drives, oppQb, named, sackPlays, turnoverPlays, flow, unitTotals, jerseys: roster?.jerseys || {},
       rosterPositions: new Map(Object.entries(roster?.names || {}).filter(([, position]) => position).map(([name, position]) => [nameKey(name), position])) };
   }));
 }
@@ -1025,7 +1043,7 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       const official = sackBoxes[i]?.get(String(r.gameId));
       const totals = played[i].unitTotals?.get(String(r.gameId));
       const withSacks = official ? { own: new Map([...(totals?.own || []), ['sacks', official.made[0]]]), opp: new Map([...(totals?.opp || []), ['sacks', official.taken[0]]]) } : totals;
-      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)), withSacks);
+      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)), withSacks, played[i].turnoverPlays?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
       const listedQb = played[i].oppQb?.get(String(r.gameId)), starter = oppStarter.get(`${i}|${r.gameId}`);
       const lastName = (nm) => String(nm || '').trim().split(/\s+/).filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop()?.toLowerCase();
