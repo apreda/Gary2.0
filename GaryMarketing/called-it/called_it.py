@@ -88,23 +88,48 @@ def num(x):
 def price(odds): return f"+{odds}" if odds > 0 else str(odds)
 def won_on_10(odds): return 10 * odds / 100 if odds > 0 else 1000 / abs(odds)
 
-def called_words(d):
-    made = when(d["created_at"]).astimezone(ET)
-    return f"at {made.strftime('%-I:%M')} this morning" if made.hour < 12 else f"at {made.strftime('%-I:%M %p')}"
+SUFFIXES = {"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"}
 
-def post_text(d):
-    """Two lines. The player's full name leads, because that is what people are searching the minute it happens."""
+def last_name(player):
+    words = [w for w in str(player).split() if w.lower() not in SUFFIXES]
+    return words[-1] if words else str(player)
+
+def bet_phrase(d, who=None):
+    """'Cook to score', 'Wentz over 1.5 pass TDs': how a bettor says the prop."""
     kind, line = (str(d["prop"]).split(" ") + [""])[:2]
-    label, did = PROPS.get(kind, (kind.replace("_", " ").upper(), ""))
+    who = who or last_name(d["player"])
+    if kind == "anytime_td": return f"{who} to score"
+    side = "over" if str(d.get("bet") or "over").lower() == "over" else "under"
+    return f"{who} {side} {line} {SAY.get(kind, kind.replace('_', ' '))}"
+
+SAY = {"threes": "threes", "points": "points", "rebounds": "rebounds", "assists": "assists", "steals": "steals", "blocks": "blocks",
+       "points_rebounds_assists": "pts+reb+ast", "points_rebounds": "pts+reb", "points_assists": "pts+ast", "rebounds_assists": "reb+ast",
+       "passing_tds": "pass TDs", "passing_yards": "pass yards", "rushing_yards": "rush yards", "receiving_yards": "rec yards",
+       "receptions": "catches", "rushing_attempts": "carries"}
+
+def post_text(d, darts=()):
+    """Gary's account is Gary, so he speaks for himself (founder, Nov 9 2026, on "Gary called it at 5:55 this morning":
+    "what value does that provide our users?"). Three short beats, each one something the reader can use:
+    what just happened and the price; what Gary said about it before the game, in his own words; what he still
+    has live in the same game. The player's full name leads, because that is what people search the minute it happens."""
+    kind, line = (str(d["prop"]).split(" ") + [""])[:2]
+    did = PROPS.get(kind, ("", ""))[1]
     over = str(d.get("bet") or "over").lower() == "over"
     n = num(d.get("actual"))
-    if kind == "anytime_td":
-        return f"{d['player']} touchdown.\n\nGary called it {called_words(d)}. {price(d['odds'])}."
-    if over and did and n:
-        return f"{d['player']} {did.format(n=n)}.\n\nGary called it {called_words(d)}. {price(d['odds'])}."
-    if not over and did and n:
-        return f"{d['player']} {did.format(n=n)}.\n\nGary had the under {line} {called_words(d)}. {price(d['odds'])}."
-    return f"{d['player']} {'over' if over else 'under'} {line} {label.lower()} cashed.\n\nGary called it {called_words(d)}. {price(d['odds'])}."
+    if kind == "anytime_td": lead = f"{d['player']} touchdown. {price(d['odds'])}."
+    elif did and n and over: lead = f"{d['player']} {did.format(n=n)}. {price(d['odds'])}."
+    elif did and n: lead = f"{d['player']} {did.format(n=n)}. Under {line} cashed, {price(d['odds'])}."
+    else: lead = f"{bet_phrase(d, d['player'])} cashed. {price(d['odds'])}."
+    said = first_sentence(d.get("reason"), 170)
+    earlier = "This morning I said" if when(d["created_at"]).astimezone(ET).hour < 12 else "Before the game I said"
+    why = f"{earlier}: {said}" if said else ""
+    others = sorted([x for x in darts if str(x.get("game_id")) == str(d.get("game_id")) and x["id"] != d["id"]
+                     and x.get("result") is None and not x.get("scratched_at")], key=lambda x: -int(x["odds"]))[:3]
+    live = "Still live in this one: " + ", ".join(f"{bet_phrase(x)} {price(int(x['odds']))}" for x in others) + "." if others else ""
+    for parts in ([lead, why, live], [lead, why], [lead, live], [lead]):
+        text = "\n\n".join(x for x in parts if x)
+        if len(text) <= 280: return text
+    return lead
 
 def first_sentence(text, limit=165):
     t = re.sub(r"\s+", " ", str(text or "")).strip()
@@ -175,6 +200,58 @@ def due(now, days):
     out.sort(key=lambda x: (-int(x[0]["odds"]), x[0]["id"]))
     return out, darts
 
+# ── tonight's card ───────────────────────────────────────────────────────────────────────────────────────
+CARD_FROM_MIN, CARD_TO_MIN = 95, 40          # posts once, between 95 and 40 minutes before the game
+
+def card(now, today, darts, dry=False):
+    """What a follower gets before the game: Gary's props for tonight's big one, in a list they can use.
+    An NFL night game with 3 or more of his props is the card; on a night without one, his five best-priced props."""
+    live = [d for d in darts if d["game_date"] == today and d.get("result") is None]
+    night = lambda d: when(d["commence_time"]).astimezone(ET).hour >= 17
+    games = {}
+    for d in live:
+        if d["league"] == "NFL" and night(d): games.setdefault(str(d["game_id"]), []).append(d)
+    games = {g: ds for g, ds in games.items() if len(ds) >= 3}
+    if games:
+        ds = max(games.values(), key=lambda ds: (when(ds[0]["commence_time"]), len(ds)))
+        start = when(ds[0]["commence_time"])
+        head = f"{str(ds[0].get('matchup') or '').replace(' @ ', ' at ')}, {start.astimezone(ET).strftime('%-I:%M')}. My props:"
+        picks = sorted(ds, key=lambda d: -int(d["odds"]))[:6]
+    else:
+        pool = [d for d in live if night(d) and int(d["odds"]) > 0]
+        if len(pool) < 3: return
+        picks = sorted(pool, key=lambda d: -int(d["odds"]))[:5]
+        start = min(when(d["commence_time"]) for d in picks)
+        head = "Tonight's props:"
+    lead_min = (start - now).total_seconds() / 60
+    if not dry and not (CARD_TO_MIN <= lead_min <= CARD_FROM_MIN): return
+    key = f"CARD {today}"
+    if not dry and rest(f"social_post_log?select=id&post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}"): return
+    lines = [f"{bet_phrase(d, d['player'])} {price(int(d['odds']))}" for d in picks]
+    foot = "The why on each one is in the app. Free."
+    text = ""
+    while lines:
+        text = f"{head}\n\n" + "\n".join(lines) + f"\n\n{foot}"
+        if len(text) <= 280: break
+        lines.pop()
+    if dry: print(f"[card, {lead_min:.0f} min out] {text!r}"); return
+    try:
+        rest("social_post_log", "POST", {"post_date": today, "slot": "card", "league": picks[0]["league"], "pick_text": key,
+                                         "commence_time": picks[0]["commence_time"], "thread_format": "card"})
+    except Exception as e:
+        log(f"card: claim failed ({e})"); return
+    try:
+        j = json.loads(http(f"{SB}/functions/v1/post-single-tweet", "POST", H, json.dumps({"text": text}).encode(), timeout=60))
+        if not j.get("success") or not j.get("tweetId"): raise RuntimeError(str(j)[:300])
+        rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "PATCH", {
+            "hook_tweet_id": j["tweetId"], "thread_url": f"https://x.com/BetwithGary/status/{j['tweetId']}",
+            "posted_at": datetime.now(timezone.utc).isoformat(), "post_text": text,
+            "audience_selection": {"format": "card_v1", "darts": [d["id"] for d in picks[: len(lines)]]}})
+        log(f"card: https://x.com/BetwithGary/status/{j['tweetId']}")
+    except Exception as e:
+        rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "DELETE")
+        log(f"card: FAILED {e}")
+
 def main():
     args = sys.argv[1:]
     os.makedirs(OUT, exist_ok=True)
@@ -188,10 +265,13 @@ def main():
         if not d: sys.exit(f"no dart {dart_id}")
         day = rest(f"darts?select=id,league&game_date=eq.{d['game_date']}&scratched_at=is.null") or []
         cashed = when(d["graded_at"]) if d.get("graded_at") else now
-        print(post_text(d)); print(draw(ticket_data(d, cashed, day), os.path.join(OUT, f"dart-{dart_id}.png")))
+        full = rest(f"darts?select={COLS}&game_date=eq.{d['game_date']}&scratched_at=is.null") or []
+        print(post_text(d, full)); print(draw(ticket_data(d, cashed, day), os.path.join(OUT, f"dart-{dart_id}.png")))
         return
 
     found, darts = due(now, [today, yesterday])
+    try: card(now, today, darts, dry="--dry" in args)
+    except Exception as e: log(f"card: FAILED {e}")
     if not found: return
     posted = rest(f"social_post_log?select=pick_text,posted_at&slot=eq.called_it&post_date=in.({today},{yesterday})") or []
     done = {p["pick_text"] for p in posted}
@@ -202,7 +282,7 @@ def main():
         if key in done: continue
         if len(todays) >= MAX_PER_DAY: log(f"{d['player']}: held, {MAX_PER_DAY} already posted today"); return
         if last and (now - last).total_seconds() / 60 < MIN_GAP_MIN: log(f"{d['player']}: waiting, last post under {MIN_GAP_MIN} min ago"); return
-        text = post_text(d)
+        text = post_text(d, darts)
         if "--dry" in args: print(f"[{how}] {text!r}"); continue
         try:
             rest("social_post_log", "POST", {"post_date": today, "slot": "called_it", "league": d["league"], "pick_text": key,
