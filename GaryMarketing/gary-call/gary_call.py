@@ -137,10 +137,11 @@ def screens(words, max_chars, max_lines=3):
 
 # ── voice ────────────────────────────────────────────────────────────────────────────────────────────────
 def speak(line, mp3_path):
-    """Gary's voice with word timings. Tries each ElevenLabs key until one has credits."""
+    """Gary's voice with word timings. Tries each ElevenLabs key until one has credits. ELEVENLABS_API_KEY_2 in
+    .env is the account the live app's Talking Gary runs on (checked Nov 9 2026), so it is the fallback, not the first."""
     text = VOICE_CUE + line
     last = None
-    for name in ("ELEVENLABS_API_KEY_2", "ELEVENLABS_API_KEY"):
+    for name in ("ELEVENLABS_API_KEY", "ELEVENLABS_API_KEY_2"):
         key = ENV.get(name)
         if not key: continue
         try:
