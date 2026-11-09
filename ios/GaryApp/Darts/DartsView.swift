@@ -84,6 +84,9 @@ enum DartCategory {
         // NBA (Oct 19 2026, the opener): the main line in each, over or under.
         "NBA": [("pts", "POINTS"), ("reb", "REBOUNDS"), ("ast", "ASSISTS"), ("threes", "THREES"), ("pra", "PTS+REB+AST")],
     ]
+    /// No longer thrown (QB rushing TD, founder Nov 9 2026). A past day's darts in one still show; a day
+    /// with nothing thrown shows no empty tab for it.
+    static let retired: Set<String> = ["qbtd"]
     /// A one-game NFL night puts the quarterback rushing touchdowns last and
     /// the interceptions just before them (founder, Sep 24 2026); a full
     /// slate keeps the order above.
@@ -640,7 +643,7 @@ struct DartsView: View {
     @ViewBuilder private var darts: some View {
         // A day with nothing thrown (an NFL weekday) keeps the board up, clear.
         let thrown = categories
-        let cats = thrown.isEmpty ? DartCategory.order(league, oneGame: oneNflGame).map { (kind: $0.kind, title: $0.title, rows: [DartRow]()) } : thrown
+        let cats = thrown.isEmpty ? DartCategory.order(league, oneGame: oneNflGame).filter { !DartCategory.retired.contains($0.kind) }.map { (kind: $0.kind, title: $0.title, rows: [DartRow]()) } : thrown
         if cats.isEmpty {
             EmptyView()
         } else {

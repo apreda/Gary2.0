@@ -147,7 +147,7 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
   // opinions and a status from the morning). Each sheet carries the games themselves.
 
   const candidates = new Map();
-  const eligible = { td: [], qbtd: [], recyds: [], rushyds: [], passtd: [], int: [] };
+  const eligible = { td: [], recyds: [], rushyds: [], passtd: [], int: [] };
   const frames = [];
   const usedSet = Object.fromEntries(Object.keys(eligible).map((k) => [k, new Set((used[k] || []).map(String))]));
   let seq = 0;
@@ -203,7 +203,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const status = injuryById.get(pid) || injuryByName.get(`${teamName}|${normName(info.name)}`) || injuryByInitial(teamName, info.name);
         if (OUT.test(status)) continue;
         const r = byPlayer.get(pid);
-        const td = overPrice(r, { propType: 'anytime_td', line: 0.5 });
+        // No quarterback touchdown darts (founder, Nov 9 2026: "no more QB rushing TD").
+        const td = pos === 'QB' ? null : overPrice(r, { propType: 'anytime_td', line: 0.5 });
         // The yardage and quarterback lines are taken either way (Sep 24 2026):
         // the main line with both prices.
         const rec = pos === 'QB' ? null : mainLineBoth(r, 'receiving_yards');
@@ -212,9 +213,8 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const int = pos === 'QB' ? mainLineBoth(r, 'interceptions') : null;
         const prices = [];
         // Tight ends score in ANYTIME TD now that their own category is gone (Sep 23 2026).
-        const tdKind = pos === 'QB' ? 'qbtd' : 'td';
         const both = (label, m) => `${label} ${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`;
-        if (td) prices.push(`${pos === 'QB' ? 'QB RUSHING TD' : 'ANYTIME TD'} ${fmtOdds(td.odds)}`);
+        if (td) prices.push(`ANYTIME TD ${fmtOdds(td.odds)}`);
         if (rec) prices.push(both('RECEIVING YARDS', rec));
         if (rush) prices.push(both('RUSHING YARDS', rush));
         if (pass) prices.push(both('PASSING TDS', pass));
@@ -241,9 +241,9 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
         const matchKey = info.name;
         // statKey: the stats' spelling; recent: his team's last three games for the one-line board (round 10: built, never
         // read; the line Gary picks sheets from carried only a game count).
-        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int, tdKind,
+        candidates.set(id, { id, gameId: String(g.id), matchup, commence: g.date, player: info.name, playerId: pid, team: teamName, position: pos, td, rec, rush, pass, int,
           status: status ? status.toLowerCase() : null, gameLine, statKey: nk, recent });
-        if (td && !usedSet[tdKind].has(matchKey)) eligible[tdKind].push(id);
+        if (td && !usedSet.td.has(matchKey)) eligible.td.push(id);
         if (rec && !usedSet.recyds.has(matchKey)) eligible.recyds.push(id);
         if (rush && !usedSet.rushyds.has(matchKey)) eligible.rushyds.push(id);
         if (pass && !usedSet.passtd.has(matchKey)) eligible.passtd.push(id);

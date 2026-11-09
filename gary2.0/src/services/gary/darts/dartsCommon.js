@@ -24,11 +24,10 @@ export function dartCount(league, games) {
  * two or three receivers"): three on a one-game night, five on two games,
  * five on a full slate; rushing yards one back on a one-game night, two on
  * two games, five on a full slate; passing TDs one for each quarterback on a
- * one-game night, five on a full slate; QB rushing TDs three and
- * interceptions up to five on a Sunday, none on any other day ("on Sunday
- * we're going to pick three quarterbacks... no need to have it here"; the
- * same for interceptions); anytime TD one more than the games, never more
- * than five.
+ * one-game night, five on a full slate; interceptions up to five on a
+ * Sunday, none on any other day; anytime TD one more than the games, never
+ * more than five. QB rushing TD is gone (founder, Nov 9 2026: "no more QB
+ * rushing TD i dont want to do those at all anymore").
  */
 export function dartCounts(league, games, date) {
   const kinds = DART_CATEGORIES[league].map((c) => c.kind);
@@ -52,7 +51,6 @@ export function dartCounts(league, games, date) {
   const perGame = Math.min(DART_COUNT, 2 * g);
   return {
     td: dartCount(league, g),
-    qbtd: sunday ? 3 : 0,
     recyds: g === 1 ? 3 : DART_COUNT,
     rushyds: g === 1 ? 1 : g === 2 ? 2 : DART_COUNT,
     passtd: perGame,
@@ -93,9 +91,9 @@ export const DART_CATEGORIES = {
   ],
   // Tight end TD and first TD dropped (founder, Sep 23 2026); rushing yards
   // added and the yardage and quarterback lines taken either way (Sep 24).
+  // QB rushing TD dropped (founder, Nov 9 2026).
   NFL: [
     { kind: 'td', label: 'ANYTIME TD' },
-    { kind: 'qbtd', label: 'QB RUSHING TD' },
     { kind: 'recyds', label: 'RECEIVING YARDS' },
     { kind: 'rushyds', label: 'RUSHING YARDS' },
     { kind: 'passtd', label: 'PASSING TDS' },

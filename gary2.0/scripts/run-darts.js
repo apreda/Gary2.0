@@ -83,7 +83,7 @@ async function storeBoardPrices(board, league, date) {
       if (c.kind === 'first_inning') add('first_inning', c, c.matchup, { line: 0.5, over: c.yes, under: c.no, book: c.book });
       else { add('hrr', c, c.player, c.hrr); add('tb', c, c.player, c.tb); add('hr', c, c.player, c.hr && { ...c.hr, line: 0.5 }); }
     } else {
-      add(c.tdKind || 'td', c, c.player, c.td && { ...c.td, line: 0.5 });
+      add('td', c, c.player, c.td && { ...c.td, line: 0.5 });
       add('recyds', c, c.player, c.rec); add('rushyds', c, c.player, c.rush); add('passtd', c, c.player, c.pass); add('int', c, c.player, c.int);
     }
   }
