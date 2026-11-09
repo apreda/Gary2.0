@@ -32,9 +32,9 @@
   .row { display: flex; justify-content: space-between; white-space: nowrap; }
   .row.miss { opacity: .5; }
   .row b { font-weight: 700; }
-  .count { font-family: "Barlow"; font-size: 60px; letter-spacing: .04em; line-height: 1; text-transform: uppercase; }
-  .each { font-size: 24px; margin-top: 12px; text-transform: uppercase; }
-  .net { font-family: "Anton"; font-size: 170px; line-height: 1; margin-top: 2px; letter-spacing: -.01em; }
+  .count { font-family: "Barlow"; font-size: 54px; letter-spacing: .04em; line-height: 1; text-transform: uppercase; margin-top: 4px; }
+  .each { font-size: 24px; margin-top: 2px; text-transform: uppercase; }
+  .net { font-family: "Anton"; font-size: 190px; line-height: 1; margin-top: 2px; letter-spacing: -.01em; }
   .free { font-size: 20px; margin-top: 10px; text-transform: uppercase; line-height: 1.3; }
   .gary { position: absolute; right: -40px; bottom: -10px; height: 930px; filter: drop-shadow(0 20px 30px rgba(0, 6, 24, .5)); }
   .gary.still { right: 20px; height: 880px; }
@@ -54,35 +54,38 @@
       <div class="rule"></div>
       <div class="mono lines" id="lines"></div>
       <div class="rule"></div>
-      <div class="count" id="count"></div>
-      <div class="mono each">$10 on every one of them:</div>
+      <div class="mono each" id="each"></div>
       <div class="net" id="net"></div>
+      <div class="count" id="count"></div>
       <div class="mono free" id="free"></div>
     </div>
   </div>
 </div>
 <script>
-  // ?d=<base64 json>: { day, title, shout[], rows[{who, bet, price, hit}], count, net, free, gary, still }
+  // Sizes are measured in the real faces: wait for them, or the fitting below runs against fallback type.
+  Promise.all([document.fonts.load('100px "Anton"'), document.fonts.load('50px "Bebas"'), document.fonts.load('50px "Barlow"')]).then(() => document.fonts.ready).then(() => {
+  // ?d=<base64 json>: { day, title, shout[], rows[{a, b, dim}], each, net, count, free, gary, still }
   const d = JSON.parse(decodeURIComponent(escape(atob(new URLSearchParams(location.search).get("d")))));
   const $ = (id) => document.getElementById(id);
-  $("day").textContent = d.day; $("title").textContent = d.title; $("count").textContent = d.count; $("net").textContent = d.net; $("free").textContent = d.free;
+  $("day").textContent = d.day; $("title").textContent = d.title; $("count").textContent = d.count; $("net").textContent = d.net; $("each").textContent = d.each; $("free").textContent = d.free;
   $("gary").src = d.gary; if (d.still) $("gary").classList.add("still");
   for (const line of d.shout) { const row = document.createElement("div"); row.textContent = line; $("shout").appendChild(row); }
   const box = $("lines");
   for (const r of d.rows) {
-    const row = document.createElement("div"); row.className = "row" + (r.hit ? "" : " miss");
-    const a = document.createElement("span"); a.textContent = r.who + "  " + r.bet;
-    const b = document.createElement("b"); b.textContent = r.price + "  " + (r.hit ? "HIT " : "MISS");
+    const row = document.createElement("div"); row.className = "row" + (r.dim ? " miss" : "");
+    const a = document.createElement("span"); a.textContent = r.a;
+    const b = document.createElement("b"); b.textContent = r.b;
     row.appendChild(a); row.appendChild(b); box.appendChild(row);
   }
   // every dart of the night is on the tape: the type shrinks until the whole list fits
   const room = box.clientHeight, n = Math.max(1, d.rows.length);
   box.style.flex = "none"; box.style.height = room + "px";
-  let fs = Math.min(24, room / (n * 1.28));
+  let fs = Math.min(34, room / (n * 1.5));
   const fit = () => { box.style.fontSize = fs + "px"; box.style.lineHeight = (room / n) + "px"; return [...box.children].every((r) => r.scrollWidth <= box.clientWidth + 1); };
   while (fs > 9 && !fit()) fs -= 0.25;
-  if (n * fs * 1.28 < room) box.style.lineHeight = Math.min(room / n, fs * 1.6) + "px";
+  if (n * fs * 1.28 < room) box.style.lineHeight = Math.min(room / n, fs * 2.2) + "px";
   document.title = "ready";
+  });
 </script>
 </body>
 </html>

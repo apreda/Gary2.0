@@ -139,6 +139,13 @@ def first_sentence(text, limit=165):
     cut = s[:limit]
     return cut[: cut.rfind(",")].rstrip() + "." if "," in cut else ""
 
+def week_line(d):
+    try:
+        h, m = week_record(d["game_date"])
+        return f"THIS WEEK {h + (0 if d.get('result') == 'hit' else 1)} HIT {m} MISSED"
+    except Exception:
+        return ""
+
 def ticket_data(d, cashed_at, day_darts):
     kind, line = (str(d["prop"]).split(" ") + [""])[:2]
     label = PROPS.get(kind, (kind.replace("_", " ").upper(), ""))[0]
@@ -150,7 +157,7 @@ def ticket_data(d, cashed_at, day_darts):
     cut = 1 if len(name) > 1 else len(name)                        # first name / the rest
     made = when(d["created_at"])
     return {
-        "no": f"DART {idx:02d} OF {len(same) or 1}",
+        "no": week_line(d),
         "game": f"{made.astimezone(ET).strftime('%a %b %-d').upper()}  {str(d.get('matchup') or '').upper()}",
         "player": [" ".join(name[:cut]), " ".join(name[cut:])] if len(name) > 1 else [" ".join(name)],
         "bet": bet, "price": price(d["odds"]),
@@ -175,6 +182,21 @@ def draw(data, out_png):
 
 # ── what is due ──────────────────────────────────────────────────────────────────────────────────────────
 COLS = "id,game_date,league,player,player_id,matchup,game_id,commence_time,prop,bet,odds,reason,created_at,result,actual,graded_at,scratched_at"
+
+def link_reply(tweet_id, words):
+    """One reply under our own post carrying the tracked App Store link; returns its id or None."""
+    try:
+        j = json.loads(http(f"{SB}/functions/v1/post-reply-tweet", "POST", H, json.dumps({"text": words, "replyToId": tweet_id}).encode(), timeout=60))
+        return j.get("tweetId")
+    except Exception as e:
+        log(f"link reply failed: {e}"); return None
+
+def week_record(darts_day):
+    """Hits and misses since Monday, for the ticket's corner: every receipt shows the whole week, misses included."""
+    day = datetime.strptime(darts_day, "%Y-%m-%d")
+    monday = (day - timedelta(days=day.weekday())).strftime("%Y-%m-%d")
+    rows = rest(f"darts?select=result&game_date=gte.{monday}&game_date=lte.{darts_day}&scratched_at=is.null&result=in.(hit,miss)") or []
+    return sum(r["result"] == "hit" for r in rows), sum(r["result"] == "miss" for r in rows)
 
 def due(now, days):
     """(dart, cashed_at, how) for every dart that just cashed and qualifies, best price first."""
@@ -228,7 +250,7 @@ def card(now, today, darts, dry=False):
     key = f"CARD {today}"
     if not dry and rest(f"social_post_log?select=id&post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}"): return
     lines = [f"{bet_phrase(d, d['player'])} {price(int(d['odds']))}" for d in picks]
-    foot = "The why on each one is in the app. Free."
+    foot = "The why on each one is free in the app."
     text = ""
     while lines:
         text = f"{head}\n\n" + "\n".join(lines) + f"\n\n{foot}"
@@ -247,6 +269,8 @@ def card(now, today, darts, dry=False):
             "hook_tweet_id": j["tweetId"], "thread_url": f"https://x.com/BetwithGary/status/{j['tweetId']}",
             "posted_at": datetime.now(timezone.utc).isoformat(), "post_text": text,
             "audience_selection": {"format": "card_v1", "darts": [d["id"] for d in picks[: len(lines)]]}})
+        reply = link_reply(j["tweetId"], "The reason behind each one: betwithgary.ai/c/xcard")
+        if reply: rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "PATCH", {"cta_tweet_id": reply})
         log(f"card: https://x.com/BetwithGary/status/{j['tweetId']}")
     except Exception as e:
         rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "DELETE")
@@ -299,6 +323,8 @@ def main():
                 "hook_tweet_id": j["tweetId"], "thread_url": f"https://x.com/BetwithGary/status/{j['tweetId']}",
                 "posted_at": datetime.now(timezone.utc).isoformat(), "post_text": text,
                 "audience_selection": {"format": "called_it_v1", "how": how, "odds": d["odds"], "prop": d["prop"]}})
+            reply = link_reply(j["tweetId"], "Tonight's whole board, with the reason on each one, is free in the app: betwithgary.ai/c/xcash")
+            if reply: rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "PATCH", {"cta_tweet_id": reply})
             log(f"{d['player']} ({how}, {price(d['odds'])}): https://x.com/BetwithGary/status/{j['tweetId']}")
         except Exception as e:
             rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "DELETE")

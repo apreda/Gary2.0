@@ -91,6 +91,8 @@
   </div>
 </div>
 <script>
+  // Sizes are measured in the real faces: wait for them, or the fitting below runs against fallback type.
+  Promise.all([document.fonts.load('100px "Anton"'), document.fonts.load('50px "Bebas"'), document.fonts.load('50px "Barlow"')]).then(() => document.fonts.ready).then(() => {
   // Data arrives as ?d=<base64 json>. Everything on the ticket is a fact from the darts row.
   const d = JSON.parse(decodeURIComponent(escape(atob(new URLSearchParams(location.search).get("d")))));
   const $ = (id) => document.getElementById(id);
@@ -112,8 +114,10 @@
   const said = document.querySelector(".said"), foot = document.querySelector(".foot");
   let fs = 22; const clear = () => said.offsetTop + said.offsetHeight <= foot.offsetTop - 14;
   while (fs > 17 && !clear()) { fs -= 1; said.style.fontSize = fs + "px"; }
+  document.body.dataset.fit = [said.offsetTop, said.offsetHeight, foot.offsetTop, fs].join(",");
   if (!clear()) { said.style.display = "none"; said.previousElementSibling.style.display = "none"; }
   document.title = "ready";
+  });
 </script>
 </body>
 </html>
