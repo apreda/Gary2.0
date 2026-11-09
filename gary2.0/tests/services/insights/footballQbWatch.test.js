@@ -60,7 +60,20 @@ describe('NFL quarterback write-ups', () => {
     const rows = await computeFootballQbWatch(ctx);
 
     expect(rows).toHaveLength(2);
-    expect(rows.every((row) => row.detail.includes('quarterback designation rather than a performance profile'))).toBe(true);
-    expect(rows.every((row) => row.meta.computed_detail.includes('No 2026 or 2025 passing line on file yet'))).toBe(true);
+    expect(rows.every((row) => row.detail.includes('with no 2026 passing line on file yet'))).toBe(true);
+    expect(rows.every((row) => row.meta.computed_detail.includes('No 2026 passing line on file yet'))).toBe(true);
+  });
+
+  it('never reads last season, early in the year or with no line this year', async () => {
+    ctx.games = ctx.games.slice(0, 1);
+    ctx.bdl.getNflPlayerSeasonStats.mockImplementation(async ({ playerId, season }) => (season === 2025 ? [{
+      player_id: playerId, passing_yards: 4100, passing_completion_pct: 67, yards_per_pass_attempt: 7.6,
+      passing_touchdowns: 24, passing_interceptions: 9, games_played: 17,
+    }] : []));
+
+    const rows = await computeFootballQbWatch(ctx);
+
+    expect(ctx.bdl.getNflPlayerSeasonStats).not.toHaveBeenCalledWith(expect.objectContaining({ season: 2025 }));
+    expect(rows.every((row) => row.meta.passing === null && !/2025|last season/i.test(`${row.detail} ${row.meta.computed_detail}`))).toBe(true);
   });
 });

@@ -713,7 +713,7 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(injuries.every((r) => r.game_id === 900)).toBe(true);
   });
 
-  it('names each starter with a real season line, labeling a prior-season line as such', async () => {
+  it('names each starter without last season\'s line in the preseason', async () => {
     bdl.getGames.mockResolvedValue([preseasonSlateGame]);
     bdl.getNflRosterDepth.mockResolvedValue({
       home: [{ id: 57, name: 'Quality Starter', position: 'QB', depth: 1, college: 'Ohio State', experience: '4th Season', injuryStatus: null }],
@@ -735,21 +735,19 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     expect(qbs.length).toBe(2);
     const vet = qbs.find((r) => r.player_id === 57);
     expect(vet.headline).toBe('Quality Starter is the projected starting quarterback for MIA');
-    expect(vet.detail).toContain('In 2025, Quality Starter threw for 4100 passing yards');
-    expect(vet.detail).toContain('24-9 touchdown-to-interception line');
-    expect(vet.meta.computed_detail).toContain("Starter's 2025 season line");
-    expect(vet.meta.computed_detail).toContain('24-9 TD-INT');
-    expect(vet.meta.prior_season_line).toBe(true);
+    expect(vet.detail).toContain('with no 2026 passing line on file yet');
+    expect(vet.detail).not.toContain('4100');
+    expect(vet.meta.passing).toBeNull();
+    expect(bdl.getNflPlayerSeasonStats).not.toHaveBeenCalledWith(expect.objectContaining({ season: 2025 }));
     const rookie = qbs.find((r) => r.player_id === 91);
-    expect(rookie.detail).toContain('no 2026 or 2025 passing sample is on file');
     expect(rookie.detail).toContain('listed questionable');
-    expect(rookie.meta.computed_detail).toContain('No 2026 or 2025 passing line on file yet');
+    expect(rookie.meta.computed_detail).toContain('No 2026 passing line on file yet');
   });
 
-  it('reads the prior season under its own name until a regular-season game is final (Week 1 morning)', async () => {
+  it('shows no line until a regular-season game is final (Week 1 morning)', async () => {
     // Sep 9 2026: BDL season_stats served Drake Maye's 17-game 2025 line under
     // the 2026 label the morning of Week 1. The standings gate says the season
-    // is not live, so the lane reads 2025 and names it.
+    // is not live, so there is no line yet, and last season is never read.
     bdl.getGames.mockResolvedValue([nflSlateGame]);
     bdl.nflStandingsCountable = vi.fn().mockResolvedValue(false);
     bdl.getNflRosterDepth.mockResolvedValue({
@@ -764,13 +762,10 @@ describe('NFL depth lanes (availability, QB watch, situational)', () => {
     try {
       const result = await generateInsightConnections({ date: '2026-09-10', league: 'NFL' });
       const maye = result.connections.find((r) => r.category === 'quarterback' && r.player_id === 57);
-      expect(maye.detail).toContain('In 2025, Drake Maye threw for 4394 passing yards');
-      expect(maye.meta.computed_detail).toContain("Maye's 2025 season line");
-      expect(maye.detail).not.toContain('2026 line so far');
-      expect(maye.meta.prior_season_line).toBe(true);
-      expect(maye.meta.stats_season).toBe(2025);
-      expect(bdl.getNflPlayerSeasonStats).toHaveBeenCalledWith({ playerId: 57, season: 2025 });
-      expect(bdl.getNflPlayerSeasonStats).not.toHaveBeenCalledWith({ playerId: 57, season: 2026 });
+      expect(maye.detail).toContain('with no 2026 passing line on file yet');
+      expect(maye.detail).not.toContain('4394');
+      expect(maye.meta.passing).toBeNull();
+      expect(bdl.getNflPlayerSeasonStats).not.toHaveBeenCalledWith(expect.objectContaining({ playerId: 57 }));
     } finally {
       delete bdl.nflStandingsCountable;
     }

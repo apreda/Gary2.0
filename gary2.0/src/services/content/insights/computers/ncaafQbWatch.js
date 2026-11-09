@@ -26,7 +26,7 @@ function teamAbbr(team) {
 }
 
 /** Sum a passer's per-game rows into the plate's numbers; null under the floor. */
-function aggregate(rows, season, prior) {
+function aggregate(rows, season) {
   const thrown = rows.filter((r) => (finite(r?.passing_attempts) ?? 0) > 0);
   const attempts = thrown.reduce((s, r) => s + finite(r.passing_attempts), 0);
   if (attempts < MIN_ATTEMPTS) return null;
@@ -37,12 +37,9 @@ function aggregate(rows, season, prior) {
   const ints = thrown.reduce((s, r) => s + (finite(r.passing_interceptions) ?? 0), 0);
   const pct = round((completions / attempts) * 100, 1);
   const ypa = round(yards / attempts, 2);
-  // The school he threw for, off the rows themselves (a transfer's prior year).
-  const teams = [...new Set(thrown.map((r) => r?.team?.abbreviation).filter(Boolean))];
   return {
     text: `${yards} passing yards, ${pct.toFixed(1)}% completions, ${ypa.toFixed(2)} yards per attempt, ${td}-${ints} TD-INT`,
-    attempts, yards, pct, ypa, td, ints, games: thrown.length, season, prior,
-    team: teams.length === 1 ? teams[0] : null,
+    attempts, yards, pct, ypa, td, ints, games: thrown.length, season,
   };
 }
 
@@ -108,30 +105,28 @@ async function gameRows({ game, season, bdl, helpers, date }) {
     const qb = side.evidence?.quarterback;
     if (!qb) continue;
     const own = current.filter(r => String(r.player.id) === String(qb.player_id) && String(r.team?.id) === String(side.team.id));
-    let line = aggregate(own, season, false);
+    // This season only (founder, Oct 23 2026): a transfer or a starter under the
+    // floor shows no line, never last year's.
+    const line = aggregate(own, season);
     const opponent = sides.find(s => s.key !== side.key)?.team;
     const recent = quarterbackRecent(own.map(r => ({ ...gameFacts(r, schedule), date: r.game?.date })), {
       kickoff: game.date || game.commence_time, opponentId: opponent?.id,
     });
-    if (!line) {
-      const prior = await bdl.getNcaafPlayerGameStats({ playerIds: [qb.player_id], season: season - 1 }) || [];
-      line = aggregate(cleanNcaafPlayerRows(prior, { season: season - 1, playerIds: [qb.player_id], asOf: cutoff }).rows, season - 1, true);
-    }
     const abbr = teamAbbr(side.team), school = side.team.college || side.team.full_name || abbr;
     const report = qb.sources.map(id => side.evidence.sources.find(s => s.id === id)).filter(Boolean);
     // The search's note on the starter is written for Gary's desk, not the page
     // (founder, Nov 9 2026: it read as internal commentary). The section reads
     // the quarterback's games, as MLB's reads the pitcher's starts.
     const intro = `${qb.name} is ${abbr}'s ${qb.status} starting quarterback.`;
-    const detail = `${intro}${line ? ` ${line.season}${line.prior ? ' prior-season' : ''} line: ${line.text} over ${line.games} games${line.prior && line.team ? ` for ${line.team}` : ''}.` : ' No verified passing sample is available yet.'}`;
+    const detail = `${intro}${line ? ` ${line.season} line: ${line.text} over ${line.games} games.` : ' No verified passing sample is available yet.'}`;
     rows.push(makeRow({ category: 'quarterback', headline: `${qb.name} is ${abbr}'s ${qb.status} starter`,
       detail, game: helpers.gameLabel(game), value: line ? `${line.ypa.toFixed(2)} Y/A` : qb.status.toUpperCase(),
       tone: TONES.NEUTRAL, relevance_score: 75, player_id: qb.player_id, team_id: side.team.id, game_id: game.id,
       meta: { source: 'ncaaf_game_context_v1', qb: qb.name, qb_status: qb.status, school, abbr, side: side.key,
         team_id: side.team.id, sources: report, source_collected_at: context.observed_at, through: date,
-        read: detail, recent, stats_season: line?.season ?? null, prior_season_line: line?.prior ?? null,
+        read: detail, recent, stats_season: line?.season ?? null,
         passing: line ? { yards: line.yards, pct: line.pct, ypa: line.ypa, td: line.td, ints: line.ints,
-          games: line.games, attempts: line.attempts, season: line.season, prior: line.prior } : null },
+          games: line.games, attempts: line.attempts, season: line.season } : null },
     }));
   }
   return rows;
