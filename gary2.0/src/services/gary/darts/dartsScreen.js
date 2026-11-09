@@ -277,7 +277,7 @@ export function screenFirstInning({ board, ctx = {}, rowsByPlayer = new Map() })
 
 // ── NFL ────────────────────────────────────────────────────────────────────
 
-const NFL_PROP = { td: 'anytime_td', qbtd: 'anytime_td', recyds: 'receiving_yards', rushyds: 'rushing_yards', passtd: 'passing_tds', int: 'interceptions' };
+const NFL_PROP = { td: 'anytime_td', recyds: 'receiving_yards', rushyds: 'rushing_yards', passtd: 'passing_tds', int: 'interceptions' };
 
 /** nflverse weekly rows → the game shape the sheets and the volume model read (newest first). */
 export function nflGameFromRow(r) {
@@ -292,15 +292,15 @@ export function nflMarkets(kind, board) {
   const ids = board.eligible[kind] || [];
   return ids.map((id) => {
     const c = board.candidates.get(id);
-    if (kind === 'td' || kind === 'qbtd') return { id, player: c.player, team: c.team, game_id: c.gameId, prop_type: 'anytime_td', line: 0.5, over_odds: c.td?.odds, under_odds: null };
+    if (kind === 'td') return { id, player: c.player, team: c.team, game_id: c.gameId, prop_type: 'anytime_td', line: 0.5, over_odds: c.td?.odds, under_odds: null };
     const m = c[SIDED_MARKET[kind].key];
     return { id, player: c.player, team: c.team, game_id: c.gameId, prop_type: NFL_PROP[kind], line: m.line, over_odds: m.over, under_odds: m.under };
   });
 }
 
 /** One player's sheet for a category: this season beside last, usage, injury tag, the line. */
-const nflPriceText = (kind, c) => (kind === 'td' || kind === 'qbtd' ? fmtOdds(c.td?.odds) : (() => { const m = c[SIDED_MARKET[kind].key]; return `${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`; })());
-const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : kind === 'qbtd' ? 'QB RUSHING TD' : NFL_PROP[kind].replace('_', ' '));
+const nflPriceText = (kind, c) => (kind === 'td' ? fmtOdds(c.td?.odds) : (() => { const m = c[SIDED_MARKET[kind].key]; return `${m.line} over ${fmtOdds(m.over)} / under ${fmtOdds(m.under)}`; })());
+const nflLabel = (kind) => (kind === 'td' ? 'ANYTIME TD' : NFL_PROP[kind].replace('_', ' '));
 
 /** The frame of one NFL game, printed once above its players' sheets. */
 // Both clubs' reports in the frame, so every sheet under the game shows the defense he faces (round 11; the NBA frame has
@@ -324,7 +324,7 @@ export function nflBoardLine(kind, c, games, seasonLabel) {
 }
 
 export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {}) {
-  const propType = kind === 'qbtd' ? 'rushing_touchdowns' : NFL_PROP[kind];
+  const propType = NFL_PROP[kind];
   const priceText = nflPriceText(kind, c);
   const lines = [`${c.player} ${c.position || ''} · ${c.team ? c.team.replace(/^.* /, '') : ''}${c.status ? ` · ${c.status}` : ''} · ${c.matchup} ${etClock(c.commence)}`.replace(/\s+·\s+·/g, ' ·')];
   lines.push(`${nflLabel(kind)} ${priceText}`);
@@ -339,7 +339,7 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   // share of the targets lately, red zone, snaps, tonight's defense against
   // his position, who is out around him, and his games dated with the defense.
   const season = Number(seasonLabel);
-  const histProp = { td: 'anytime_td', qbtd: 'anytime_td', recyds: 'receiving_yards', rushyds: 'rushing_yards', passtd: 'passing_tds', int: 'interceptions' }[kind];
+  const histProp = NFL_PROP[kind];
   const hist = priceHistoryLine(ctx.history, c.player, histProp) || priceHistoryLine(ctx.history, c.player, kind);
   if (hist) lines.push(hist);
   const weeks = ctx.weeksByName?.get(c.statKey || normName(c.player)) || [];

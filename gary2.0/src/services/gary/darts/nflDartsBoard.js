@@ -2,7 +2,7 @@
 // each priced player with his injury tag, this season's game count and totals
 // (this season only: founder, Oct 23 2026, no last season ever; a one or two
 // game rate is a count, never who a player is), and the day's prices for the
-// seven NFL dart categories. Sources: BDL
+// NFL dart categories. Sources: BDL
 // games, odds, player props and injuries; nflverse weekly lines.
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { nflSeason } from '../../../utils/dateUtils.js';
@@ -276,7 +276,7 @@ export const SIDED_MARKET = {
 export function nflDartRow(kind, c, { side = 'over' } = {}) {
   const base = { league: 'NFL', kind, game_id: c.gameId, matchup: c.matchup, commence_time: c.commence,
     player: c.player, player_id: c.playerId, team: c.team, position: c.position, bet: 'over' };
-  if (kind === 'td' || kind === 'qbtd') return { ...base, prop: 'anytime_td 0.5', odds: c.td.odds, book: c.td.book };
+  if (kind === 'td') return { ...base, prop: 'anytime_td 0.5', odds: c.td.odds, book: c.td.book };
   const market = SIDED_MARKET[kind];
   const m = c[market.key];
   return { ...base, bet: side, prop: `${market.prop} ${m.line}`, odds: side === 'under' ? m.under : m.over, book: m.book };
