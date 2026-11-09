@@ -132,7 +132,7 @@ def ticket_data(d, cashed_at, day_darts):
         "called": f"{clock(made)} ET", "cashed": f"{clock(cashed_at)} ET",
         "won": f"$10 WON ${won_on_10(d['odds']):.2f}",
         "saidAt": f"GARY, {clock(made)}:", "said": first_sentence(d.get("reason")),
-        "free": f"One of {len(same) or 1} darts Gary posted before the games. All free in the app.",
+        "free": f"One of {len(same) or 1} props on Gary's Darts board this morning. All free in the app.",
         "gary": ART,
     }
 
