@@ -4,6 +4,7 @@ import { EmailSignup } from "./EmailSignup";
 import { isEmailRuntimeReady } from "@/lib/email/config";
 import { AppStoreButton } from "./AppStoreButton";
 import { PrivacyChoicesLink } from "./PrivacyChoicesLink";
+import { LEADERBOARD_OPEN } from "@/lib/book/leaderboard-open";
 const COLUMNS: {
   heading: string;
   links: { href: string; label: string; external?: boolean }[];
@@ -85,7 +86,7 @@ export function Footer() {
             ),
           )}
           <Link href="/you">Your Book</Link>
-          <Link href="/leaderboard">Leaderboard</Link>
+          {LEADERBOARD_OPEN && <Link href="/leaderboard">Leaderboard</Link>}
           <Link href="/account">Account</Link>
           <PrivacyChoicesLink />
         </nav>

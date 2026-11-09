@@ -8,6 +8,7 @@ import { myFollows, setFollow } from '@/lib/book/api';
 import { bookButton } from './LogBet';
 import { profileAvatar } from './ProfileEditor';
 import { ProfileSafety } from './ProfileSafety';
+import { LEADERBOARD_OPEN } from '@/lib/book/leaderboard-open';
 
 type RecordLine = { wins: number; losses: number };
 interface Card extends RecordLine {
@@ -89,9 +90,11 @@ export function PublicProfile({ userId }: { userId: string }) {
   };
   return (
     <div>
-      <Link href="/leaderboard" className="text-[13px] text-gold underline underline-offset-4">
-        ← Leaderboard
-      </Link>
+      {LEADERBOARD_OPEN && (
+        <Link href="/leaderboard" className="text-[13px] text-gold underline underline-offset-4">
+          ← Leaderboard
+        </Link>
+      )}
       {loading ? (
         <p role="status" className="mt-7 text-sm text-mid">
           Loading the player&apos;s record…

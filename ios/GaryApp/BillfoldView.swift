@@ -254,7 +254,7 @@ struct BillfoldView: View {
                     // The standings live in the BOARD scope (founder, Aug 20:
                     // the whole Book rides inside the Billfold, not the dock).
                     UserBookSection()
-                } else if billfoldScope == "board" {
+                } else if billfoldScope == "board", AppFlags.leaderboardOpen {
                     // THE LEADERBOARD — record and streak tabs, podium + table.
                     ScrollView(showsIndicators: false) {
                         ClassicLeaderboardView()
@@ -318,6 +318,7 @@ struct BillfoldView: View {
         .onChange(of: selectedTab) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: garyScope) { _ in recomputeCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: billfoldScope) { _ in recomputeCache() }
+        .onAppear { if !AppFlags.leaderboardOpen, billfoldScope == "board" { billfoldScope = "gary" } }
         .onChange(of: selectedSport) { _ in recomputeSelectionCache(); chartZoomScale = 1; chartZoomAnchor = 1; scrubDate = nil }
         .onChange(of: timeframe) { _ in onTimeframeChange(); chartZoomScale = 1; chartZoomAnchor = 1 }
         .onChange(of: sportTimeframe) { _ in onSportTimeframeChange() }
@@ -578,9 +579,11 @@ struct BillfoldView: View {
 
     private func bookScopeTabs(spacing: CGFloat, tracking: CGFloat, compress: Bool = false) -> some View {
         HStack(spacing: spacing) {
-            bookScopeTab("GARY", tracking: tracking, compress: compress, isOn: billfoldScope != "you" && billfoldScope != "board") { billfoldScope = "gary" }
+            bookScopeTab("GARY", tracking: tracking, compress: compress, isOn: billfoldScope != "you" && !(billfoldScope == "board" && AppFlags.leaderboardOpen)) { billfoldScope = "gary" }
             bookScopeTab("YOU", tracking: tracking, compress: compress, isOn: billfoldScope == "you") { billfoldScope = "you" }
-            bookScopeTab("LEADERBOARD", tracking: tracking, compress: compress, isOn: billfoldScope == "board") { billfoldScope = "board" }
+            if AppFlags.leaderboardOpen {
+                bookScopeTab("LEADERBOARD", tracking: tracking, compress: compress, isOn: billfoldScope == "board") { billfoldScope = "board" }
+            }
         }
     }
 

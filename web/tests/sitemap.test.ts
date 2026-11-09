@@ -14,6 +14,7 @@ import {
 import type { ArchiveDateSummary, ArchiveDayIndexRow } from '@/lib/gary/archive';
 import { SPORTS } from '@/lib/gary/leagues';
 import type { PickIndexRow } from '@/lib/gary/gamepage';
+import { LEADERBOARD_OPEN } from '@/lib/book/leaderboard-open';
 
 const BASE_URL = 'https://www.betwithgary.ai';
 const pathOf = (url: string) => new URL(url).pathname;
@@ -70,7 +71,8 @@ const FIXED = [
   '/results',
   ...SPORTS.map(sport => `/results/${sport.slug}`),
   '/results/audit',
-  '/leaderboard',
+  // Listed only once the leaderboard is open (lib/book/leaderboard-open.ts); closed, the page is noindex.
+  ...(LEADERBOARD_OPEN ? ['/leaderboard'] : []),
   '/archive',
   '/nfl',
   '/pricing',

@@ -6,6 +6,7 @@ import { accountHref } from "@/lib/auth/redirect";
 import { useSupabaseSessionHint } from "@/lib/auth/session-hint";
 import { AppStoreButton } from "./AppStoreButton";
 import { Icon } from "./site/Icon";
+import { LEADERBOARD_OPEN } from "@/lib/book/leaderboard-open";
 
 // The app's page header and its floating dock (ios/GaryApp ContentView,
 // GaryCenteredTabBar): the mark beside GARY A.I., destinations as words that
@@ -19,13 +20,15 @@ const PRIMARY: [string, string][] = [
   ["/results", "Record"],
   ["/archive", "Archive"],
 ];
-const MORE: [string, string][] = [
-  ["/today", "Today"],
-  ["/how-it-works", "How Gary works"],
-  ["/you", "Your Book"],
-  ["/leaderboard", "Leaderboard"],
-  ["/app", "Gary for iPhone"],
-];
+const MORE: [string, string][] = (
+  [
+    ["/today", "Today"],
+    ["/how-it-works", "How Gary works"],
+    ["/you", "Your Book"],
+    ["/leaderboard", "Leaderboard"],
+    ["/app", "Gary for iPhone"],
+  ] as [string, string][]
+).filter(([href]) => LEADERBOARD_OPEN || href !== "/leaderboard");
 const DOCK_LEFT = [
   { href: "/", label: "HOME", icon: "house" as const },
   { href: "/props", label: "PROPS", icon: "scope" as const },

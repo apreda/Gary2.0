@@ -62,7 +62,7 @@ struct ProfileView: View {
                         ProgressView("Restoring your account").tint(GaryColors.gold).foregroundStyle(.white.opacity(0.6)).frame(maxWidth: .infinity).padding(30)
                     } else if !auth.isAuthenticated {
                         signedOutPitch
-                        boardDoor
+                        if AppFlags.leaderboardOpen { boardDoor }
                     } else {
                         if loading && !bookLoaded {
                             ProgressView("Opening your book").tint(GaryColors.gold).foregroundStyle(.white.opacity(0.6)).frame(maxWidth: .infinity).padding(30)
@@ -81,7 +81,7 @@ struct ProfileView: View {
                                 actionRow
                                 if !openSlips.isEmpty { openSlipsBlock }
                             }
-                            boardDoor
+                            if AppFlags.leaderboardOpen { boardDoor }
                         }
                         if AppFlags.purchasesEnabled { membershipCard }
                         accountFooter

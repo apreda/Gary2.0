@@ -28,6 +28,11 @@ extension AppFlags {
     /// picks too (GARY_MANUAL_GAME_PICKS).
     static let heldLeagues: Set<String> = ["NHL"]
 
+    /// The leaderboard stays out of the app until 25 real people have a graded record on it (founder, Nov 9 2026).
+    /// That day there were 4, beside about 10 seeded accounts. Its code and the server's board are untouched;
+    /// set this to true (and LEADERBOARD_OPEN on the website) when the count is reached.
+    static let leaderboardOpen = false
+
     static func hidesHeldLeague(_ raw: String?) -> Bool {
         guard let raw, !raw.isEmpty else { return false }
         let n = raw.uppercased()
