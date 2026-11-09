@@ -26,7 +26,8 @@ const day = (d) => { const [, m, dd] = String(d || '').split('-').map(Number); r
 const memo = new Map();
 const once = (key, fn) => {
   // A result marked `retry` (a part of it failed) is used once and asked for again next time (round 14).
-  if (!memo.has(key)) memo.set(key, fn().catch(() => null).then((v) => { if (v == null || v.retry) memo.delete(key); return v; }));
+  // The failure is said in the log (Nov 9 2026: the Nov 8 downloads hung and nothing recorded why).
+  if (!memo.has(key)) memo.set(key, fn().catch((e) => { console.warn(`[NFL data] ${key} did not load: ${e?.message || e}`); return null; }).then((v) => { if (v == null || v.retry) memo.delete(key); return v; }));
   return memo.get(key);
 };
 

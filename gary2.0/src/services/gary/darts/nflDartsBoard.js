@@ -7,7 +7,8 @@
 import { ballDontLieService as bdl } from '../../providers/ballDontLieService.js';
 import { nflSeason } from '../../../utils/dateUtils.js';
 import { TEAM_NAMES } from '../../sports/nfl/nflStreaksService.js';
-import { weeklyRows as officialWeeklyRows, withOfficialReport, snapCounts, aliasByRoster } from '../../sports/nfl/nflPlayerContext.js';
+import { weeklyRows as officialWeeklyRows, withOfficialReport, snapCounts, aliasByRoster, gameDays } from '../../sports/nfl/nflPlayerContext.js';
+import { loadAllOrFail } from './dartsDataGuard.js';
 import { getPracticeReport, nflverseCode, loadNflverseFile } from '../../providers/nflverseService.js';
 import { getNflSchedule, scheduleRowFor } from '../../sports/nfl/nflSchedule.js';
 import { finalReportIn } from '../../sports/nfl/nflAvailability.js';
@@ -108,7 +109,7 @@ function statText(pos, s, teamWeeks = null, elsewhere = () => null) {
   return `${s.games} game${s.games === 1 ? '' : 's'}; ${teamWeeks?.length ? `his team's last ${last.length}` : `last ${last.length}`}, newest first: ${last.join('; ')}`;
 }
 
-export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null }) {
+export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null, dataTries = {} }) {
   // The season the date falls in, not its calendar year (Oct 29 2026 hunt: Week 18 and the playoffs are in January).
   const season = nflSeason(new Date(`${date}T17:00:00Z`));
   const listed = [...await bdl.getNflGamesForDate(date), ...await bdl.getNflGamesForDate(nextUtcDay(date))];
@@ -119,6 +120,17 @@ export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, su
     .filter((g) => !/final|progress|half|quarter|overtime/i.test(String(g.status || '')))
     .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
   if (!games.length) return { league: 'NFL', games: 0, text: '', candidates: new Map(), eligible: {} };
+
+  // No data, no darts (founder, Nov 9 2026; dartsDataGuard.js): the files every line and sheet is built from, asked for
+  // until they answer. They are kept for the run, so the list and the sheets read the same download. A file that never
+  // loads stops the run here, before anything is thrown.
+  await loadAllOrFail({
+    'the weekly stats': () => officialWeeklyRows(season),
+    'the snap counts': () => snapCounts(season),
+    'the schedule': () => gameDays(),
+    'the schedule file': () => getNflSchedule(),
+    'the weekly rosters': () => loadNflverseFile('roster_weekly', season),
+  }, { log: (m) => console.log(`NFL ${m}`), ...dataTries });
 
   const [odds, feed, thisYear, schedule] = await Promise.all([
     bdl.getOddsV2({ game_ids: games.map((g) => g.id) }, 'nfl').catch(() => null),

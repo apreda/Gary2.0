@@ -47,6 +47,7 @@ const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoar
 const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
 const { nflNewsFor, NEWS_NOT_ON_FILE: NFL_NEWS_NOT_ON_FILE } = await import('../src/services/gary/agentic/orchestrator/nflRead.js');
 const { nflGamePacket, packetOn } = await import('../src/services/gary/darts/nflGamePacket.js');
+const { DartsDataMissing, failedLoads, isDataMissingRun } = await import('../src/services/gary/darts/dartsDataGuard.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -111,8 +112,10 @@ async function throwLeague(league) {
   if (DART_CATEGORIES[league].every((c) => full(c.kind))) { log(`${league}: board full`); return; }
 
   if (!force) {
-    const { data: last } = await supabase.from('dart_runs').select('started_at, status')
-      .eq('game_date', date).eq('league', league).order('started_at', { ascending: false }).limit(1);
+    // A run that stopped for missing data threw nothing: the next run tries again without waiting out the hour.
+    const { data: recent } = await supabase.from('dart_runs').select('started_at, status, error')
+      .eq('game_date', date).eq('league', league).order('started_at', { ascending: false }).limit(20);
+    const last = (recent || []).filter((r) => !isDataMissingRun(r));
     const lastAt = last?.[0] ? Date.parse(last[0].started_at) : 0;
     if (Date.now() - lastAt < REFILL_GAP_MS) { log(`${league}: last throw ${Math.round((Date.now() - lastAt) / 60000)} min ago, waiting`); return; }
   }
@@ -208,6 +211,18 @@ async function throwLeague(league) {
         plays: await getPlayLedger(board.season).then((L) => new Map((L?.games || []).flatMap((g) => Object.keys(g.teamLastQ || {}).map((t) => [`${g.week}|${t}`, { lastPlay: Object.fromEntries(Object.entries(g.lastPlay || {}).filter(([k]) => k.startsWith(`${t}|`))), lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ }])))).catch(() => null),
         hurt: await getPlayLedger(board.season).then((L) => { const m = new Map(); for (const g of L?.games || []) for (const e of g.hurt || []) { const k = `${g.week}|${e.team}`; m.set(k, [...(m.get(k) || []), e]); } return m; }).catch(() => null) };
       log(`${league}: game logs for ${gamesByName.size} players this season, ${priorByName.size} last; team context for ${[...contexts.values()].filter(Boolean).length} of ${board.frames.length} games; red zone ${rz ? rz.byName.size : 0} player-seasons, snaps ${snaps?.size || 0}`);
+      // No data, no darts (founder, Nov 9 2026): the loads a sheet drops without a word when they fail. Checked here,
+      // before the packet and the news desk spend anything.
+      const lacking = [
+        gamesByName?.missing || !weekRows?.length ? 'the weekly stats' : null,
+        !snaps?.size ? 'the snap counts' : null,
+        !days?.size ? 'the schedule' : null,
+        !schedule || schedule.unavailable ? 'the schedule file' : null,
+        !roster || roster.unavailable ? 'the weekly rosters' : null,
+        !rz?.byName?.size ? 'the red zone file' : null,
+        !defCur ? "the defenses' games by position" : null,
+      ].filter(Boolean);
+      if (lacking.length) throw new DartsDataMissing(lacking.map((x) => `${x} did not load`));
       // Each game's stadium and kickoff forecast in its frame, as the reads have it (round 11).
       for (const f of board.frames) f.extra = [...(f.extra || []), ...(await stadiumWeatherLines({ homeTeam: f.homeFull, awayTeam: f.awayFull, commence: f.commence, season: board.season }).catch(() => ['Stadium and kickoff weather: not on file.']))];
       // Each club's roster moves since its last game, as the game reads have them (round 13: the deadline trades of Jeffery
@@ -242,6 +257,10 @@ async function throwLeague(league) {
       for (const f of board.frames) { blocks.set(String(f.gameId), nflGameBlock(f, injuries, weeksByName, snaps)); starts.set(String(f.gameId), f.commence); }
       screens = owedKinds.map((kind) => screenNflCategory({ kind, board, gamesByName, priorByName, contexts, season: board.season, ctx, log: { log } }));
     }
+    // No data, no darts, every league (founder, Nov 9 2026): a failed load said anywhere in what Gary would read (the
+    // list, a sheet, a game frame) stops the throw before the first ask.
+    const notLoaded = failedLoads({ screens, blocks, skip: (board.frames || []).map((f) => f.news) });
+    if (notLoaded.length) throw new DartsDataMissing(notLoaded);
     if (!dry) await storeBoardPrices(board, league, date);
     const perClubKinds = league === 'NFL' && board.games === 1 ? PER_CLUB_ONE_GAME : [];
     const rows = [];
