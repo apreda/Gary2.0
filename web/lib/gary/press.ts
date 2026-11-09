@@ -13,7 +13,7 @@ export const BRAND = {
   x: '@BetwithGary',
   xUrl: 'https://x.com/BetwithGary',
   supportEmail: 'support@betwithgary.ai',
-  sports: ['MLB', 'NFL', 'NCAAF', 'NBA (relaunch planned)', 'Earlier sports and 2026 FIFA World Cup archives'],
+  sports: ['MLB', 'NFL', 'NCAAF', 'NBA', 'Earlier sports and 2026 FIFA World Cup archives'],
   character:
     'Gary is the bear persona for the Gary AI sports-analysis product, not a real human handicapper. Always use the real character assets; never generate a bear, and never a lion.',
   boilerplateShort:

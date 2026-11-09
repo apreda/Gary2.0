@@ -60,7 +60,7 @@ export function PricingPlans() {
                   </span>
                   <Mark on={on} />
                 </div>
-                <span className="text-[11.5px] text-low">{s.code === 'NBA' ? 'NBA relaunch planned' : 'Winners picks'}</span>
+                <span className="text-[11.5px] text-low">Winners picks</span>
                 <span className="flex items-baseline gap-0.5">
                   <span className="font-mono text-[13px] font-bold text-gold">{PRICING.single}</span>
                   <span className="font-mono text-[9px] text-white/35">/mo</span>

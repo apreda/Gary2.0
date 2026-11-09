@@ -1,5 +1,5 @@
 import { BRAND, liveStats } from '@/lib/gary/press';
-import { FREE_OFFER, LAUNCH_OFFER } from '@/lib/gary/launch-offer';
+import { FREE_OFFER, LAUNCH_OFFER, WINNERS_IS_FREE } from '@/lib/gary/launch-offer';
 
 export const revalidate = 3600;
 
@@ -31,7 +31,7 @@ export async function GET() {
 - Tagline: "${BRAND.tagline}"
 - Sports covered: ${BRAND.sports.join(', ')}
 - Free access: ${FREE_OFFER}
-- Winners access: Gary’s best bets of the day: his favorite game and prop picks, on web and iOS. ${LAUNCH_OFFER} After the preview, other accounts can choose a Winners plan; see ${BRAND.domain}/pricing for current terms.
+- Winners access: Gary’s best bets of the day: his favorite game and prop picks, on web and iOS. ${LAUNCH_OFFER}${WINNERS_IS_FREE ? '' : ` After the preview, other accounts can choose a Winners plan; see ${BRAND.domain}/pricing for current terms.`}
 - iOS App Store: ${BRAND.appStoreUrl}
 - X / Twitter: ${BRAND.x} (${BRAND.xUrl})
 - Support: ${BRAND.supportEmail}
@@ -56,7 +56,7 @@ ${BRAND.boilerplateMedium}
 - ${BRAND.domain}/props — today's player prop picks, grouped by game
 - ${BRAND.domain}/props/home-runs — today's MLB home run picks
 - ${BRAND.domain}/props/touchdowns — today's NFL anytime touchdown picks
-- ${BRAND.domain}/pricing — free features, launch preview, founding access and Winners plans
+- ${BRAND.domain}/pricing — ${WINNERS_IS_FREE ? 'what is free right now (everything, Winners included)' : 'free features, launch preview, founding access and Winners plans'}
 - ${BRAND.domain}/winners — Gary’s best bets of the day, with account-owned access
 - ${BRAND.domain}/you — your private Book and personal tracking
 - ${BRAND.domain}/results — complete graded track record

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { LaunchOffer } from '@/components/LaunchOffer';
-import { LAUNCH_OFFER } from '@/lib/gary/launch-offer';
+import { LAUNCH_OFFER, WINNERS_IS_FREE } from '@/lib/gary/launch-offer';
 import { Eyebrow } from '@/components/Eyebrow';
 import { AppStoreButton } from '@/components/AppStoreButton';
 import { JsonLd } from '@/components/JsonLd';
@@ -203,8 +203,14 @@ export default function AppPage() {
           <ul className="mt-4 space-y-2.5 text-[15px] text-mid">
             <li>Gary’s favorite game and prop bets of the day</li>
             <li>A separate record for Winners picks — Gary&apos;s Billfold record</li>
-            <li>Choose one sport or All-Access for every active sport</li>
-            <li>Included during the launch preview and for founding accounts</li>
+            {WINNERS_IS_FREE ? (
+              <li>Free right now, like the rest of Gary</li>
+            ) : (
+              <>
+                <li>Choose one sport or All-Access for every active sport</li>
+                <li>Included during the launch preview and for founding accounts</li>
+              </>
+            )}
           </ul>
         </div>
       </section>

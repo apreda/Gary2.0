@@ -29,9 +29,9 @@ import { pageMetadata } from "@/lib/seo/metadata";
 export const revalidate = 120;
 export const metadata = pageMetadata({
   canonical: "/",
-  title: "Free Pick of the Day: AI Sports Picks for MLB & NFL | Gary AI",
+  title: "Free Pick of the Day: NFL, NBA, MLB & College Football Picks | Gary AI",
   description:
-    "Gary’s free pick of the day, with his reasons. Game and prop picks for every MLB, NFL and college football game, and every result on the record.",
+    "Gary’s free pick of the day, with his reasons. Game and prop picks for the NFL, the NBA, MLB and college football, and every result on the record.",
 });
 /**
  * The latest published days before today, whole days, until they hold

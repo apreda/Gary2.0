@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { LaunchOffer } from '@/components/LaunchOffer';
-import { FREE_OFFER, LAUNCH_OFFER } from '@/lib/gary/launch-offer';
+import { FREE_OFFER, LAUNCH_OFFER, WINNERS_IS_FREE } from '@/lib/gary/launch-offer';
 import Link from 'next/link';
 import { Eyebrow } from '@/components/Eyebrow';
 import { JsonLd } from '@/components/JsonLd';
@@ -16,12 +16,30 @@ export const revalidate = 600;
 
 export const metadata: Metadata = pageMetadata({
   canonical: '/pricing',
-  title: 'Gary AI Pricing — Winners, Gary’s Best Bets',
+  title: WINNERS_IS_FREE ? 'Gary AI Pricing — Free Right Now, Winners Included' : 'Gary AI Pricing — Winners, Gary’s Best Bets',
   description:
     `Game picks and player props stay free. Winners brings you Gary’s best bets of the day. ${LAUNCH_OFFER}`,
 });
 
-const faqItems = [
+const freeFaqItems = [
+  {
+    question: 'What does Gary cost?',
+    answer:
+      'Nothing right now. Game picks, player props, Darts, Winners, the record and your own Book are all free on the website and in the iPhone app.',
+  },
+  {
+    question: 'Will Winners cost money later?',
+    answer:
+      'Paid plans for Winners are planned. This page will give the price and the date before anything changes, and the picks, the record and your Book stay free.',
+  },
+  {
+    question: 'Do I need an account?',
+    answer:
+      'No. An account is only for keeping your own record: the picks you tail or fade, your streak and your place on the leaderboard.',
+  },
+];
+
+const paidFaqItems = [
   {
     question: "What do I actually pay for if the picks are free?",
     answer:
@@ -43,6 +61,8 @@ const faqItems = [
       FREE_OFFER,
   },
 ];
+
+const faqItems = WINNERS_IS_FREE ? freeFaqItems : paidFaqItems;
 
 const faqJsonLd = {
   '@context': 'https://schema.org',
@@ -74,7 +94,8 @@ export default async function PricingPage() {
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-[16px] leading-relaxed text-mid">
           Gary makes game picks and player prop picks for free. Winners brings you the bets
-          he likes most each day. Choose one sport or All-Access for every active sport.
+          he likes most each day.{' '}
+          {WINNERS_IS_FREE ? 'Right now Winners is free too.' : 'Choose one sport or All-Access for every active sport.'}
         </p>
         {l30 && allTime && (l30.wins + l30.losses) > 0 && (
           <div className="mx-auto mt-6 inline-flex flex-wrap items-center justify-center gap-3 px-1 py-2.5">
@@ -96,12 +117,15 @@ export default async function PricingPage() {
 
       <LaunchOffer className="mt-8" />
 
-      {/* Plans */}
-      <section className="mt-12">
-        <PricingPlans />
-      </section>
+      {/* Plans: only when there is something to buy (see WINNERS_IS_FREE). */}
+      {!WINNERS_IS_FREE && (
+        <section className="mt-12">
+          <PricingPlans />
+        </section>
+      )}
 
-      {/* Gating table — what unlocking gets you */}
+      {/* Gating table — what unlocking gets you. Hidden while nothing is locked. */}
+      {!WINNERS_IS_FREE && (
       <section className="mt-16">
         <Eyebrow>FREE VS. WINNERS</Eyebrow>
         <h2 className="mt-2 font-display text-2xl uppercase text-hi">What each plan includes</h2>
@@ -120,6 +144,7 @@ export default async function PricingPage() {
           ))}
         </div>
       </section>
+      )}
 
       {/* Explain the difference between all picks and Winners. */}
       <section className="mt-16 rounded-panel border border-line bg-elev px-7 py-8">

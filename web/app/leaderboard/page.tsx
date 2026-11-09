@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
   canonical: '/leaderboard',
   title: 'Leaderboard | Gary AI',
   description:
-    'Real people. Verified predictions. Find the hot streaks, compare records, and build your own free Book.',
+    'Picks graded by the same system that grades Gary. Find the hot streaks, compare records, and build your own free Book.',
 });
 export const revalidate = 300;
 export default async function LeaderboardPage() {
