@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gary called it</title>
+<style>
+  @font-face { font-family: "Anton"; src: url("file:///Users/adam.preda/Gary2.0/GaryMarketing/ads/2026-10-04-sunday-spot/public/Anton-Regular.ttf"); }
+  @font-face { font-family: "Bebas"; src: url("file:///Users/adam.preda/Gary2.0/GaryMarketing/ads/2026-10-04-sunday-spot/public/BebasNeue-Regular.ttf"); }
+  @font-face { font-family: "Barlow"; src: url("file:///Users/adam.preda/Gary2.0/GaryMarketing/ads/2026-10-04-sunday-spot/public/BarlowCondensed-SemiBold.ttf"); }
+  :root { --navy: #001741; --paper: #f3eee2; --ink: #17130f; --stamp: #c8261b; --gold: #e2b95a; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; background: var(--navy); }
+  .stage { position: relative; width: 1080px; height: 1350px;
+    background: radial-gradient(900px 900px at 62% 58%, #17408f 0%, #0a2a66 38%, var(--navy) 78%); }
+
+  /* the ticket: thermal paper, torn top and bottom */
+  .ticket { position: absolute; left: 48px; top: 62px; width: 640px; height: 1226px; transform: rotate(-2.4deg);
+    filter: drop-shadow(0 26px 34px rgba(0, 6, 24, .55)); }
+  .paper { position: absolute; inset: 0; background: var(--paper); color: var(--ink); padding: 54px 44px 40px;
+    --tooth: 22px;
+    -webkit-mask:
+      conic-gradient(from -45deg at 50% 100%, #000 90deg, #0000 0) 0 0 / var(--tooth) 14px repeat-x,
+      conic-gradient(from 135deg at 50% 0, #000 90deg, #0000 0) 0 100% / var(--tooth) 14px repeat-x,
+      linear-gradient(#000 0 0) 0 13px / 100% calc(100% - 26px) no-repeat; }
+  .paper::after { content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: .5;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='7'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .5  0 0 0 0 .42  0 0 0 .16 0'/></filter><rect width='300' height='300' filter='url(%23n)'/></svg>"); }
+
+  .mono { font-family: "Courier New", Courier, monospace; font-weight: 700; letter-spacing: .02em; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .brand { font-family: "Bebas"; font-size: 52px; letter-spacing: .04em; line-height: 1; }
+  .no { font-size: 22px; }
+  .rule { border-top: 3px dashed var(--ink); margin: 15px 0; opacity: .8; }
+  .game { font-size: 23px; text-transform: uppercase; }
+  .player { font-family: "Anton"; text-transform: uppercase; line-height: .95; margin-top: 24px; letter-spacing: .005em; }
+  .player div { height: .95em; }
+  .player span { display: inline-block; white-space: nowrap; }
+  .bet { font-family: "Barlow"; font-size: 54px; text-transform: uppercase; letter-spacing: .05em; margin-top: 18px; line-height: 1; }
+  .price { font-family: "Anton"; font-size: 204px; line-height: .98; margin-top: 4px; letter-spacing: -.01em; }
+  .times { font-size: 31px; line-height: 1.34; }
+  .times span { display: inline-block; width: 128px; opacity: .62; }
+  .won { font-family: "Barlow"; font-size: 58px; letter-spacing: .04em; margin-top: 16px; line-height: 1; }
+  .said { font-size: 22px; line-height: 1.3; margin-top: 2px; }
+  .said i { font-style: normal; display: block; margin-bottom: 6px; opacity: .7; }
+  .foot { position: absolute; left: 44px; right: 44px; bottom: 40px; }
+  .bars { height: 44px; background: repeating-linear-gradient(90deg, var(--ink) 0 3px, #0000 3px 7px, var(--ink) 7px 12px, #0000 12px 14px, var(--ink) 14px 16px, #0000 16px 22px, var(--ink) 22px 29px, #0000 29px 32px); opacity: .9; }
+  .free { font-size: 21px; margin-top: 12px; text-transform: uppercase; line-height: 1.3; }
+
+  /* the stamp: red ink, pressed unevenly */
+  .stamp { position: absolute; left: 322px; top: 548px; transform: rotate(-11deg); font-family: "Anton"; font-size: 94px; line-height: 1;
+    color: var(--stamp); border: 9px solid var(--stamp); padding: 10px 22px 2px; letter-spacing: .04em; mix-blend-mode: multiply; opacity: .93;
+    filter: url(#ink); }
+  .stamp::before { content: ""; position: absolute; inset: 6px; border: 3px solid var(--stamp); }
+
+  .gary { position: absolute; right: -40px; bottom: -10px; height: 930px; filter: drop-shadow(0 20px 30px rgba(0, 6, 24, .5)); }
+  .gary.lost { right: 24px; height: 880px; }
+  .shout { position: absolute; left: 722px; top: 70px; font-family: "Anton"; font-size: 122px; line-height: .92; color: var(--gold);
+    text-transform: uppercase; letter-spacing: .005em; text-shadow: 0 10px 28px rgba(0, 6, 24, .45); }
+  .stage.lost .stamp { color: #2a2622; border-color: #2a2622; }
+  .stage.lost .stamp::before { border-color: #2a2622; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="ink" x="-5%" y="-10%" width="110%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency=".035" numOctaves="2" seed="11" result="warp"/>
+    <feDisplacementMap in="SourceGraphic" in2="warp" scale="5" result="d"/>
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="3" result="grain"/>
+    <feColorMatrix in="grain" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.5 1.42" result="holes"/>
+    <feComposite in="d" in2="holes" operator="in"/>
+  </filter>
+</svg>
+<div class="stage" id="stage">
+  <div class="shout" id="shout"></div>
+  <img class="gary" id="gary" alt="">
+  <div class="ticket">
+    <div class="paper">
+      <div class="head"><div class="brand">GARY A.I.</div><div class="mono no" id="no"></div></div>
+      <div class="rule"></div>
+      <div class="mono game" id="game"></div>
+      <div class="player" id="player"></div>
+      <div class="bet" id="bet"></div>
+      <div class="price" id="price"></div>
+      <div class="rule"></div>
+      <div class="mono times" id="times"><div><span>CALLED</span><b id="called"></b></div><div><span id="doneLabel">CASHED</span><b id="cashed"></b></div></div>
+      <div class="won" id="won"></div>
+      <div class="rule"></div>
+      <div class="mono said"><i id="saidAt"></i><span id="said"></span></div>
+      <div class="foot"><div class="bars"></div><div class="mono free" id="free"></div></div>
+    </div>
+    <div class="stamp" id="stamp">CASHED</div>
+  </div>
+</div>
+<script>
+  // Data arrives as ?d=<base64 json>. Everything on the ticket is a fact from the darts row.
+  const d = JSON.parse(decodeURIComponent(escape(atob(new URLSearchParams(location.search).get("d")))));
+  const $ = (id) => document.getElementById(id);
+  $("no").textContent = d.no; $("game").textContent = d.game; $("bet").textContent = d.bet; $("price").textContent = d.price;
+  $("called").textContent = d.called; $("cashed").textContent = d.cashed; $("won").textContent = d.won;
+  $("saidAt").textContent = d.saidAt; $("said").textContent = "“" + d.said + "”"; $("free").textContent = d.free;
+  $("gary").src = d.gary;
+  if (d.lost) { $("stage").classList.add("lost"); $("gary").classList.add("lost"); $("stamp").textContent = d.stamp || "DEAD"; $("doneLabel").textContent = "DIED"; }
+  const p = $("player");
+  for (const part of d.player) { const row = document.createElement("div"); const s = document.createElement("span"); s.textContent = part; row.appendChild(s); p.appendChild(row); }
+  for (const line of (d.shout || ["CALLED", "IT."])) { const row = document.createElement("div"); row.textContent = line; $("shout").appendChild(row); }
+  // the name fills the ticket's width: the longest line sets the size (offsetWidth ignores the ticket's tilt)
+  let size = 120; p.style.fontSize = size + "px";
+  const max = 552;
+  while (size > 60 && [...p.querySelectorAll("span")].some((s) => s.offsetWidth > max)) { size -= 2; p.style.fontSize = size + "px"; }
+  // the stamp lands across the lower right of the price, wherever the name pushed it
+  const tm = $("times"); $("stamp").style.top = (tm.offsetTop - 52) + "px";
+  // Gary's line shrinks to stay clear of the bar code; if it still cannot fit, the ticket goes without it
+  const said = document.querySelector(".said"), foot = document.querySelector(".foot");
+  let fs = 22; const clear = () => said.offsetTop + said.offsetHeight <= foot.offsetTop - 14;
+  while (fs > 17 && !clear()) { fs -= 1; said.style.fontSize = fs + "px"; }
+  if (!clear()) { said.style.display = "none"; said.previousElementSibling.style.display = "none"; }
+  document.title = "ready";
+</script>
+</body>
+</html>

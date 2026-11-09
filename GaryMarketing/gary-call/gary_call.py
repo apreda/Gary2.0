@@ -88,8 +88,14 @@ def bet_words(sp):
         if team and words.startswith(team + " "): return short_team(team, sp.get("league")) + words[len(team):]
     return words
 
+def parse_time(iso):
+    """Postgres timestamps carry 1 to 6 fraction digits; Python 3.9 reads only 0, 3 or 6."""
+    t = str(iso).replace("Z", "+00:00")
+    t = re.sub(r"\.(\d+)", lambda m: "." + (m.group(1) + "000000")[:6], t, count=1)
+    return datetime.fromisoformat(t)
+
 def start_words(iso):
-    d = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(ET)
+    d = parse_time(iso).astimezone(ET)
     hour = d.hour % 12 or 12
     return f"{hour}{'' if d.minute == 0 else ':%02d' % d.minute}{'am' if d.hour < 12 else 'pm'} EST"
 
@@ -323,7 +329,7 @@ def main():
         state = json.load(open(state_path)) if os.path.exists(state_path) else {}
         if not render_only and (state.get("skip") or (state.get("x") and state.get("ig"))): continue
         if not render_only and state.get("tries", 0) >= 4: continue
-        lead_min = (datetime.fromisoformat(sp["commence_time"].replace("Z", "+00:00")) - datetime.now(timezone.utc)).total_seconds() / 60
+        lead_min = (parse_time(sp["commence_time"]) - datetime.now(timezone.utc)).total_seconds() / 60
         if not render_only and lead_min < MIN_LEAD_MIN:
             continue
         if sp.get("kind") != "game":
