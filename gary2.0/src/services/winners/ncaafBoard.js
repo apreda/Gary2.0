@@ -1,3 +1,5 @@
+// NOT RUN SINCE NOV 9 2026 (founder: college on Winners is the five most watched games, no extras; see
+// scripts/run-winners-board.js). Kept whole so the board can come back the day college earns its extras.
 // GARY'S COLLEGE BOARD (Oct 22 2026, from Oct 23; founder: "college should work the same way the other sports do").
 // Gary picks every college game for the Picks page; that is his lean. His bets are a separate look, as for the NFL and
 // the NBA: about 110 minutes before the first kickoff he hasn't boarded (college picks run from T-240, Saturdays from

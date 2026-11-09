@@ -81,8 +81,11 @@ const etClock = (iso) => {
 
 /**
  * NFL SUNDAY'S BIG AFTERNOON GAMES (founder, Oct 23 2026: "always include like a 4:25 big game" beside the prime-time
- * games): of Sunday's 1 PM games and of its 4:05/4:25 games, the one with the highest combined power rating (ESPN's FPI)
- * in each window. `slate`: rows with away_team, home_team, commence_time and an id. Returns [{ row, window }].
+ * games): of Sunday's 1 PM games and of its 4:05/4:25 games, the one fans would call the game of the window. That is
+ * the game whose WEAKER team has the best power rating (ESPN's FPI), so both teams are good; the combined rating
+ * breaks a tie. It was the highest combined rating, which a great team against a bad one can win. Founder, Nov 9
+ * 2026: the Winners game has to be one people care about.
+ * `slate`: rows with away_team, home_team, commence_time and an id. Returns [{ row, window }].
  */
 export function nflAfternoonBigGames(slate, ratings) {
   const ranked = [...ratings];
@@ -93,8 +96,8 @@ export function nflAfternoonBigGames(slate, ratings) {
     const best = (slate || []).map((row) => {
       const when = etClock(row.commence_time);
       const h = ratingOf(row.home_team), a = ratingOf(row.away_team);
-      return when.dow === 'Sun' && inWindow(when.minutes) && Number.isFinite(h) && Number.isFinite(a) ? { row, sum: h + a } : null;
-    }).filter(Boolean).sort((x, y) => y.sum - x.sum)[0];
+      return when.dow === 'Sun' && inWindow(when.minutes) && Number.isFinite(h) && Number.isFinite(a) ? { row, weaker: Math.min(h, a), sum: h + a } : null;
+    }).filter(Boolean).sort((x, y) => y.weaker - x.weaker || y.sum - x.sum)[0];
     if (best) out.push({ row: best.row, window });
   }
   return out;
