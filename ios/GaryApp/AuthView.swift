@@ -195,16 +195,17 @@ struct AuthView: View {
                         HStack(spacing: 10) {
                             if isSubmitting {
                                 ProgressView()
-                                    .tint(.black)
+                                    .tint(GaryColors.gold)
                             } else {
                                 Text(isSignUp ? "CREATE ACCOUNT" : "SIGN IN")
                                     .font(GaryFonts.mono(14, bold: true)).tracking(1)
                             }
                         }
-                        .foregroundStyle(.black.opacity(0.85))
+                        .foregroundStyle(GaryColors.gold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Capsule().fill(GaryColors.gold))
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LabInk.plate))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .disabled(isSubmitting || !isFormValid)

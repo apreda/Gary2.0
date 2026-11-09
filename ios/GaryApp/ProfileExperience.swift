@@ -336,9 +336,10 @@ struct ProfileEditorSheet: View {
                     }
                     if let error { Text(error).font(GaryFonts.text(13)).foregroundStyle(GaryColors.loss).fixedSize(horizontal: false, vertical: true) }
                     Button(action: save) {
-                        HStack { if saving { ProgressView().tint(.black) }; Text(saving ? "Saving profile" : "Save profile") }
-                            .font(GaryFonts.text(15, .semibold)).foregroundStyle(.black).frame(maxWidth: .infinity).padding(.vertical, 15)
-                            .background(Capsule().fill(GaryColors.gold))
+                        HStack { if saving { ProgressView().tint(GaryColors.gold) }; Text(saving ? "Saving profile" : "Save profile") }
+                            .font(GaryFonts.text(15, .semibold)).foregroundStyle(GaryColors.gold).frame(maxWidth: .infinity).padding(.vertical, 15)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LabInk.plate))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
                     }.buttonStyle(.plain).disabled(saving || handleIssue != nil || !unitValid || auth.currentUser?.id != ownerID)
                     if let handleIssue { Text(handleIssue).font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }
                     if !unitValid { Text("Enter a dollar amount greater than zero, up to $100,000, or leave it blank for the default.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.6)) }

@@ -428,7 +428,7 @@ struct FootballGameIntelView: View {
                     })
             }
             if !newsLines.isEmpty {
-                ScoutNewsCard(text: newsLines.joined(separator: " "))
+                ScoutNewsCard(text: newsLines.joined(separator: " · "))
             }
             ScoutBigNumbersRail(rows: bigNumberRows)
             // The series lives HERE and only here — the same section as MLB.

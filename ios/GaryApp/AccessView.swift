@@ -1,109 +1,100 @@
 import SwiftUI
 
-// MARK: - Access View (Onboarding/Landing)
+// MARK: - Access View (first launch)
 
+/// The first screen a new fan sees. Rebuilt Nov 9 2026: Gary himself and what
+/// each page is, in the app's own words, in place of the wordmark and six
+/// feature chips. One action. It opens the disclaimer, and agreeing to that
+/// is what enters the app, on Home (the old "ACCESS PICKS" dropped a new fan
+/// on a Picks page that reads PICKS INCOMING for most of the day).
 struct AccessView: View {
     @ObservedObject private var authManager = AuthManager.shared
-    @State private var showDisclaimer = true
+    @State private var showDisclaimer = false
     @State private var showSignIn = false
     @AppStorage("hasEntered") private var hasEntered: Bool = false
     @AppStorage("selectedTab") private var selectedTab: Int = 0
     @State private var animateIn = false
-    
+
+    /// The four pages, as the app names them.
+    private let pages: [(name: String, line: String)] = [
+        ("PICKS", "Gary's side of every game, with his reasons."),
+        ("WINNERS", "The bets he makes from his $10,000 bankroll."),
+        ("DARTS", "Touchdown scorers, stat lines and the parlay of the day."),
+        ("BILLFOLD", "Every win and every loss, kept on the record."),
+    ]
+
     var body: some View {
         ZStack {
             LiquidGlassBackground()
-            
-            VStack(spacing: 20) {
-                // Fixed top gap (not a flexible Spacer) so the ONLY expanding space
-                // is the one between the value chips and the bottom CTAs — that
-                // anchors the actions to the thumb zone and fills the page.
-                Spacer().frame(height: 24)
 
-                // The clean single-source Gary mark (not the raw transparent hero
-                // PNG, which showed a checkerboard) — rounded like the app icon.
-                VStack(spacing: 10) {
-                    Image(GaryBrand.mark)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 168, height: 168)
-                        .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous)
-                            .stroke(GaryColors.gold.opacity(0.25), lineWidth: 1))
+            VStack(spacing: 0) {
+                // Gary gives way first on a short phone; the words never do.
+                Image("GaryIdleBase")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(minHeight: 110, maxHeight: 290)
+                    .layoutPriority(-1)
+                    .padding(.top, 8)
+                    .accessibilityHidden(true)
+                    .opacity(animateIn ? 1 : 0)
+                    .scaleEffect(animateIn ? 1 : 0.94)
+                    .animation(.easeOut(duration: 0.5).delay(0.1), value: animateIn)
 
+                VStack(alignment: .leading, spacing: 0) {
                     Text("GARY A.I.")
-                        .font(GaryFonts.mono(30))
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1.6)
+                        .foregroundStyle(GaryColors.gold.opacity(0.9))
+                        .padding(.bottom, 6)
+
+                    // Fixed, so a tight screen takes its height from Gary, never from the headline.
+                    Text("A PICK ON")
+                        .font(GaryFonts.display(44))
+                        .foregroundStyle(.white)
+                        .fixedSize()
+                    Text("EVERY GAME.")
+                        .font(GaryFonts.display(44))
                         .foregroundStyle(GaryColors.gold)
+                        .fixedSize()
+                        .padding(.top, -6)
+                        .padding(.bottom, 12)
 
-                    Text("AI sports predictions and insights")
-                        .font(GaryFonts.text(14.5))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .opacity(animateIn ? 1 : 0)
-                .scaleEffect(animateIn ? 1 : 0.8)
-                .animation(.easeOut(duration: 0.6).delay(0.2), value: animateIn)
-                
-                // Tech Chips ("NEW · Introducing" badge retired — stale for a
-                // shipped app)
-                VStack(spacing: 12) {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 10),
-                            GridItem(.flexible(), spacing: 10)
-                        ],
-                        spacing: 10
-                    ) {
-                        TechChip(icon: "brain.head.profile", text: "Pick Reasoning")
-                        TechChip(icon: "arrow.triangle.2.circlepath", text: "Game Predictions")
-                        TechChip(icon: "chart.line.uptrend.xyaxis", text: "Multi-Book Odds")
-                        TechChip(icon: "globe", text: "Matchup Analysis")
-                        TechChip(icon: "doc.text.magnifyingglass", text: "Player Insights")
-                        TechChip(icon: "chart.bar.xaxis", text: "Scores & Results")
-                    }
-                    .padding(.horizontal, 24)
-                }
-                .opacity(animateIn ? 1 : 0)
-                .offset(y: animateIn ? 0 : 30)
-                .animation(.easeOut(duration: 0.6).delay(0.4), value: animateIn)
-
-                // The one flexible gap — pushes the CTAs down to the bottom.
-                Spacer(minLength: 24)
-
-                // Action Buttons — anchored to the bottom (thumb zone).
-                VStack(spacing: 14) {
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        hasEntered = true
-                        selectedTab = 3
+                    ForEach(pages, id: \.name) { page in
+                        Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(page.name)
+                                .font(GaryFonts.mono(10.5, bold: true)).tracking(1)
+                                .foregroundStyle(GaryColors.gold)
+                                .frame(width: 78, alignment: .leading)
+                            Text(page.line)
+                                .font(GaryFonts.text(14.5))
+                                .foregroundStyle(.white.opacity(0.82))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    } label: {
-                        Text("ACCESS PICKS")
-                            .font(GaryFonts.mono(14, bold: true)).tracking(1)
-                            .foregroundStyle(.black.opacity(0.85))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Capsule().fill(GaryColors.gold))
+                        .padding(.vertical, 10)
+                        .accessibilityElement(children: .combine)
+                    }
+                    Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
+                .opacity(animateIn ? 1 : 0)
+                .offset(y: animateIn ? 0 : 18)
+                .animation(.easeOut(duration: 0.5).delay(0.25), value: animateIn)
+
+                // The one flexible gap: the action sits in the thumb zone.
+                Spacer(minLength: 14)
+
+                VStack(spacing: 6) {
+                    Button { showDisclaimer = true } label: {
+                        AccessActionLabel(text: "SEE TODAY'S BOARD")
                     }
                     .buttonStyle(.plain)
 
-                    Button {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        hasEntered = true
-                        selectedTab = 0
-                        }
-                    } label: {
-                        Text("Explore Gary")
-                            .font(GaryFonts.text(14, .semibold))
-                            .foregroundStyle(GaryColors.gold)
-                            .padding(.vertical, 12)
-                    }
-
-                    // Returning-user path — the standard "Already have an account?
-                    // Sign In" line (was a near-invisible grey footnote).
                     // SIGNED-IN STATE (App Store 2.1a, Aug 19): a successful
-                    // sign-in used to land back here with this row unchanged —
-                    // reading as "nothing happened" and inviting doomed retries.
-                    // The row now confirms the signed-in account.
+                    // sign-in used to land back here with this row unchanged,
+                    // reading as "nothing happened". The row confirms the account.
                     if authManager.isAuthenticated {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark.circle.fill")
@@ -113,11 +104,9 @@ struct AccessView: View {
                                 .foregroundStyle(.white.opacity(0.75))
                         }
                         .font(GaryFonts.text(13.5, .semibold))
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 10)
                     } else {
-                        Button {
-                            showSignIn = true
-                        } label: {
+                        Button { showSignIn = true } label: {
                             HStack(spacing: 5) {
                                 Text("Already have an account?")
                                     .foregroundStyle(.white.opacity(0.55))
@@ -125,27 +114,26 @@ struct AccessView: View {
                                     .foregroundStyle(GaryColors.gold)
                             }
                             .font(GaryFonts.text(13.5, .semibold))
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 24)
+                .padding(.bottom, 10)
                 .opacity(animateIn ? 1 : 0)
-                .offset(y: animateIn ? 0 : 40)
-                .animation(.easeOut(duration: 0.6).delay(0.6), value: animateIn)
-
-                // Small fixed bottom margin above the home indicator (not flexible,
-                // so it can't steal space from the gap above the CTAs).
-                Spacer().frame(height: 16)
+                .animation(.easeOut(duration: 0.5).delay(0.4), value: animateIn)
             }
         }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.8)) {
-                animateIn = true
-            }
-        }
+        .onAppear { animateIn = true }
         .sheet(isPresented: $showDisclaimer) {
-            DisclaimerSheet(isPresented: $showDisclaimer)
+            DisclaimerSheet(isPresented: $showDisclaimer) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    selectedTab = 0
+                    hasEntered = true
+                }
+            }
         }
         .sheet(isPresented: $showSignIn) {
             AuthView()
@@ -161,45 +149,42 @@ struct AccessView: View {
     }
 }
 
-// MARK: - Tech Chip
-
-struct TechChip: View {
-    let icon: String
+/// The app's quiet action: gold words on the ink plate inside a gold hairline,
+/// the look of GOT IT on How Gary Works. No filled oval (design.md).
+private struct AccessActionLabel: View {
     let text: String
-    
+    var chevron: Bool = true
+
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(GaryColors.gold)
             Text(text)
-                .font(GaryFonts.mono(11, bold: true))
-                .foregroundStyle(.white.opacity(0.85))
-                .fitsOneLine()
+                .font(GaryFonts.display(16)).tracking(1.6)
+            if chevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(hex: "#0F0D0D"))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
+        .foregroundStyle(GaryColors.gold)
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LabInk.plate))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
 // MARK: - Disclaimer Sheet
 
+/// Shown when a new fan asks for the board. Agreeing is what enters the app;
+/// swiping it away goes back to the first screen.
 struct DisclaimerSheet: View {
     @Binding var isPresented: Bool
-    
+    var onAccept: () -> Void = {}
+
     var body: some View {
         ZStack {
             LiquidGlassBackground(accentColor: GaryColors.gold)
-            
+
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("BEFORE YOU START")
@@ -209,41 +194,32 @@ struct DisclaimerSheet: View {
                         .font(GaryFonts.display(28))
                         .foregroundStyle(.white)
                 }
+                .padding(.top, 8)
 
                 ScrollView(showsIndicators: false) {
                     Text(disclaimerText)
-                        .font(GaryFonts.text(14))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(GaryFonts.text(14.5))
+                        .foregroundStyle(.white.opacity(0.72))
                         .lineSpacing(4)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(hex: "#0F0D0D"))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
-                                )
-                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 Button {
                     isPresented = false
+                    onAccept()
                 } label: {
-                    Text("I UNDERSTAND")
-                        .font(GaryFonts.mono(14, bold: true)).tracking(1)
-                        .foregroundStyle(.black.opacity(0.85))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Capsule().fill(GaryColors.gold))
+                    AccessActionLabel(text: "I UNDERSTAND", chevron: false)
                 }
                 .buttonStyle(.plain)
             }
             .padding(24)
         }
-        .presentationDetents([.medium, .large])
+        // Tall enough that the whole notice reads without scrolling on a
+        // current phone; a small one scrolls the words, never the button.
+        .presentationDetents([.fraction(0.78), .large])
         .presentationDragIndicator(.visible)
     }
-    
+
     private var disclaimerText: String {
         return """
         Gary AI provides informational sports betting analysis only. No wagers are placed within this app.
@@ -258,4 +234,3 @@ struct DisclaimerSheet: View {
         """
     }
 }
-

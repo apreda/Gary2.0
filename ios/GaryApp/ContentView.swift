@@ -223,7 +223,12 @@ struct ContentView: View {
             // would keep its keyboard up across tabs — resign it on any switch.
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
-        .sheet(isPresented: $showingGaryIntro, onDismiss: { hasSeenGaryIntro = true }) {
+        .sheet(isPresented: $showingGaryIntro, onDismiss: {
+            hasSeenGaryIntro = true
+            // The intro has just said picks post through the day: the moment
+            // an alert for them makes sense. iOS shows its prompt only once.
+            AppDelegate.shared?.requestNotificationPermissions(UIApplication.shared)
+        }) {
             GaryIntroSheet { showingGaryIntro = false }
         }
         .onChange(of: scenePhase) { newPhase in

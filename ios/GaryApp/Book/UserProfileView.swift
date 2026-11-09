@@ -117,7 +117,7 @@ struct ProfileView: View {
         HStack(alignment: .top, spacing: 13) {
             ProfileAvatar(name: auth.isAuthenticated ? profileName : "", symbol: auth.isAuthenticated ? snapshot?.profile?.avatar : nil, size: 56)
             VStack(alignment: .leading, spacing: 5) {
-                Text(auth.isAuthenticated ? (profileName.isEmpty ? "Your profile" : "@\(profileName)") : "Your next chapter")
+                Text(auth.isAuthenticated ? (profileName.isEmpty ? "Your profile" : "@\(profileName)") : "Your profile")
                     .font(GaryFonts.display(27)).foregroundStyle(GaryColors.warmWhite).fixedSize(horizontal: false, vertical: true)
                 if auth.isAuthenticated {
                     if let snapshot {
@@ -126,7 +126,7 @@ struct ProfileView: View {
                     }
                     if let bio = snapshot?.profile?.bio, !bio.isEmpty { Text(bio).font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.6)).fixedSize(horizontal: false, vertical: true) }
                     Button("Edit profile") { showEditor = true }.font(GaryFonts.text(12, .semibold)).foregroundStyle(GaryColors.gold).padding(.vertical, 5).disabled(snapshot == nil)
-                } else { Text("Your picks. Your progress. Your people.").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.5)) }
+                } else { Text("Sign in to keep your own record beside Gary's.").font(GaryFonts.text(13)).foregroundStyle(.white.opacity(0.5)) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.system(size: 18)).foregroundStyle(.white.opacity(0.6)).frame(width: 40, height: 44)
@@ -136,7 +136,7 @@ struct ProfileView: View {
 
     private var signedOutPitch: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Build a record worth knowing.").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
+            Text("Keep your own record.").font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite)
             feature("checkmark.shield", "A record you can trust", "Ride or fade Gary before the game. Results settle automatically.")
             feature("plus.square.dashed", "One pick. Your streak.", "Add your strongest call, then follow your winning run.")
             feature("list.bullet.rectangle", "Your whole book", "Track your own bets privately beside your verified picks.")
@@ -262,7 +262,7 @@ struct ProfileView: View {
                 Image(systemName: "trophy").font(.system(size: 23)).foregroundStyle(GaryColors.gold)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("The leaderboard").font(GaryFonts.text(16, .semibold)).foregroundStyle(GaryColors.warmWhite)
-                    Text("Real records. Hot streaks. Your place.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5))
+                    Text("Graded records, hot streaks and where you stand.").font(GaryFonts.text(12)).foregroundStyle(.white.opacity(0.5))
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
@@ -324,7 +324,15 @@ struct ProfileView: View {
         }.frame(maxWidth: .infinity)
     }
     private var panel: some View { RoundedRectangle(cornerRadius: 15).fill(GaryColors.cardBg).overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.07))) }
-    private func primaryLabel(_ text: String) -> some View { Text(text).font(GaryFonts.text(14, .semibold)).foregroundStyle(.black).frame(maxWidth: .infinity).padding(.vertical, 14).background(Capsule().fill(GaryColors.gold)) }
+    /// The profile's main action: gold words on the ink plate inside a gold hairline (the look of GOT IT on How Gary
+    /// Works). It was a gold-filled capsule, which design.md rules out.
+    private func primaryLabel(_ text: String) -> some View {
+        Text(text).font(GaryFonts.text(14, .semibold)).foregroundStyle(GaryColors.gold)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(LabInk.plate))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
     private func openBook(_ scope: String) { billfoldScope = scope; selectedTab = 4; dismiss() }
     private func resetAccount() {
         requestID = UUID(); snapshot = nil; card = nil; bets = []; bookLoaded = false; loadFailed = false; identityFailed = false; portalURL = nil; portalError = nil

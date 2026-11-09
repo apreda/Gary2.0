@@ -127,7 +127,7 @@ struct NBAGameIntelView: View {
                     })
             }
             if !newsLines.isEmpty {
-                ScoutNewsCard(text: newsLines.joined(separator: " "))
+                ScoutNewsCard(text: newsLines.joined(separator: " · "))
             }
             ScoutBigNumbersRail(rows: bigNumberRows)
             GameH2HSection(edges: mine)

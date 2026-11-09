@@ -335,16 +335,21 @@ struct UserBookSection: View {
             Text("YOUR BOOK")
                 .font(GaryFonts.mono(11, bold: true)).tracking(1.4)
                 .foregroundStyle(GaryColors.gold)
-            Text("Sign in and every pick you tail or fade goes on your own record — graded by the same system that grades Gary.")
-                .font(GaryFonts.text(13))
-                .foregroundStyle(.white.opacity(0.6))
+            Text("Tail or fade any pick of Gary's and it goes on your own record, graded the same way his is. Your bets from anywhere else can sit beside it.")
+                .font(GaryFonts.text(14))
+                .foregroundStyle(.white.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
+            // An action is gold words and a chevron, never a filled box (design.md).
             Button { showAuthSheet = true } label: {
-                Text("Sign in")
-                    .font(GaryFonts.mono(11, bold: true)).tracking(1)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(GaryColors.gold))
+                HStack(spacing: 6) {
+                    Text("SIGN IN TO START YOUR BOOK")
+                        .font(GaryFonts.mono(11, bold: true)).tracking(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundStyle(GaryColors.gold)
+                .frame(minHeight: 44, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -372,11 +377,11 @@ struct UserBookSection: View {
                     loading = false
                 }
             } label: {
-                Text("TRY AGAIN")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(Capsule().fill(GaryColors.gold))
+                Text("TRY AGAIN ›")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -395,11 +400,11 @@ struct UserBookSection: View {
                 .foregroundStyle(.white.opacity(0.6))
                 .fixedSize(horizontal: false, vertical: true)
             Button { showQuickLog = true } label: {
-                Text("+ LOG A BET")
-                    .font(GaryFonts.mono(10, bold: true)).tracking(0.8)
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(Capsule().fill(GaryColors.gold))
+                Text("LOG A BET ›")
+                    .font(GaryFonts.mono(11, bold: true)).tracking(0.8)
+                    .foregroundStyle(GaryColors.gold)
+                    .frame(minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }

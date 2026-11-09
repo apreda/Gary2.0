@@ -42,10 +42,20 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Gary unlaunchable again.
         // Push is optional: avoid initializing its SDK (and installation
         // diagnostics) before the user grants notification permission.
-        requestNotificationPermissions(application)
-        
+        // A fan who has never been inside isn't asked at cold launch, over a
+        // screen they haven't read yet (Nov 9 2026). They're asked once How
+        // Gary Works has told them picks post through the day (ContentView),
+        // or here on their next open if they never saw it.
+        Self.shared = self
+        if UserDefaults.standard.bool(forKey: "hasEntered") {
+            requestNotificationPermissions(application)
+        }
+
         return true
     }
+
+    /// The running delegate, for the one ask that happens after launch.
+    static weak var shared: AppDelegate?
 
     private func configureFirebaseIfValid() -> Bool {
         guard let url = Bundle.main.url(forResource: "GoogleService-Info", withExtension: "plist"),
@@ -68,7 +78,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return FirebaseApp.app() != nil
     }
     
-    private func requestNotificationPermissions(_ application: UIApplication) {
+    func requestNotificationPermissions(_ application: UIApplication) {
         #if DEBUG
         // Recording sims launch with `-tour.noPrompts YES` so no system alert lands in the footage.
         if UserDefaults.standard.bool(forKey: "tour.noPrompts") { return }
