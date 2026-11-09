@@ -342,9 +342,12 @@ Deno.serve(async (req) => {
     for (const r of sundayPicks) console.log(JSON.stringify({ mode: "sunday_free_pick", ...r }).slice(0, 500));
     const resultReplies = await runFreePickResult(Date.now(), dryRun);
     for (const r of resultReplies) if (r.replied || r.error) console.log(JSON.stringify({ mode: "free_pick_result", ...r }).slice(0, 300));
-    // The stat desk (statDesk.ts) runs last, inside what is left of a 110 s budget for the run.
-    const statPosts = await runStatDesk(sb, etDate(), Date.now(), dryRun, {
-      model: WRITER_MODEL, postTweet: (text) => postTweet(text), force: url.searchParams.get("stat_slot"), deadlineMs: startedAt + 110_000,
+    // The stat desk (statDesk.ts) is OFF since Nov 9 2026 (27 posts, about 107 views each, 1 like). It runs only
+    // with STAT_DESK_ENABLED=1, or as a dry-run preview of one slot (?dry_run=1&stat_slot=<slot>).
+    const statSlot = url.searchParams.get("stat_slot");
+    const statDeskOn = Deno.env.get("STAT_DESK_ENABLED") === "1" || (dryRun && !!statSlot);
+    const statPosts = !statDeskOn ? [] : await runStatDesk(sb, etDate(), Date.now(), dryRun, {
+      model: WRITER_MODEL, postTweet: (text) => postTweet(text), force: statSlot, deadlineMs: startedAt + 110_000,
     });
     for (const r of statPosts) console.log(JSON.stringify({ mode: "stat_desk", ...r }).slice(0, 500));
     return respond({ mode: "free_pick", metrics, results: [freePick, ...sundayPicks, ...resultReplies, ...statPosts] });
