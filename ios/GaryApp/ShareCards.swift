@@ -57,6 +57,25 @@ func renderPropShareImages(prop: PropPick, gameResult: String?) -> [UIImage] {
     return renderer.uiImage.map { [$0] } ?? []
 }
 
+/// The line over a shared pick: GARY'S PICK, then how hard he's on it (SPRINKLE, LEAN, HAMMER) when his stake is on file.
+private struct ShareCardEyebrow: View {
+    let tier: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("GARY'S PICK")
+                .foregroundStyle(GaryColors.gold)
+            if let tier {
+                Text("·").foregroundStyle(GaryColors.gold.opacity(0.6))
+                Text(tier).foregroundStyle(.white.opacity(0.92))
+            }
+        }
+        .font(GaryFonts.mono(14, bold: true)).tracking(3)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// "Headline" share card — the Volt Mode direction from the range boards,
 /// re-cut in Gary's own colors: the pick as huge display type on warm black,
 /// gold eyebrow, the bear riding the top corner so the brand survives any
@@ -67,7 +86,7 @@ struct HeadlineShareCardView: View {
     var square: Bool = false
     var bare: Bool = false
 
-    private var tier: String? { pick.confidence.map { convictionTier(min(max($0, 0), 1)) } }
+    private var tier: String? { pick.gary_bet?.tier }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
@@ -167,10 +186,7 @@ struct HeadlineShareCardView: View {
     private var headlineCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                Text("GARY'S PICK")
-                    .font(GaryFonts.mono(14, bold: true)).tracking(3)
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.top, 8)
+                ShareCardEyebrow(tier: tier)
                 Spacer()
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()
@@ -230,7 +246,7 @@ struct HeadlineSharePropCardView: View {
     var square: Bool = false
     var bare: Bool = false
 
-    private var tier: String? { prop.confidence.map { convictionTier(min(max($0, 0), 1)) } }
+    private var tier: String? { prop.gary_bet?.tier }
     private var stamp: (text: String, color: Color)? {
         switch gameResult?.lowercased() {
         case "won":  return ("CASHED", GaryColors.gold)
@@ -288,10 +304,7 @@ struct HeadlineSharePropCardView: View {
     private var headlineCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                Text("GARY'S PICK")
-                    .font(GaryFonts.mono(14, bold: true)).tracking(3)
-                    .foregroundStyle(GaryColors.gold)
-                    .padding(.top, 8)
+                ShareCardEyebrow(tier: tier)
                 Spacer()
                 Image(GaryBrand.mark)
                     .resizable().scaledToFit()

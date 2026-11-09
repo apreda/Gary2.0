@@ -565,7 +565,7 @@ struct HomeView: View {
                                     return !h.isEmpty && !a.isEmpty && hay.contains(h) && hay.contains(a)
                                 }) {
                                     s.take = splitTake(match.rationale).take
-                                    s.tier = match.confidence.map { convictionTier(min(max($0, 0), 1)) }
+                                    s.tier = match.gary_bet?.tier
                                 }
                             }
                             // The fact check — what the game confirmed or refuted.

@@ -50,10 +50,12 @@ struct PropPick: Identifiable, Codable {
     /// fallback rule, and every surface reads THAT, never this field raw.
     var lane: String? = nil
     var quote_receipt: PropQuoteReceipt? = nil
+    // Gary's own bet on this prop, when he was asked (most props carry none).
+    var gary_bet: GaryBetStake? = nil
 
     // CodingKeys to map snake_case from JSON
     enum CodingKeys: String, CodingKey {
-        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats, lane, quote_receipt
+        case player, game_id, team, prop, bet, odds, confidence, analysis, league, sport, line, time, position, matchup, key_stats, lane, quote_receipt, gary_bet
         case commence_time = "commence_time"
         case tdCategory = "td_category"
     }
