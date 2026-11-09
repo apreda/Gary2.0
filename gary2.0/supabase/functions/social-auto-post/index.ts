@@ -5,6 +5,7 @@ import { socialRunHealth } from "./health.js";
 import { composeFreePickPost } from "./gamePickHook.ts";
 import { shortTeam, startWords } from "./teamWords.ts";
 import { runStatDesk } from "./statDesk.ts";
+import { noDashes } from "../_shared/noDashes.js";
 
 // social-auto-post — the scheduled @BetwithGary poster: the day's free pick, plus the metrics refresh.
 //
@@ -17,6 +18,9 @@ import { runStatDesk } from "./statDesk.ts";
 // the bet alone, a blank line, then the matchup and start ("have it spaced out for the pick"). Each morning a reply under
 // yesterday's post says how it went. On a Sunday the NFL's morning game and Sunday Night Football post as
 // free picks of their own, beside the day's free pick.
+// Nov 9 2026 (the social reset): the post opens with Gary's own line on the pick from the app, with no label
+// line; a clip of Gary saying it is attached when the Mac job has made one; the result is a quote post at the
+// final ("Won. Bears 27, Buccaneers 24."), not a reply the next morning; the stat desk is off.
 // The every-game pick threads, prop replies, recaps, verdict quote-tweets, week tape, arc updates and the
 // personality post were removed on Sep 29 2026; git history keeps them.
 //
@@ -176,24 +180,83 @@ function ticketKey(sp: any): string[] {
   return spread ? [spread[1]] : [];
 }
 
-const FREE_PICK_HEADER = "Gary's Free Pick of the Day";
+// THE CALL IN GARY'S OWN WORDS (founder, Nov 9 2026: "throw it all out ... be the CMO ... own this"). The post
+// opens with the line Gary wrote about his own pick in the app (pick_snapshot.brief.summary), then the bet alone,
+// then the matchup and start. Nothing is written for X. A year of stat lines under a label never drew more than
+// 5 likes; the "Gary's Free Pick of the Day" first line is gone. A pick with no line of its own (props) keeps
+// the writer's one fact.
+const X_LIMIT = 280;
+
+/** The bet with the team's short name: "Tampa Bay Buccaneers +6.5 -120" reads "Buccaneers +6.5". */
+export function betWords(sp: any): string {
+  const words = ticketWords(sp);
+  if (sp?.kind === "prop") return words;
+  for (const team of String(sp?.matchup ?? "").split(/\s+@\s+/)) {
+    if (team && words.startsWith(team + " ")) return `${shortTeam(team, sp?.league)}${words.slice(team.length)}`;
+  }
+  return words;
+}
+
+/** Gary's line fitted to one post: the whole line, else its first sentence, else nothing. */
+export function garyLineFor(summary: string, rest: string): string {
+  const whole = noDashes(String(summary ?? "").replace(/\s+/g, " ").trim());
+  if (!whole) return "";
+  const first = (whole.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? whole).trim();
+  return [whole, first].find((line) => `${line}\n\n${rest}`.length <= X_LIMIT) ?? "";
+}
 
 async function freePickText(sp: any): Promise<{ text: string; writer: string }> {
   const game = (matchup: string) => `${matchup} ${startWords(sp.commence_time)}`;
   const fallback = ticketWords(sp);
   try {
-    const { data } = await sb.from("winners_candidates").select("rationale:pick_snapshot->>rationale").eq("id", sp.candidate_id).limit(1);
+    const { data } = await sb.from("winners_candidates")
+      .select("summary:pick_snapshot->brief->>summary, rationale:pick_snapshot->>rationale").eq("id", sp.candidate_id).limit(1);
+    const rest = `${betWords(sp)}\n\n${game(matchupWords(sp, ""))}`;
+    const line = garyLineFor(String(data?.[0]?.summary ?? ""), rest);
+    if (line) return { text: `${line}\n\n${rest}`, writer: "gary's line" };
     const rationale = String(data?.[0]?.rationale ?? "");
     const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    // The bet stands alone between blank lines (founder, Oct 10 2026: "have it spaced out for the pick"),
-    // under a first line that says what the post is ("no mention of the free pick of the day?").
-    return { text: `${FREE_PICK_HEADER}\n\n${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
+    return { text: `${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
   } catch (e) {
-    console.error("free pick writer failed: " + String(e));
-    return { text: `${FREE_PICK_HEADER}\n\n${fallback}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
+    console.error("free pick text failed: " + String(e));
+    return { text: `${betWords(sp)}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
   }
+}
+
+// GARY'S CLIP (Nov 9 2026). The Mac job GaryMarketing/gary-call/run.mjs renders a short clip of Gary saying his
+// line and puts it in the social-media bucket at gary-call/<date>-<candidate>-x.mp4. The post waits up to 15
+// minutes from the pick for it (never inside 30 minutes of the start), then goes out as text. A failed video
+// post falls back to text, so a pick is never lost to the clip.
+const CLIP_WAIT_MIN = 15;
+const CLIP_MIN_LEAD_MIN = 30;
+const clipName = (today: string, sp: any) => `${today}-${sp.candidate_id}-x.mp4`;
+
+async function clipReady(name: string): Promise<boolean> {
+  try {
+    const { data } = await sb.storage.from("social-media").list("gary-call", { search: name, limit: 5 });
+    return !!data?.some((f: any) => f.name === name);
+  } catch (_e) { return false; }
+}
+
+async function pickedAtMs(sp: any): Promise<number> {
+  if (sp?.chosen_at) return new Date(sp.chosen_at).getTime();
+  try {
+    const { data } = await sb.from("winners_candidates").select("created_at").eq("id", sp.candidate_id).limit(1);
+    return data?.[0]?.created_at ? new Date(data[0].created_at).getTime() : 0;
+  } catch (_e) { return 0; }
+}
+
+async function postTweetWithClip(text: string, videoPath: string): Promise<string> {
+  const r = await fetch(`${SB_URL}/functions/v1/post-tweet-media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, video_path: videoPath }),
+  });
+  const j = await r.json();
+  if (!j.success || !j.tweetId) throw new Error(`post-tweet-media failed: ${JSON.stringify(j).slice(0, 300)}`);
+  return j.tweetId as string;
 }
 
 /** One free pick post: the claim, the text, the post, the link reply. `claimKey` is the log row's pick_text. */
@@ -205,9 +268,16 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
   if (logErr) throw logErr;
   if (already?.length && !dryRun) return { posted: false, reason: "free pick already posted today" };
 
+  const clip = clipName(today, sp);
+  const hasClip = await clipReady(clip);
+  if (!dryRun && !hasClip && leadMin > CLIP_MIN_LEAD_MIN) {
+    const waitedMin = (nowMs - await pickedAtMs(sp)) / 60_000;
+    if (waitedMin >= 0 && waitedMin < CLIP_WAIT_MIN) return { posted: false, reason: `waiting for Gary's clip (${Math.round(waitedMin)} of ${CLIP_WAIT_MIN} min)` };
+  }
+
   if (dryRun) {
     const composed = await freePickText(sp);
-    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, ...composed, reply: LINK_REPLY };
+    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, ...composed, clip: hasClip ? clip : null, reply: LINK_REPLY };
   }
 
   const { error: claimErr } = await sb.from("social_post_log").insert({
@@ -216,25 +286,33 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
   });
   if (claimErr) return { posted: false, reason: "free pick claimed by another run" };
   const { text, writer } = await freePickText(sp);
-  let tweetId: string;
-  try { tweetId = await postTweet(text); }
-  catch (e) {
-    await sb.from("social_post_log").delete().eq("post_date", today).eq("pick_text", claimKey);
-    return { posted: false, pick: sp.pick_text, error: String(e) };
+  let tweetId = "";
+  let withClip = false;
+  if (hasClip) {
+    try { tweetId = await postTweetWithClip(text, `gary-call/${clip}`); withClip = true; }
+    catch (e) { console.error("free pick clip post failed, posting text: " + String(e)); }
+  }
+  if (!tweetId) {
+    try { tweetId = await postTweet(text); }
+    catch (e) {
+      await sb.from("social_post_log").delete().eq("post_date", today).eq("pick_text", claimKey);
+      return { posted: false, pick: sp.pick_text, error: String(e) };
+    }
   }
   const threadUrl = `https://x.com/BetwithGary/status/${tweetId}`;
   let replyId: string | null = null;
   try { replyId = await postTweet(LINK_REPLY, tweetId); } catch (e) { console.error("free pick link reply failed: " + String(e)); }
   const { error: upErr } = await sb.from("social_post_log").update({
     hook_tweet_id: tweetId, cta_tweet_id: replyId, thread_url: threadUrl, posted_at: new Date().toISOString(), post_text: text,
+    audience_selection: { format: "gary_call_v1", writer, clip: withClip ? `gary-call/${clip}` : null },
   }).eq("post_date", today).eq("pick_text", claimKey);
   if (upErr) return { posted: true, pick: sp.pick_text, thread_url: threadUrl, error: `POST_LOG_WRITE_FAILED: ${upErr.message}` };
-  return { posted: true, pick: sp.pick_text, thread_url: threadUrl, writer };
+  return { posted: true, pick: sp.pick_text, thread_url: threadUrl, writer, clip: withClip };
 }
 
 async function runFreePickMode(today: string, nowMs: number, dryRun: boolean) {
   const { data: rows, error } = await sb.from("streak_picks")
-    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet").eq("game_date", today).limit(1);
+    .select("candidate_id, league, kind, pick_text, odds, matchup, commence_time, player, prop, bet, chosen_at").eq("game_date", today).limit(1);
   if (error) throw error;
   const sp = rows?.[0];
   if (!sp) return { posted: false, reason: "today's free pick is not chosen yet" };
@@ -256,49 +334,80 @@ async function runSundayFreePicks(today: string, nowMs: number, dryRun: boolean)
   return out;
 }
 
-// THE MORNING RESULT (founder, Oct 2 2026: "close the loop every morning ... win or lose"). From 8 AM ET, once
-// yesterday's free pick is graded, one reply under yesterday's post. Losses stay up like wins. A second free
-// pick posted by hand (logged in slot free_pick under its own ticket, as on Oct 4 2026) gets the same reply.
+// THE VERDICT (Nov 9 2026; from Oct 2 it was a "Won." reply the next morning). As soon as a free pick is graded,
+// a post quoting the call says how it went and the final score: "Won. Bears 27, Buccaneers 24." Wins and losses
+// both, at the final, while people are still on the game. A prop has no score line. A second free pick posted by
+// hand (logged in slot free_pick under its own ticket, as on Oct 4 2026) gets the same post.
 const RESULT_WORDS: Record<string, string> = { won: "Won.", lost: "Lost.", push: "Push." };
 
-/** How one of yesterday's free pick posts went: the day's streak pick, or a hand-posted game pick by its ticket. */
-async function freePickResult(row: any, day: string): Promise<string> {
+async function postQuote(text: string, quoteTweetId: string): Promise<string> {
+  const r = await fetch(`${SB_URL}/functions/v1/post-quote-tweet`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ text, quoteTweetId }),
+  });
+  const j = await r.json();
+  if (!j.success || !j.tweetId) throw new Error(`post-quote-tweet failed: ${JSON.stringify(j).slice(0, 300)}`);
+  return j.tweetId as string;
+}
+
+/** How a logged free pick went: the day's streak pick, or a game pick logged under its own ticket. */
+async function freePickOutcome(row: any, day: string): Promise<{ result: string; league: string; kind: string; pickText: string }> {
   if (row.pick_text === `FREE PICK ${day}`) {
     const { data, error } = await sb.rpc("streak_pick_day", { p_day: day });
     if (error) throw error;
-    return String(data?.result ?? "").toLowerCase();
+    return { result: String(data?.result ?? "").toLowerCase(), league: String(data?.league ?? row.league ?? ""), kind: String(data?.kind ?? "game"), pickText: String(data?.pick_text ?? "") };
   }
   const { data, error } = await sb.rpc("gary_graded_games", { p_from: day, p_to: day });
   if (error) throw error;
   const graded = (data ?? []).find((g: any) => g.pick_text === row.pick_text && g.league === row.league);
-  return String(graded?.result ?? "").toLowerCase();
+  return { result: String(graded?.result ?? "").toLowerCase(), league: String(row.league ?? ""), kind: "game", pickText: String(row.pick_text ?? "") };
+}
+
+/** "Bears 27, Buccaneers 24." The graded row's final_score reads away-home beside its "Away @ Home" matchup. */
+export function scoreWords(finalScore: string, matchup: string, league: string): string {
+  const m = String(finalScore ?? "").trim().match(/^(\d+)\s*-\s*(\d+)$/);
+  const [away, home] = String(matchup ?? "").split(/\s+@\s+/);
+  if (!m || !away || !home) return "";
+  const a = { name: shortTeam(away, league), pts: Number(m[1]) }, h = { name: shortTeam(home, league), pts: Number(m[2]) };
+  const [top, bottom] = a.pts >= h.pts ? [a, h] : [h, a];
+  return `${top.name} ${top.pts}, ${bottom.name} ${bottom.pts}.`;
+}
+
+async function finalScoreWords(league: string, day: string, pickText: string): Promise<string> {
+  try {
+    const nfl = league.toUpperCase() === "NFL";
+    const q = sb.from(nfl ? "nfl_results" : "game_results").select("final_score, matchup").eq("game_date", day).eq("pick_text", pickText);
+    const { data } = await (nfl ? q : q.ilike("league", league)).limit(1);
+    return scoreWords(String(data?.[0]?.final_score ?? ""), String(data?.[0]?.matchup ?? ""), league);
+  } catch (_e) { return ""; }
 }
 
 async function runFreePickResult(nowMs: number, dryRun: boolean): Promise<any[]> {
-  const hourEt = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false }).format(new Date(nowMs)));
-  if (hourEt < 8) return [{ replied: false, reason: "the result posts from 8 AM ET" }];
-  const yesterday = easternDateOffset(-1);
-  const { data: rows, error } = await sb.from("social_post_log").select("id, league, pick_text, hook_tweet_id")
-    .eq("post_date", yesterday).eq("slot", "free_pick").not("hook_tweet_id", "is", null).is("result_tweet_id", null);
+  const days = [etDate(new Date(nowMs)), easternDateOffset(-1, new Date(nowMs))];
+  const { data: rows, error } = await sb.from("social_post_log").select("id, post_date, league, pick_text, hook_tweet_id")
+    .in("post_date", days).eq("slot", "free_pick").not("hook_tweet_id", "is", null).is("result_tweet_id", null);
   if (error) throw error;
   if (!rows?.length) return [{ replied: false, reason: "no free pick result to post" }];
   const out: any[] = [];
   for (const row of rows) {
-    const result = await freePickResult(row, yesterday);
-    const words = RESULT_WORDS[result];
-    if (!words) { out.push({ replied: false, reason: `yesterday's free pick is not graded yet (${result || "no result"})` }); continue; }
-    if (dryRun) { out.push({ replied: false, dry_run: true, result, words }); continue; }
-    const { data: claimed, error: claimErr } = await sb.from("social_post_log").update({ result_tweet_id: "pending", result })
+    const o = await freePickOutcome(row, row.post_date);
+    const words = RESULT_WORDS[o.result];
+    if (!words) { out.push({ replied: false, reason: `free pick of ${row.post_date} is not graded yet (${o.result || "no result"})` }); continue; }
+    const score = o.kind === "game" && o.pickText ? await finalScoreWords(o.league, row.post_date, o.pickText) : "";
+    const text = score ? `${words} ${score}` : words;
+    if (dryRun) { out.push({ replied: false, dry_run: true, result: o.result, words: text }); continue; }
+    const { data: claimed, error: claimErr } = await sb.from("social_post_log").update({ result_tweet_id: "pending", result: o.result })
       .eq("id", row.id).is("result_tweet_id", null).select("id");
     if (claimErr) throw claimErr;
     if (!claimed?.length) { out.push({ replied: false, reason: "result claimed by another run" }); continue; }
     try {
-      const id = await postTweet(words, row.hook_tweet_id);
+      const id = await postQuote(text, row.hook_tweet_id);
       await sb.from("social_post_log").update({ result_tweet_id: id }).eq("id", row.id);
-      out.push({ replied: true, result, tweet: id });
+      out.push({ replied: true, result: o.result, words: text, tweet: id });
     } catch (e) {
       await sb.from("social_post_log").update({ result_tweet_id: null, result: null }).eq("id", row.id);
-      out.push({ replied: false, result, error: String(e) });
+      out.push({ replied: false, result: o.result, error: String(e) });
     }
   }
   return out;
