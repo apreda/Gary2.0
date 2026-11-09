@@ -68,39 +68,75 @@ Your training data is old; the pitcher data provided is current — say nothing 
 
 For each game: TWO short paragraphs, one per starting pitcher — the away arm first, then the home arm — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that arm tonight.`;
 
-// THE QUARTERBACKS (founder, Sep 21 2026): the NFL card runs MLB's Arms
-// system with the sport's nouns swapped — the same batched voice call, the
-// same facts-only world, the same cache and retry — never a stat template.
-const QUARTERBACKS_VOICE_CONTRACT = `You are Gary — the bettor whose picks publish in this app. You write as yourself, never as an AI or a system.
+// THE QUARTERBACKS (NFL Sep 21 2026, college Nov 9 2026): MLB's Arms system,
+// the same batched call, facts-only world, cache and retry. Nov 9 2026: it is a
+// read on the two quarterbacks, not Gary's opinion or his bet (founder: "it
+// should just be like the insight into the qbs without garys thoughts"), so
+// football no longer writes as Gary. MLB keeps its own contract.
+const QUARTERBACKS_CONTRACT = `You're writing THE QUARTERBACKS section of a game page: a read on each of the game's two starting quarterbacks, built from the data below. The data is current; your training data is old, so say nothing the data can't back.
 
-Your training data is old; the quarterback data provided is current — say nothing it can't back.
-
-For each game: TWO short paragraphs, one per starting quarterback — the away quarterback first, then the home quarterback — separated by a blank line. Each is a sentence or two: whatever you'd actually say about that quarterback this week.`;
+For each game: two short paragraphs, one per quarterback, the away quarterback first, then the home quarterback, separated by a blank line. Each is a sentence or two on how that quarterback is playing coming into this game.`;
 
 function armsVoiceContract(league) {
-  return league === 'NFL' ? QUARTERBACKS_VOICE_CONTRACT : ARMS_VOICE_CONTRACT;
+  return league === 'NFL' || league === 'NCAAF' ? QUARTERBACKS_CONTRACT : ARMS_VOICE_CONTRACT;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function shortDate(day) {
+  const [, m, d] = String(day || '').split('-').map(Number);
+  return m && d ? `${MONTHS[m - 1]} ${d}` : null;
+}
+
+function passingGame(g) {
+  let s = `${g.comp} of ${g.att}, ${g.yds} yards, ${g.td} TD, ${g.ints} INT`;
+  if (g.rush_att) s += `; ${g.rush_att} rush${g.rush_att === 1 ? '' : 'es'} for ${g.rush_yds} yards${g.rush_td ? `, ${g.rush_td} rushing TD` : ''}`;
+  return s;
+}
+
+function gameLabel(g) {
+  const when = shortDate(g.date);
+  const where = g.opp ? `${g.home === false ? 'at' : 'vs'} ${g.opp}` : null;
+  return [when, where].filter(Boolean).join(' ');
+}
+
+// The depth chart lists injury designations by letter ("Q"); the write-up read "listed q".
+const INJURY_WORDS = { q: 'questionable', d: 'doubtful', o: 'out', p: 'probable', ir: 'on injured reserve' };
+function injuryWord(status) {
+  const s = String(status).trim().toLowerCase();
+  return INJURY_WORDS[s] || s;
+}
+
+/** This season's passing line; last season never stands in for it (founder, Oct 23 2026). */
+function currentPassing(meta) {
+  const p = meta?.passing;
+  return p && !p.prior ? p : null;
 }
 
 /** One quarterback's facts as a compact line, off the day's quarterback row. Omits what the row lacks. */
-function quarterbackFactLine(qb) {
+export function quarterbackFactLine(qb) {
   const meta = qb?.meta || {};
   const name = meta.qb;
   if (!name) return null;
   const bits = [];
-  const p = meta.passing;
+  const p = currentPassing(meta);
   if (p) {
-    const label = p.prior ? `${p.season} (prior season)` : `${p.season} so far`;
     const parts = [];
     if (p.yards != null) parts.push(`${p.yards} passing yards`);
     if (p.pct != null) parts.push(`${p.pct}% completions`);
     if (p.ypa != null) parts.push(`${p.ypa} yards per attempt`);
     if (p.td != null && p.ints != null) parts.push(`${p.td}-${p.ints} TD-INT`);
-    if (parts.length) bits.push(`${label}: ${parts.join(', ')}${p.games ? ` over ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`);
-  } else {
-    bits.push('no verified passing line on file this season or last');
+    if (parts.length) bits.push(`this season: ${parts.join(', ')}${p.games ? ` over ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`);
+  } else if (!meta.recent?.last) {
+    // A sample under the season floor still has its games below; only a
+    // quarterback who hasn't thrown this season reads as no line.
+    bits.push('no passing line this season');
   }
-  if (meta.qb_status && meta.qb_status !== 'confirmed') bits.push(`${meta.qb_status} starter`);
-  if (meta.injury_status) bits.push(`listed ${String(meta.injury_status).toLowerCase()} on the injury report`);
+  const r = meta.recent;
+  if (r?.last) bits.push(`last game (${gameLabel(r.last)}): ${passingGame(r.last)}`);
+  if (r?.last3) bits.push(`last ${r.last3.games} games: ${passingGame(r.last3)}`);
+  for (const g of r?.vs_opp || []) bits.push(`against this opponent this season (${shortDate(g.date)}): ${passingGame(g)}`);
+  if (r?.days_since_last != null) bits.push(`${r.days_since_last} days since his last game`);
+  if (meta.injury_status) bits.push(`listed ${injuryWord(meta.injury_status)} on the injury report`);
   return `${name} (${meta.abbr || 'TEAM'}): ${bits.join('; ')}`;
 }
 
@@ -108,14 +144,14 @@ function quarterbackFactLine(qb) {
 function partialQuarterbacksTake(qb, missingTeam) {
   const meta = qb?.meta || {};
   const name = meta.qb || 'The named starter';
-  const p = meta.passing;
+  const p = currentPassing(meta);
   let first;
   if (p && p.yards != null && p.pct != null) {
     first = `${name} has ${p.yards} passing yards on ${p.pct}% completions${p.ypa != null ? ` at ${p.ypa} yards per attempt` : ''}`
       + `${p.td != null && p.ints != null ? `, ${p.td} touchdowns against ${p.ints} interception${p.ints === 1 ? '' : 's'}` : ''}`
-      + `${p.prior ? ` in his ${p.season} season` : p.games ? ` through ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`;
+      + `${p.games ? ` through ${p.games} game${p.games === 1 ? '' : 's'}` : ''}`;
   } else {
-    first = `${name} is the only named starter in this matchup so far, with no verified passing line on file`;
+    first = `${name} is the only named starter in this matchup so far, with no passing line this season`;
   }
   return `${first}. The ${missingTeam} have not named their starter, so that half of the matchup remains unsettled.`;
 }
@@ -153,105 +189,12 @@ function exhaustedArmsProvider(error) {
 }
 
 /**
- * Attach `arms_take` to MLB board rows — one batched voice call, JSON out,
- * then focused retries for missing games within one optional time budget.
- * Cached voice requires the same exact game and complete input fingerprint.
+ * Write takes for jobs that lack one: one batched call per league, then up to
+ * two focused retries per missing game, all inside one optional time budget.
+ * Each job is { row, league, matchup, gameKey, facts }; a written take lands on
+ * job.row.arms_take with arms_take_status 'available'.
  */
-export async function attachArmsTakes(board, starters, {
-  existingBoard = [],
-  quarterbacks = [],
-  timeoutMs = Number(process.env.GARY_BOARD_ARMS_TIMEOUT_MS) || 3 * 60 * 1000,
-} = {}) {
-  const repeatedMatchups = repeatedMatchupKeys(board);
-  const starterFor = (row, team) => {
-    const matchup = rowMatchup(row);
-    const candidates = starters.filter((st) => st.league === 'MLB'
-      && String(st.team || '').toUpperCase() === String(team || '').toUpperCase()
-      && (!st.game || st.game === matchup));
-    if (!candidates.length) return null;
-    // Team + matchup is ambiguous on a twin bill even when only one probable
-    // has been announced. Require this row's time bucket before accepting any
-    // candidate so game 2 can never populate game 1 (or vice versa).
-    if (repeatedMatchups.has(rowMatchupKey(row))) {
-      const rowBucket = gameTimeBucket(row.commence_time);
-      if (rowBucket == null) return null;
-      return candidates.find((st) => gameTimeBucket(st.game_time) === rowBucket) || null;
-    }
-    if (candidates.length <= 1) return candidates[0] || null;
-    const rowTime = Date.parse(row.commence_time);
-    if (!Number.isFinite(rowTime)) return candidates[0];
-    return [...candidates].sort((a, b) => {
-      const aDelta = Math.abs((Date.parse(a.game_time) || rowTime) - rowTime);
-      const bDelta = Math.abs((Date.parse(b.game_time) || rowTime) - rowTime);
-      return aDelta - bDelta;
-    })[0];
-  };
-  const jobs = [];
-  let partialCount = 0;
-  let cachedCount = 0;
-  for (const r of board) {
-    if (r.league !== 'MLB' && r.league !== 'NFL') continue;
-    r.arms_take = null;
-    r.arms_take_status = 'unavailable';
-    delete r.arms_input_sha;
-    // NFL: the same two-starter shape, off the day's quarterback rows by
-    // exact BDL game id (one game per matchup per week; no twin bills).
-    const nfl = r.league === 'NFL';
-    const qbFor = (side) => nfl && r.bdl_game_id != null
-      ? quarterbacks.find((qb) => String(qb.game_id) === String(r.bdl_game_id) && qb.meta.side === side) || null
-      : null;
-    const awayStarter = nfl ? qbFor('away') : starterFor(r, r.away_abbr);
-    const homeStarter = nfl ? qbFor('home') : starterFor(r, r.home_abbr);
-    const a = nfl ? quarterbackFactLine(awayStarter) : armsFactLine(awayStarter);
-    const h = nfl ? quarterbackFactLine(homeStarter) : armsFactLine(homeStarter);
-    // With neither arm posted there is still no grounded pitcher story. With
-    // exactly one, publish the known arm and state the other club's status
-    // plainly; this is not the retired quality-starts fallback.
-    if (!a && !h) continue;
-    if (!a || !h) {
-      const known = awayStarter || homeStarter;
-      const missingTeam = a ? (r.home_team || r.home_abbr) : (r.away_team || r.away_abbr);
-      r.arms_take = nfl ? partialQuarterbacksTake(known, missingTeam) : partialArmsTake(known, missingTeam);
-      r.arms_take_status = 'partial';
-      partialCount++;
-      continue;
-    }
-    const matchup = rowMatchup(r);
-    const job = {
-      row: r,
-      league: r.league,
-      matchup,
-      gameKey: rowGameIdentity(r),
-      facts: [a, h].filter(Boolean).join('\n'),
-    };
-    const identityOf = (st) => nfl ? (st.meta?.qb ?? null) : (st.person_id ?? null);
-    job.inputSha = createHash('sha256').update(JSON.stringify([
-      armsVoiceContract(r.league), job.gameKey, r.commence_time,
-      identityOf(awayStarter), identityOf(homeStarter), job.facts,
-    ])).digest('hex');
-    r.arms_input_sha = job.inputSha;
-    const prior = existingBoard.find((row) => rowGameIdentity(row) === job.gameKey
-      && row.arms_input_sha === job.inputSha && validArmsTake(row.arms_take));
-    if (prior) {
-      r.arms_take = prior.arms_take;
-      r.arms_take_status = 'available';
-      cachedCount++;
-    }
-    jobs.push(job);
-  }
-  const summary = () => ({
-    status: jobs.some((job) => !job.row.arms_take) ? 'degraded' : 'complete',
-    eligible: jobs.length,
-    available: jobs.filter((job) => Boolean(job.row.arms_take)).length,
-    cached: cachedCount,
-    partial: partialCount,
-    missing_game_keys: jobs.filter((job) => !job.row.arms_take).map((job) => job.gameKey),
-  });
-  if (jobs.every((job) => job.row.arms_take)) {
-    if (partialCount) console.log(`[TomorrowBoard] arms takes attached: 0 paired + ${partialCount} partial`);
-    return summary();
-  }
-
+async function writeTakes(jobs, { timeoutMs = 3 * 60 * 1000 } = {}) {
   const models = [...new Set([PROPS_DESK_MODEL, ...DESK_FALLBACK_MODELS])];
   const exhaustedScopes = new Set();
   const availableModels = () => models.filter((model) => !exhaustedScopes.has(armsProviderScope(model)));
@@ -381,6 +324,109 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
   } finally {
     clearTimeout(budgetTimer);
   }
+}
+
+/**
+ * Attach `arms_take` to MLB board rows — one batched voice call, JSON out,
+ * then focused retries for missing games within one optional time budget.
+ * Cached voice requires the same exact game and complete input fingerprint.
+ */
+export async function attachArmsTakes(board, starters, {
+  existingBoard = [],
+  quarterbacks = [],
+  timeoutMs = Number(process.env.GARY_BOARD_ARMS_TIMEOUT_MS) || 3 * 60 * 1000,
+} = {}) {
+  const repeatedMatchups = repeatedMatchupKeys(board);
+  const starterFor = (row, team) => {
+    const matchup = rowMatchup(row);
+    const candidates = starters.filter((st) => st.league === 'MLB'
+      && String(st.team || '').toUpperCase() === String(team || '').toUpperCase()
+      && (!st.game || st.game === matchup));
+    if (!candidates.length) return null;
+    // Team + matchup is ambiguous on a twin bill even when only one probable
+    // has been announced. Require this row's time bucket before accepting any
+    // candidate so game 2 can never populate game 1 (or vice versa).
+    if (repeatedMatchups.has(rowMatchupKey(row))) {
+      const rowBucket = gameTimeBucket(row.commence_time);
+      if (rowBucket == null) return null;
+      return candidates.find((st) => gameTimeBucket(st.game_time) === rowBucket) || null;
+    }
+    if (candidates.length <= 1) return candidates[0] || null;
+    const rowTime = Date.parse(row.commence_time);
+    if (!Number.isFinite(rowTime)) return candidates[0];
+    return [...candidates].sort((a, b) => {
+      const aDelta = Math.abs((Date.parse(a.game_time) || rowTime) - rowTime);
+      const bDelta = Math.abs((Date.parse(b.game_time) || rowTime) - rowTime);
+      return aDelta - bDelta;
+    })[0];
+  };
+  const jobs = [];
+  let partialCount = 0;
+  let cachedCount = 0;
+  for (const r of board) {
+    if (r.league !== 'MLB' && r.league !== 'NFL') continue;
+    r.arms_take = null;
+    r.arms_take_status = 'unavailable';
+    delete r.arms_input_sha;
+    // NFL: the same two-starter shape, off the day's quarterback rows by
+    // exact BDL game id (one game per matchup per week; no twin bills).
+    const nfl = r.league === 'NFL';
+    const qbFor = (side) => nfl && r.bdl_game_id != null
+      ? quarterbacks.find((qb) => String(qb.game_id) === String(r.bdl_game_id) && qb.meta.side === side) || null
+      : null;
+    const awayStarter = nfl ? qbFor('away') : starterFor(r, r.away_abbr);
+    const homeStarter = nfl ? qbFor('home') : starterFor(r, r.home_abbr);
+    const a = nfl ? quarterbackFactLine(awayStarter) : armsFactLine(awayStarter);
+    const h = nfl ? quarterbackFactLine(homeStarter) : armsFactLine(homeStarter);
+    // With neither arm posted there is still no grounded pitcher story. With
+    // exactly one, publish the known arm and state the other club's status
+    // plainly; this is not the retired quality-starts fallback.
+    if (!a && !h) continue;
+    if (!a || !h) {
+      const known = awayStarter || homeStarter;
+      const missingTeam = a ? (r.home_team || r.home_abbr) : (r.away_team || r.away_abbr);
+      r.arms_take = nfl ? partialQuarterbacksTake(known, missingTeam) : partialArmsTake(known, missingTeam);
+      r.arms_take_status = 'partial';
+      partialCount++;
+      continue;
+    }
+    const matchup = rowMatchup(r);
+    const job = {
+      row: r,
+      league: r.league,
+      matchup,
+      gameKey: rowGameIdentity(r),
+      facts: [a, h].filter(Boolean).join('\n'),
+    };
+    const identityOf = (st) => nfl ? (st.meta?.qb ?? null) : (st.person_id ?? null);
+    job.inputSha = createHash('sha256').update(JSON.stringify([
+      armsVoiceContract(r.league), job.gameKey, r.commence_time,
+      identityOf(awayStarter), identityOf(homeStarter), job.facts,
+    ])).digest('hex');
+    r.arms_input_sha = job.inputSha;
+    const prior = existingBoard.find((row) => rowGameIdentity(row) === job.gameKey
+      && row.arms_input_sha === job.inputSha && validArmsTake(row.arms_take));
+    if (prior) {
+      r.arms_take = prior.arms_take;
+      r.arms_take_status = 'available';
+      cachedCount++;
+    }
+    jobs.push(job);
+  }
+  const summary = () => ({
+    status: jobs.some((job) => !job.row.arms_take) ? 'degraded' : 'complete',
+    eligible: jobs.length,
+    available: jobs.filter((job) => Boolean(job.row.arms_take)).length,
+    cached: cachedCount,
+    partial: partialCount,
+    missing_game_keys: jobs.filter((job) => !job.row.arms_take).map((job) => job.gameKey),
+  });
+  if (jobs.every((job) => job.row.arms_take)) {
+    if (partialCount) console.log(`[TomorrowBoard] arms takes attached: 0 paired + ${partialCount} partial`);
+    return summary();
+  }
+
+  await writeTakes(jobs, { timeoutMs });
 
   // Both starters known, no take yet: the app polls this row on the short
   // clock until the next refresh carries the copy (Sep 21 2026, every league).
@@ -391,4 +437,32 @@ One entry per game listed above. Copy each GAME KEY exactly into game_key.`;
   }
   console.log(`[TomorrowBoard] arms takes attached: ${result.available}/${jobs.length} paired (${cachedCount} exact-input cached) + ${partialCount} partial`);
   return result;
+}
+
+/**
+ * College THE QUARTERBACKS (Nov 9 2026): the NFL section's writer for a
+ * college game page. Takes [{ gameKey, matchup, away, home }] with both
+ * quarterback rows, returns Map gameKey -> [away paragraph, home paragraph] for
+ * every game that came back as exactly two paragraphs.
+ */
+export async function writeQuarterbackTakes(games, { timeoutMs = 2 * 60 * 1000 } = {}) {
+  const jobs = [];
+  for (const g of games || []) {
+    const a = quarterbackFactLine(g.away);
+    const h = quarterbackFactLine(g.home);
+    if (!a || !h) continue;
+    jobs.push({ row: {}, league: 'NCAAF', matchup: g.matchup, gameKey: g.gameKey, facts: `${a}\n${h}` });
+  }
+  const out = new Map();
+  if (!jobs.length) return out;
+  try {
+    await writeTakes(jobs, { timeoutMs });
+  } catch (e) {
+    console.warn(`[QuarterbackTakes] college write failed: ${e.message}`);
+  }
+  for (const job of jobs) {
+    const paragraphs = String(job.row.arms_take || '').split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+    if (paragraphs.length === 2) out.set(job.gameKey, paragraphs);
+  }
+  return out;
 }

@@ -18,6 +18,7 @@ const EARLY_SEASON_GAMES = 8;
 
 import { makeRow, TONES } from '../shared.js';
 import { footballSeasonLive } from '../footballData.js';
+import { quarterbackRecent } from '../quarterbackRecent.js';
 
 function fixed(value, decimals = 1) {
   const n = Number(value);
@@ -199,6 +200,24 @@ export async function computeFootballQbWatch(ctx) {
         console.warn(`[footballQbWatch] season stats failed for ${qb.name}: ${err?.message || err}`);
       }
 
+      // His games one by one, for THE QUARTERBACKS write-up (Nov 9 2026): last
+      // game, last three, any game against this opponent, days since he played.
+      let recent = null;
+      if (seasonLive && typeof bdl.getNflPlayerGameLogsBatch === 'function') {
+        try {
+          const kickoff = game.date || `${date}T23:59:59Z`;
+          const logs = await bdl.getNflPlayerGameLogsBatch([qb.id], season, 25, 15, { asOf: kickoff });
+          const opponent = side.key === 'home' ? awayTeam : homeTeam;
+          recent = quarterbackRecent((logs?.[String(qb.id)]?.games || []).map((g) => ({
+            date: g.date, opp: g.opponent, oppId: g.opponentId, home: g.isHome,
+            comp: g.pass_comp, att: g.pass_att, yds: g.pass_yds, td: g.pass_tds, ints: g.ints,
+            rushAtt: g.rush_att, rushYds: g.rush_yds, rushTd: g.rush_tds,
+          })), { kickoff, opponentId: opponent.id });
+        } catch (err) {
+          console.warn(`[footballQbWatch] game logs failed for ${qb.name}: ${err?.message || err}`);
+        }
+      }
+
       const rosterBits = [qb.experience, qb.college ? `out of ${qb.college}` : null].filter(Boolean).join(', ');
       const injuryNote = qb.injuryStatus
         ? ` He is listed ${String(qb.injuryStatus).toLowerCase()} on the injury report.`
@@ -249,6 +268,7 @@ export async function computeFootballQbWatch(ctx) {
             ? { yards: last.yards, pct: last.pct, ypa: last.ypa, td: last.td, ints: last.ints,
                 games: last.games, season: last.season }
             : null,
+          recent,
         },
       }));
     }
