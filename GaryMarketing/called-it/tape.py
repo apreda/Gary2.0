@@ -47,7 +47,7 @@ def build(day):
             "count": f"{len(hits)} hit   {len(misses)} missed", "net": money(net),
             "free": "Every prop goes up on Gary's Darts board before the games. All free in the app.", "gary": f"{HERO}/{art}", "still": still}
     direction = "even" if abs(net) < 0.005 else (f"up ${net:,.2f}" if net > 0 else f"down ${abs(net):,.2f}")
-    text = f"Gary's props last night: {len(hits)} hit, {len(misses)} missed.\n\n$10 on every one of them: {direction}."
+    text = f"Last night's props: {len(hits)} hit, {len(misses)} missed.\n\n$10 on every one of them: {direction}.\n\nTonight's go up in the app this morning. Free."
     return data, text, {"hits": len(hits), "misses": len(misses), "net": round(net, 2)}
 
 def draw(data, out_png):
