@@ -1,1 +1,1 @@
-free,today,props,player,parlay,best,bets,mlb,football,ncaaf,tips,expert,odds,daily,spread,touchdown
+free,today,player,parlay,best,bets,mlb,ncaaf,cfb,tips,expert,odds,daily,spread,touchdown,predictions

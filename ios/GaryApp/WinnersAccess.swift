@@ -23,12 +23,14 @@ struct WinnersAccessSnapshot: Codable {
         if preview { return "Winners preview" }
         if sports.contains("ALL") { return "All-Access member" }
         if !sports.isEmpty { return "\(sports.sorted().joined(separator: " + ")) member" }
+        if WinnersGate.openToAll { return "Winners is open" }
         return "Gary Free"
     }
     var detail: String {
         if founding { return "Your founding access includes Winners. Your book and leaderboard are always free." }
         if preview { return "Winners is included through September 30. Create an account to keep your founding access." }
         if !sports.isEmpty { return "Winners is unlocked for your plan. Your personal book and leaderboard are included." }
+        if WinnersGate.openToAll { return "Everything in Gary is free right now, Winners included. Your book and leaderboard are always free." }
         return "Full picks, your profile, bet tracking and leaderboards are free. A Winners pass unlocks the selected boards." }
     func unlocks(_ league: String) -> Bool { isFreeAccess || sports.contains("ALL") || sports.contains(league.uppercased()) }
 }
@@ -41,6 +43,10 @@ struct WinnersAccessSnapshot: Codable {
 /// on yet, show me what it would look like"): on, the Winners page draws
 /// today's card the way a non-member will see it once the date arrives.
 enum WinnersGate {
+    /// The server gives Winners to everyone right now (`has_winners_access` returns true for all, checked Nov 9
+    /// 2026), so an account made after October 1 with no pass must not be told a pass unlocks the boards. Mirrors
+    /// WINNERS_IS_FREE on the website; set both to false the day paid plans start.
+    static let openToAll = true
     static let previewKey = "winnersGatePreview"
     static var preview: Bool {
         #if DEBUG

@@ -1,0 +1,5 @@
+A new first screen: meet Gary and see what each page is.
+THE QUARTERBACKS on NFL and college game pages reads each starter's recent games.
+Home celebrates the big plays in Gary's bets, and you can share the replay.
+Gary's clips play smoother and the app uses far less memory.
+Smaller fixes throughout.
