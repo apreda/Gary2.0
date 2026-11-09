@@ -13,6 +13,7 @@ import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries, seasonTeamBoxes } from '../../gamebygame/gameRecordStore.js';
 import { flowFacts, lastLeft, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { threesByDefender, threesByDefenderText } from './nbaThreesByDefender.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
 
@@ -402,6 +403,18 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   };
   const rests = await Promise.all(games.slice(0, BOX_GAMES).map((g, i) => restLine(g, i)));
   const advanced = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaAdvancedBox(g.id)));
+  // Each side's 3s by closest defender (Nov 9 2026, founder GO: "allowed 19-43 from three" read the same open or
+  // contested). It posts hours to a day after the final, so last night's game can be not on file yet.
+  const shooting = await Promise.all(games.slice(0, BOX_GAMES).map((g) => ballDontLieService.getNbaShootingByDefender(g.id)));
+  const threesLine = (i, g, home) => {
+    const rows = shooting[i];
+    if (rows == null) return '      3s by closest defender: not on file';
+    if (!rows.length) return '      3s by closest defender: not on file yet (the tracking posts hours to a day after the final)';
+    const [us, them] = home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team];
+    const box = boxes[i];
+    const side = (t, o, b) => threesByDefenderText(threesByDefender(rows, t?.id), t?.name, o || b?.totals || null);
+    return `      3s by closest defender: ${side(us, officials[i]?.us, box)} · ${side(them, officials[i]?.them, box?.opponent)}`;
+  };
   const officials = await Promise.all(games.slice(0, BOX_GAMES).map(async (g) => {
     const o = await espnTeamBox(g).catch(() => null);
     return o ? (g.home_team?.id === ts.id ? { us: o.home, them: o.away } : { us: o.away, them: o.home }) : null;
@@ -459,7 +472,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     const rec = wl ? ` (${gp === 1 ? 'this was their only game' : others ? `their other games, newest first: ${others}` : byTeamSummaries ? 'no other games' : 'their other games: not on file'})` : '';
     const q = quarterLine(g, home, us, them);
     const line = `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp}${rec} · ${us > them ? 'W' : 'L'} ${us}-${them}${g.postseason ? ' (postseason)' : ''}${cupWords(g.ist_stage) ? ` · ${cupWords(g.ist_stage).replace(/; the game counts in the standings$/, '')}` : ''}${q ? ` · ${q}` : ' · quarters not on file'}`;
-    const scoring = i < BOX_GAMES ? scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i]) : null;
+    const scoring = i < BOX_GAMES ? `${scoringLine(advanced[i], home ? [g.home_team, g.visitor_team] : [g.visitor_team, g.home_team], officials[i])}\n${threesLine(i, g, home)}` : null;
     const stored = flows.get(String(g.id));
     const flow = stored ? `      flow: ${flowFacts(stored, ts.id, byTeamSummaries)}` : `      flow: not on file (${recordsFailed ? `the game records did not load: ${recordsFailed}` : 'the game record is not built yet'})`;
     const older = stored && i >= BOX_GAMES ? olderGameFacts(stored, ts.id).map((l) => `      ${l}`).join('\n') : null;

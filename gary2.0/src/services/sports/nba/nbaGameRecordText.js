@@ -12,6 +12,7 @@ const mins = (m) => (m > 0 && m < 0.5 ? '<1' : String(Math.round(m)));
 const possessive = (name) => (/s$/.test(name) ? `${name}'` : `${name}'s`);
 const signed = (n) => (n == null ? '' : n > 0 ? `+${n}` : String(n));
 import { playerKey, samePlayerIn } from '../../providers/nbaOfficialInjuryReport.js';
+import { threesByDefenderText } from './nbaThreesByDefender.js';
 
 export const sideOf = (rec, teamId) => (String(rec.home.id) === String(teamId) ? 'home' : 'away');
 const other = (s) => (s === 'home' ? 'away' : 'home');
@@ -169,7 +170,7 @@ function teamBox(rec, side) {
   const gap = t.official && t.playersSum && ['fgm', 'fga', 'fg3m', 'fg3a', 'ftm', 'fta'].some((k) => t.playersSum[k] !== t[k])
     ? ` · its players' lines above add up to ${t.playersSum.fgm}-${t.playersSum.fga} FG, ${t.playersSum.fg3m}-${t.playersSum.fg3a} 3PT, ${t.playersSum.ftm}-${t.playersSum.fta} FT (the stats feed is missing what the official box has)` : '';
   const source = t.official ? 'official box' : "players' rows summed (the official box not on file; team turnovers and rebounds not included)";
-  return `  ${rec[side].short} team (${source}): ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} reb (${t.oreb} off), ${t.ast} ast, ${t.stl} stl, ${t.blk} blk, ${t.turnover} TO${t.teamTurnovers ? ` (${t.teamTurnovers} of them team turnovers)` : ''}, ${t.pf} PF · ${kinds}${gap}`;
+  return `  ${rec[side].short} team (${source}): ${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} reb (${t.oreb} off), ${t.ast} ast, ${t.stl} stl, ${t.blk} blk, ${t.turnover} TO${t.teamTurnovers ? ` (${t.teamTurnovers} of them team turnovers)` : ''}, ${t.pf} PF · ${kinds}${gap} · 3s by closest defender: ${threesByDefenderText(t.threes, null, t)}`;
 }
 
 /** One game in full, from `teamId`'s side. `byTeam` is summariesByTeam over the season so far. */

@@ -9,7 +9,8 @@
  *   - each team's box, where its points came from (paint, second chance, fast break, off turnovers, bench) and its
  *     possessions;
  *   - how it went: the score by quarter, the largest lead each way, lead changes, ties, each team's biggest run, the
- *     score after three quarters and with five minutes left.
+ *     score after three quarters and with five minutes left;
+ *   - each team's 3s by closest defender, wide open to very tight (Nov 9 2026, nbaThreesByDefender.js).
  * What happened across games (who had played before, who was listed after) is read from the store when a game is
  * shown, not written into it. Facts only; what they mean is Gary's read. Sources: BDL games, box scores, stats by
  * period, lineups, play-by-play and the v2 advanced box; the NBA's official injury report.
@@ -19,8 +20,9 @@ import { ballDontLieService } from '../../providers/ballDontLieService.js';
 import { latestOfficialReport, gameListing } from '../../providers/nbaOfficialInjuryReport.js';
 import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor, espnNameKey } from './espnNbaGame.js';
+import { threesByDefender } from './nbaThreesByDefender.js';
 
-export const NBA_RECORD_VERSION = 18;
+export const NBA_RECORD_VERSION = 19;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -217,7 +219,7 @@ export async function buildNbaGameRecord(gameId) {
   if (!box) throw new Error(`game ${gameId}: box score not on file`);
   const ots = [1, 2, 3].filter((k) => g[`home_ot${k}`] != null);
   const periods = [1, 2, 3, 4, ...ots.map((k) => 4 + k)];
-  const [byPeriod, lineups, advanced, plays, report, homeGames, awayGames] = await Promise.all([
+  const [byPeriod, lineups, advanced, plays, report, homeGames, awayGames, shooting] = await Promise.all([
     Promise.all(periods.map(async (q) => new Map(((await get(`/nba/v1/stats?game_ids[]=${g.id}&period=${q}&per_page=100`))?.data || []).map((r) => [r.player.id, r])))),
     ballDontLieService.getNbaLineups([g.id]).catch(() => []),
     ballDontLieService.getNbaAdvancedBox(g.id),
@@ -225,6 +227,7 @@ export async function buildNbaGameRecord(gameId) {
     reportAtTip(g),
     ballDontLieService.getGames('basketball_nba', { team_ids: [g.home_team.id], seasons: [g.season], per_page: 100, paginateAll: true }),
     ballDontLieService.getGames('basketball_nba', { team_ids: [g.visitor_team.id], seasons: [g.season], per_page: 100, paginateAll: true }),
+    ballDontLieService.getNbaShootingByDefender(g.id),
   ]);
   const starters = new Set((lineups || []).filter((r) => r.starter).map((r) => r.player?.id));
   const checks = [];
@@ -301,7 +304,8 @@ export async function buildNbaGameRecord(gameId) {
     const id = side === 'home' ? g.home_team.id : g.visitor_team.id;
     const adv = (advanced || []).filter((r) => r.team?.id === id && (r.period ?? 0) === 0);
     teams[side] = { ...Object.fromEntries(STATS.map((k) => [k, sum(mine, k)])), bench: sum(mine.filter((p) => !p.starter), 'pts'),
-      ...(adv.length ? { paint: sum(adv, 'points_paint'), secondChance: sum(adv, 'points_second_chance'), fastBreak: sum(adv, 'points_fast_break'), offTurnovers: sum(adv, 'points_off_turnovers') } : {}) };
+      ...(adv.length ? { paint: sum(adv, 'points_paint'), secondChance: sum(adv, 'points_second_chance'), fastBreak: sum(adv, 'points_fast_break'), offTurnovers: sum(adv, 'points_off_turnovers') } : {}),
+      threes: threesByDefender(shooting, id) };
   }
   // The official team box (ESPN) where it is on file: its shooting, rebounds and turnovers include what the players' rows
   // miss (team turnovers and rebounds, now and then a shot); the players' sums are kept to show any difference.
@@ -344,6 +348,9 @@ export async function buildNbaGameRecord(gameId) {
   // rebuild tries again.
   if (teams.home.secondChance === 0 && teams.away.secondChance === 0 && (teams.home.oreb > 0 || teams.away.oreb > 0)) { teams.home.secondChance = null; teams.away.secondChance = null; }
   checks.push({ check: 'the advanced box is on file', ok: Boolean(teams.home.secondChance != null && teams.away.secondChance != null) });
+  // Posts hours to a day after the final, and a few games never get it (LAC at OKC, Oct 25 2026): the late rebuild tries
+  // again for two days (ensureNbaRecords).
+  checks.push({ check: 'the closest-defender shooting is on file', ok: Boolean(teams.home.threes && teams.away.threes) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });
 
   const home = teamOf(g.home_team), away = teamOf(g.visitor_team);
