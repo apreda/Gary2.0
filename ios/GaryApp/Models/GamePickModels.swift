@@ -74,32 +74,6 @@ extension GaryPick {
     }
 }
 
-/// Gary's own bet on a pick (`gary_bet` in the pick JSON since Sep 24 2026): whether he plays it and for how much.
-/// Its decode never throws. One pick that fails to decode empties the whole board (Aug 18 2026), so any surprise in
-/// this object reads as "no bet on file" instead.
-struct GaryBetStake: Codable, Equatable {
-    var play: Bool? = nil
-    var stake_dollars: Double? = nil
-
-    init(play: Bool? = nil, stake_dollars: Double? = nil) {
-        self.play = play
-        self.stake_dollars = stake_dollars
-    }
-
-    init(from decoder: Decoder) throws {
-        guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }
-        play = try? c.decodeIfPresent(Bool.self, forKey: .play)
-        if let d = try? c.decodeIfPresent(Double.self, forKey: .stake_dollars) {
-            stake_dollars = d
-        } else if let s = try? c.decodeIfPresent(String.self, forKey: .stake_dollars) {
-            stake_dollars = Double(s.trimmingCharacters(in: .whitespaces))
-        }
-    }
-
-    /// SPRINKLE, LEAN or HAMMER from his stake; nil when he passed or no bet is on file.
-    var tier: String? { convictionTier(stakeDollars: stake_dollars, plays: play) }
-}
-
 struct GaryPick: Identifiable, Codable {
     let pick_id: String?
     var game_id: Int? = nil   // per-game id — disambiguates doubleheaders (same matchup, two games)
@@ -158,8 +132,6 @@ struct GaryPick: Identifiable, Codable {
     // reason; it is never graded. Absent on every pick that was not scratched.
     var scratched_at: String? = nil
     var scratch_reason: String? = nil
-    // Gary's own bet on this pick: play or pass, and his stake. Absent on picks from before Sep 24 2026.
-    var gary_bet: GaryBetStake? = nil
     /// Scratched on late news before the game: shown faded with Gary's reason, never graded.
     var isScratched: Bool { !(scratched_at ?? "").isEmpty }
     // Soccer / World Cup context

@@ -1,13 +1,11 @@
 import Foundation
 
-/// Conviction tiers, Gary's vocabulary, read from his own stake (founder, Nov 9 2026: map the tiers to his dollar
-/// stake). They used to come from a confidence number with bands at 0.70 and 0.80; every pick since late October sits
-/// between 0.50 and 0.65, so every one would have read SPRINKLE. His own write-ups set these bands: he calls a $300
-/// play "a lean, not a hammer" and "a normal-size play", and $100 to $150 a small one. On game picks since Oct 1:
-/// 26% SPRINKLE, 70% LEAN, 4% HAMMER. Nil when he passed on the bet or no bet is on file.
-func convictionTier(stakeDollars: Double?, plays: Bool?) -> String? {
-    guard plays != false, let stake = stakeDollars, stake > 0 else { return nil }
-    return stake >= 400 ? "HAMMER" : stake >= 200 ? "LEAN" : "SPRINKLE"
+/// Conviction tiers — Gary's vocabulary, not calculator language ("82%" is
+/// fake precision and self-inflicted accountability). Bands set from the real
+/// Apr–Jun 2026 confidence distribution so the tiers actually spread:
+/// 27% SPRINKLE · 48% LEAN · 25% HAMMER.
+func convictionTier(_ confidence: Double) -> String {
+    confidence >= 0.80 ? "HAMMER" : confidence >= 0.70 ? "LEAN" : "SPRINKLE"
 }
 
 /// Splits a rationale into (take, rest): the opening 1–2 SENTENCES lead the
