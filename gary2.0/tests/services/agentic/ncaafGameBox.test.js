@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -101,5 +101,24 @@ describe('how a college game\'s turnovers happened', () => {
     expect(publishedFumbles(0, cfbd({ totalFumbles: '2', fumblesLost: '0' }))).toBeNull();
     expect(publishedFumbles(undefined, cfbd({ totalFumbles: '1', fumblesLost: '0' }))).toBeNull();
     expect(publishedFumbles(1, null)).toBeNull();
+  });
+});
+
+// Florida Atlantic at Florida (Sep 5 2026): a catch overturned on review read its original 25 yards; Arkansas's runs with a
+// holding foul after them were left out.
+describe('runs and pass plays by the score at the snap', () => {
+  it('reads the final ruling, and a run or catch that stood with a foul after it', () => {
+    const snap = (text, type, extra = {}) => ({ text, type: { text: type }, start: { team: { id: '1' } }, awayScore: 0, homeScore: 0, period: { number: 1 }, ...extra });
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'rushing', keys: ['rushingAttempts'], athletes: [{ athlete: { id: '9', lastName: 'Back' }, stats: ['2'] }] }] }] },
+      drives: { previous: [{ team: { id: '1' }, plays: [
+        snap('(09:07) #10 C.Pass pass incomplete deep middle to #2 K.End. The previous play is under automatic review. CALL OVERTURNED. (Original Play: (09:07) #10 C.Pass pass complete deep middle to #2 K.End caught at FLA23, for 25 yards to the FLA23)', 'Pass Incompletion'),
+        snap('(08:30) #5 A.Back rush middle for 7 yards gain to the ARK47 PENALTY ARK Holding (#75 K.Line) 10 yards from ARK47 to ARK37', 'Penalty', { statYardage: -3 }),
+        snap('(08:00) #5 A.Back rush left for 22 yards gain (16) to the UNA03, out of bounds PENALTY ARK Holding (#75 K.Line) 10 yards', 'Penalty'),
+        snap('(07:30) #5 A.Back rush left for 9 yards gain to the UNA03 PENALTY UNA Offside 5 yards. NO PLAY', 'Penalty'),
+      ] }] },
+    };
+    expect(gameBoxFromSummary(summary, '1').byScore['1'].close).toEqual({ runs: 2, runYards: 23, passes: 1, passYards: 0 });
   });
 });

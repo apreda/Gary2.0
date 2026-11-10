@@ -481,14 +481,22 @@ function byScoreAtSnap(summary, teams) {
   for (const drive of list) for (const p of drive?.plays || []) {
     if (p?.id != null && seen.has(p.id)) continue;
     if (p?.id != null) seen.add(p.id);
-    const type = String(p?.type?.text || ''), text = String(p?.text || '');
-    const pass = /^(Pass Reception|Pass Incompletion|Passing Touchdown|Sack)\b|Interception/i.test(type), run = /^(Rush|Rushing Touchdown)\b/i.test(type);
+    // The final ruling only, and a snap ESPN types "Penalty" whose words before the foul tell a run, a pass or a sack that
+    // stood (Nov 10 2026 college audit: these lines matched the box's total yards in 789 of 1,370 team-games; a catch replay
+    // overturned read its original 25 yards, and runs and catches with a foul after them were left out; with both, 943).
+    const type = String(p?.type?.text || ''), text = finalRuling(p?.text);
+    const told = /^penalty$/i.test(type) && !/\bno play\b/i.test(text) ? text.split(/\bPENALTY\b/)[0] : null;
+    const toldRun = told != null && /\b(?:rush|run)\b.*\bfor (?:\d+ yards?|no gain)/i.test(told) && !/\bpass\b/i.test(told);
+    const toldPass = told != null && !toldRun && /\bpass (?:complete|incomplete)\b|\bsacked\b/i.test(told);
+    const pass = /^(Pass Reception|Pass Incompletion|Passing Touchdown|Sack)\b|Interception/i.test(type) || toldPass, run = /^(Rush|Rushing Touchdown)\b/i.test(type) || toldRun;
     const fumble = /Fumble/i.test(type) && !/punt|kick/i.test(text) ? (/\b(pass|sacked)\b/i.test(text) ? 'pass' : /\brush\b|\brun\b/i.test(text) ? 'run' : null) : null;
     const team = String(p?.start?.team?.id ?? drive?.team?.id ?? '');
     if ((pass || run || fumble) && out[team] && !/\bno play\b/i.test(text)) {
       const by = team === String(home) ? h - a : a - h;
       const slot = out[team][by >= 22 ? 'aheadBig' : by >= 9 ? 'ahead' : by <= -22 ? 'behindBig' : by <= -9 ? 'behind' : 'close'];
-      const yards = /Interception/i.test(type) ? 0 : snapYards(text, p?.statYardage);
+      // A run cut short by the foul is credited to its spot ("for 22 yards gain (16)").
+      const credited = told != null ? told.match(/for \d+ yards?(?: gain| loss)? ?\((-?\d+)\)/i) : null;
+      const yards = /Interception/i.test(type) ? 0 : credited ? Number(credited[1]) : snapYards(told ?? text, told != null ? 0 : p?.statYardage);
       if (run || fumble === 'run') { slot.runs += 1; slot.runYards += yards; } else { slot.passes += 1; slot.passYards += yards; }
     }
     if (Number.isFinite(Number(p?.homeScore))) h = Number(p.homeScore);
@@ -651,7 +659,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v29 (Nov 9 2026): how the turnovers happened (fumbles on the ground, the ones lost, points off them).
   // v30 (Nov 10 2026): points off a turnover read past timeouts and a turnover told twice.
   // v31 (Nov 10 2026): each team's fumbles as the box states them (fumbleTotals).
-  return cachedResearch(`espn_cfb_box_v31:${eventId}`, async () => {
+  // v32 (Nov 10 2026 audit): the by-score plays read the final ruling and the runs and catches that stood with a foul after them.
+  return cachedResearch(`espn_cfb_box_v32:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
