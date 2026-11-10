@@ -314,15 +314,15 @@ def main():
         except Exception as e:
             log(f"{d['player']}: claim failed ({e})"); continue
         try:
-            day = [x for x in darts if x["game_date"] == d["game_date"]]
-            jpg = draw(ticket_data(d, cashed_at, day), os.path.join(OUT, f"dart-{d['id']}.png"))
-            body = json.dumps({"text": text, "images_base64": [base64.b64encode(open(jpg, "rb").read()).decode()]}).encode()
-            j = json.loads(http(f"{SB}/functions/v1/post-tweet-media", "POST", H, body, timeout=180))
+            # TEXT ONLY (Nov 10 2026). The ticket image went out on the first three: 62, 333 and 29 views, against 122 and
+            # 205 for that day's text posts. The log had said so for months (image posts 138-245 views, text 574-1,255),
+            # and the founder on the art: "so bad they just look like A.I slop". No images on X.
+            j = json.loads(http(f"{SB}/functions/v1/post-single-tweet", "POST", H, json.dumps({"text": text}).encode(), timeout=60))
             if not j.get("success") or not j.get("tweetId"): raise RuntimeError(str(j)[:300])
             rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "PATCH", {
                 "hook_tweet_id": j["tweetId"], "thread_url": f"https://x.com/BetwithGary/status/{j['tweetId']}",
                 "posted_at": datetime.now(timezone.utc).isoformat(), "post_text": text,
-                "audience_selection": {"format": "called_it_v1", "how": how, "odds": d["odds"], "prop": d["prop"]}})
+                "audience_selection": {"format": "called_it_text_v2", "how": how, "odds": d["odds"], "prop": d["prop"]}})
             reply = link_reply(j["tweetId"], "Tonight's whole board, with the reason on each one, is free in the app: betwithgary.ai/c/xcash")
             if reply: rest(f"social_post_log?post_date=eq.{today}&pick_text=eq.{urllib.parse.quote(key)}", "PATCH", {"cta_tweet_id": reply})
             log(f"{d['player']} ({how}, {price(d['odds'])}): https://x.com/BetwithGary/status/{j['tweetId']}")
