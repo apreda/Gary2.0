@@ -131,6 +131,13 @@ describe('the by-score line gate', () => {
     expect(line(95)).not.toContain('not on file');
     expect(line(94)).toContain('not on file');
   });
+
+  it('writes a margin range in words, never as a score', () => {
+    const z = { runs: 0, runYards: 0, passes: 0, passYards: 0 };
+    const side = { close: z, ahead: { runs: 2, runYards: 50, passes: 0, passYards: 0 }, aheadBig: z, behind: z, behindBig: z };
+    const box = { teams: [{ id: '1', homeAway: 'home', totals: { totalYards: 50 } }, { id: '2', homeAway: 'away', totals: { totalYards: 0 } }], scoring: [], bigPlays: [], byScore: { 1: side, 2: { ...side, ahead: z } } };
+    expect(ncaafFlowLines(box, '1').find((l) => l.startsWith('by the score'))).toContain('ahead by 9 to 21: 2 runs for 50 yds');
+  });
 });
 
 // Tennessee at Texas (Sep 26 2026): ESPN's players added up to 1 kickoff return for 21; the school's box and CFBD's had 2 for 19.

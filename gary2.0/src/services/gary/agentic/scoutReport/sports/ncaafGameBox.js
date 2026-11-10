@@ -477,7 +477,8 @@ export function gameBoxFromSummary(summary, eventId) {
   return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, passerSpans, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
 }
 
-const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9-21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9-21'], ['behindBig', 'behind by 22+']];
+// "9 to 21", not "9-21": in a row of scores and completions a hyphen reads as a score (round 5 first read).
+const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9 to 21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9 to 21'], ['behindBig', 'behind by 22+']];
 // The yards from the play's words: ESPN's statYardage carries returns and penalties (a 5-yard sack with a fumble return
 // read 61). Its number only when the words give none.
 function snapYards(text, stat) {
