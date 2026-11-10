@@ -62,7 +62,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 24 (same round): every drive the feed flags as reaching the 20 is a red-zone trip, as the official box counts them.
 // 25 (same round): the extra point after a kickoff-return touchdown joins that touchdown in the scoring.
 // 26 (Nov 10 2026, NFL round 4b): each quarterback's first dropback of the game, with the score then.
-const LEDGER_SCHEMA = 26;
+// 27 (same round): each takeaway, and the points scored from it through the possession it began.
+const LEDGER_SCHEMA = 27;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -602,6 +603,38 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
         (game.hurt ||= []).push({ team: m[1], who: m[3], tag: m[2] ? `${m[2]}-${m[3]}` : m[3], q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, later: false });
       }
     }
+    // POINTS AFTER TAKEAWAYS (NFL round 4b, Nov 10 2026: the Packers' Wk 9 recap gave 21 points off four Patriots
+    // turnovers, and the drives line said only "2 began in Patriots territory"). Each interception and each fumble the
+    // other side recovered, a kick or punt return fumble the kicking side fell on included (Turpin's, Cowboys Wk 5), with
+    // the points the taker scored from the play itself through the possession it began: until the other side runs a play
+    // or the half ends. The scores are the totals before the row that ends it.
+    {
+      const T = game.tk || (game.tk = { last: [0, 0], open: [], done: [], home: g('home_team'), away: g('away_team') });
+      const half = (q) => (q == null ? null : q <= 2 ? 1 : q <= 4 ? 2 : q);
+      const scoreOf = (team, tot) => (team === T.home ? tot[0] : team === T.away ? tot[1] : null);
+      const REAL = new Set(['run', 'pass', 'punt', 'field_goal', 'extra_point', 'kickoff', 'qb_kneel', 'qb_spike']);
+      T.open = T.open.filter((t) => {
+        if ((REAL.has(playType) && posteam !== t.team) || half(qtr) !== t.half) { t.end = scoreOf(t.team, T.last); T.done.push(t); return false; }
+        return true;
+      });
+      for (const t of T.open) {
+        if (flag(g('touchdown')) && g('td_team') === t.team) t.td = true;
+        if (playType === 'field_goal' && g('field_goal_result') === 'made' && posteam === t.team) t.fg = true;
+      }
+      if (playType !== 'no_play') {
+        const rec = g('fumble_recovery_1_team'), lost = g('fumbled_1_team');
+        // A fumble the feed marks lost though its first recovery was the fumbling side's own (a lateral after it, fumbled again
+        // and lost: the Buccaneers' Wk 8 Q1 6:42 run, the Commanders' last play Wk 9) is the defense's, as the box counts it.
+        const taker = flag(g('interception')) ? defteam : flag(g('fumble')) && rec && lost && rec !== lost ? rec
+          : SCRIMMAGE.has(playType) && flag(g('fumble_lost')) ? defteam : null;
+        if (taker && scoreOf(taker, T.last) != null) {
+          T.open.push({ team: taker, q: qtr, clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null,
+            kind: flag(g('interception')) ? 'interception' : KICKS.has(playType) ? 'return fumble' : 'fumble', half: half(qtr),
+            start: scoreOf(taker, T.last), td: flag(g('touchdown')) && g('td_team') === taker, fg: false });
+        }
+      }
+      if (homeNow != null && awayNow != null) T.last = [homeNow, awayNow];
+    }
     // THE GAME'S FLOW (Oct 29 2026, founder: "who got ahead, how, when did the team go up 14 versus being close the
     // whole game"): each score in order with the score after it (an extra point or two-point try joins its
     // touchdown), the largest lead each way and when, and how often the lead changed hands.
@@ -814,7 +847,10 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
       lead: g.flow.lead, lead_changes: g.flow.changes } : null;
     const hurt = (g.hurt || []).map(({ team, who, q, clock, later }) => ({ team, who, q, clock, later }));
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ || {}, qbFirst: g.qbFirst || {} };
+    // Each takeaway with the points from it; one still open at the end of the file closes on the final score.
+    const takeaways = g.tk ? [...g.tk.done, ...g.tk.open.map((t) => ({ ...t, end: t.end ?? (t.team === g.tk.home ? g.tk.last[0] : g.tk.last[1]) }))]
+      .map(({ team, q, clock, kind, start, end, td, fg }) => ({ team, q, clock, kind, points: start != null && end != null ? end - start : null, td, fg })) : [];
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ || {}, qbFirst: g.qbFirst || {}, takeaways };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

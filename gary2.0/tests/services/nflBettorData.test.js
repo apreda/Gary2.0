@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gameByGame, lineStory, quarterbacks, skillPlayers } from '../../src/services/sports/nfl/nflBettorData.js';
+import { gameByGame, lineStory, nflGameFull, quarterbacks, skillPlayers, teamGames } from '../../src/services/sports/nfl/nflBettorData.js';
 
 // lineStory is shared by the NFL, college and the NBA.
 describe('lineStory with no listed move', () => {
@@ -54,5 +54,22 @@ describe('the game head\'s quarterbacks', () => {
         qbFirst: { 'BAL|L.Jackson': { i: 0, q: 1, clock: '15:00', diff: 0 }, 'BAL|T.Huntley': { i: 1, q: 1, clock: '10:00', diff: -7 }, 'BAL|J.Fagnano': { i: 2, q: 2, clock: '9:39', diff: -6 } } }]]) };
     const head = gameByGame(d, 'Baltimore Ravens', '2026-11-12').split('\n').find((l) => /^  Wk 8 /.test(l));
     expect(head).toMatch(/QB Lamar Jackson \(started, left early\) 1-of-1.*; Tyler Huntley \(relief, first dropback Q1 10:00, down 7\) 1-of-4.*; Joe Fagnano \(first dropback Q2 9:39, down 6\) 1-of-21/);
+  });
+});
+
+// Round 4b, Nov 10 2026: the Packers' Wk 9 drives line read "2 began in Patriots territory (15 points)"; the play-by-play has
+// 22 points off their four takeaways (three touchdowns, one with a two-point try).
+describe('the drives line after takeaways', () => {
+  it('gives the points from the takeaways when the play-by-play finds every one the box counts, and nothing otherwise', () => {
+    const g = { game_id: 'g9', season: '2026', game_type: 'REG', week: '9', gameday: '2026-11-08', home_team: 'NE', away_team: 'GB', home_score: '27', away_score: '45' };
+    const side = { drives: 10, drive_end_of_half: 0, drive_tds: 5, red_zone_trips: 0, opp_territory_drives: 0 };
+    const tk = (pts, td) => ({ team: 'GB', q: 1, clock: '14:32', kind: 'interception', points: pts, td, fg: false });
+    const d = { season: 2026, schedule: [g], snaps: [], playerWeek: [],
+      teamWeek: [{ game_id: 'g9', team: 'NE', passing_interceptions: 3, fumbles_lost_total: 1 }, { game_id: 'g9', team: 'GB' }],
+      ledgerGames: new Map([['g9', { game_id: 'g9', lines: { GB: side, NE: side }, takeaways: [tk(7, true), tk(0, false), tk(7, true), tk(8, true)] }]]) };
+    const drives = (dd) => nflGameFull(dd, teamGames(dd, 'GB', 2026, '2026-11-12')[0], 'GB', '2026-11-12').split('\n').find((l) => /^\s*drives:/.test(l));
+    expect(drives(d)).toMatch(/Packers 10 \(5 TD\); no red-zone trips; none began in Patriots territory; after its 4 takeaways: 22 points \(3 TD\) · Patriots/);
+    d.ledgerGames.get('g9').takeaways.pop();
+    expect(drives(d)).not.toMatch(/takeaway/);
   });
 });

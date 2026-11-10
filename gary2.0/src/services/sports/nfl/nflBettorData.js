@@ -948,7 +948,7 @@ function specialTeamsLine(d, x, code) {
     const punting = !L ? 'punting not on file' : !n(L.punts) ? 'no punts' : `${n(L.punts)} punt${n(L.punts) === 1 ? '' : 's'} for ${n(L.punt_yards)} yds (${n(L.punts_inside_20)} inside the 20${n(L.punts_blocked) ? `, ${n(L.punts_blocked)} blocked` : ''})`;
     const mine = rows.filter((r) => r.team === c);
     const ret = mine.filter((r) => n(r.kickoff_returns) || n(r.punt_returns)).map((r) => `${r.player_display_name} ${[n(r.kickoff_returns) ? `${n(r.kickoff_returns)} kickoff return${n(r.kickoff_returns) === 1 ? '' : 's'} for ${n(r.kickoff_return_yards)}` : null, n(r.punt_returns) ? `${n(r.punt_returns)} punt return${n(r.punt_returns) === 1 ? '' : 's'} for ${n(r.punt_return_yards)}` : null].filter(Boolean).join(', ')}`);
-    const blocks = mine.flatMap((r) => [['def_punt_blocks', 'punt'], ['def_fg_blocks', 'field goal'], ['def_pat_blocks', 'extra point']].filter(([k]) => n(r[k])).map(([k, w]) => `${r.player_display_name} blocked a ${w}`));
+    const blocks = mine.flatMap((r) => [['def_punt_blocks', 'punt'], ['def_fg_blocks', 'field goal'], ['def_pat_blocks', 'extra point']].filter(([k]) => n(r[k])).map(([k, w]) => `${r.player_display_name} blocked ${/^[aeiou]/.test(w) ? 'an' : 'a'} ${w}`));
     // Fumbles lost on kicks and punts, and onside kicks recovered (round 13: counted in the turnovers, never said).
     const stLost = n(L?.special_teams_fumbles_lost), onside = n(L?.onside_recoveries);
     const stTurn = [stLost ? `${stLost} return fumble${stLost === 1 ? '' : 's'} lost` : null, onside ? `${onside} onside kick${onside === 1 ? '' : 's'} recovered` : null].filter(Boolean).join(', ');
@@ -972,7 +972,14 @@ function driveLine(x, code) {
     const rz = t.red_zone_trips ? `red zone ${count(t.red_zone_trips, 'trip')}, ${t.red_zone_tds} TD` : 'no red-zone trips';
     const short = t.opp_territory_drives ? `${t.opp_territory_drives} began in ${nickname(o)} territory (${count(t.opp_territory_points, 'point')})` : `none began in ${nickname(o)} territory`;
     const other = [t.defensive_tds ? count(t.defensive_tds, 'defensive TD') : null, t.special_teams_tds ? count(t.special_teams_tds, 'special-teams TD') : null].filter(Boolean).join(', ');
-    return `${nickname(c)} ${t.drives} (${ends}${half}); ${rz}; ${short}${other ? `; also ${other}` : ''}`;
+    // The points from its takeaways: the play itself and the possession it began (NFL round 4b: the Packers' Wk 9 read
+    // "2 began in Patriots territory (15 points)" beside four takeaways). Only when the play-by-play finds every takeaway
+    // the box counts.
+    const tk = (x.ledger?.takeaways || []).filter((e) => e.team === c), boxTk = c === code ? x.def?.giveaways : x.off?.giveaways;
+    const kinds = [tk.filter((e) => e.td).length ? `${tk.filter((e) => e.td).length} TD` : null, tk.filter((e) => e.fg).length ? `${tk.filter((e) => e.fg).length} FG` : null].filter(Boolean).join(', ');
+    const after = tk.length && tk.length === boxTk && tk.every((e) => e.points != null)
+      ? `; after its ${count(tk.length, 'takeaway')}: ${count(tk.reduce((a, e) => a + e.points, 0), 'point')}${kinds ? ` (${kinds})` : ''}` : '';
+    return `${nickname(c)} ${t.drives} (${ends}${half}); ${rz}; ${short}${after}${other ? `; also ${other}` : ''}`;
   };
   return `drives: ${side(code, x.opp)} · ${side(x.opp, code)}`;
 }
