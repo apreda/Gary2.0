@@ -16,6 +16,9 @@ describe('game reads fit to one dart ask', () => {
     expect(t).toContain('SCHEDULE AND TRAVEL\nNothing unusual.');
     expect(t).toContain('WHO IS PLAYING\nx lineups');
     expect(trimRead(read('x'), 9)).toBe(read('x'));
+    // A two-space line that is not a game's first line is not counted as a game; an NFL week label is.
+    expect(gamesInRead(read('x').replace('  Fri, Nov 6 · @ Somewhere', '  Fri, Nov 6 · @ Somewhere\n  (a note under the game)'))).toBe(4);
+    expect(gamesInRead(read('x').replace(/^ {2}(\w{3}, Nov \d) · /gm, '  Wk 9 · $1 · '))).toBe(4);
   });
   it('leaves the blocks alone when the ask fits, trims every game in it alike when it does not, and never touches a short frame', () => {
     const blocks = new Map([['1', read('a')], ['2', read('b')], ['3', 'GAME 3 · a short frame']]);

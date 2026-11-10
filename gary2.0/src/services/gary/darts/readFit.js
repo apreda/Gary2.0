@@ -11,8 +11,9 @@ export const ASK_MOST_CHARS = Number(process.env.GARY_DARTS_ASK_MOST_CHARS) || 5
 
 const SECTION = /^THIS SEASON, GAME BY GAME/;
 const TEAM_HEAD = /^\S.*newest first:\s*$/;
-// A game's first line: two spaces, then the day. The count of games left off is not a game.
-const GAME_START = /^ {2}(?!\(its \d+ games? (?:before these )?(?:is|are) not shown here\))\S/;
+// A game's first line: two spaces, then the day ("  Sat, Nov 7 · vs ..." in the NBA, "  Wk 8 · Sun, Nov 1 · vs ..." in
+// the NFL). Any other two-space line (the count of games left off, a note under a team) belongs to the game above it.
+const GAME_START = /^ {2}(?:[^·\n]{1,24} · )?(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), [A-Z][a-z]{2} \d{1,2}\b/;
 
 /** How many games the longest team log in a read holds; 0 for a block that is not a game read. */
 export function gamesInRead(text) {
