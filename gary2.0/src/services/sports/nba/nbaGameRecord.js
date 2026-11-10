@@ -22,7 +22,7 @@ import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor, espnNameKey } from './espnNbaGame.js';
 import { threesByDefender } from './nbaThreesByDefender.js';
 
-export const NBA_RECORD_VERSION = 21;
+export const NBA_RECORD_VERSION = 22;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -127,6 +127,21 @@ export function flowOf(plays, final) {
   const scoreAt = (keep) => { const xs = ordered.filter(keep); const x = xs[xs.length - 1]; return x ? { home: x.home_score, away: x.away_score } : null; };
   return { largestLead: lead, leadChanges: changes, ties, biggestRun: best,
     fiveLeft: scoreAt((p) => p.period < 4 || (p.period === 4 && clockSeconds(p.clock) >= 300)) };
+}
+
+/** The largest leads and lead changes counted from the play-by-play, kept only where ESPN's published ones agree (Nov 10
+ * 2026 data round: 291 of 294 largest leads and 145 of 147 lead changes agreed; in the others ESPN's own play-by-play
+ * gave our count and its published number another, Pacers-Bucks Oct 26 "9 lead changes" for 5). One the two disagree on
+ * is set to null and not printed; with ESPN's box not on file the count stands. Returns what was left off. */
+export function withPublishedLeads(flow, officialBox) {
+  const off = [];
+  for (const side of ['home', 'away']) {
+    const pub = officialBox?.[side]?.largestLead;
+    if (pub != null && flow.largestLead[side] != null && pub !== flow.largestLead[side]) { off.push(`${side} largest lead ${flow.largestLead[side]}, ESPN ${pub}`); flow.largestLead[side] = null; }
+  }
+  const pub = officialBox?.home?.leadChanges;
+  if (pub != null && flow.leadChanges != null && pub !== flow.leadChanges) { off.push(`lead changes ${flow.leadChanges}, ESPN ${pub}`); flow.leadChanges = null; }
+  return off;
 }
 
 // WHO WAS ON THE FLOOR, QUARTER BY QUARTER (Oct 27 2026, founder: "there has to be a way to know who closed out a
@@ -349,6 +364,7 @@ export async function buildNbaGameRecord(gameId) {
   teams.home.possessions = teams.away.possessions = possessionsOf(teams.home, teams.away);
   const quarters = { home: periods.map((q) => (q <= 4 ? g[`home_q${q}`] : g[`home_ot${q - 4}`])), away: periods.map((q) => (q <= 4 ? g[`visitor_q${q}`] : g[`visitor_ot${q - 4}`])) };
   const flow = plays ? flowOf(plays, final) : null;
+  const published = flow ? withPublishedLeads(flow, officialBox) : [];
   const lastOff = plays ? lastOffOf(plays, players, periods) : null;
   // Who was on the floor in each stretch, for the quarters followed, only when the play-by-play ends at the final (a
   // drifted running score would put points on the wrong five).
@@ -357,6 +373,7 @@ export async function buildNbaGameRecord(gameId) {
   checks.push({ check: "the players' points add up to the final", ok: teams.home.pts === final.home && teams.away.pts === final.away, detail: `${teams.home.pts}-${teams.away.pts} against ${final.home}-${final.away}` });
   checks.push({ check: 'the quarters add up to the final', ok: quarters.home.every((v) => v != null) && sum(quarters.home.map((v) => ({ v })), 'v') === final.home && sum(quarters.away.map((v) => ({ v })), 'v') === final.away });
   checks.push({ check: 'the play-by-play ends at the final', ok: Boolean(flow) });
+  checks.push({ check: "the largest leads and lead changes match ESPN's", ok: !published.length, detail: published.join('; ') || null });
   checks.push({ check: "each player's quarters add up to his minutes and points", ok: !quarterMismatch.length, detail: quarterMismatch.join('; ') || null });
   checks.push({ check: "the closing five match the last quarter's minutes", ok: Boolean(closing) });
   const stintPts = (stints || []).reduce((acc, s) => [acc[0] + s.pts[0], acc[1] + s.pts[1]], [0, 0]);

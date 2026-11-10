@@ -67,8 +67,11 @@ function flowText(rec, us) {
   if (rec.afterThree) parts.push(`after three ${rec.afterThree[us]}-${rec.afterThree[them]}`);
   if (!f) return `${parts.join('; ')}; leads, runs and the late score not on file (the play-by-play does not end at the final)`;
   if (f.fiveLeft) parts.push(`with 5:00 left ${f.fiveLeft[us]}-${f.fiveLeft[them]}`);
-  parts.push(`largest lead ${rec[us].short} ${f.largestLead[us]}, ${rec[them].short} ${f.largestLead[them]}`);
-  parts.push(`${f.leadChanges} lead change${f.leadChanges === 1 ? '' : 's'}, ${f.ties} tie${f.ties === 1 ? '' : 's'}`);
+  // A largest lead or lead-change count the play-by-play and ESPN's published box disagree on is null and left off
+  // (withPublishedLeads, nbaGameRecord.js).
+  const leads = [us, them].filter((s) => f.largestLead[s] != null).map((s) => `${rec[s].short} ${f.largestLead[s]}`);
+  if (leads.length) parts.push(`largest lead ${leads.join(', ')}`);
+  parts.push(`${f.leadChanges != null ? `${f.leadChanges} lead change${f.leadChanges === 1 ? '' : 's'}, ` : ''}${f.ties} tie${f.ties === 1 ? '' : 's'}`);
   const run = (s) => { const r = f.biggestRun[s]; return r ? `${rec[s].short} ${r.pts}-0 in the ${periodName(r.startPeriod)}${r.endPeriod !== r.startPeriod ? ` into the ${periodName(r.endPeriod)}` : ''} (${r.start[us]}-${r.start[them]} to ${r.end[us]}-${r.end[them]})` : `${rec[s].short} none`; };
   parts.push(`biggest run ${run(us)}; ${run(them)}`);
   return parts.join('; ');
