@@ -859,12 +859,21 @@ export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
 /** A team's kickoff and punt returns in one game from the box (round 10: the return game was in neither read): "returns:
  * 3 kickoff returns for 71 (long 38), 2 punt returns for 45 (long 31, 1 TD)". Null when the box has no return groups. */
-export function ncaafReturns(box, teamId) {
+// `cfbd` is the team's CFBD box (category -> stat), which leaves a kind with no returns out. Its counts and yards stand when
+// ESPN's player rows add up to something else, without a long (Nov 10 2026 college audit: against 92 official school boxes
+// CFBD's team returns were right in all 92 of each kind, ESPN's players summed in 91 kickoff and 90 punt).
+export function ncaafReturns(box, teamId, cfbd = null) {
   const mine = (box?.players || []).filter((p) => p.teamId === String(teamId));
   if (!(box?.players || []).some((p) => p.stats?.kickReturns || p.stats?.puntReturns)) return null;
   const sum = (group, k) => mine.reduce((a, p) => a + (Number(p.stats?.[group]?.[k]) || 0), 0);
   const long = (group, k) => Math.max(...mine.filter((p) => p.stats?.[group]).map((p) => Number(p.stats[group][k]) || 0));
-  const one = (group, n, yds, lg, td, word) => { const c = sum(group, n); if (!c) return null; const t = sum(group, td);
+  const one = (group, n, yds, lg, td, word) => {
+    const c = sum(group, n), t = sum(group, td), cf = (k) => Number(cfbd?.get?.(k) ?? 0);
+    if (cfbd?.get && (cf(n) !== c || cf(yds) !== sum(group, yds))) {
+      const tds = cf(td.replace('Touchdowns', 'TDs'));
+      return cf(n) ? `${cf(n)} ${word} return${cf(n) === 1 ? '' : 's'} for ${cf(yds)}${tds ? ` (${tds} TD)` : ''}` : null;
+    }
+    if (!c) return null;
     return `${c} ${word} return${c === 1 ? '' : 's'} for ${sum(group, yds)} (long ${long(group, lg)}${t ? `, ${t} TD` : ''})`; };
   const parts = [one('kickReturns', 'kickReturns', 'kickReturnYards', 'longKickReturn', 'kickReturnTouchdowns', 'kickoff'),
     one('puntReturns', 'puntReturns', 'puntReturnYards', 'longPuntReturn', 'puntReturnTouchdowns', 'punt')].filter(Boolean);

@@ -547,7 +547,9 @@ async function playerGames(sides, boxes) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);
         const mineD = driveLine(found.teamId), theirsD = driveLine(oppId);
         // Each side's kickoff and punt returns (round 10: the return game was in neither read).
-        const ret = (id) => ncaafReturns(box, id);
+        // Checked against CFBD's team box of the game, the published count (Nov 10 2026 audit), when its two scores are this box's.
+        const cfbdSame = (found.game.teams || []).length === 2 && (found.game.teams || []).every((t) => (box.teams || []).some((b) => b.id === String(t.teamId) && b.score === Number(t.points)));
+        const ret = (id) => ncaafReturns(box, id, !cfbdSame ? null : String(id) === String(found.teamId) ? found.own : found.opp);
         if (mineD && theirsD) drives.set(String(r.gameId), `drives: ${mineD} · opponent: ${theirsD}${ret(found.teamId) ? `\n      returns: ${ret(found.teamId)} · opponent: ${ret(oppId)}` : ''}`);
         // The game's flow (ncaafFlowLines; Oct 29 2026, founder: who got ahead, how and when).
         await placeHurt(box, [found.teamId, oppId]);

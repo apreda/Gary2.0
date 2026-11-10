@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -120,5 +120,16 @@ describe('runs and pass plays by the score at the snap', () => {
       ] }] },
     };
     expect(gameBoxFromSummary(summary, '1').byScore['1'].close).toEqual({ runs: 2, runYards: 23, passes: 1, passYards: 0 });
+  });
+});
+
+// Tennessee at Texas (Sep 26 2026): ESPN's players added up to 1 kickoff return for 21; the school's box and CFBD's had 2 for 19.
+describe('a team\'s returns', () => {
+  it('keeps the box\'s returns when CFBD agrees, and prints CFBD\'s count without a long when not', () => {
+    const box = { players: [{ teamId: '251', stats: { kickReturns: { kickReturns: 1, kickReturnYards: 21, longKickReturn: 21, kickReturnTouchdowns: 0 } } }] };
+    const cfbd = (o) => new Map(Object.entries(o));
+    expect(ncaafReturns(box, '251', cfbd({ kickReturns: '1', kickReturnYards: '21' }))).toBe('1 kickoff return for 21 (long 21)');
+    expect(ncaafReturns(box, '251', cfbd({ kickReturns: '2', kickReturnYards: '19', puntReturns: '1', puntReturnYards: '4' }))).toBe('2 kickoff returns for 19, 1 punt return for 4');
+    expect(ncaafReturns(box, '251', null)).toBe('1 kickoff return for 21 (long 21)');
   });
 });
