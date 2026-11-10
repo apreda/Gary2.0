@@ -76,7 +76,7 @@ async function seasonLines(season) {
       if (!(s.snaps > 0)) continue;
       const key = `${nk}|${s.team}`;
       const cur = byKey.get(key) || { games: 0, targets: 0, rec: 0, recYds: 0, recTd: 0, carries: 0, rushYds: 0, rushTd: 0, passTd: 0, int: 0, attempts: 0, weeks: new Set() };
-      cur.weeks.add(s.week); byKey.set(key, cur);
+      cur.weeks.add(s.week); (cur.snapWeeks ||= new Map()).set(s.week, s); byKey.set(key, cur);
     }
   }
   for (const [key, cur] of byKey) {
@@ -101,10 +101,14 @@ function statText(pos, s, teamWeeks = null, elsewhere = () => null) {
     if (def && !r) return `Wk ${w} no offensive snaps (${def} on defense)`;
     if (st && (!r || !(r.targets || r.carries || r.rec || r.passTd || r.int || r.recYds || r.rushYds))) return `Wk ${w} special teams only (${st} snaps)`;
     if (!r && !s.weeks?.has(w)) { const other = elsewhere(w); return `Wk ${w} ${other ? `with ${other}` : 'did not play'}`; }
-    if (!r) return `Wk ${w} no touches`;
-    if (pos === 'QB') return `Wk ${w} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds, ${r.rushTd || 0} rush TD`;
-    if (pos === 'RB' || pos === 'FB') return `Wk ${w} ${r.carries} carries ${r.rushYds} yds${r.rushTd ? ` ${r.rushTd} TD` : ''}, ${r.targets} tgt ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}`;
-    return `Wk ${w} ${r.targets} tgt, ${r.rec} catch${r.rec === 1 ? '' : 'es'} ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}${r.rushTd ? `, ${r.rushTd} rush TD` : ''}`;
+    // The opponent and his share of the offense's snaps beside each game (Nov 10 2026: the list is where Gary chooses
+    // whose sheet to read, and "2 tgt, 1 catch 9 yds" read the same on 12 snaps as on 60).
+    const sn = s.snapWeeks?.get(w), opp = r?.opp || sn?.opp;
+    const at = `Wk ${w}${opp ? ` against ${opp}:` : ''}`, on = sn?.teamSnaps ? `, ${sn.snaps} of ${sn.teamSnaps} snaps` : '';
+    if (!r) return `${at} no touches${on}`;
+    if (pos === 'QB') return `${at} ${r.passTd} pass TD, ${r.int} INT, ${r.rushYds} rush yds, ${r.rushTd || 0} rush TD${on}`;
+    if (pos === 'RB' || pos === 'FB') return `${at} ${r.carries} carries ${r.rushYds} yds${r.rushTd ? ` ${r.rushTd} TD` : ''}, ${r.targets} tgt ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}${on}`;
+    return `${at} ${r.targets} tgt, ${r.rec} catch${r.rec === 1 ? '' : 'es'} ${r.recYds} yds${r.recTd ? ` ${r.recTd} TD` : ''}${r.rushTd ? `, ${r.rushTd} rush TD` : ''}${on}`;
   });
   return `${s.games} game${s.games === 1 ? '' : 's'}; ${teamWeeks?.length ? `his team's last ${last.length}` : `last ${last.length}`}, newest first: ${last.join('; ')}`;
 }

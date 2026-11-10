@@ -329,7 +329,8 @@ export function nflSheet(kind, c, games, prior, seasonLabel, priorLabel, ctx = {
   const lines = [`${c.player} ${c.position || ''} · ${c.team ? c.team.replace(/^.* /, '') : ''}${c.status ? ` · ${c.status}` : ''} · ${c.matchup} ${etClock(c.commence)}`.replace(/\s+·\s+·/g, ' ·')];
   lines.push(`${nflLabel(kind)} ${priceText}`);
   const cur = seasonClause(games, propType, seasonLabel), prev = seasonClause(prior, propType, priorLabel);
-  if (cur) lines.push(cur); else lines.push(ctx.seasonMissing ? `${seasonLabel}: games not on file (the weekly stats did not load)` : `${seasonLabel}: no games yet`);
+  // The series says its order (Nov 10 2026: "2026: 19 24 72 9 50" sat above the dated rows with no word on which end was newest).
+  if (cur) lines.push(cur.replace(`${seasonLabel}:`, `${seasonLabel}, newest first:`)); else lines.push(ctx.seasonMissing ? `${seasonLabel}: games not on file (the weekly stats did not load)` : `${seasonLabel}: no games yet`);
   if (prev) lines.push(prev);
   const roleNote = prev ? priorRoleNote(games, prior, priorLabel) : null;
   if (roleNote) lines.push(roleNote);
