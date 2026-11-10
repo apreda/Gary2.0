@@ -57,7 +57,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 11 (Oct 29 2026, same night): each team's plays of 20 yards or more and who made them, and its runs and passes by the
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
-const LEDGER_SCHEMA = 21;
+// 22 (Nov 10 2026, NFL data round 1): kneel-downs and spikes counted as third and fourth downs, as the official box has them.
+const LEDGER_SCHEMA = 22;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -248,6 +249,7 @@ function extraUnit() {
 
 const SCRIMMAGE = new Set(['run', 'pass']);
 const KICKS = new Set(['kickoff', 'punt']);
+const DOWN_PLAYS = new Set(['run', 'pass', 'qb_kneel', 'qb_spike']);
 
 function addGameDetail(perGame, playType, posteam, defteam, g) {
   const E = (code) => (code ? perGame.get(code)?.extra : null);
@@ -307,14 +309,17 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
   }
   // Each third and fourth down run from scrimmage, with the distance; a fourth-down try with where and the score
   // (Oct 29 2026, founder: "how the team did on third downs and fourth downs, coupled with down and distance").
-  if (SCRIMMAGE.has(playType) && E(posteam)) {
+  // Kneel-downs and spikes are third and fourth downs too, as the official box counts them, each said for what it was
+  // (NFL data round 1, Nov 10 2026: 35 team games read a third-down try short of ESPN's box, every one a kneel or spike).
+  if (DOWN_PLAYS.has(playType) && E(posteam)) {
     const down = num(g('down')), togo = num(g('ydstogo'));
     // Only a down the play settled: one replayed after an accepted foul is neither made nor failed (round 12: the Bears'
     // 3rd & 1, run for 8 and called back for holding, read as a failed try).
     const settled = (k) => flag(g(`${k}_converted`)) || flag(g(`${k}_failed`)) || (flag(g('touchdown')) && g('td_team') === posteam);
-    if (down === 3 && togo != null && settled('third_down')) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam });
+    const kind = playType === 'qb_kneel' ? { kneel: true } : playType === 'qb_spike' ? { spike: true } : {};
+    if (down === 3 && togo != null && settled('third_down')) E(posteam).thirdDowns.push({ togo, made: flag(g('third_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam, ...kind });
     if (down === 4 && togo != null && settled('fourth_down')) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
-      yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')) });
+      yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')), ...kind });
   }
   // Plays of 20 yards or more and who made them, and the runs and passes by the score at the snap (Oct 29 2026,
   // founder: a defense gives up yards differently when it is far ahead or far behind). Penalty-nullified snaps carry

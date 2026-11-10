@@ -827,9 +827,11 @@ function downsLine(x, code) {
   const one = (c, o) => {
     const l = L[c];
     const t = l.third_downs, fo = l.fourth_downs || [];
-    const togo = (xs) => xs.map((d) => d.togo).sort((a, b) => a - b).join(', ') || 'none';
+    // A kneel-down or spike is a down as the official box counts it, said for what it was (NFL data round 1).
+    const kind = (d) => (d.kneel ? ' (kneel-down)' : d.spike ? ' (spike)' : '');
+    const togo = (xs) => xs.slice().sort((a, b) => a.togo - b.togo).map((d) => `${d.togo}${kind(d)}`).join(', ') || 'none';
     const third = t.length ? `3rd down ${t.filter((d) => d.made).length} of ${t.length} (made on 3rd & ${togo(t.filter((d) => d.made))}; not on 3rd & ${togo(t.filter((d) => !d.made))})` : 'no 3rd downs';
-    const fourth = fo.length ? `4th down ${fo.filter((d) => d.made).length} of ${fo.length} (${fo.map((d) => `4th & ${d.togo}${spot(d.yardline, c, o)}, ${whenIn(d)}${score(d.diff)}: ${d.made ? 'made' : 'not made'}`).join('; ')})` : 'no 4th-down tries';
+    const fourth = fo.length ? `4th down ${fo.filter((d) => d.made).length} of ${fo.length} (${fo.map((d) => `4th & ${d.togo}${spot(d.yardline, c, o)}, ${whenIn(d)}${score(d.diff)}: ${d.made ? 'made' : 'not made'}${kind(d)}`).join('; ')})` : 'no 4th-down tries';
     const top = l.top_seconds ? `; possession ${Math.floor(l.top_seconds / 60)}:${String(l.top_seconds % 60).padStart(2, '0')}` : '';
     const pens = l.penalties != null ? `; penalties ${l.penalties} for ${l.penalty_yards} yds` : '';
     return `${nickname(c)} ${third}, ${fourth}${top}${pens}`.replace(/not on 3rd & none\)/, 'missed none)').replace(/made on 3rd & none;/, 'made none;');

@@ -320,6 +320,15 @@ describe('a parsed season', () => {
     expect(g.lines.AAA.fourth_downs).toMatchObject([{ togo: 2, made: true, yardline: 35, diff: 4, q: 3 }]);
   });
 
+  it('counts a third-down kneel-down and a spike as the official box does (Nov 10 2026: 35 team games read a try short)', async () => {
+    const body = [HEADER.join(','),
+      row({ down: '3', ydstogo: '6', play_type: 'qb_kneel', third_down_failed: '1' }),
+      row({ down: '3', ydstogo: '8', play_type: 'qb_spike', third_down_failed: '1' }),
+    ].join('\n');
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
+    expect(led.games[0].lines.AAA.third_downs).toEqual([{ togo: 6, made: false, kneel: true }, { togo: 8, made: false, spike: true }]);
+  });
+
   it('kicks and punts are excluded from scrimmage splits', async () => {
     const body = [HEADER.join(','), row(), row({ play_type: 'punt' }), row({ play_type: 'kickoff' })].join('\n');
     const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
