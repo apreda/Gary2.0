@@ -47,6 +47,10 @@ const { nflSeasonGames } = await import('../src/services/gary/darts/nflDartsBoar
 const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.js');
 const { nflNewsFor, NEWS_NOT_ON_FILE: NFL_NEWS_NOT_ON_FILE } = await import('../src/services/gary/agentic/orchestrator/nflRead.js');
 const { nflGamePacket, packetOn } = await import('../src/services/gary/darts/nflGamePacket.js');
+const { nbaGamePacket, nbaPacketBlock } = await import('../src/services/gary/darts/nbaGamePacket.js');
+// Game packets are built a few at a time: each is a desk build of a few minutes.
+const PACKETS_AT_ONCE = 3;
+const inTurns = async (items, atOnce, work) => { const queue = [...items]; await Promise.all(Array.from({ length: Math.min(atOnce, queue.length) }, async () => { for (let x = queue.shift(); x; x = queue.shift()) await work(x); })); };
 const { DartsDataMissing, failedLoads, isDataMissingRun } = await import('../src/services/gary/darts/dartsDataGuard.js');
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => {
@@ -68,6 +72,7 @@ const asOf = dry && asOfArg && Number.isFinite(Date.parse(asOfArg)) ? Date.parse
 const START = String(process.env.DARTS_START_ET || '05:30').split(':').map(Number);
 const START_MIN = START[0] * 60 + (START[1] || 0);
 const REFILL_GAP_MS = 55 * 60 * 1000;
+const RUN_MAX_MS = 90 * 60 * 1000;
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const log = (...m) => console.log(`[${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}]`, ...m);
@@ -113,8 +118,12 @@ async function throwLeague(league) {
 
   if (!force) {
     // A run that stopped for missing data threw nothing: the next run tries again without waiting out the hour.
-    const { data: recent } = await supabase.from('dart_runs').select('started_at, status, error')
+    const { data: recent } = await supabase.from('dart_runs').select('started_at, finished_at, status, error')
       .eq('game_date', date).eq('league', league).order('started_at', { ascending: false }).limit(20);
+    // A throw still running holds the next run off (Nov 10 2026: with a game packet in every frame a Sunday throw can
+    // run past the hour, and a second run beside it would ask everything twice). A run that died is let go after 90 minutes.
+    const running = (recent || []).find((r) => !r.finished_at && Date.now() - Date.parse(r.started_at) < RUN_MAX_MS);
+    if (running) { log(`${league}: a throw started ${Math.round((Date.now() - Date.parse(running.started_at)) / 60000)} min ago is still running, waiting`); return; }
     const last = (recent || []).filter((r) => !isDataMissingRun(r));
     const lastAt = last?.[0] ? Date.parse(last[0].started_at) : 0;
     if (Date.now() - lastAt < REFILL_GAP_MS) { log(`${league}: last throw ${Math.round((Date.now() - lastAt) / 60000)} min ago, waiting`); return; }
@@ -151,7 +160,14 @@ async function throwLeague(league) {
     const starts = new Map();
     if (league === 'NBA') {
       // NBA (Oct 19 2026): each category's menu is the board with a sheet of each player's own games; no formula.
-      for (const f of board.frames) { blocks.set(String(f.gameId), f.block); starts.set(String(f.gameId), f.commence); }
+      // The game packet in every frame (founder, Nov 10 2026; nbaGamePacket.js): the game as the pick reads it, with the
+      // day's news. One that can't be built fails the run here, before any ask; the next run tries again.
+      if (packetOn(board.games)) await inTurns(board.frames, PACKETS_AT_ONCE, async (f) => {
+        f.packet = await nbaGamePacket(f, { log });
+        f.news = f.packet.news;
+        log(`${league}: game packet for ${f.matchup} (${f.packet.story.length} chars, news ${f.packet.news ? f.packet.news.length : 0})`);
+      });
+      for (const f of board.frames) { blocks.set(String(f.gameId), f.packet ? nbaPacketBlock(f) : f.block); starts.set(String(f.gameId), f.commence); }
       screens = [];
       for (const kind of owedKinds) screens.push(await screenNbaCategory({ kind, board, asOf: new Date(asOf || Date.now()) }));
       log(`${league}: menus ${screens.map((sc) => `${sc.kind} ${sc.menu.length}`).join(', ')}`);
@@ -236,12 +252,10 @@ async function throwLeague(league) {
       // "no games yet" row; the Wilson TD dart read the backfield as Wilson's). The desk reads the frame as Gary has it.
       // The game packet first, when the board is small enough (nflGamePacket.js). One that can't be built fails this league's
       // run here, before any ask; the next run tries again until kickoff (REFILL_GAP_MS).
-      if (packetOn(board.games)) {
-        for (const f of board.frames) {
-          f.packet = await nflGamePacket(f, { log });
-          log(`${league}: game packet for ${f.matchup} (${f.packet.length} chars)`);
-        }
-      }
+      if (packetOn(board.games)) await inTurns(board.frames, PACKETS_AT_ONCE, async (f) => {
+        f.packet = await nflGamePacket(f, { log });
+        log(`${league}: game packet for ${f.matchup} (${f.packet.length} chars)`);
+      });
       const NEWS_AT_ONCE = 4;
       const newsQueue = [...board.frames];
       await Promise.all(Array.from({ length: Math.min(NEWS_AT_ONCE, newsQueue.length) }, async () => {

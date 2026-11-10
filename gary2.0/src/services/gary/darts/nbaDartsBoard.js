@@ -82,8 +82,9 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     const matchup = `${away.abbreviation} @ ${home.abbreviation}`;
     const line = (odds || []).filter((o) => o.game_id === g.id).sort((a, b) => (a.vendor === 'draftkings' ? -1 : 0) - (b.vendor === 'draftkings' ? -1 : 0))[0];
     const head = [`GAME ${gi + 1} · ${away.full_name} @ ${home.full_name} · ${etClock(g.datetime)}`];
-    if (line?.spread_home_value != null) { const sp = Number(line.spread_home_value); head.push(sp < 0 ? `${home.abbreviation} ${sp}` : sp > 0 ? `${away.abbreviation} ${-sp}` : 'pick em'); }
-    if (line?.total_value != null) head.push(`total ${line.total_value}`);
+    const headParts = { game: head[0], spread: null, total: null };
+    if (line?.spread_home_value != null) { const sp = Number(line.spread_home_value); head.push(headParts.spread = sp < 0 ? `${home.abbreviation} ${sp}` : sp > 0 ? `${away.abbreviation} ${-sp}` : 'pick em'); }
+    if (line?.total_value != null) head.push(headParts.total = `total ${line.total_value}`);
     if (oddsFailed) head.push('spread and total not on file (the odds feed did not load)');
 
     let pricesFailed = false;
@@ -111,7 +112,7 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     }
     // The report rides in each game's block, the part of the board Gary's ask carries (Oct 29 2026 hunt: it sat only in
     // board.text, which no ask reads).
-    frames.push({ gameId: String(g.id), matchup, homeFull: home.full_name, awayFull: away.full_name, commence: g.datetime, block: lines.join('\n') });
+    frames.push({ gameId: String(g.id), matchup, homeFull: home.full_name, awayFull: away.full_name, commence: g.datetime, block: lines.join('\n'), head: headParts });
     for (const team of [away, home]) {
       const roster = [...byPlayer.keys()].map((pid) => ({ pid, info: people[pid] || people[Number(pid)] })).filter((p) => p.info?.team === team.full_name);
       const priced = [];

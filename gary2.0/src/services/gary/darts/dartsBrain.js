@@ -19,6 +19,7 @@ import { homedir } from 'os';
 import { createModelSession, sendToSessionWithRetry } from '../agentic/orchestrator/sessionManager.js';
 import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { DART_CATEGORIES, SIDED_KINDS, FLEX_MIN, fmtOdds, etDate } from './dartsCommon.js';
+import { fitBlocks } from './readFit.js';
 import { CATEGORY_LABEL } from './dartsScreen.js';
 
 export const DARTS_MODEL = process.env.GARY_DARTS_MODEL || 'claude-opus-5-5';
@@ -235,17 +236,20 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
   });
   let model = DARTS_MODEL;
   let message;
+  let asked = 0;
+  const sheetChars = (list) => list.reduce((a, m) => a + String(m.sheet || '').length, 0);
   let looked = [];
   let fillOrder = menu;
   const turns = [];
   if (menu.length <= WHOLE_BOARD_READ) {
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, blocks, starts), dateLong, perClub, note, flex });
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(menu, fitBlocks(blocks, menu.map((m) => m.gameId), { used: sheetChars(menu) }), starts), dateLong, perClub, note, flex });
   } else {
     const want = Math.max(SHEETS_WANTED, count + 4);
     try {
       const boardAsk = buildBoardAsk({ kind, menu, dateLong, look: want, note });
       const res = await sendToSessionWithRetry(session, boardAsk, {});
       turns.push([boardAsk, res.content]);
+      asked = boardAsk.length;
       model = res.model || session.modelName || model;
       const ids = new Set(menu.map((m) => m.id));
       looked = [...new Set((parseJsonKey(res.content, 'look') || []).map(cleanId).filter((id) => ids.has(id)))].slice(0, want + 4);
@@ -257,7 +261,8 @@ export async function throwCategory({ league, kind, count, menu, board, dateLong
     const lookedSet = new Set(looked);
     const chosen = menu.filter((m) => lookedSet.has(m.id));
     fillOrder = [...chosen, ...menu.filter((m) => !lookedSet.has(m.id))];
-    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, blocks, starts), dateLong, perClub, afterLook: true, flex });
+    // The games of the players he named, each as the game pick reads it, fit to one ask (readFit.js).
+    message = buildCategoryAsk({ kind, count, sheets: sheetsByGame(chosen, fitBlocks(blocks, chosen.map((m) => m.gameId), { used: asked + sheetChars(chosen) }), starts), dateLong, perClub, afterLook: true, flex });
   }
   const taken = [];
   for (let attempt = 0; attempt <= REASKS; attempt++) {
