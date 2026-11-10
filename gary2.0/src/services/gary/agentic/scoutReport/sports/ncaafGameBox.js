@@ -519,12 +519,14 @@ function defensePlaysLine(box, us, them, name) {
   };
   return (box.players || []).length ? `who made the defensive plays: ${one(us)} · ${one(them)}` : null;
 }
-/** The by-score line for both teams; said not on file when the plays run more than 30 yards off a team's box total. */
+/** The by-score line for both teams; said not on file when the plays run more than 5 yards off a team's box total. */
+// Gate 30 to 5 yards (Nov 10 2026 college audit: exact in 943 of 1,370 team-games, within 5 in 1,098; the 30 yard gate let
+// rows print whose parts missed the box by up to 30).
 function byScoreLine(box, us, them, name) {
   if (!box?.byScore) return null;
   const yards = (id) => SCORE_BUCKETS.reduce((n, [k]) => n + box.byScore[id][k].runYards + box.byScore[id][k].passYards, 0);
   const total = (t) => Number(t?.totals?.totalYards);
-  const off = [us, them].find((t) => Number.isFinite(total(t)) && Math.abs(yards(t.id) - total(t)) > 30);
+  const off = [us, them].find((t) => Number.isFinite(total(t)) && Math.abs(yards(t.id) - total(t)) > 5);
   if (off) return `by the score at the snap: not on file (this game's plays run ${Math.abs(yards(off.id) - total(off))} yards off ${name(off.id)}'s box)`;
   const part = (s) => `${s.runs} run${s.runs === 1 ? '' : 's'} for ${s.runYards} yds, ${s.passes} pass play${s.passes === 1 ? '' : 's'} for ${s.passYards}`;
   const one = (t) => `${name(t.id)} ${SCORE_BUCKETS.filter(([k]) => box.byScore[t.id][k].runs || box.byScore[t.id][k].passes).map(([k, w]) => `${w}: ${part(box.byScore[t.id][k])}`).join('; ') || 'no plays on file'}`;

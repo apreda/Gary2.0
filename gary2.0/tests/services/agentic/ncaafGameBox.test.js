@@ -123,6 +123,16 @@ describe('runs and pass plays by the score at the snap', () => {
   });
 });
 
+describe('the by-score line gate', () => {
+  it('prints only when the plays come within 5 yards of each team\'s box total', () => {
+    const b = (k) => ({ close: { runs: 1, runYards: k, passes: 0, passYards: 0 }, ahead: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, aheadBig: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, behind: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, behindBig: { runs: 0, runYards: 0, passes: 0, passYards: 0 } });
+    const box = (k) => ({ teams: [{ id: '1', homeAway: 'home', totals: { totalYards: 100 } }, { id: '2', homeAway: 'away', totals: { totalYards: 50 } }], scoring: [], bigPlays: [], byScore: { 1: b(k), 2: b(50) } });
+    const line = (k) => ncaafFlowLines(box(k), '1').find((l) => l.startsWith('by the score'));
+    expect(line(95)).not.toContain('not on file');
+    expect(line(94)).toContain('not on file');
+  });
+});
+
 // Tennessee at Texas (Sep 26 2026): ESPN's players added up to 1 kickoff return for 21; the school's box and CFBD's had 2 for 19.
 describe('a team\'s returns', () => {
   it('keeps the box\'s returns when CFBD agrees, and prints CFBD\'s count without a long when not', () => {
