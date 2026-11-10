@@ -12,6 +12,16 @@ export class PickDataError extends Error {
   }
 }
 
+/**
+ * NO DATA, NO PICK (founder, Nov 10 2026: "we have to make sure the bad inputs dont exist"). The reads say a failed source
+ * in words ("... did not load"). One such line in what Gary would read stops the pick before any ask; the game's next
+ * tier builds it again. `text` is the data only, never a news desk's own words.
+ */
+export function assertEverythingLoaded(text, where) {
+  const holes = [...new Set((String(text || '').match(/[^().;·\n]*did not load[^().;·\n]*/g) || []).map((s) => s.trim()))];
+  if (holes.length) throw new PickDataError(holes.map((source) => ({ source, code: where })));
+}
+
 // Record terminal source failures before legacy readers can catch them and
 // return []/null. Never retain request headers, tokens, URLs or response bodies.
 export function recordPickDataFailure(source, error) {

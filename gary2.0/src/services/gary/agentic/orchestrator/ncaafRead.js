@@ -16,7 +16,7 @@ import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
 import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
-import { withOptionalData } from '../../pickDataIntegrity.js';
+import { withOptionalData, assertEverythingLoaded } from '../../pickDataIntegrity.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
@@ -375,7 +375,10 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, asOf = new
     ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
     ['SCHEDULE, TRAVEL AND WEATHER', situation(desk)],
   ];
-  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
+  const story = parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n');
+  // NO DATA, NO PICK (pickDataIntegrity.js, Nov 10 2026): a source that did not load stops the read before any ask.
+  assertEverythingLoaded(story, 'in the game read');
+  return { line, story };
 }
 
 /** One game on Gary's college board (winners/ncaafBoard.js), read the way the pick reads it, without his write-up: the

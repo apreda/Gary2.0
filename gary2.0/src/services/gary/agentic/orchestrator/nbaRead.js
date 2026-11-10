@@ -16,6 +16,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
+import { assertEverythingLoaded } from '../../pickDataIntegrity.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords, reportClock } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
@@ -905,7 +906,11 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   // Recaps of the games the log shows leave the news (newsWithoutRecaps.js): the log has each one's score and quarters,
   // the newest five their boxes, and a recap can put a real number under the wrong game.
   const boxed = new Set(seasons.filter(Boolean).flatMap((ts) => ts.games.slice(0, 15)).map((g) => `${g.home_team_score}-${g.visitor_team_score}`));
-  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n'), news: newsWithoutRecaps(newsForGary(desk, { facts, start: starts[0], asOf }), boxed) };
+  const story = parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n');
+  // NO DATA, NO PICK (pickDataIntegrity.js, Nov 10 2026): the game records or the league's ratings not loading stops the
+  // read, for the game pick and the props desk alike.
+  assertEverythingLoaded(story, 'in the game read');
+  return { line, story, news: newsWithoutRecaps(newsForGary(desk, { facts, start: starts[0], asOf }), boxed) };
 }
 
 export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {

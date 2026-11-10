@@ -19,6 +19,7 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
+import { assertEverythingLoaded } from '../pickDataIntegrity.js';
 import { teamRecords, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
 import { nbaGameRows } from '../darts/nbaDartsBoard.js';
 import { summariesByTeam } from '../../sports/nba/nbaGameRecordText.js';
@@ -155,6 +156,8 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   // markets stayed on the board).
   const sheets = await Promise.all([...byPlayer.values()].map((p) => playerSheet(p, p.markets, asOf)
     .catch((e) => `${p.player} (${p.team})\n  This season's games are not on file (${e.message}).`)));
+  // NO DATA, NO PICK (pickDataIntegrity.js, Nov 10 2026): the game records not loading stops this game's props.
+  assertEverythingLoaded(sheets.join('\n'), 'in the prop sheets');
   const sheetsBlock = sheets.length ? `\n\n═══ THE PLAYERS — each one's own games, for the stats his markets settle on ═══\n${sheets.join('\n\n')}` : '';
 
   // Gary's published game pick no longer rides the desk (Oct 27 2026, founder GO; see footballPropsDesk.js).

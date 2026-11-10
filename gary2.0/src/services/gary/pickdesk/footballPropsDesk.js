@@ -2,7 +2,7 @@ import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../../prov
 import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { nflLadderAllowance } from './nflPropLadders.js';
-import { withPickDataIntegrity, assertPickDataIntegrity, PickDataError } from '../pickDataIntegrity.js';
+import { withPickDataIntegrity, assertPickDataIntegrity, PickDataError, assertEverythingLoaded } from '../pickDataIntegrity.js';
 /**
  * THE FOOTBALL PROPS DESK — NFL + NCAAF props on the same system as MLB
  * (founder GO, Aug 20 2026: "it needs to be the same system as MLB").
@@ -431,8 +431,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     } else {
       throw new PickDataError([{ source: "the players' games for the prop sheets", code: 'did not load' }]);
     }
-    const holes = [...new Set((sheetsBlock.match(/[^().;·\n]*did not load[^().;·\n]*/g) || []).map((s) => s.trim()))];
-    if (holes.length) throw new PickDataError(holes.map((source) => ({ source, code: 'in the prop sheets' })));
+    assertEverythingLoaded(sheetsBlock, 'in the prop sheets');
   }
 
   // The story after the sheets: CARRIES AND TARGETS leaves out the players whose sheet is below and keeps their
