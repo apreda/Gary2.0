@@ -702,7 +702,7 @@ const playedPerPlays = (plays, gameId, entry) => namedInPlays(plays?.named?.get(
  * player lines on file are left out of the counts and named once beside the
  * team.
  */
-function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null, starts = new Map(), exempt = []) {
+export function availabilityLines(team, reported, rows, results, state = 'checked', onFile = new Set(), core = new Map(), history = null, plays = null, starts = new Map(), exempt = []) {
   const games = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => onFile.has(String(r.gameId)));
   // Whether he started (Oct 27 2026 data loop: an offensive lineman read "OL (out)" with nothing to say whether he was
   // the starting left tackle or a reserve): the official box's starting lineup of each game the schools post one for.
@@ -725,8 +725,13 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // A game with no stat row whose play-by-play names him: he played in it (Oct 24 2026 read check).
     const inPlays = sinceLast ? games.slice(-sinceLast).filter((r) => playedPerPlays(plays, r.gameId, entry)) : [];
     const plays_ = inPlays.length ? `; the play-by-play names him in ${inPlays.length === sinceLast ? (sinceLast === 1 ? 'it' : 'each of them') : inPlays.map(day).join(', ')}` : '';
+    // And a game whose play-by-play is on file and does not name him by any jersey says so, as REGULARS does (Nov 10 2026
+    // college pass 2: "stat rows in 7 of 8 games, the last Oct 24 (none in the last game)" read as "didn't play last week"
+    // with the desk silent on the plays).
+    const unnamed = sinceLast ? games.slice(-sinceLast).filter((r) => plays?.named?.get(String(r.gameId))?.length && !namedInPlays(plays.named.get(String(r.gameId)), { first: entry.first, last: entry.last })) : [];
+    const notNamed = unnamed.length ? `; the play-by-play of the ${unnamed.map((r) => `${day(r)} ${versus(r)}`).join(' and ')} game${unnamed.length > 1 ? 's' : ''} does not name him` : '';
     const gaps = core.has(name) ? [] : gamesWithoutRowBeforeLast(entry, games);
-    return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`}${plays_})` : ''}; `
+    return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`}${plays_}${notNamed})` : ''}; `
       + (gaps.length ? `no stat row on ${gaps.map(day).join(', ')}; ` : '')
       + (core.has(name) ? UNDER_OFFENSE : recentGames(entry, games));
   };
