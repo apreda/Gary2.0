@@ -206,7 +206,6 @@ export function garyLineFor(summary: string, rest: string): string {
 }
 
 async function freePickText(sp: any): Promise<{ text: string; writer: string }> {
-  const game = (matchup: string) => `${matchup} ${startWords(sp.commence_time)}`;
   const fallback = ticketWords(sp);
   try {
     const { data } = await sb.from("winners_candidates")
@@ -215,24 +214,25 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
     // per tweet?"). A fact, the pick with the full team name, a fact: the "standard" posts that averaged 559 to 596
     // views (best 3,462), from the same writer that made them. No header, no matchup line. If the writer fails the
     // post falls through to Gary's own line below.
+    // Nov 10 2026, later: "the old tweets had actual info each time too not just the time of the game i hate that".
+    // No path prints the matchup and start line any more, and props take the same layout as game picks.
     const published = String(data?.[0]?.rationale ?? "");
-    if (sp?.kind !== "prop" && published.trim()) {
+    if (published.trim()) {
       try {
         const hook = await composeGamePickHook({ rationale: published, pickLine: ticketWords(sp), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
         return { text: hook, writer: "fact / pick / fact" };
       } catch (e) { console.error("fact / pick / fact failed, using Gary's line: " + String(e)); }
     }
-    const rest = `${betWords(sp)}\n\n${game(matchupWords(sp, ""))}`;
-    const line = garyLineFor(String(data?.[0]?.summary ?? ""), rest);
-    if (line) return { text: `${line}\n\n${rest}`, writer: "gary's line" };
-    const rationale = String(data?.[0]?.rationale ?? "");
-    const w = await composeFreePickPost({ rationale, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
+    const bet = betWords(sp);
+    const line = garyLineFor(String(data?.[0]?.summary ?? ""), bet);
+    if (line) return { text: `${line}\n\n${bet}`, writer: "gary's line" };
+    const w = await composeFreePickPost({ rationale: published, pick: String(sp.pick_text ?? ""), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
     const keys = ticketKey(sp);
     const words = keys.length && keys.every((k) => w.pickWords.includes(k)) ? w.pickWords : fallback;
-    return { text: `${w.opening}\n\n${words}\n\n${game(matchupWords(sp, w.matchupWords))}`, writer: words === fallback ? "fact, ticket words" : "writer" };
+    return { text: `${w.opening}\n\n${words}\n\n${w.closing}`, writer: words === fallback ? "fact, ticket words" : "writer" };
   } catch (e) {
     console.error("free pick text failed: " + String(e));
-    return { text: `${betWords(sp)}\n\n${game(matchupWords(sp, ""))}`, writer: `none (${String(e).slice(0, 120)})` };
+    return { text: `${betWords(sp)}\n\n${matchupWords(sp, "")}`, writer: `none (${String(e).slice(0, 120)})` };
   }
 }
 
