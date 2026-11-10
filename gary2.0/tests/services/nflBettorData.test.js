@@ -73,3 +73,18 @@ describe('the drives line after takeaways', () => {
     expect(drives(d)).not.toMatch(/takeaway/);
   });
 });
+
+// Round 4b, Nov 10 2026: Jake Ferguson played 5% of the Cowboys' Wk 8 snaps, left in the first quarter, and was named nowhere
+// (not a 60% regular by the last-three rule).
+describe('left early or limited, by a player\'s own earlier games', () => {
+  it('names one 30 points or more under his lowest earlier share with no play naming him late, and not one named in the fourth', () => {
+    const gm = (wk, day) => ({ game_id: `g${wk}`, season: '2026', game_type: 'REG', week: String(wk), gameday: `2026-10-${day}`, home_team: 'DAL', away_team: 'NYG', home_score: '20', away_score: '10' });
+    const games = [gm(1, '04'), gm(2, '11'), gm(3, '18')];
+    const snap = (wk, pct) => ({ game_id: `g${wk}`, week: String(wk), season: '2026', team: 'DAL', pfr_player_id: 'FergJa00', player: 'Jake Ferguson', position: 'TE', offense_pct: pct, defense_pct: 0, st_pct: 0 });
+    const d = (q) => ({ season: 2026, schedule: games, teamWeek: [], playerWeek: [], rosterWeekly: [], snaps: [snap(1, 0.58), snap(2, 0.56), snap(3, 0.05)],
+      ledgerGames: new Map(games.map((g) => [g.game_id, { game_id: g.game_id, hurt: [], ejected: [], lastNamed: g.game_id === 'g3' ? { 'J.Ferguson': { q, clock: '9:02' } } : {} }])) });
+    const row = (dd) => gameByGame(dd, 'Dallas Cowboys', '2026-11-12').split('\n').slice(1).join('\n').split(/\n  Wk /)[0];
+    expect(row(d(1))).toMatch(/left early or limited: Jake Ferguson \(TE, 5% of snaps; 56 to 58% in his 2 earlier games; last named on a play Q1 9:02\)/);
+    expect(row(d(4))).not.toMatch(/Jake Ferguson/);
+  });
+});

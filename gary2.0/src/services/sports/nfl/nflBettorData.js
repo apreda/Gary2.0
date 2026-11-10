@@ -497,6 +497,21 @@ function lineupChanges(d, code, gs) {
     // came back).
     const starterBack = (id) => name.get(id).pos === 'QB' && players.some((q) => q !== id && name.get(q).pos === 'QB' && of(g, q) >= 0.5);
     const limited = players.filter((id) => snapRegular(id) && of(g, id) > 0 && of(g, id) < 0.25 && !starterBack(id) && !benched(id) && !displaced(id));
+    // Also one at least 30 points under the lowest of his own earlier games this season (two or more), with no play naming
+    // him in the fourth quarter or overtime (NFL round 4b: Jake Ferguson, 5% the day he left in the first quarter, and Bradley
+    // Chubb, 32% against 65 to 83%, were named nowhere; of the 37 such names whose outcome is known in Weeks 1 to 8, 31 were
+    // on the next report hurt, missed games or were named hurt by the recap). Quarterbacks are on the game's head; one the
+    // hurt line names (hurt or ejected) is there.
+    const lastNamedOf = (id) => { const nk = keys(name.get(id).name)[1]; if (!nk) return null;
+      const fits = Object.entries(g.ledger?.lastNamed || {}).filter(([k]) => { const [init, rest] = k.split('.'); return init && rest && `${key(rest)}|${key(init)[0]}` === nk; });
+      return fits.length === 1 ? fits[0][1] : fits.length ? undefined : null; };
+    const onHurtLine = (id) => { const nk = keys(name.get(id).name)[1]; return Boolean(nk) && [...(g.ledger?.hurt || []), ...(g.ledger?.ejected || [])].some((e) => { const [init, rest] = String(e.who || '').split('.'); return e.team === code && init && rest && `${key(rest)}|${key(init)[0]}` === nk; }); };
+    const earlier = (id) => prior.map((e) => of(e, id)).filter((v) => v > 0);
+    const dropped = g.ledger ? players.filter((id) => { const before = earlier(id), ln = lastNamedOf(id);
+      return !limited.includes(id) && !benched(id) && !displaced(id) && name.get(id).pos !== 'QB' && posOf(id) !== 'QB' && of(g, id) > 0 && before.length >= 2 && of(g, id) <= Math.min(...before) - 0.3
+        && ln !== undefined && !(ln && ln.q > 3) && !onHurtLine(id); }) : [];
+    const droppedLabel = (id) => { const before = earlier(id), lo = Math.round(100 * Math.min(...before)), hi = Math.round(100 * Math.max(...before)), ln = lastNamedOf(id);
+      return label(g, id, true, `; ${lo === hi ? `${lo}% in each of his ${before.length} earlier games` : `${lo} to ${hi}% in his ${before.length} earlier games`}${ln ? `; last named on a play Q${ln.q}${ln.clock ? ` ${ln.clock}` : ''}` : ''}`); };
     const reserveRole = players.filter((id) => snapRegular(id) && displaced(id) && !gone(g, id));
     const reserved = players.filter((id) => !absent.includes(id) && !departed.includes(id) && onReserve(g, id) && !stillOnReserve(id) && of(g, id) === 0 && prior.some((e) => of(e, id) >= 0.25));
     // One back from a reserve list is said once, under "back" (round 16: Tyler Smith read under "back" and "first game at
@@ -527,7 +542,7 @@ function lineupChanges(d, code, gs) {
         .map((p) => `${name.get(p).name} ${Math.round(100 * of(g, p))}%`); };
     const parts = [
       missing.length ? `missing regulars: ${list(missing, (id) => `${name.get(id).name} (${name.get(id).pos}, ${why(g, id)}${inPlace(id).length ? `; at ${GROUP(posOf(id))} that day: ${inPlace(id).join(', ')}` : ''})`)}` : null,
-      limited.length ? `left early or limited: ${list(limited, (id) => label(g, id, true))}` : null,
+      limited.length || dropped.length ? `left early or limited: ${list([...limited, ...dropped], (id) => (dropped.includes(id) ? droppedLabel(id) : label(g, id, true)))}` : null,
       reserveRole.length ? `back to a reserve role: ${list(reserveRole, (id) => `${name.get(id).name} (${name.get(id).pos}) as ${returned(id).map((q) => name.get(q).name).join(' and ')} returned`)}` : null,
       departed.length ? `no longer on the roster: ${list(departed, (id) => `${name.get(id).name} (${name.get(id).pos}${offWord(g, id) ? `, ${offWord(g, id)}` : ''})`)}` : null,
       reserved.length ? `on reserve: ${list(reserved, (id) => `${name.get(id).name} (${name.get(id).pos}, ${reserveWord(g, id)})`)}` : null,
