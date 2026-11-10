@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -90,5 +90,16 @@ describe('how a college game\'s turnovers happened', () => {
     const d = turnoverDetail(withTimeout);
     expect(d['1']).toMatchObject({ fumbles: 1, lost: 1 });
     expect(d['2']).toMatchObject({ takeaways: 1, pointsOff: 7, unsure: false });
+  });
+
+  // Texas State at Texas (Sep 5 2026): the plays told two Texas State fumbles, ESPN's and CFBD's boxes three, as did the
+  // school's box. CFBD leaves a zero total out.
+  it('takes every fumble from the published boxes, and says nothing when they differ', () => {
+    const cfbd = (o) => new Map(Object.entries(o));
+    expect(publishedFumbles(3, cfbd({ totalFumbles: '3', fumblesLost: '2' }))).toBe(3);
+    expect(publishedFumbles(0, cfbd({ fumblesLost: '0' }))).toBe(0);
+    expect(publishedFumbles(0, cfbd({ totalFumbles: '2', fumblesLost: '0' }))).toBeNull();
+    expect(publishedFumbles(undefined, cfbd({ totalFumbles: '1', fumblesLost: '0' }))).toBeNull();
+    expect(publishedFumbles(1, null)).toBeNull();
   });
 });

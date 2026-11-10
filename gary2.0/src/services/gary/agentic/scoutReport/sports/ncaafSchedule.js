@@ -36,7 +36,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns, publishedFumbles } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey, officialSacks } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -416,13 +416,16 @@ async function teamBoxBuilder(season, weeks) {
         ? ` (${[fumbles ? `${plural(fumbles, 'fumble')} ${word === 'giveaway' ? 'lost' : 'recovered'}` : null, picks ? `${picks} INT` : null].filter(Boolean).join(', ')})` : '';
       if (!detail) return `${count(total, word)}${split}`;
       // The side that turned it over, and the side that scored off it.
-      const gave = word === 'giveaway' ? detail.mine : detail.theirs, took = word === 'giveaway' ? detail.theirs : detail.mine;
+      const took = word === 'giveaway' ? detail.theirs : detail.mine;
       const scored = Number(total) > 0 && !took.unsure && took.takeaways === Number(total)
         ? `, ${word === 'giveaway' ? `${took.pointsOff} opponent ${took.pointsOff === 1 ? 'point' : 'points'}` : plural(took.pointsOff, 'point')} off ${Number(total) === 1 ? 'it' : 'them'}` : '';
-      const ground = word === 'giveaway'
-        ? (gave.fumbles ? `fumbled ${times(gave.fumbles)} in all` : 'no fumbles')
-        : (gave.fumbles ? `opponent fumbled ${times(gave.fumbles)} in all` : 'opponent did not fumble');
-      return `${count(total, word)}${split}${scored} · ${ground}`;
+      // Every fumble, kept or lost, from the published boxes (Nov 10 2026: the play text missed fumbles the stat crew
+      // never wrote into it); nothing said when ESPN's and CFBD's boxes do not give the same number.
+      const all = word === 'giveaway' ? publishedFumbles(detail.espnFumbles?.mine, found?.own) : publishedFumbles(detail.espnFumbles?.theirs, found?.opp);
+      const ground = all == null ? null : word === 'giveaway'
+        ? (all ? `fumbled ${times(all)} in all` : 'no fumbles')
+        : (all ? `opponent fumbled ${times(all)} in all` : 'opponent did not fumble');
+      return `${count(total, word)}${split}${scored}${ground ? ` · ${ground}` : ''}`;
     };
     // Penalties and fourth downs from the same box (Oct 23 2026 data audit: SMU went 4-for-5 on fourth down against
     // Virginia; third downs alone undercounted how drives were kept alive). Penalties are the whole team's, every unit.
@@ -470,7 +473,8 @@ async function playerGames(sides, boxes) {
       }
       const oppSideId = (box.teams || []).find((t) => t.id && t.id !== String(found.teamId))?.id;
       if (box.turnovers && oppSideId && box.turnovers[String(found.teamId)] && box.turnovers[oppSideId]) {
-        turnoverPlays.set(String(r.gameId), { mine: box.turnovers[String(found.teamId)], theirs: box.turnovers[oppSideId] });
+        turnoverPlays.set(String(r.gameId), { mine: box.turnovers[String(found.teamId)], theirs: box.turnovers[oppSideId],
+          espnFumbles: { mine: box.fumbleTotals?.[String(found.teamId)], theirs: box.fumbleTotals?.[oppSideId] } });
       }
       const ownT = espnUnitTotals(box, found.teamId), oppT = oppSideId ? espnUnitTotals(box, oppSideId) : null;
       if (ownT && oppT) unitTotals.set(String(r.gameId), { own: ownT, opp: oppT });

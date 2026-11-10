@@ -170,6 +170,21 @@ export function turnoverDetail(summary) {
   return out;
 }
 
+/**
+ * How many times a team fumbled in a game, kept or lost, as published: ESPN's player box (`espnTotal`, the box's
+ * fumbleTotals) and CFBD's team box (`cfbd`, its category-to-stat map) must say the same number, else null (Nov 10 2026
+ * college check: the play text missed fumbles the stat crew never wrote into it, and "no fumbles" printed for teams that
+ * fumbled and kept it; over 1,370 team-games the play text matched ESPN's box in 1,243. Against 88 official school box
+ * scores the play text was right in 76, ESPN's box in 83, CFBD's in 83, and the two agreeing in 81 of 84). CFBD leaves
+ * totalFumbles out when it is zero, so a CFBD box with fumblesLost and no totalFumbles reads 0. Never below the lost ones.
+ */
+export function publishedFumbles(espnTotal, cfbd) {
+  const lost = Number(cfbd?.get?.('fumblesLost'));
+  if (!Number.isFinite(lost) || !Number.isFinite(espnTotal)) return null;
+  const c = cfbd.has('totalFumbles') ? Number(cfbd.get('totalFumbles')) : 0;
+  return c === espnTotal && c >= lost ? c : null;
+}
+
 export function gameBoxFromSummary(summary, eventId) {
   summary = withoutRepeatedDrives(summary);
   const competition = summary?.header?.competitions?.[0];
@@ -182,12 +197,20 @@ export function gameBoxFromSummary(summary, eventId) {
   const players = [];
   // Each team's own defensive totals row (round 12: the athletes' sack credits ran one over it, a sack wiped out by a foul).
   const defTotals = {};
+  // Each team's fumbles as the box states them: the fumbles group's totals row, or 0 when the group lists nobody in a box
+  // that lists the team's other players (ESPN then gives no totals row).
+  const fumbleTotals = {};
   for (const side of summary?.boxscore?.players || []) {
     const teamId = String(side?.team?.id ?? '');
     const byId = new Map();
     for (const group of side?.statistics || []) {
       const keys = (group?.keys || []).flatMap((k) => String(k).split('/'));
       if (group?.name === 'defensive' && Array.isArray(group?.totals)) { const tv = group.totals.flatMap((v) => String(v).split('/')); defTotals[teamId] = Object.fromEntries(keys.map((k, i) => [k, num(tv[i])])); }
+      if (group?.name === 'fumbles') {
+        const n = group.totals?.length ? num(group.totals[keys.indexOf('fumbles')]) : (group.athletes || []).length ? null : 0;
+        const others = (side.statistics || []).some((g) => g?.name !== 'fumbles' && (g?.athletes || []).length);
+        if (Number.isFinite(n) && (n > 0 || others)) fumbleTotals[teamId] = n;
+      }
       for (const entry of group?.athletes || []) {
         const id = String(entry?.athlete?.id ?? '');
         if (!id || !group?.name) continue;
@@ -434,7 +457,7 @@ export function gameBoxFromSummary(summary, eventId) {
       .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}\\b[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
     if (hit) starterQb[t.id] = hit.name;
   }
-  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary) };
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
 }
 
 const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9-21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9-21'], ['behindBig', 'behind by 22+']];
@@ -627,7 +650,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v28 (Nov 5 2026): runs and pass plays by the score at the snap.
   // v29 (Nov 9 2026): how the turnovers happened (fumbles on the ground, the ones lost, points off them).
   // v30 (Nov 10 2026): points off a turnover read past timeouts and a turnover told twice.
-  return cachedResearch(`espn_cfb_box_v30:${eventId}`, async () => {
+  // v31 (Nov 10 2026): each team's fumbles as the box states them (fumbleTotals).
+  return cachedResearch(`espn_cfb_box_v31:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
