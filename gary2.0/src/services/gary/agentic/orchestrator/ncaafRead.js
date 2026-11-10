@@ -304,7 +304,8 @@ export function seasonGames(desk) {
       : old ? [old[0], old[1], old[2], old[3], old[5], old[6], Boolean(old[4])] : null;
     // The opponent's conference and record now, from the line's opponent label (Oct 24 2026: the board read "W 24-21 @
     // Michigan State" without Michigan State being 2-5).
-    const o = l.match(/— opponent: ([^,—]+?)(?:,|$| —)/);
+    // A semicolon ends it too (Nov 10 2026: an FCS opponent's label is "FCS; its quarterback that day: ...").
+    const o = l.match(/— opponent: ([^,;—]+?)(?:[,;]|$| —)/);
     if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: g[6], at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? o[1].trim() : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     // The first passer, past a starter who threw none ("Dylan Lonergan started, no pass; AJ Surace 7-of-18"; Oct 29

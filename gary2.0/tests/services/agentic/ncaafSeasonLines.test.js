@@ -58,4 +58,30 @@ describe('college season lines', () => {
   it('says so when this week\'s quarterback threw the most passes in every game', () => {
     expect(seasonLines('Nebraska Cornhuskers', teams[1].games, 'Anthony Colandrea')).toMatch(/threw the most passes in all 1\./);
   });
+
+  // Rows built from Nov 10 2026: who the game was against, then the score. The opponent's own games carry scores and
+  // overtimes of their own.
+  it('reads rows with the opponent before the score', () => {
+    const newer = `THIS SEASON GAME BY GAME (2026)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Every completed game this season, newest first.
+
+North Carolina Tar Heels (5-3):
+  Sat, Oct 24 · vs Syracuse Orange — opponent: ACC, talent No. 35 of 138, not in the AP Top 25 that week; its quarterback that day: Steve Angeli (started) 20-of-34, 256 yds, 3 runs for 1 (sacks included); its games, newest first: W 42-41 (OT) @ UConn Huskies (QB Steve Angeli; ran 120 on 30, passed for 310), L 10-24 @ Clemson Tigers — L 30-31 (OT) — by quarter 10-3-7-3, opponent 0-10-0-13, overtime 7-8
+      quarterback: Billy Edwards Jr. (started) 25-of-38, 290 yds, 2 TD, 1 INT
+      offense: 31 runs for 120 · passing 25-38 for 290 · 1 giveaway (1 INT), 7 opponent points off it · no fumbles · third down 6-14
+      defense: 35 runs for 140 · 2 sacks for -14 yards · passing 20-34 for 256 · 2 sacks, 5 tackles for loss · 0 takeaways · opponent did not fumble
+  Sat, Sep 12 · vs East Tennessee State Buccaneers — opponent: FCS; its quarterback that day: Mason Mims (started) 23-of-31, 178 yds — W 35-3 — by quarter 7-14-14-0, opponent 0-0-0-3
+      quarterback: Billy Edwards Jr. (started) 20-of-25, 240 yds, 3 TD, 0 INT
+  Sat, Aug 29 · vs TCU Horned Frogs (neutral site) — opponent: Big 12, talent No. 40 of 138; its quarterback that day: Jaden Craig (started) 20-of-32, 175 yds; its games: under Duke Blue Devils' Sat, Oct 3 game above — W 15-10 — by quarter 10-2-3-0, opponent 10-0-0-0
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    const [unc] = seasonGames(newer);
+    expect(unc.games.map((g) => [g.result, g.pf, g.pa, g.ot, g.at, g.opponent, g.fcs, g.oppNow])).toEqual([
+      ['L', 30, 31, true, 'vs', 'Syracuse Orange', false, 'ACC'],
+      ['W', 35, 3, false, 'vs', 'East Tennessee State Buccaneers', true, 'FCS'],
+      ['W', 15, 10, false, 'vs', 'TCU Horned Frogs', false, 'Big 12'],
+    ]);
+    expect(unc.games[0]).toMatchObject({ qb: 'Billy Edwards Jr. (started)', off: 410, def: 382 });
+  });
 });
