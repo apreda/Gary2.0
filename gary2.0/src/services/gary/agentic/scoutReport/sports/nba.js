@@ -466,6 +466,10 @@ function formatNbaRosterDepth(homeTeam, awayTeam, rosterDepth, injuries) {
 }
 
 
+// Whether a box-score row has any time on the floor: "0:56" is 56 seconds (Nov 10 2026 data round: parseFloat read it as 0,
+// and Washington's Beekman and Gill, 0:58 and 0:34 on Oct 23, read "not in any of the team's last 10 games").
+export const playedAny = (min) => { const [m, s] = String(min ?? '0').split(':'); return (Number(m) || 0) * 60 + (Number(s) || 0) > 0; };
+
 // =========================================================================
 // MAIN EXPORT: buildNbaScoutReport
 // =========================================================================
@@ -586,11 +590,11 @@ export async function buildNbaScoutReport(game, options = {}) {
         // Find this player's entries in the box scores; else his name as the stats feed spells it, among his team's
         // players (Oct 27 2026 data loop: the report's "Ace Bailey" is the feed's "Airious Bailey").
         const statName = (s) => `${s.player?.first_name || ''} ${s.player?.last_name || ''}`.trim();
-        let playerEntries = allStats.filter(s => playerNamesMatch(injName, statName(s).toLowerCase()) && parseFloat(s.min || '0') > 0);
+        let playerEntries = allStats.filter(s => playerNamesMatch(injName, statName(s).toLowerCase()) && playedAny(s.min));
         if (!playerEntries.length && teamId != null) {
           const mine = [...new Set(allStats.filter((s) => s.team?.id === teamId).map(statName))];
           const named = samePlayerIn(pName, mine, injuryList.map((i) => `${i.player?.first_name || ''} ${i.player?.last_name || ''}`.trim()));
-          if (named) playerEntries = allStats.filter((s) => statName(s) === named && parseFloat(s.min || '0') > 0);
+          if (named) playerEntries = allStats.filter((s) => statName(s) === named && playedAny(s.min));
         }
 
         if (playerEntries.length > 0) {
