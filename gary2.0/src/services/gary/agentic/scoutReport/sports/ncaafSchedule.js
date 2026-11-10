@@ -86,6 +86,20 @@ async function resolveSite({ homeTeam, awayTeam, season, game, seasonGames }) {
     tz: homeStadium.tz, lat: homeStadium.lat, lon: homeStadium.lon, homeStadium, awayStadium };
 }
 
+// Each game-time decision on a past row, whether he played: a box row, the official starting lineup, a play-by-play mention,
+// or none of them.
+// A quoted nickname is not part of the name, and a starter in the game's official lineup played (p2 round 1, Nov 10
+// 2026: Duke's 'Jayden "Duke" Scott', with a box row, and 7 of 131 game-time decisions the official lineup has starting,
+// most of them linemen with no box row, read "did not play").
+export const gameTimeWords = (box, names, lineup = null) => names.map((name) => {
+  if (!box || box.unavailable) return `${name} (whether he played not on file)`;
+  const plain = String(name).replace(/\s*["“”][^"“”]*["“”]\s*/g, ' ').trim();
+  const [first, ...rest] = plain.split(/\s+/); const last = rest.join(' ').replace(/\s+(?:jr\.?|sr\.?|ii|iii|iv)$/i, '');
+  const inBox = (box.players || []).some((p) => String(p.last || '').toLowerCase() === last.toLowerCase() && String(p.first || '')[0]?.toLowerCase() === first[0]?.toLowerCase());
+  const started = !inBox && lineup ? startedIn(lineup, plain) : false;
+  return `${name} (${inBox ? 'played' : started ? 'played: in the official starting lineup' : namedInPlays(box.named, { first, last }) ? 'named in the play-by-play' : 'did not play: no box row, not in the play-by-play'})`;
+}).join(', ');
+
 /**
  * A played game's weather at kickoff, as CFBD recorded it, when it was more than a dry, calm day (Oct 24 2026 read check:
  * SMU's 25 points against Boston College came in heavy rain, BYU's 62 passing yards at TCU in rain, and the game log
@@ -1007,13 +1021,14 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   })));
   // Who started at quarterback for each opponent, from that school's official box of the game (round 12: the opponent
   // line listed a reliever first and dropped a starter with under five passes).
-  const oppStarter = new Map();
+  const oppStarter = new Map(), oppLineup = new Map();
   await Promise.all(sides.map(async (s, i) => {
     const us = teamsById.get(Number(s.id));
     for (const r of s.results) {
       const opp = teamsById.get(Number(r.opponentId));
       if (!opp || !us) continue;
       const map = await teamStarters(school(opp), [{ gameId: r.gameId, date: r.date, opponent: school(us) }], season).catch(() => null);
+      if (map?.get(String(r.gameId))) oppLineup.set(`${i}|${r.gameId}`, map.get(String(r.gameId)));
       const qb = (map?.get(String(r.gameId)) || []).find((x) => /^QB$/i.test(String(x.position || '')));
       if (qb) oppStarter.set(`${i}|${r.gameId}`, qb.name);
     }
@@ -1051,12 +1066,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     const f = boxes.find(s.team, r);
     if (f?.game?.id != null) gtdBoxes.set(`${i}|${r.gameId}`, await getNcaafGameBox(f.game.id).catch(() => null));
   })));
-  const gtdWords = (box, names) => names.map((name) => {
-    if (!box || box.unavailable) return `${name} (whether he played not on file)`;
-    const [first, ...rest] = String(name).trim().split(/\s+/); const last = rest.join(' ').replace(/\s+(?:jr\.?|sr\.?|ii|iii|iv)$/i, '');
-    const inBox = (box.players || []).some((p) => String(p.last || '').toLowerCase() === last.toLowerCase() && String(p.first || '')[0]?.toLowerCase() === first[0]?.toLowerCase());
-    return `${name} (${inBox ? 'played' : namedInPlays(box.named, { first, last }) ? 'named in the play-by-play' : 'did not play: no box row, not in the play-by-play'})`;
-  }).join(', ');
+  const gtdWords = gameTimeWords;
   // A report exists only for a game against a team of the same conference (the Big Ten and Big 12 report conference games
   // only), so outside one there is no list, not an empty one.
   const outLine = (i, r) => {
@@ -1072,8 +1082,8 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
     // Every name (round 8: the list stopped at 8 and hid starters who missed only that game behind season-long absentees).
     const list = (names) => (names.length ? names.join(', ') : 'nobody');
     const box = gtdBoxes.get(`${i}|${r.gameId}`);
-    const gtd = (h) => { const names = h?.found ? gameTimeOnGameDay(h, day) : []; return names.length ? `; game-time decision: ${gtdWords(box, names)}` : ''; };
-    return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)}${gtd(histories[i])} · opponent: ${opp == null ? 'not on file' : list(opp)}${gtd(theirs)}`;
+    const gtd = (h, lineup) => { const names = h?.found ? gameTimeOnGameDay(h, day) : []; return names.length ? `; game-time decision: ${gtdWords(box, names, lineup)}` : ''; };
+    return `out on game day (conference reports): ${mine == null ? 'not on file' : list(mine)}${gtd(histories[i], starts[i]?.get(String(r.gameId)))} · opponent: ${opp == null ? 'not on file' : list(opp)}${gtd(theirs, oppLineup.get(`${i}|${r.gameId}`))}`;
   };
 
   // A game with no weather row says so: without the line, silence would read as a dry, calm day.
