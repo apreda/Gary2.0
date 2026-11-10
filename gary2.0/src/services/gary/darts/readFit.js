@@ -44,18 +44,33 @@ export function trimRead(text, keep) {
   return out.join('\n').replace(/\n+$/, '');
 }
 
+// A read this long is mostly game log: on Nov 10 2026 everything else was 9% of an NBA read and 24% of an NFL one (9,000
+// and 25,000 characters). One the cut takes next to nothing from has its game log in a layout this file no longer reads
+// (the section title, the "newest first:" team heads and the two-space game lines come from nbaRead.js, nbaBettorData.js
+// and nflRead.js).
+const LONG_READ_CHARS = 60_000;
+/** A long read whose game log the cut cannot find. */
+export const cutBlind = (text) => { const s = String(text || ''); return s.length > LONG_READ_CHARS && trimRead(s, 0).length > s.length * 0.8; };
+
 /**
  * The blocks of the games in one ask, fit to it: as they are when the ask stays within its target, otherwise every read at
  * the most games per team that does. One game per team is kept as long as the ask stays within the most it may hold;
  * past that the reads keep everything about tonight and leave the game logs off. `used` = the rest of the ask, in
  * characters (the list he chose from and the players' sheets).
+ *
+ * Throws when the reads run over the target and their game logs cannot be found to cut: sent whole, a dozen reads are
+ * about 300,000 tokens in one ask. run-darts.js calls this on the whole board before the first ask, so the run stops
+ * there.
  */
 export function fitBlocks(blocks, gameIds, { used = 0, target = ASK_TARGET_CHARS, most = ASK_MOST_CHARS } = {}) {
   const ids = [...new Set((gameIds || []).map(String))].filter((k) => blocks.get(k));
   const size = (m) => used + ids.reduce((a, k) => a + String(m.get(k)).length, 0);
   if (size(blocks) <= target) return blocks;
   const games = Math.max(0, ...ids.map((k) => gamesInRead(blocks.get(k))));
-  if (!games) return blocks;
+  if (!games) {
+    if (ids.some((k) => cutBlind(blocks.get(k)))) throw new Error(`the game reads in one ask come to ${size(blocks)} characters, over the ${target} it aims to hold, and their game logs could not be cut: the layout readFit.js reads them by has changed`);
+    return blocks;
+  }
   const at = (keep) => { const m = new Map(blocks); for (const k of ids) m.set(k, trimRead(blocks.get(k), keep)); return m; };
   for (let keep = games - 1; keep >= 1; keep--) { const m = at(keep); if (size(m) <= (keep === 1 ? most : target)) return m; }
   return at(0);

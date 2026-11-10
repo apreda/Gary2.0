@@ -29,6 +29,15 @@ describe('game reads fit to one dart ask', () => {
     // The list and the sheets count against the ask too.
     expect(gamesInRead(fitBlocks(blocks, ['1', '2'], { used: 400, target: full + 300, most: full + 300 }).get('1'))).toBe(3);
   });
+  it('stops when long reads run over the ask and their game logs are in a layout the cut cannot read', () => {
+    const long = (tag) => ['WHO IS PLAYING', `${tag} lineups`, '', 'THIS SEASON, GAME BY GAME', 'Team A (3-1), most recent first:', ...Array.from({ length: 40 }, (_, i) => `  Day ${i} · @ Somewhere\n      box: ${'x'.repeat(2000)}`)].join('\n');
+    const blocks = new Map([['1', long('a')], ['2', long('b')]]);
+    expect(() => fitBlocks(blocks, ['1', '2'], { target: 1000, most: 2000 })).toThrow(/could not be cut/);
+    // Whole reads that fit are sent as they are, and frames with no game log are never stopped.
+    expect(fitBlocks(blocks, ['1', '2'], { target: 1e6, most: 1e6 })).toBe(blocks);
+    const frames = new Map([['1', 'GAME 1 · a short frame'], ['2', 'GAME 2 · a short frame']]);
+    expect(fitBlocks(frames, ['1', '2'], { target: 5, most: 5 })).toBe(frames);
+  });
   it('keeps one game a team while the ask stays within the most it may hold, and only tonight past that', () => {
     const blocks = new Map([['1', read('a')], ['2', read('b')]]);
     const one = trimRead(read('a'), 1).length * 2;

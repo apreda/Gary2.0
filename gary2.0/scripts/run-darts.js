@@ -48,6 +48,7 @@ const { scratchDarts } = await import('../src/services/gary/darts/dartsScratch.j
 const { nflNewsFor, NEWS_NOT_ON_FILE: NFL_NEWS_NOT_ON_FILE } = await import('../src/services/gary/agentic/orchestrator/nflRead.js');
 const { nflGamePacket, packetOn } = await import('../src/services/gary/darts/nflGamePacket.js');
 const { nbaGamePacket, nbaPacketBlock } = await import('../src/services/gary/darts/nbaGamePacket.js');
+const { fitBlocks } = await import('../src/services/gary/darts/readFit.js');
 // Game packets are built a few at a time: each is a desk build of a few minutes.
 const PACKETS_AT_ONCE = 3;
 const inTurns = async (items, atOnce, work) => { const queue = [...items]; await Promise.all(Array.from({ length: Math.min(atOnce, queue.length) }, async () => { for (let x = queue.shift(); x; x = queue.shift()) await work(x); })); };
@@ -275,6 +276,8 @@ async function throwLeague(league) {
     // list, a sheet, a game frame) stops the throw before the first ask.
     const notLoaded = failedLoads({ screens, blocks, skip: (board.frames || []).map((f) => f.news) });
     if (notLoaded.length) throw new DartsDataMissing(notLoaded);
+    // Game reads too long for one ask that cannot be cut stop the run here, before the first ask (readFit.js).
+    fitBlocks(blocks, [...blocks.keys()]);
     if (!dry) await storeBoardPrices(board, league, date);
     const perClubKinds = league === 'NFL' && board.games === 1 ? PER_CLUB_ONE_GAME : [];
     const rows = [];
