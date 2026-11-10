@@ -19,7 +19,7 @@ import { newsWithoutRecaps } from './newsWithoutRecaps.js';
 import { assertEverythingLoaded } from '../../pickDataIntegrity.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords, reportClock } from '../../../sports/nba/nbaBettorData.js';
-import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
+import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { espnVenue } from '../../../sports/nba/espnNbaGame.js';
 import { NBA_ARENAS } from '../../../sports/nba/nbaArenas.js';
@@ -207,17 +207,21 @@ async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf
 // The starting fives come from a web search's projection; the read says so above them (Oct 23 2026 audit: the
 // desk's heading never reached Gary). A projected starter the injury report lists Out or Doubtful says so in the five
 // (Oct 29 2026 hunt, round 7: Golden State's projection had Draymond Green at center six lines above "Draymond Green
-// (Out)"; he did not play).
+// (Out)"; he did not play). Questionable and Probable too (Nov 10 2026 data round 4: 22 of the 47 wrong men in the
+// projected fives, Oct 30 to Nov 9, were Questionable lower on the desk with nothing beside the name in the five).
 export function projectedStarters(desk) {
   const five = sectionOf(desk, 'STARTING LINEUPS');
   if (!five) return '';
   const listed = new Map();
   for (const l of sectionOf(desk, 'INJURY REPORT').split('\n')) {
-    const m = l.match(/^\s*•\s*(.+?)(?: \([A-Z]{1,2}(?:-[A-Z]{1,2})?\))? \((Out|Doubtful)\) - /);
-    if (m) listed.set(playerKey(m[1]), m[2]);
+    const m = l.match(/^\s*•\s*(.+?)(?: \([A-Z]{1,2}(?:-[A-Z]{1,2})?\))? \((Out|Doubtful|Questionable|Prob|Probable)\) - /);
+    if (m) listed.set(m[1], m[2] === 'Prob' ? 'Probable' : m[2]);
   }
+  // The report and the lineup feed can spell one player two ways (Chicago's "Nic Claxton" is BDL's "Nicolas Claxton").
+  const names = [...listed.keys()];
+  const statusOf = (name) => listed.get(samePlayerIn(name, names, [...names, name]));
   const marked = five.split('\n').map((l) => l.replace(/^(\[(?:HOME|AWAY)\] [^:]+: )(.*)$/, (all, head, list) => head + list.split(/, (?=[^,()]+\()/)
-    .map((p) => { const [, name, pos] = p.match(/^(.*?)(?: \(([A-Z]{1,2})\))?$/); const st = listed.get(playerKey(name)); return st ? `${name} (${pos ? `${pos}; ` : ''}${st} on the injury report)` : p; }).join(', '))).join('\n');
+    .map((p) => { const [, name, pos] = p.match(/^(.*?)(?: \(([A-Z]{1,2})\))?$/); const st = statusOf(name); return st ? `${name} (${pos ? `${pos}; ` : ''}${st} on the injury report)` : p; }).join(', '))).join('\n');
   // The desk's heading names the source (Nov 2 2026: BallDontLie's projected lineups, each team's status on its own line).
   const bdl = /^STARTING LINEUPS \(BALLDONTLIE/m.test(String(desk || ''));
   return `${bdl ? 'Starting lineups (BallDontLie projected lineups):' : "Projected starters (a web search's projection, not confirmed):"}\n${marked}`;
