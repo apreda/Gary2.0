@@ -336,6 +336,15 @@ describe('a parsed season', () => {
     expect(led.games[0].lines.AAA.box_plays).toBe(4);
   });
 
+  it('a drive that reached the 20 and was knelt out at the half is a red-zone trip, as the official box counts it (Nov 10 2026)', async () => {
+    const body = [HEADER.join(','),
+      row({ fixed_drive: '4', fixed_drive_result: 'End of half', drive_inside20: '1', drive_start_yard_line: 'BBB 30', yardline_100: '12' }),
+      row({ fixed_drive: '4', fixed_drive_result: 'End of half', drive_inside20: '1', drive_start_yard_line: 'BBB 30', yardline_100: '13', play_type: 'qb_kneel' }),
+    ].join('\n');
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
+    expect([led.games[0].lines.AAA.red_zone_trips, led.games[0].lines.AAA.drive_end_of_half]).toEqual([1, 1]);
+  });
+
   it('kicks and punts are excluded from scrimmage splits', async () => {
     const body = [HEADER.join(','), row(), row({ play_type: 'punt' }), row({ play_type: 'kickoff' })].join('\n');
     const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });

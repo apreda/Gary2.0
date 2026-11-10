@@ -59,7 +59,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
 // 22 (Nov 10 2026, NFL data round 1): kneel-downs and spikes counted as third and fourth downs, as the official box has them.
 // 23 (same round): each team's plays as the official box counts them (kneel-downs and spikes in, two-point tries out).
-const LEDGER_SCHEMA = 23;
+// 24 (same round): every drive the feed flags as reaching the 20 is a red-zone trip, as the official box counts them.
+const LEDGER_SCHEMA = 24;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -422,13 +423,17 @@ function driveTotals(list) {
     : d.lastType === 'qb_kneel' && /^(Turnover|Turnover on downs)$/.test(d.result) ? 'End of half' : d.result);
   for (const raw of list) {
     const d = { ...raw, result: resultOf(raw) };
+    // Every drive that reached the 20 is a red-zone trip, as the official box counts them: one with no start on file and
+    // one that ran out the half (a kneel-down to end it too) included (NFL data round 1, Nov 10 2026: 13 team games read
+    // a trip or two short of ESPN's box; every drive the feed flags matched it in 272 of 272).
+    if (d.inside20) { t.red_zone_trips += 1; if (d.result === 'Touchdown') t.red_zone_tds += 1; }
     if (d.start == null) continue;
     const pts = d.scoreStart != null && d.scoreEnd != null ? Math.max(0, d.scoreEnd - d.scoreStart) : 0;
     if (d.start > 50) { t.opp_territory_drives += 1; t.opp_territory_points += pts; }
     // A drive that reached the 20 and ran out the half is a red-zone trip that came up empty (Oct 27 2026 data loop: 14
     // team games read a trip short of ESPN's count, the Bears' drive to the 4 before halftime among them); a kneel-down
     // to end it is not.
-    if (d.result === 'End of half') { t.drive_end_of_half += 1; if (d.inside20 && d.lastType !== 'qb_kneel') t.red_zone_trips += 1; continue; }
+    if (d.result === 'End of half') { t.drive_end_of_half += 1; continue; }
     t.drives += 1;
     t.drive_points += pts;
     if (d.result === 'Touchdown') t.drive_tds += 1;
@@ -439,7 +444,6 @@ function driveTotals(list) {
     else if (d.result === 'Missed field goal') t.drive_missed_fgs += 1;
     else if (d.result === 'Safety') t.drive_safeties += 1;
     if (d.result === 'Punt' && d.firstDowns === 0) t.three_and_outs += 1;
-    if (d.inside20) { t.red_zone_trips += 1; if (d.result === 'Touchdown') t.red_zone_tds += 1; }
     t.start_sum += d.start; t.start_n += 1;
   }
   const { start_sum, start_n, ...out } = t;
