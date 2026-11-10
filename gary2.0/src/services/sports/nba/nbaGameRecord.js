@@ -158,16 +158,19 @@ export function followQuarter(plays, players, q) {
   for (const { ids: [inId, outId] } of subs) { if (!entered.has(outId)) court[sideOf.get(outId)].add(outId); entered.add(inId); }
   if (court.home.size !== 5 || court.away.size !== 5) return null;
   // The running score after each play of the quarter, starting from the score it began at.
-  const before = [...(plays || [])].filter((p) => p.period < q && p.home_score != null && p.away_score != null)
-    .sort((a, b) => a.period - b.period || clockSeconds(b.clock) - clockSeconds(a.clock) || a.order - b.order).pop();
-  const scoreAfter = []; let run = { home: before?.home_score ?? 0, away: before?.away_score ?? 0 };
-  for (const p of inQ) { if (p.home_score != null && p.away_score != null) run = { home: p.home_score, away: p.away_score }; scoreAfter.push(run); }
-  const scoreAt = (i) => (i < 0 ? { home: before?.home_score ?? 0, away: before?.away_score ?? 0 } : scoreAfter[i]);
+  const earlier = (plays || []).filter((p) => p.period < q && p.home_score != null && p.away_score != null);
+  const before = { home_score: Math.max(0, ...earlier.map((p) => p.home_score)), away_score: Math.max(0, ...earlier.map((p) => p.away_score)) };
+  const scoreAfter = []; let run = { home: before.home_score, away: before.away_score };
+  // A score never goes down: at one clock the feed sometimes logs an and-one's free throw, with the basket counted in its
+  // score, before the basket itself (flowOf), so each side's running score is the highest it has shown.
+  for (const p of inQ) { if (p.home_score != null && p.away_score != null) run = { home: Math.max(run.home, p.home_score), away: Math.max(run.away, p.away_score) }; scoreAfter.push(run); }
+  const scoreAt = (i) => (i < 0 ? { home: before.home_score, away: before.away_score } : scoreAfter[i]);
   const secs = new Map(); let clock = length; let startIdx = -1;
   const stints = [];
-  const credit = (to, endIdx = inQ.length) => {
+  // A stretch ends at the substitution's own score (one can carry the basket before it), and the next starts there.
+  const credit = (to, endIdx = inQ.length - 1) => {
     for (const side of ['home', 'away']) for (const id of court[side]) secs.set(id, (secs.get(id) || 0) + (clock - to));
-    const a = scoreAt(startIdx), b = scoreAt(endIdx - 1);
+    const a = scoreAt(startIdx), b = scoreAt(endIdx);
     if (clock > to || b.home !== a.home || b.away !== a.away) stints.push({ from: clock, to, home: [...court.home], away: [...court.away], margin: a.home - a.away, pts: [b.home - a.home, b.away - a.away] });
     clock = to; startIdx = endIdx;
   };
