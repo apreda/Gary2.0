@@ -164,3 +164,19 @@ describe('who made the sacks', () => {
     expect(line(box(3))).toContain('Tennessee sacks by: not on file');
   });
 });
+
+// Oklahoma at Florida (Nov 7 2026): Florida's starter Tramell Jones Jr. was never found, so a reliever could read as the starter.
+describe('the starting quarterback from the plays', () => {
+  it('finds a passer whose last name ends in Jr.', () => {
+    const passer = (id, last, att) => ({ athlete: { id, firstName: 'T', lastName: last, displayName: `T ${last}` }, stats: [String(att)] });
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'passing', keys: ['passingAttempts'], athletes: [passer('8', 'Jones Jr.', 20), passer('9', 'Philo', 6)] }] }] },
+      drives: { previous: [{ team: { id: '1' }, plays: [
+        { text: '(14:55) #10 T.Jones Jr. pass complete short left to #1 W.Out for 8 yards', type: { text: 'Pass Reception' }, start: { team: { id: '1' } }, period: { number: 1 } },
+        { text: '(02:00) #12 T.Philo pass incomplete short right', type: { text: 'Pass Incompletion' }, start: { team: { id: '1' } }, period: { number: 4 } },
+      ] }] },
+    };
+    expect(gameBoxFromSummary(summary, '1').starterQb['1']).toBe('T Jones Jr.');
+  });
+});

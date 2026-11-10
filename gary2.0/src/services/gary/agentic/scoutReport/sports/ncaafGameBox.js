@@ -449,12 +449,14 @@ export function gameBoxFromSummary(summary, eventId) {
   const byScore = byScoreAtSnap(summary, teams);
   // Each side's starting quarterback: the first of its passers the play-by-play has dropping back (round 15: Iowa's
   // starter Jeremy Hecklinski read second to the reliever, and Oregon's Dante Moore, hurt early, was dropped).
+  // A last name ending in "Jr." too (Nov 10 2026 college audit: Florida's Tramell Jones Jr. was found in none of his starts;
+  // against 72 official lineups this was right in 68).
   const starterQb = {};
   for (const t of teams) {
     const qbs = players.filter((x) => x.teamId === t.id && Number(x.stats?.passing?.passingAttempts) > 0 && x.last);
     const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const hit = allPlays.filter((p) => String(p?.start?.team?.id ?? '') === t.id).map((p) => String(p?.text || ''))
-      .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}\\b[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
+      .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}(?!\\w)[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
     if (hit) starterQb[t.id] = hit.name;
   }
   return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
@@ -677,7 +679,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v30 (Nov 10 2026): points off a turnover read past timeouts and a turnover told twice.
   // v31 (Nov 10 2026): each team's fumbles as the box states them (fumbleTotals).
   // v32 (Nov 10 2026 audit): the by-score plays read the final ruling and the runs and catches that stood with a foul after them.
-  return cachedResearch(`espn_cfb_box_v32:${eventId}`, async () => {
+  // v33 (Nov 10 2026 audit): a starting quarterback whose last name ends in "Jr." is found.
+  return cachedResearch(`espn_cfb_box_v33:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
