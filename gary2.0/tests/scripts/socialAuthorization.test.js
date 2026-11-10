@@ -6,7 +6,6 @@ import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { isSocialServiceRequest } from '../../supabase/functions/post-single-tweet/authorization.ts';
-import { easternDateOffset } from '../../supabase/functions/_shared/dateKeys.js';
 
 const require = createRequire(import.meta.url);
 const endpoints = ['post-single-tweet', 'post-quote-tweet', 'post-reply-tweet', 'post-tweet-media', 'post-delete-tweet', 'update-x-banner', 'get-tweet-metrics', 'social-auto-post'];
@@ -105,12 +104,10 @@ describe('X service endpoints reject untrusted callers at the real entrypoint', 
 });
 
 describe('authorized X operations retain their existing behavior against recording HTTP fixtures', () => {
-  // THE FREE PICK (Sep 29 2026: @BetwithGary is a brand account; the every-game threads, the week tape and
-  // the verdict quote-tweets are retired). The scheduled poster posts the day's streak pick once, as text,
-  // in the Oct 10 layout: a first line saying what it is, one fact from Gary's published case, the bet alone,
-  // then the matchup and start. The Opus writer picks the fact and says the ticket the way a fan does; code
-  // checks its words against the ticket's line and side and keeps the exact ticket when they drift.
-  const FREE_PICK_HEADER = "Gary's Free Pick of the Day";
+  // THE FREE PICK (Nov 10 2026: back to the Aug/Sep layout). The scheduled poster posts the day's streak pick
+  // once, as text: a fact from Gary's published case, the exact ticket without its price, a second fact. The
+  // writer supplies only the two facts; code places the ticket. A failed writer never drops the post. The
+  // result goes out as a post quoting the pick once it is graded.
   const LINK_REPLY = 'The full breakdown is free in the app: betwithgary.ai/c/xpick';
   const day = '2026-10-12';
   const streakPick = { candidate_id: 'cand-1', league: 'MLB', kind: 'game', pick_text: 'Los Angeles Angels ML +120', odds: 120,
@@ -120,7 +117,7 @@ describe('authorized X operations retain their existing behavior against recordi
   const rationale = `${opening} ${closing}`;
   const written = { pick_words: 'Angels ML', matchup_words: 'Angels @ Brewers', opening_source: rationale, closing_source: rationale, opening, closing };
   const writerReply = input => Response.json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'write_hook', input }] });
-  const expectedText = `${FREE_PICK_HEADER}\n\n${opening}\n\nAngels ML\n\nAngels @ Brewers 7:05pm EST`;
+  const expectedText = `${opening}\n\nLos Angeles Angels ML\n\n${closing}`;
   /** One free pick day's dependencies; an override answers its path ahead of the defaults. */
   const freePickTransport = (overrides = {}, { today = day, pick = streakPick, source = rationale } = {}) => call => {
     const path = call.url.pathname;
@@ -132,6 +129,8 @@ describe('authorized X operations retain their existing behavior against recordi
       case '/rest/v1/social_post_log':
         if (call.method !== 'GET') return new Response(null, { status: call.method === 'POST' ? 201 : 204 });
         expect(call.url.searchParams.get('post_date')).toBe('eq.' + today);
+        // One pick, one post: a second read asks whether this candidate is already posted under another key.
+        if (call.url.searchParams.has('pick_id')) { expect(call.url.searchParams.get('pick_id')).toBe('eq.' + pick.candidate_id); return Response.json([]); }
         expect(call.url.searchParams.get('pick_text')).toBe('eq.FREE PICK ' + today);
         return Response.json([]);
       case '/rest/v1/winners_candidates':
@@ -143,37 +142,36 @@ describe('authorized X operations retain their existing behavior against recordi
   };
   const mutations = f => f.calls.filter(c => c.url.hostname === 'fixture.invalid' && c.method !== 'GET').map(c => [c.method, c.url.pathname]);
 
-  it.each(['ok', 'ticket-drift', 'rate-limit', 'invalid-output', 'empty-source', 'transport-error'])('the free pick writer reads the whole published case and code keeps the ticket: %s', async scenario => {
+  it.each(['ok', 'rate-limit', 'invalid-output', 'empty-source', 'transport-error'])('the free pick writer reads the whole published case and code places the exact ticket: %s', async scenario => {
+    let asked = 0;
     const f = fixture('social-auto-post', { transport: freePickTransport({
       '/v1/messages': call => {
         const body = JSON.parse(call.body);
-        expect(body.model).toBe('claude-opus-5-5');
-        expect(body.tool_choice).toEqual({ type: 'tool', name: 'write_hook', disable_parallel_tool_use: true });
-        expect(body.tools[0].input_schema.required).toEqual(['pick_words', 'matchup_words', 'opening_source', 'closing_source', 'opening', 'closing']);
-        expect(body.system).toContain('Do not turn an opposing-case fact into support');
-        expect(body.system).toContain('Also write pick_words');
-        expect(JSON.parse(body.messages[0].content)).toEqual({ pick: streakPick.pick_text, matchup: streakPick.matchup, league: 'MLB', maximum_characters_per_block: 80, rationale });
+        if (++asked === 1) {
+          expect(body.model).toBe('claude-opus-5-5');
+          expect(body.tool_choice).toEqual({ type: 'tool', name: 'write_hook', disable_parallel_tool_use: true });
+          expect(body.tools[0].input_schema.required).toEqual(['opening_source', 'closing_source', 'opening', 'closing']);
+          expect(JSON.parse(body.messages[0].content)).toMatchObject({ pick: 'Los Angeles Angels ML', matchup: streakPick.matchup, league: 'MLB', rationale });
+        }
         if (scenario === 'rate-limit') return Response.json({ error: { type: 'rate_limit_error' } }, { status: 429 });
         if (scenario === 'transport-error') throw new TypeError('fixture connection failure');
         if (scenario === 'invalid-output') return writerReply({ ...written, closing: '' });
-        if (scenario === 'ticket-drift') return writerReply({ ...written, pick_words: 'Brewers ML' });
         return writerReply(written);
       },
     }, { source: scenario === 'empty-source' ? '' : rationale }) });
     const result = await f.internal('runFreePickMode')(day, Date.parse(day + 'T16:00:00-04:00'), true);
     expect(result).toMatchObject({ posted: false, dry_run: true, pick: streakPick.pick_text, lead_min: 185, reply: LINK_REPLY });
     expect(result.error).toBeUndefined();
-    const game = 'Angels @ Brewers 7:05pm EST';
-    if (scenario === 'ok') expect(result).toMatchObject({ text: expectedText, writer: 'writer' });
-    else if (scenario === 'ticket-drift') expect(result).toMatchObject({ text: `${FREE_PICK_HEADER}\n\n${opening}\n\nLos Angeles Angels ML\n\n${game}`, writer: 'fact, ticket words' });
+    if (scenario === 'ok') expect(result).toMatchObject({ text: expectedText, writer: 'fact / pick / fact' });
     else {
-      // A failed writer never drops the post: the exact ticket goes out alone, and the run names the code.
+      // A failed writer never drops the post: the bet and the matchup go out, and the run names the code.
       const code = { 'rate-limit': 'HOOK_PROVIDER_UNAVAILABLE', 'invalid-output': 'HOOK_OUTPUT_INVALID', 'empty-source': 'HOOK_SOURCE_MISSING', 'transport-error': 'HOOK_PROVIDER_UNAVAILABLE' }[scenario];
-      expect(result.text).toBe(`${FREE_PICK_HEADER}\n\nLos Angeles Angels ML\n\n${game}`);
+      expect(result.text).toBe('Angels ML\n\nAngels @ Brewers');
       expect(result.writer).toMatch(/^none \(/);
       expect(result.writer).toContain(code);
     }
-    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(scenario === 'empty-source' ? 0 : 1);
+    // The second ask is the backup writer, tried once after the first fails.
+    expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength({ ok: 1, 'empty-source': 0 }[scenario] ?? 2);
     expect(mutations(f)).toEqual([]);
   });
 
@@ -187,12 +185,11 @@ describe('authorized X operations retain their existing behavior against recordi
       '/v1/messages': call => {
         const body = JSON.parse(call.body);
         expect(JSON.parse(body.messages[0].content).rationale).toBe(source.rationale);
-        expect(body.system).toContain('Do not turn an opposing-case fact into support');
         return writerReply({ pick_words: source.pick.replace(/ [+-]\d+$/, ''), matchup_words: sp.matchup, opening_source: source.rationale, closing_source: source.rationale, opening: open, closing: close });
       },
     }, { today: '2026-09-16', pick: sp, source: source.rationale }) });
     const result = await f.internal('runFreePickMode')('2026-09-16', Date.parse('2026-09-16T16:00:00Z'), true);
-    expect(result.text).toBe([FREE_PICK_HEADER, open, source.pick.replace(/ [+-]\d+$/, ''), `${sp.matchup} ${tigers ? '3:07pm EST' : '1:15pm EST'}`].join('\n\n'));
+    expect(result.text).toBe([open, source.pick.replace(/ [+-]\d+$/, ''), close].join('\n\n'));
     expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(1);
     expect(mutations(f)).toEqual([]);
   });
@@ -216,7 +213,7 @@ describe('authorized X operations retain their existing behavior against recordi
     expect(f.calls.indexOf(claim)).toBeLessThan(f.calls.findIndex(c => c.url.pathname === '/v1/messages'));
     const health = f.internal('socialRunHealth')({ results: [result] });
     if (outcome === 'accepted') {
-      expect(result).toEqual({ posted: true, pick: streakPick.pick_text, thread_url: 'https://x.com/BetwithGary/status/777', writer: 'writer' });
+      expect(result).toEqual({ posted: true, pick: streakPick.pick_text, thread_url: 'https://x.com/BetwithGary/status/777', writer: 'fact / pick / fact', clip: false });
       expect(mutations(f)).toEqual([['POST', '/rest/v1/social_post_log'], ['POST', '/functions/v1/post-single-tweet'], ['POST', '/functions/v1/post-reply-tweet'], ['PATCH', '/rest/v1/social_post_log']]);
       const record = f.calls.find(c => c.method === 'PATCH');
       expect(JSON.parse(record.body)).toMatchObject({ hook_tweet_id: '777', cta_tweet_id: '778', thread_url: 'https://x.com/BetwithGary/status/777', post_text: expectedText });
@@ -237,7 +234,7 @@ describe('authorized X operations retain their existing behavior against recordi
     { name: 'its game is under five minutes away', now: day + 'T19:02:00-04:00', reason: "free pick's game starts in 3 min; too late to post", calls: ['/rest/v1/streak_picks'] },
     { name: 'it is already in the log today', overrides: { '/rest/v1/social_post_log': () => Response.json([{ id: 1 }]) }, reason: 'free pick already posted today', calls: ['/rest/v1/streak_picks', '/rest/v1/social_post_log'] },
     { name: 'the day has no streak pick yet', overrides: { '/rest/v1/streak_picks': () => Response.json([]) }, reason: "today's free pick is not chosen yet", calls: ['/rest/v1/streak_picks'] },
-    { name: 'another run claimed the log row first', overrides: { '/rest/v1/social_post_log': call => call.method === 'POST' ? Response.json({ code: '23505', message: 'duplicate key' }, { status: 409 }) : Response.json([]) }, reason: 'free pick claimed by another run', calls: ['/rest/v1/streak_picks', '/rest/v1/social_post_log', '/rest/v1/social_post_log'] },
+    { name: 'another run claimed the log row first', overrides: { '/rest/v1/social_post_log': call => call.method === 'POST' ? Response.json({ code: '23505', message: 'duplicate key' }, { status: 409 }) : Response.json([]) }, reason: 'free pick claimed by another run', calls: ['/rest/v1/streak_picks', '/rest/v1/social_post_log', '/rest/v1/social_post_log', '/rest/v1/social_post_log'] },
   ])('the free pick is not posted when $name', async ({ now = day + 'T16:00:00-04:00', overrides = {}, reason, calls }) => {
     const f = fixture('social-auto-post', { transport: freePickTransport(overrides) });
     expect(await f.internal('runFreePickMode')(day, Date.parse(now), false)).toEqual({ posted: false, reason });
@@ -251,43 +248,39 @@ describe('authorized X operations retain their existing behavior against recordi
       '/rest/v1/rpc/free_pick_extras': call => { expect(JSON.parse(call.body)).toEqual({ p_date: day }); return Response.json([started, morning]); },
       '/rest/v1/social_post_log': call => { expect(call.url.searchParams.get('pick_text')).toBe('eq.' + morning.pick_text); return Response.json([]); },
       '/v1/messages': call => {
-        expect(JSON.parse(JSON.parse(call.body).messages[0].content)).toMatchObject({ pick: morning.pick_text, matchup: morning.matchup, league: 'NFL' });
+        expect(JSON.parse(JSON.parse(call.body).messages[0].content)).toMatchObject({ pick: 'Jacksonville Jaguars +3.5', matchup: morning.matchup, league: 'NFL' });
         return writerReply({ ...written, pick_words: 'Jaguars +3.5', matchup_words: 'Jaguars @ Chiefs' });
       },
     }, { pick: morning }) });
     const results = await f.internal('runSundayFreePicks')(day, Date.parse(day + 'T08:00:00-04:00'), true);
     expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({ dry_run: true, pick: morning.pick_text, text: `${FREE_PICK_HEADER}\n\n${opening}\n\nJaguars +3.5\n\nJaguars @ Chiefs 9:30am EST`, writer: 'writer' });
+    expect(results[0]).toMatchObject({ dry_run: true, pick: morning.pick_text, text: `${opening}\n\nJacksonville Jaguars +3.5\n\n${closing}`, writer: 'fact / pick / fact' });
     expect(f.calls.filter(c => c.url.pathname === '/v1/messages')).toHaveLength(1);
     expect(mutations(f)).toEqual([['POST', '/rest/v1/rpc/free_pick_extras']]);
   });
 
-  it("the morning result replies once under yesterday's free pick, from 8 AM ET, claimed before the send", async () => {
-    const early = fixture('social-auto-post');
-    expect(await early.internal('runFreePickResult')(Date.parse('2026-10-12T07:59:00-04:00'), false)).toEqual([{ replied: false, reason: 'the result posts from 8 AM ET' }]);
-    expect(early.calls).toEqual([]);
-    const yesterday = easternDateOffset(-1);
+  it('the verdict quotes the free pick once it is graded, claimed before the send', async () => {
     const f = fixture('social-auto-post', { transport: call => {
       const path = call.url.pathname;
       if (path === '/rest/v1/social_post_log' && call.method === 'GET') {
-        expect(call.url.searchParams.get('post_date')).toBe('eq.' + yesterday);
-        expect(call.url.searchParams.get('slot')).toBe('eq.free_pick');
+        expect(call.url.searchParams.get('post_date')).toContain(day);
         expect(call.url.searchParams.get('result_tweet_id')).toBe('is.null');
-        return Response.json([{ id: 7, league: 'MLB', pick_text: 'FREE PICK ' + yesterday, hook_tweet_id: '777' }]);
+        return Response.json([{ id: 7, post_date: day, league: 'MLB', pick_text: 'FREE PICK ' + day, hook_tweet_id: '777' }]);
       }
-      if (path === '/rest/v1/rpc/streak_pick_day') { expect(JSON.parse(call.body)).toEqual({ p_day: yesterday }); return Response.json({ result: 'WON' }); }
+      if (path === '/rest/v1/rpc/streak_pick_day') { expect(JSON.parse(call.body)).toEqual({ p_day: day }); return Response.json({ result: 'WON', league: 'MLB', kind: 'game', pick_text: streakPick.pick_text }); }
+      if (path === '/rest/v1/game_results') return Response.json([{ final_score: '5-3', matchup: streakPick.matchup }]);
       if (path === '/rest/v1/social_post_log' && call.method === 'PATCH') {
         const body = JSON.parse(call.body);
         expect(call.url.searchParams.get('id')).toBe('eq.7');
-        if (body.result_tweet_id === 'pending') { expect(call.url.searchParams.get('result_tweet_id')).toBe('is.null'); return Response.json([{ id: 7 }]); }
+        if (body.result_tweet_id === 'pending') { expect(body.result).toBe('won'); expect(call.url.searchParams.get('result_tweet_id')).toBe('is.null'); return Response.json([{ id: 7 }]); }
         expect(body).toEqual({ result_tweet_id: '779' });
         return new Response(null, { status: 204 });
       }
-      if (path === '/functions/v1/post-reply-tweet') { expect(JSON.parse(call.body)).toEqual({ text: 'Won.', replyToId: '777' }); return Response.json({ success: true, tweetId: '779' }); }
+      if (path === '/functions/v1/post-quote-tweet') { expect(JSON.parse(call.body)).toEqual({ text: 'Won. Angels 5, Brewers 3.', quoteTweetId: '777' }); return Response.json({ success: true, tweetId: '779' }); }
       throw new Error('Unexpected send or dependency: ' + path);
     } });
-    expect(await f.internal('runFreePickResult')(Date.parse('2026-10-12T08:00:00-04:00'), false)).toEqual([{ replied: true, result: 'won', tweet: '779' }]);
-    expect(mutations(f)).toEqual([['POST', '/rest/v1/rpc/streak_pick_day'], ['PATCH', '/rest/v1/social_post_log'], ['POST', '/functions/v1/post-reply-tweet'], ['PATCH', '/rest/v1/social_post_log']]);
+    expect(await f.internal('runFreePickResult')(Date.parse('2026-10-13T08:00:00-04:00'), false)).toEqual([{ replied: true, result: 'won', words: 'Won. Angels 5, Brewers 3.', tweet: '779' }]);
+    expect(mutations(f)).toEqual([['POST', '/rest/v1/rpc/streak_pick_day'], ['PATCH', '/rest/v1/social_post_log'], ['POST', '/functions/v1/post-quote-tweet'], ['PATCH', '/rest/v1/social_post_log']]);
   });
 
   it('returns HTTP 503 for a failed dependency rather than a healthy HTTP 200', async () => {
