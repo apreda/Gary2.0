@@ -36,7 +36,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns, publishedFumbles, officialSackPlays } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns, publishedFumbles, officialSackPlays, passerSpanText } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey, officialSacks } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -298,8 +298,10 @@ function quarterbackOfGame(rows, result, onFile, starters = null) {
   // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine
   // games); college box scores count sacks as runs, so the line says so.
   const runs = (row) => (Number(row.rushing_attempts) > 0 ? `; ${plural(row.rushing_attempts, 'run')} for ${row.rushing_yards ?? '?'} yds${Number(row.rushing_touchdowns) > 0 ? `, ${row.rushing_touchdowns} TD` : ''} (sacks included)` : '');
+  // When each was in, once two or more are listed (round 4 of the Nov 10 2026 college review: who took over and when).
+  const span = (row) => (shown.length > 1 && passerSpanText(row.passer_span) ? `, passing or running ${passerSpanText(row.passer_span)}` : '');
   return `quarterback: ${[...unseen, ...shown.map((row) => `${nameOf(row)}${started(row) ? ' (started)' : ''} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
-    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}`)].join('; ')}`;
+    + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}${span(row)}`)].join('; ')}`;
 }
 
 // The player rows against the team's own box (Oct 23 2026 source audit: BDL's college player rows missed overtime
@@ -541,7 +543,7 @@ async function playerGames(sides, boxes) {
           .sort((a, b) => Number(b.passing_attempts) - Number(a.passing_attempts));
         // With his runs, sacks inside them as college counts them (round 14: Louisiana's Lunch Winfield ran for 91 of the
         // 146 USC allowed, and the read gave his passing only), after a comma: the passers are split on "; " (round 15).
-        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds${Number(x.rushing_attempts) ? `, ${x.rushing_attempts} run${Number(x.rushing_attempts) === 1 ? '' : 's'} for ${x.rushing_yards} (sacks included)` : ''}`).join('; '));
+        if (passers.length) oppQb.set(String(r.gameId), passers.map((x) => `${x.player.first_name} ${x.player.last_name} ${x.passing_completions}-of-${x.passing_attempts}, ${x.passing_yards} yds${Number(x.rushing_attempts) ? `, ${x.rushing_attempts} run${Number(x.rushing_attempts) === 1 ? '' : 's'} for ${x.rushing_yards} (sacks included)` : ''}${passers.length > 1 && passerSpanText(x.passer_span) ? `, passing or running ${passerSpanText(x.passer_span)}` : ''}`).join('; '));
       }
       if (oppId) {
         kicking.set(String(r.gameId), `kicking: ${kicks(found.teamId)} · opponent's kicking: ${kicks(oppId)}`);

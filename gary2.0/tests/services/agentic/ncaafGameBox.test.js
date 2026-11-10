@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays, ncaafFlowLines } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays, ncaafFlowLines, passerSpanText } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -188,5 +188,28 @@ describe('the starting quarterback from the plays', () => {
       ] }] },
     };
     expect(gameBoxFromSummary(summary, '1').starterQb['1']).toBe('T Jones Jr.');
+  });
+});
+
+describe('when each passer was in', () => {
+  it('gives each passer his first and last play, and none when the plays miss his box attempts', () => {
+    const passer = (id, first, last, att) => ({ athlete: { id, firstName: first, lastName: last, displayName: `${first} ${last}` }, stats: [String(att)] });
+    const play = (text, period, clock) => ({ text, type: { text: 'Pass Reception' }, start: { team: { id: '1' } }, period: { number: period }, clock: { displayValue: clock } });
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'passing', keys: ['passingAttempts'], athletes: [passer('8', 'Josh', 'Hoover', 2), passer('9', 'Grant', 'Wilson', 2), passer('7', 'Kade', 'Long', 4)] }] }] },
+      drives: { previous: [{ team: { id: '1' }, plays: [
+        play('#10 J.Hoover pass complete short left to #1 W.Out for 8 yards', 1, '12:58'),
+        play('#10 J.Hoover pass incomplete short right', 2, '0:11'),
+        play('#3 G.Wilson rush left for 6 yards', 3, '13:40'),
+        play('#3 G.Wilson pass complete deep left to #4 C.Becker for 25 yards, TOUCHDOWN', 5, '0:00'),
+        play('#3 G.Wilson pass incomplete short middle', 5, '0:00'),
+        play('#2 K.Long pass incomplete short middle', 4, '1:00'),
+      ] }] },
+    };
+    const spans = gameBoxFromSummary(summary, '1').passerSpans;
+    expect(passerSpanText(spans['8'])).toBe('Q1 12:58 to Q2 0:11');
+    expect(passerSpanText(spans['9'])).toBe('Q3 13:40 to OT');
+    expect(spans['7']).toBeUndefined();
   });
 });

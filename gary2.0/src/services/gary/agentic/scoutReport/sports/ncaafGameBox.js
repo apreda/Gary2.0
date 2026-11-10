@@ -459,7 +459,22 @@ export function gameBoxFromSummary(summary, eventId) {
       .map((txt) => qbs.find((q) => new RegExp(`\\b${esc(q.last)}(?!\\w)[^,;]{0,6}\\s(?:pass|sacked|scrambles?)\\b`, 'i').test(txt))).find(Boolean);
     if (hit) starterQb[t.id] = hit.name;
   }
-  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
+  // When each passer was in, by box athlete id: his first and last play passing, sacked or running (Nov 10 2026 college
+  // review, round 4: the recaps told who took over and when, Arizona State's Keene, Boley and Fette, Nevada's Duncan gone
+  // after the 1st quarter, Boise State's Cutforth in the 4th, and the row gave three stat lines in no order). Only when the
+  // plays hold his box pass attempts within one (season: 1,475 of 1,533 passers in games with two or more).
+  const passerSpans = {};
+  for (const q of players.filter((x) => Number(x.stats?.passing?.passingAttempts) > 0 && x.last && x.first)) {
+    const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?:\\b${esc(q.first[0])}\\.\\s?|\\b${esc(q.first)}\\s)${esc(q.last)}(?!\\w)[^,;]{0,6}\\s(?:pass|sacked|scrambles?|rush|run)\\b`, 'i');
+    const mine = allPlays.filter((p) => String(p?.start?.team?.id ?? '') === q.teamId && re.test(String(p?.text || ''))
+      && !/kickoff|punt|field goal|extra point|two.?point|2pt/i.test(String(p?.type?.text || '')));
+    const passes = mine.filter((p) => /\bpass\b/i.test(p.text) && !/\bsacked\b|\bNO PLAY\b/i.test(p.text)).length;
+    if (!mine.length || Math.abs(passes - Number(q.stats.passing.passingAttempts)) > 1) continue;
+    const at = (p) => ({ period: Number(p?.period?.number) || null, clock: p?.clock?.displayValue || null });
+    passerSpans[q.id] = { first: at(mine[0]), last: at(mine.at(-1)) };
+  }
+  return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, passerSpans, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
 }
 
 const SCORE_BUCKETS = [['close', 'within one score'], ['ahead', 'ahead by 9-21'], ['aheadBig', 'ahead by 22+'], ['behind', 'behind by 9-21'], ['behindBig', 'behind by 22+']];
@@ -682,7 +697,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v31 (Nov 10 2026): each team's fumbles as the box states them (fumbleTotals).
   // v32 (Nov 10 2026 audit): the by-score plays read the final ruling and the runs and catches that stood with a foul after them.
   // v33 (Nov 10 2026 audit): a starting quarterback whose last name ends in "Jr." is found.
-  return cachedResearch(`espn_cfb_box_v33:${eventId}`, async () => {
+  // v34 (Nov 10 2026 review, round 4): each passer's first and last play (passerSpans).
+  return cachedResearch(`espn_cfb_box_v34:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -756,6 +772,13 @@ export function boxAddsUp(box, teamId, teamLine) {
  * the desk knows the game by, and the counts. Passing `interceptions` are thrown; the interceptions category's are
  * made by the defense.
  */
+/** When a passer was in, "Q1 10:11 to Q3 7:59" (overtime as OT), from the box's passerSpans; null when not on file. */
+export function passerSpanText(span) {
+  if (!span?.first || !span?.last) return null;
+  const at = (x) => (x.period > 4 ? 'OT' : `Q${x.period}${x.clock ? ` ${x.clock}` : ''}`);
+  return `${at(span.first)} to ${at(span.last)}`;
+}
+
 export function playerGameRows(box, teamId, gameId, positions = {}) {
   return (box?.players || []).filter((p) => p.teamId === String(teamId)).map((p) => {
     const s = (category, key) => p.stats?.[category]?.[key] ?? null;
@@ -770,7 +793,8 @@ export function playerGameRows(box, teamId, gameId, positions = {}) {
       interceptions: s('interceptions', 'interceptions'),
       field_goals_made: s('kicking', 'fieldGoalsMade'), field_goal_attempts: s('kicking', 'fieldGoalAttempts'),
       extra_points_made: s('kicking', 'extraPointsMade'), extra_point_attempts: s('kicking', 'extraPointAttempts'),
-      punts: s('punting', 'punts'), kick_returns: s('kickReturns', 'kickReturns'), punt_returns: s('puntReturns', 'puntReturns') };
+      punts: s('punting', 'punts'), kick_returns: s('kickReturns', 'kickReturns'), punt_returns: s('puntReturns', 'puntReturns'),
+      passer_span: box?.passerSpans?.[p.id] || null };
   });
 }
 
