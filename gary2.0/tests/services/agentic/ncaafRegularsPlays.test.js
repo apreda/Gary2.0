@@ -7,8 +7,8 @@ describe('a regular with no stat row in the last game', () => {
   const rows = [1, 2, 3].map((id) => ({ player: { id: 9, first_name: 'Jo', last_name: 'Smith', position_abbreviation: 'LB' }, game: { id }, total_tackles: 5 }));
   const line = (named) => regularsLines('Ducks', [], rows, results, new Set(['1', '2', '3', '4']), new Map(), { named, jerseys: {} }).find((l) => /Jo Smith/.test(l));
 
-  it('says the last game\'s play-by-play does not name him only when it is on file', () => {
-    expect(line(new Map([['4', ['12|b|jones']]]))).toContain("the last Sep 19 vs Team 3; the last game's play-by-play does not name him; his last 3 games");
+  it('names the last game by date and opponent when its play-by-play, on file, does not name him', () => {
+    expect(line(new Map([['4', ['12|b|jones']]]))).toContain('the last Sep 19 vs Team 3; the play-by-play of the Sep 26 vs Team 4 game does not name him; his last 3 games');
     expect(line(new Map())).toContain('the last Sep 19 vs Team 3; his last 3 games');
   });
 });

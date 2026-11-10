@@ -900,9 +900,10 @@ export function regularsLines(team, reported, rows, results, onFile, core, plays
   const startedLast = (p) => Boolean(lastLineup && startedIn(lastLineup, p.name, p.entry.position));
   // Whether the last game's play-by-play names him (Nov 10 2026 college round 5: "stat rows in 4 of 5 earlier games, the
   // last Oct 3" read as "missed the BYU game", and he played it). A regular it names is not listed (kept above); one it
-  // does not name by any jersey says so, when that game's play-by-play is on file.
+  // does not name by any jersey says so, when that game's play-by-play is on file. The game is named by date and
+  // opponent, as "the last game's" right after "the last Oct 31 @ Colorado" read as the Oct 31 game.
   const lastNamed = plays?.named?.get(String(last.gameId));
-  const notInPlays = (entry) => (lastNamed?.length && !namedInPlays(lastNamed, { first: entry.first, last: entry.last }) ? "; the last game's play-by-play does not name him" : '');
+  const notInPlays = (entry) => (lastNamed?.length && !namedInPlays(lastNamed, { first: entry.first, last: entry.last }) ? `; the play-by-play of the ${day(last)} ${versus(last)} game does not name him` : '');
   const missing = kept.map((p) => {
     const report = onReport(p.name, reported, exempt);
     if (startedLast(p)) return `  ${p.name}${p.entry.position ? ` (${p.entry.position})` : ''}: no stat row, but in the last game's official starting lineup${report ? ` · ${report.status} on this week's availability report` : ''}`;
