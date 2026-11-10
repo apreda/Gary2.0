@@ -598,6 +598,15 @@ function recentGames(entry, games) {
   return `${mine.length === 1 ? 'his game' : `his last ${mine.length} games, newest first`}: ${mine.map((r) => `${day(r)} ${versus(r)}: ${productionLine(entry.games.get(String(r.gameId)))}`).join('; ')}`;
 }
 
+// The games before his last stat row that have none, when his last three games do not already name every game he has a
+// row in (Nov 10 2026 college data round: for 493 of the Oct 31 and Nov 7 report players' past games a reader could not
+// tell whether he had a stat row; "stat rows in 6 of 8" said how many, not which).
+export function gamesWithoutRowBeforeLast(entry, games) {
+  const played = games.filter((r) => entry.games.has(String(r.gameId)));
+  if (played.length <= 3) return [];
+  return games.slice(0, games.indexOf(played.at(-1))).filter((r) => !entry.games.has(String(r.gameId)));
+}
+
 /** Each player's rows in these games: name to { position, games: Map game id -> row }. */
 function playersOf(rows, results) {
   const inGames = new Set(results.map((r) => String(r.gameId)));
@@ -670,7 +679,9 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // A game with no stat row whose play-by-play names him: he played in it (Oct 24 2026 read check).
     const inPlays = sinceLast ? games.slice(-sinceLast).filter((r) => playedPerPlays(plays, r.gameId, entry)) : [];
     const plays_ = inPlays.length ? `; the play-by-play names him in ${inPlays.length === sinceLast ? (sinceLast === 1 ? 'it' : 'each of them') : inPlays.map(day).join(', ')}` : '';
+    const gaps = core.has(name) ? [] : gamesWithoutRowBeforeLast(entry, games);
     return `stat rows in ${played.length} of ${games.length} games, the last ${day(played.at(-1))}${sinceLast ? ` (none in the last ${sinceLast === 1 ? 'game' : `${sinceLast} games`}${plays_})` : ''}; `
+      + (gaps.length ? `no stat row on ${gaps.map(day).join(', ')}; ` : '')
       + (core.has(name) ? UNDER_OFFENSE : recentGames(entry, games));
   };
   // What the report itself says beyond the status: a conference report's row only repeats it ("RB #2 listed Doubtful on
