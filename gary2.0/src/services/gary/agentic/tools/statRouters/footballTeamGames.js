@@ -191,12 +191,12 @@ export function formSummary(results, count = 5, { leagueContext = null, opponent
  * Facts only, no verdict. It reports that a team led at half and was
  * outscored after; it never says whether that means anything. Gary decides.
  */
-export function gameStoryLine(result, { opponentContext = null } = {}) {
+export function gameStoryLine(result, { opponentContext = null, opponentFirst = false } = {}) {
   if (!result) return null;
-  const head = `${result.tied ? 'T' : result.won ? 'W' : 'L'} ${result.scored}-${result.allowed}${result.overtime ? ' (OT)' : ''} `
-    + `${result.home || result.neutral ? 'vs' : '@'} ${result.opponent || 'Unknown'}${result.neutral ? ` (neutral site${typeof result.neutral === 'string' ? `, ${result.neutral}` : ''})` : ''}`;
-
-  const parts = [head];
+  const score = `${result.tied ? 'T' : result.won ? 'W' : 'L'} ${result.scored}-${result.allowed}${result.overtime ? ' (OT)' : ''}`;
+  const where = `${result.home || result.neutral ? 'vs' : '@'} ${result.opponent || 'Unknown'}${result.neutral ? ` (neutral site${typeof result.neutral === 'string' ? `, ${result.neutral}` : ''})` : ''}`;
+  // `opponentFirst` (the college game rows, Nov 10 2026): who the game was against, then its score.
+  const parts = opponentFirst ? [where, opponentContext, score].filter(Boolean) : [`${score} ${where}`];
 
   if (result.shapeKnown && result.quartersFor) {
     // Each quarter's score, as the NFL's game lines give it (Oct 24 2026 read check: the halves hid Rutgers' two
@@ -207,7 +207,7 @@ export function gameStoryLine(result, { opponentContext = null } = {}) {
     parts.push('quarter detail not available for this game');
   }
 
-  if (opponentContext) parts.push(opponentContext);
+  if (opponentContext && !opponentFirst) parts.push(opponentContext);
   const line = parts.join(' — ');
   // The written headline goes last so the structured facts read first.
   return result.summary ? `${line}\n      "${result.summary}"` : line;

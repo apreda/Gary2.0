@@ -295,11 +295,17 @@ export function seasonGames(desk) {
   for (const l of sectionOf(desk, 'THIS SEASON GAME BY GAME').split('\n')) {
     const t = l.match(/^(\S.*) \(\d+-\d+(?:-\d+)?\):$/);
     if (t) { cur = { team: t[1], games: [] }; teams.push(cur); game = null; continue; }
-    const g = cur && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)(?: \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
+    // Two row orders: who the game was against before its score (rows built from Nov 10 2026), and the score first
+    // (desks stored before that). Overtime is the row's own score's, never one in the opponent's list of games (a 24-27
+    // loss at South Carolina read "OT" from South Carolina's overtime game with someone else).
+    const first = cur && l.match(/^ {2}\S.*? · (vs|@) (.+?)(?: \(neutral site[^)]*\))? — (?:.* — )?([WLT]) (\d+)-(\d+)( \(OT\))?(?: — (?:by quarter|quarter detail)|$)/);
+    const old = cur && !first && l.match(/^ {2}\S.* · ([WLT]) (\d+)-(\d+)( \(OT\))? (vs|@) (.+?)(?: \(neutral site[^)]*\))?(?: — |$)/);
+    const g = first ? [first[0], first[3], first[4], first[5], first[1], first[2], Boolean(first[6])]
+      : old ? [old[0], old[1], old[2], old[3], old[5], old[6], Boolean(old[4])] : null;
     // The opponent's conference and record now, from the line's opponent label (Oct 24 2026: the board read "W 24-21 @
     // Michigan State" without Michigan State being 2-5).
     const o = l.match(/— opponent: ([^,—]+?)(?:,|$| —)/);
-    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: / \(OT\) /.test(l), at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? o[1].trim() : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
+    if (g) { game = { result: g[1], pf: Number(g[2]), pa: Number(g[3]), ot: g[6], at: g[4], opponent: g[5].replace(/ \(neutral site[^)]*\)/g, ''), fcs: /— opponent: FCS\b/.test(l), oppNow: o ? o[1].trim() : null, qb: null, off: null, def: null }; cur.games.push(game); continue; }
     if (!game) continue;
     // The first passer, past a starter who threw none ("Dylan Lonergan started, no pass; AJ Surace 7-of-18"; Oct 29
     // 2026 hunt: Rutgers' game read "passer not on file").

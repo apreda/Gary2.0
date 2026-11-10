@@ -113,6 +113,10 @@ describe('football game ledger — summaries', () => {
     }], 10);
     const line = gameStoryLine(blownLead[0]);
     expect(line).toContain('by quarter 10-14-0-0, opponent 7-3-14-7');
+    // The college rows ask for who the game was against ahead of its score.
+    const first = gameStoryLine(blownLead[0], { opponentContext: 'opponent: SEC', opponentFirst: true });
+    expect(first.indexOf('opponent: SEC')).toBeLessThan(first.search(/[WL] \d+-\d+/));
+    expect(first).toContain('by quarter 10-14-0-0, opponent 7-3-14-7');
   });
 
   it('reads a scoreless quarter as zero, not as missing data', () => {

@@ -29,7 +29,7 @@ import { ballDontLieService } from '../../../../providers/ballDontLieService.js'
 import { getTeamTalent, getRankings } from '../../../../providers/cfbdService.js';
 import { cfbdSchoolFor } from '../../orchestrator/ncaafRosterAndPoll.js';
 import { getFbsTeams, fbsVenueFor, getSeasonGames, seasonGameFor, getVenues, venueById, getSeasonWeather, gameWeatherFor,
-  getWeekBoxScores, getWeekAdvancedGames, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
+  getWeekBoxScores, cfbdTeamMatches } from '../../../../providers/cfbdService.js';
 import { getKickoffWeather, windDescription, gameHoursDescription } from '../../../../providers/weatherService.js';
 import { findTeam } from '../shared/utilities.js';
 import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statRouters/footballTeamGames.js';
@@ -360,8 +360,6 @@ async function teamBoxBuilder(season, weeks) {
   // burst lost four of six weeks of unit lines on five desks).
   const boxRows = [];
   for (let week = 0; week <= through; week++) boxRows.push(...((await getWeekBoxScores(season, week).catch(() => null))?.rows || []));
-  const advancedRows = [];
-  for (let week = 0; week <= through; week++) advancedRows.push(...((await getWeekAdvancedGames(season, week).catch(() => null))?.rows || []));
   const stats = (entry) => new Map((entry?.stats || []).map((row) => [row.category, row.stat]));
   const find = (team, result) => {
     const game = boxRows.find((row) => (row.teams || []).some((t) => cfbdTeamMatches(t.team, team))
@@ -429,16 +427,12 @@ async function teamBoxBuilder(season, weeks) {
     // Penalties and fourth downs from the same box (Oct 23 2026 data audit: SMU went 4-for-5 on fourth down against
     // Virginia; third downs alone undercounted how drives were kept alive). Penalties are the whole team's, every unit.
     const penalties = (box) => { const m = String(box.get('totalPenaltiesYards') ?? '').match(/^(\d+)-(-?\d+)$/); return m ? `${m[1]} for ${m[2]} yards` : '—'; };
-    // Success rate and line yards with garbage time out, the game's own numbers and no season figure (Nov 5 2026, founder:
-    // "yes add in those missing things"; the Oct 23 cut of play-by-play rates is his to overrule, and he did).
-    const advanced = found ? advancedRows.find((row) => String(row.gameId) === String(found.game?.id) && cfbdTeamMatches(row.team, team)) : null;
-    const pct = (v) => (Number.isFinite(Number(v)) ? `${Math.round(Number(v) * 100)}%` : '—');
-    const unit = (u) => `${pct(u?.successRate)} (runs ${pct(u?.rushingPlays?.successRate)}, passes ${pct(u?.passingPlays?.successRate)}), ${Number.isFinite(Number(u?.lineYards)) ? Number(u.lineYards).toFixed(1) : '—'} line yards a run`;
-    const advancedLine = advanced ? `      success rate, garbage time out: ${unit(advanced.offense)} · allowed ${unit(advanced.defense)}` : '      success rate: not on file for this game';
+    // No success-rate line (Nov 10 2026 college review, founder: "we shouldnt be like doing math for gary"). It went on every
+    // row Nov 5, and within one slate 25 of 34 reads argued from it, subtracting defense from offense and averaging the
+    // result across opponents ("LSU +17 over the last three, Alabama -1"). The row keeps what happened in the game.
     return [
       `      offense: ${side(own, opp.get('sacks'), sackPlays?.mine)} · ${lost(own, 'giveaway')} · third down ${own.get('thirdDownEff') ?? '—'} · fourth down ${own.get('fourthDownEff') ?? '—'} · team penalties ${penalties(own)}`,
       `      defense: ${side(opp, own.get('sacks'), sackPlays?.theirs)} · ${count(own.get('sacks'), 'sack')}, ${count(own.get('tacklesForLoss'), 'tackle')} for loss · ${lost(opp, 'takeaway')} · opponent third down ${opp.get('thirdDownEff') ?? '—'} · opponent fourth down ${opp.get('fourthDownEff') ?? '—'} · opponent penalties ${penalties(opp)}`,
-      advancedLine,
     ];
   };
   return { find, lines };
@@ -1031,9 +1025,10 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   const weatherLine_ = (row) => (!row ? '\n      weather: not on file' : playedInWeather(row) ? `\n      ${playedInWeather(row)}` : '');
   const seasonGames = `THIS SEASON GAME BY GAME (${season})
 ${RULE}
-Every completed game this season, newest first: date, site, score, the
-score by quarter, the opponent (its conference, record now and other games),
-each unit's box score (runs, passing, turnovers, third and fourth downs,
+Every completed game this season, newest first: date, site, the opponent (its
+conference, talent and poll place, its quarterback that day and its other
+games), then the score and the score by quarter, each unit's box score (runs,
+passing, turnovers and how they happened, third and fourth downs,
 penalties), where each side's points came from, kicking, drives, scoring and
 flow, who was out, and the weather at kickoff when it was rain, snow, a
 storm, wind of 15 mph or more, or freezing.
@@ -1060,7 +1055,16 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       const oppText = seen ? `${short}${short ? '; ' : ''}its games: under ${seen} above`
         : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date });
       if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
-      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: oppText ? `opponent: ${oppText}` : null })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}${theirQb ? ` · opponent's quarterback: ${theirQb}` : ''}\n${units.join('\n')}`
+      // Who the game was against comes before its score, the opponent's quarterback that day with it (Nov 10 2026 college
+      // review: the row opened "W 38-17 @ Auburn" and who Auburn is came after; the NFL row gives the opponent, its
+      // quarterback and who it was missing first). Nothing is added or dropped.
+      const qbThatDay = theirQb ? `its quarterback that day: ${theirQb}` : null;
+      const gamesAt = oppText ? oppText.search(/(?:[,;] )?its games(?:, newest first)?:/) : -1;
+      const against = !qbThatDay ? oppText : !oppText ? qbThatDay
+        : gamesAt < 0 ? `${oppText}; ${qbThatDay}`
+          : gamesAt === 0 ? `${qbThatDay}; ${oppText}`
+            : `${oppText.slice(0, gamesAt)}; ${qbThatDay}; ${oppText.slice(gamesAt).replace(/^[,;] /, '')}`;
+      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: against ? `opponent: ${against}` : null, opponentFirst: true })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}\n${units.join('\n')}`
         // The scoring line says every score's kind; "points from" only stands in when that line is missing (round 16).
         + (played[i].flow?.get(String(r.gameId)) ? '' : `\n      ${points || 'points from: not on file for this game'}`)
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`
