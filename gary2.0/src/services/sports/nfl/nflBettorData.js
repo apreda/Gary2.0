@@ -1158,7 +1158,9 @@ function depthSnaps(d, code, before) {
   };
   return { rosterOf, snaps };
 }
-export async function nextUp(d, homeTeam, awayTeam, before) {
+// `kept`, a Map, keeps what this section read for each team (this week's listed players, ESPN's first quarterback and each
+// listed starter's next man), so THE QUARTERBACKS says the same as this section (round 3, Nov 10 2026).
+export async function nextUp(d, homeTeam, awayTeam, before, kept = null) {
   const lines = [];
   const key = (x) => String(x || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
   for (const team of [awayTeam, homeTeam]) {
@@ -1173,8 +1175,10 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
     // status on the final report is a rest day (round 18: the Bengals' Wk 7 DTs Allen, Hill and Lawrence all played).
     const final = finalReportIn(report, row?.gameday ? `${row.gameday}T12:00:00-05:00` : null);
     const listed = (report?.players || []).filter((p) => /out|doubtful|questionable/i.test(p.game_status || '') || (!final && p.practice === 'DNP'));
+    kept?.set(team, { listed, starter: new Map() });
     const depth = await espnDepthChart(team);
     if (!depth) { if (listed.length) lines.push(`${team}: ESPN's depth chart did not load`); continue; }
+    if (kept) kept.get(team).qb1 = depth.find(([pos]) => /^qb$/i.test(pos))?.[1]?.[0]?.name || null;
     const { rosterOf, snaps } = depthSnaps(d, code, before);
     // A starter on ESPN's chart moved to a reserve, suspended or exempt list since his last game is on no practice report
     // (round 16: Buffalo's C.J. Gardner-Johnson, suspended for the Ravens game, and Damar Hamlin named nowhere).
@@ -1214,10 +1218,11 @@ export async function nextUp(d, homeTeam, awayTeam, before) {
       if (!spot || seen.has(p.name)) continue;
       seen.add(p.name);
       // A spot with no second name is said (round 15: the Titans' punter, on the report, went without a line).
-      if (!spot[1][1]) { lines.push(`${team}: ${p.name} (${spot[0].toUpperCase()}; ${p.game_status || `practice ${p.practice}`}) → no backup listed at his spot on ESPN's chart`); continue; }
+      if (!spot[1][1]) { kept?.get(team)?.starter.set(depthKey(p.name), { spot: spot[0], next: null }); lines.push(`${team}: ${p.name} (${spot[0].toUpperCase()}; ${p.game_status || `practice ${p.practice}`}) → no backup listed at his spot on ESPN's chart`); continue; }
       const skipped = [];
       let next = null;
       for (const a of spot[1].slice(1)) { const why = unavailable(a); if (!why) { next = a; break; } skipped.push(`${a.name} ${why}`); }
+      kept?.get(team)?.starter.set(depthKey(p.name), { spot: spot[0], next: next?.name || null });
       const note = skipped.length ? ` (ahead of him on ESPN's chart: ${skipped.join(', ')})` : '';
       lines.push(`${team}: ${p.name} (${spot[0].toUpperCase()}; ${p.game_status || `practice ${p.practice}`}) → ${next ? `${next.name}${note}: ${snaps(next, { special: /^(pr|kr|k|pk|p|ls|h)$/i.test(spot[0]) })}` : `no available backup on ESPN's chart${note}`}`);
     }
@@ -1236,7 +1241,10 @@ export function deskStarter(deskQbSection, team) {
 // His passing, game by game (`byGame`, the board, which has no game log) or not at all (the read: each game's line in the
 // game log carries his passing beside who it came against). A season total stood beside the game log with no opponent
 // in it (Oct 26 2026 blind review: Cousins's "14 TD, 5 INT", 9 of them against Miami, the Chargers and the Saints).
-export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byGame = false } = {}) {
+// A starter on this week's report (`chart`, what NEXT ON THE DEPTH CHART read) has his status beside his name and the
+// next quarterback on ESPN's chart (round 3, Nov 10 2026: the Nov 8 Browns read "Deshaun Watson" as the plain starter
+// while the report had him questionable with a concussion and the chart had Shedeur Sanders next; Sanders started).
+export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byGame = false, chart = null } = {}) {
   const { season } = d; const out = [];
   for (const team of [awayTeam, homeTeam]) {
     const qb = deskStarter(deskQbSection, team);
@@ -1255,7 +1263,13 @@ export function quarterbacks(d, deskQbSection, homeTeam, awayTeam, before, { byG
     const hasStarted = !qb || k('unknown') > 0 || k('with') > 0 || k('shared') > 0;
     const ids = new Set(played(d, season, before).map((g) => g.game_id));
     const his = (d.playerWeek || []).filter((r) => r.position === 'QB' && sameQb(r.player_display_name, qb) && r.team === codeOf(team) && ids.has(r.game_id));
-    const lines = [`${team}: ${qb || 'starter not on the desk'}`];
+    const seen = chart?.get(team);
+    const rep = qb && seen?.listed?.find((p) => depthKey(p.name) === depthKey(qb));
+    const behind = rep ? seen.starter.get(depthKey(qb)) : null;
+    const next = !rep ? '' : behind?.spot && /^qb$/i.test(behind.spot) ? (behind.next ? `next on ESPN's depth chart: ${behind.next}` : "no available backup on ESPN's depth chart")
+      : seen.qb1 && depthKey(seen.qb1) !== depthKey(qb) ? `ESPN's depth chart lists ${seen.qb1} first` : '';
+    const onReport = rep ? ` (${rep.game_status || `practice ${rep.practice}`} on this week's injury report${rep.injury ? `, ${String(rep.injury).toLowerCase()}` : ''}${next ? `; ${next}` : ''})` : '';
+    const lines = [`${team}: ${qb || 'starter not on the desk'}${onReport}`];
     if (gs.length) lines.push(`  games at quarterback this season: ${who || 'not recorded'}${qb && !hasStarted ? ` · this would be ${qb}'s first game at quarterback this season` : ''}`);
     if (qb && byGame) {
       const at = new Map(gs.map((x) => [x.g.game_id, x]));

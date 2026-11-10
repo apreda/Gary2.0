@@ -73,11 +73,14 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
   // SITUATION" went the way of "HOW GOOD THEY ARE").
   // One memory for both teams' lists (round 16): each opponent's other games once, tonight's two teams' games bare.
   const read = { shown: new Map(), tonight: new Set([codeOf(homeTeam), codeOf(awayTeam)]) };
+  // The depth chart section first: a quarterback on this week's report reads his status and the next man (round 3).
+  const chart = new Map();
+  const nextOnChart = await nextUp(data, homeTeam, awayTeam, before, chart);
   const parts = [
     [header, spreadInWords(line)].filter(Boolean).join('\n'),
-    ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before)],
+    ['THE QUARTERBACKS', quarterbacks(data, qbs, homeTeam, awayTeam, before, { chart })],
     ['THE INJURY REPORT', [injuriesAsReported(desk), backOffReport(data, desk, awayTeam, homeTeam, before)].filter(Boolean).join('\n\n')],
-    ["NEXT ON THE DEPTH CHART (ESPN), FOR STARTERS ON THIS WEEK'S REPORT", await nextUp(data, homeTeam, awayTeam, before)],
+    ["NEXT ON THE DEPTH CHART (ESPN), FOR STARTERS ON THIS WEEK'S REPORT", nextOnChart],
     ["ROSTER MOVES", await rosterMoves(data, homeTeam, awayTeam, before)],
     // The record and the kickers head each team's game log; a separate HOW GOOD THEY ARE repeated its scores and yards
     // (Oct 23 2026 data review), and the record with and without this week's quarterback is in THE QUARTERBACKS.
