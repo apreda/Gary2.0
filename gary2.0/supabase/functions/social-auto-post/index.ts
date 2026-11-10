@@ -2,7 +2,7 @@ import { easternDateOffset } from '../_shared/dateKeys.js';
 import { isSocialServiceRequest } from "../post-single-tweet/authorization.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { socialRunHealth } from "./health.js";
-import { composeFreePickPost } from "./gamePickHook.ts";
+import { composeFreePickPost, composeGamePickHook } from "./gamePickHook.ts";
 import { shortTeam, startWords } from "./teamWords.ts";
 import { runStatDesk } from "./statDesk.ts";
 import { noDashes } from "../_shared/noDashes.js";
@@ -211,6 +211,17 @@ async function freePickText(sp: any): Promise<{ text: string; writer: string }> 
   try {
     const { data } = await sb.from("winners_candidates")
       .select("summary:pick_snapshot->brief->>summary, rationale:pick_snapshot->>rationale").eq("id", sp.candidate_id).limit(1);
+    // THE AUG/SEP LAYOUT (founder, Nov 10 2026: "cant we bring back the tweet format that was getting these views
+    // per tweet?"). A fact, the pick with the full team name, a fact: the "standard" posts that averaged 559 to 596
+    // views (best 3,462), from the same writer that made them. No header, no matchup line. If the writer fails the
+    // post falls through to Gary's own line below.
+    const published = String(data?.[0]?.rationale ?? "");
+    if (sp?.kind !== "prop" && published.trim()) {
+      try {
+        const hook = await composeGamePickHook({ rationale: published, pickLine: ticketWords(sp), matchup: String(sp.matchup ?? ""), league: String(sp.league ?? ""), model: WRITER_MODEL });
+        return { text: hook, writer: "fact / pick / fact" };
+      } catch (e) { console.error("fact / pick / fact failed, using Gary's line: " + String(e)); }
+    }
     const rest = `${betWords(sp)}\n\n${game(matchupWords(sp, ""))}`;
     const line = garyLineFor(String(data?.[0]?.summary ?? ""), rest);
     if (line) return { text: `${line}\n\n${rest}`, writer: "gary's line" };
