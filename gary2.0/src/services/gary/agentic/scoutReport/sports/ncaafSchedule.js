@@ -252,6 +252,21 @@ export function opponentStrength(strength, teamName, when, leagueGames) {
   return bits.length ? bits.join(', ') : null;
 }
 
+/**
+ * A game row's opponent clause: its label, its quarterback that day, its games. Who the game was against comes before
+ * its score, the opponent's quarterback that day with it (Nov 10 2026 college review: the row opened "W 38-17 @ Auburn"
+ * and who Auburn is came after). The three parts are split by " · ", as "; " splits the quarterbacks inside the middle
+ * one (round 5: "...that week; its quarterback that day: A 25-of-38 ...; B 4-of-5 ...; its games" read as one list).
+ */
+export function opponentClause(oppText, theirQb) {
+  const qbThatDay = theirQb ? `its quarterback that day: ${theirQb}` : null;
+  const gamesAt = oppText ? oppText.search(/(?:[,;] | · )?its games(?:, newest first)?:/) : -1;
+  return !qbThatDay ? oppText : !oppText ? qbThatDay
+    : gamesAt < 0 ? `${oppText} · ${qbThatDay}`
+      : gamesAt === 0 ? `${qbThatDay} · ${oppText}`
+        : `${oppText.slice(0, gamesAt)} · ${qbThatDay} · ${oppText.slice(gamesAt).replace(/^(?:[,;] | · )/, '')}`;
+}
+
 function splitLine(team, label, results, describe) {
   // One builder for all three sites: the shared split reads `home`.
   const split = homeAwaySplit(results.map((r) => ({ ...r, home: true }))).home;
@@ -1074,18 +1089,10 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       const etDayOf = (x) => new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
       const seen = shownOpponents.get(Number(r.opponentId));
       const short = label(r.opponentId, { full: false, when: r.date });
-      const oppText = seen ? `${short}${short ? '; ' : ''}its games: under ${seen} above`
+      const oppText = seen ? `${short}${short ? ' · ' : ''}its games: under ${seen} above`
         : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date });
       if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
-      // Who the game was against comes before its score, the opponent's quarterback that day with it (Nov 10 2026 college
-      // review: the row opened "W 38-17 @ Auburn" and who Auburn is came after; the NFL row gives the opponent, its
-      // quarterback and who it was missing first). Nothing is added or dropped.
-      const qbThatDay = theirQb ? `its quarterback that day: ${theirQb}` : null;
-      const gamesAt = oppText ? oppText.search(/(?:[,;] )?its games(?:, newest first)?:/) : -1;
-      const against = !qbThatDay ? oppText : !oppText ? qbThatDay
-        : gamesAt < 0 ? `${oppText}; ${qbThatDay}`
-          : gamesAt === 0 ? `${qbThatDay}; ${oppText}`
-            : `${oppText.slice(0, gamesAt)}; ${qbThatDay}; ${oppText.slice(gamesAt).replace(/^[,;] /, '')}`;
+      const against = opponentClause(oppText, theirQb);
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: against ? `opponent: ${against}` : null, opponentFirst: true })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}\n${units.join('\n')}`
         // The scoring line says every score's kind; "points from" only stands in when that line is missing (round 16).
         + (played[i].flow?.get(String(r.gameId)) ? '' : `\n      ${points || 'points from: not on file for this game'}`)

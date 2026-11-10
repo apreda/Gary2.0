@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
+import { opponentClause } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -83,5 +84,13 @@ North Carolina Tar Heels (5-3):
       ['W', 15, 10, false, 'vs', 'TCU Horned Frogs', false, 'Big 12'],
     ]);
     expect(unc.games[0]).toMatchObject({ qb: 'Billy Edwards Jr. (started)', off: 410, def: 382 });
+  });
+
+  // Round 5: the opponent clause's parts are split by " · ", as "; " splits its quarterbacks. Rows stored before read too.
+  it('splits the opponent clause by dots and still reads an FCS label', () => {
+    expect(opponentClause('ACC, talent No. 35 of 138, its games, newest first: W 42-41 (OT) @ UConn Huskies', 'A 25-of-38, 290 yds; B 4-of-5, 30 yds'))
+      .toBe('ACC, talent No. 35 of 138 · its quarterback that day: A 25-of-38, 290 yds; B 4-of-5, 30 yds · its games, newest first: W 42-41 (OT) @ UConn Huskies');
+    const row = `THIS SEASON GAME BY GAME (2026)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nEvery completed game this season, newest first.\n\nNorth Carolina Tar Heels (1-0):\n  Sat, Sep 12 · vs East Tennessee State Buccaneers — opponent: ${opponentClause('FCS', 'Mason Mims (started) 23-of-31, 178 yds')} — W 35-3 — by quarter 7-14-14-0, opponent 0-0-0-3\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    expect(seasonGames(row)[0].games[0]).toMatchObject({ result: 'W', pf: 35, pa: 3, fcs: true, oppNow: 'FCS' });
   });
 });
