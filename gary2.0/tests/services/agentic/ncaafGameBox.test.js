@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays, ncaafFlowLines, passerSpanText } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays, ncaafFlowLines, passerSpanText, ncaafRedZone } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -233,5 +233,14 @@ describe('when each passer was in', () => {
     expect(passerSpanText(spans['8'])).toBe('Q1 12:58 to Q2 0:11');
     expect(passerSpanText(spans['9'])).toBe('Q3 13:40 to OT');
     expect(spans['7']).toBeUndefined();
+  });
+});
+
+// "red zone 5 trips, 1 TD" left BYU's two end-zone interceptions at Utah unsaid (Nov 10 2026 college pass 2).
+describe('ncaafRedZone', () => {
+  it('says how each trip inside the 20 ended', () => {
+    const d = (result, inside20) => ({ result, inside20 });
+    expect(ncaafRedZone([d('FG', true), d('TD', true), d('PUNT', false), d('INT', true), d('INT', true), d('FG', true)])).toBe('red zone 5 trips (2 FG, 1 TD, 2 interceptions)');
+    expect(ncaafRedZone([d('PUNT', false)])).toBe('no red-zone trips');
   });
 });

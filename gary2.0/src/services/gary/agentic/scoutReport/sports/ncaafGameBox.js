@@ -930,12 +930,14 @@ export function ncaafReturns(box, teamId, cfbd = null) {
   return parts.length ? parts.join(', ') : 'no returns';
 }
 
-/** A team's red-zone trips in one game and how many ended in a touchdown (round 9, Oct 29 2026: the college reads had
- * none; the NFL's drive line does). Null when the drives carry no snap positions (an older cached box). */
+/** A team's red-zone trips in one game and how each ended (round 9, Oct 29 2026: the college reads had none; the NFL's
+ * drive line does). Null when the drives carry no snap positions (an older cached box). How each ended, as the short
+ * fields' clause says it (Nov 10 2026 college pass 2: "red zone 5 trips, 1 TD" left BYU's two end-zone interceptions at
+ * Utah, Michigan's missed 32-yarder from the Indiana 1 and five more recaps' stops inside the 20 unsaid). */
 export function ncaafRedZone(drives) {
   if (!drives?.length || drives.every((d) => d.inside20 === undefined)) return null;
-  const trips = drives.filter((d) => d.inside20), td = trips.filter((d) => ncaafDriveWord(d.result) === 'TD').length;
-  return trips.length ? `red zone ${trips.length} trip${trips.length === 1 ? '' : 's'}, ${td} TD` : 'no red-zone trips';
+  const trips = drives.filter((d) => d.inside20);
+  return trips.length ? `red zone ${trips.length} trip${trips.length === 1 ? '' : 's'} (${ncaafDriveTally(trips.map((d) => d.result))})` : 'no red-zone trips';
 }
 
 /** Drive results counted in words: "6 punts, 1 safety, 3 on downs, 1 TD". */
