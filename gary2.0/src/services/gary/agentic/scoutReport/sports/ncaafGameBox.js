@@ -384,7 +384,9 @@ export function gameBoxFromSummary(summary, eventId) {
     for (const seg of String(p?.text || '').matchAll(new RegExp(`((?:${NAME_RE}(?:,\\s*|\\s+and\\s+)?)+)\\s+injured\\b`, 'g'))) {
       for (const m of seg[1].matchAll(new RegExp(NAME_RE, 'g'))) {
         const jersey = m[1], who = m[2].replace(/\.\s?/, '.');
-        const later = allPlays.slice(i + 1).some((q) => new RegExp(`#${jersey}\\s+${who.replace('.', '\\.\\s?')}\\b`).test(String(q?.text || '')));
+        // Not \b after the name: "R.Joseph Jr." ends in a dot, and \b there never matched, so 9 of 33 hurt players with a
+        // "Jr." read "not on a later play" though later plays named them (Nov 10 2026 data round, ECU's R.Joseph Jr.).
+        const later = allPlays.slice(i + 1).some((q) => new RegExp(`#${jersey}\\s+${who.replace('.', '\\.\\s?')}(?!\\w)`).test(String(q?.text || '')));
         const [init, last] = who.split('.');
         const byName = (x) => x.first?.[0] === init[0] && String(x.last || '').toLowerCase().startsWith(String(last || '').split(' ')[0].toLowerCase());
         const owner = players.find((x) => String(x.jersey ?? '') === jersey && byName(x)) || players.find(byName);
@@ -699,7 +701,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v32 (Nov 10 2026 audit): the by-score plays read the final ruling and the runs and catches that stood with a foul after them.
   // v33 (Nov 10 2026 audit): a starting quarterback whose last name ends in "Jr." is found.
   // v34 (Nov 10 2026 review, round 4): each passer's first and last play (passerSpans).
-  return cachedResearch(`espn_cfb_box_v34:${eventId}`, async () => {
+  // v35 (Nov 10 2026 data round): a hurt player whose name ends in "Jr." is found on later plays.
+  return cachedResearch(`espn_cfb_box_v35:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

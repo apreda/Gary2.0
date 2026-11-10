@@ -198,6 +198,21 @@ describe('the starting quarterback from the plays', () => {
   });
 });
 
+// East Carolina vs South Florida (2026): R.Joseph Jr. was hurt in the 2nd quarter and caught passes after, yet read "not on a later play".
+describe('a hurt player on a later play', () => {
+  it('finds a name ending in Jr. on a later play', () => {
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'receiving', keys: ['receptions'], athletes: [{ athlete: { id: '7', firstName: 'R', lastName: 'Joseph Jr.', displayName: 'R Joseph Jr.', jersey: '1' }, stats: ['2'] }] }] }] },
+      drives: { previous: [{ team: { id: '1' }, plays: [
+        { id: 'a', text: '(12:54) #9 E.Williams pass complete short left to #1 R.Joseph Jr. for 15 yards. #1 R.Joseph Jr. injured on the play', type: { text: 'Pass Reception' }, start: { team: { id: '1' } }, period: { number: 2 } },
+        { id: 'b', text: '(09:59) #9 E.Williams pass complete short left to #1 R.Joseph Jr. caught at ECU38, for 17 yards', type: { text: 'Pass Reception' }, start: { team: { id: '1' } }, period: { number: 3 } },
+      ] }] },
+    };
+    expect(gameBoxFromSummary(summary, '1').hurt.map((h) => [h.who, h.later])).toEqual([['R.Joseph Jr.', true]]);
+  });
+});
+
 describe('when each passer was in', () => {
   it('gives each passer his first and last play, and none when the plays miss his box attempts', () => {
     const passer = (id, first, last, att) => ({ athlete: { id, firstName: first, lastName: last, displayName: `${first} ${last}` }, stats: [String(att)] });
