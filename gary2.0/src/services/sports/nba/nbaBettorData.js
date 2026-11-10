@@ -170,6 +170,12 @@ const reportDate = (tip) => tip.toLocaleDateString('en-US', { timeZone: 'America
 // A team's Out rows on one listing (two-way players' G League listings are not absences from the rotation).
 const outRows = (side) => [...side.values()].filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason));
 
+/** Of a game's Out list, the players who had played for the team (`played`: names from its boxes), in the report's
+ * spelling. The report and the box can spell one player two ways (Nov 10 2026 data round: Washington's "Alex Sarr" on
+ * the report is the box's "Alexandre Sarr", and his Out on Nov 2 read "WAS out: nobody"; Dallas's "Sergio de Larrea"
+ * and Minnesota's "Terrence Shannon Jr" were dropped the same way, 16 lists in 154 games). */
+export const outWhoHadPlayed = (out, played) => (out || []).filter((name) => samePlayerIn(name, played, [...(out || []), ...played]));
+
 // Who played for a team in its last PLAYED_FROM_GAMES games before `before`, from their box scores: { n, keys }, or
 // null when a box is not on file (Oct 27 2026 data audit: Golden State's Out list read "Jimmy Butler III, Kristaps
 // Porzingis, Moses Moody", three players who had not played all season, and seven reads in three nights called a win
@@ -434,12 +440,8 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // for that team this season: someone who hasn't played yet is no change from what the team has been. Tonight's own
   // team keeps the bare score, since those games are full rows in its list.
   const teamBoxes = byTeamSummaries ? await seasonTeamBoxes('NBA', season, asOfDay).catch(() => null) : null;
-  const playedFor = (teamId) => new Set((byTeamSummaries?.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[String(r.summary.home.id) === String(teamId) ? 'home' : 'away'] || []));
-  const outWords = (r, side, teamId) => {
-    if (r.summary.listed?.[side] == null) return 'not on file';
-    const played = playedFor(teamId);
-    return (r.summary.out?.[side] || []).filter((name) => played.has(name)).join(', ') || 'nobody';
-  };
+  const playedFor = (teamId) => [...new Set((byTeamSummaries?.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[String(r.summary.home.id) === String(teamId) ? 'home' : 'away'] || []))];
+  const outWords = (r, side, teamId) => (r.summary.listed?.[side] == null ? 'not on file' : outWhoHadPlayed(r.summary.out?.[side], playedFor(teamId)).join(', ') || 'nobody');
   const boxWords = (t) => `${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} rebounds (${t.oreb} offensive), ${t.turnover} turnovers`;
   const otherGames = (teamId, gameId) => {
     if (!byTeamSummaries) return null;
