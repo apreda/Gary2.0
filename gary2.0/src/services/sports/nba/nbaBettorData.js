@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries, seasonTeamBoxes } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, lastLeft, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { flowFacts, lastLeft, newToTheFive, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 import { threesByDefender, threesByDefenderText } from './nbaThreesByDefender.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
@@ -454,6 +454,12 @@ export async function gameByGame(team, league, before = new Date(), { season = n
       const played = box?.[mine]?.fga != null && box?.[theirs]?.fga != null ? `; about ${box[mine].possessions} possessions; ${boxWords(box[mine])}; allowed ${boxWords(box[theirs])}` : '';
       return `${score} (their out: ${outWords(r, mine, teamId)}; ${r.summary[theirs].abbr || r.summary[theirs].name} out: ${outWords(r, theirs, r.summary[theirs].id)}${played})`; }).join(', ');
   };
+  // Who joined the five, from the stored games before this one (Nov 10 2026 data round 4: 10 of 40 ESPN recaps named a
+  // change to the five, and the row's started line said only who started).
+  const withChanges = (text, g, i) => {
+    const five = newToTheFive(byTeamSummaries, ts.id, g.id, games.length - 1 - i);
+    return text.replace(/^( {6}started: .+)$/m, (l) => (five && !/not on file$/.test(l) ? `${l}; ${five}` : l));
+  };
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
     const opp = home ? g.visitor_team?.full_name : g.home_team?.full_name;
@@ -486,7 +492,7 @@ export async function gameByGame(team, league, before = new Date(), { season = n
     if (fullThere) return `  ${etDay(g.datetime || `${g.date}T16:00:00Z`)} · ${home ? 'vs' : '@'} ${opp} · ${us > them ? 'W' : 'L'} ${us}-${them}: the meeting, in full under ${meetingUnder} above`;
     const sideThere = Boolean(meetingWith) && String(opp).split(' ').pop() === String(meetingWith.team).split(' ').pop()
       && (meetingWith.data?.games || []).slice(0, BOX_GAMES).some((x) => String(x.id) === String(g.id));
-    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i], sideThere), earlyLine(i, g, stored)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
+    return i < BOX_GAMES ? `${line}\n${[flow, rests[i], ownOuts[i], withChanges(whoPlayed(boxes[i], boxes.filter((_, k) => k !== i), outs[i], starters[i], scoring, officials[i], ownOuts[i], sideThere), g, i), earlyLine(i, g, stored)].filter(Boolean).join('\n')}` : `${line}\n${[flow, older].filter(Boolean).join('\n')}`;
   });
   return [`${head}, ${games.length > GAMES_SHOWN ? `the last ${GAMES_SHOWN} of ${games.length} games, ` : ''}newest first:`, ...rows].join('\n');
 }

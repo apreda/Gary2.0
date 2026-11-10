@@ -104,6 +104,31 @@ export function nextListed(byTeam, teamId, date, name) {
   if (hit?.status === 'Out' && playedNext) return null;
   return hit ? `${hit.status} for the next game, ${etDay(n.game_date)}: ${String(hit.reason || 'reason not on file').replace(/^Injury\/Illness - /, '')}` : null;
 }
+/** A team's stored games before `gameId` and that game's own summary, from `byTeam`; null when the game is not stored
+ * or `expected` (how many games the team played before it) disagrees, so a record not built yet is never read as a
+ * game someone missed. */
+function earlierGames(byTeam, teamId, gameId, expected) {
+  const list = byTeam?.get(String(teamId)) || [];
+  const k = list.findIndex((r) => String(r.game_id) === String(gameId));
+  if (k < 0 || (expected != null && k !== expected)) return null;
+  return { earlier: list.slice(0, k), here: list[k] };
+}
+const inGame = (name, names) => Boolean(samePlayerIn(name, names, names.includes(name) ? names : [...names, name]));
+
+/** Who started this game and not the team's game before it, and whose first start of the season it was (round 4: 10 of
+ * 40 recaps named a change to the five, Meleek Thomas "making his first NBA start", read on the row as one more name on
+ * the started line). '' when the five is the same or the team's games are not all stored. */
+export function newToTheFive(byTeam, teamId, gameId, expected) {
+  const g = earlierGames(byTeam, teamId, gameId, expected);
+  if (!g || !g.earlier.length) return '';
+  const startersOf = (r) => r.summary.starters?.[summarySide(r.summary, teamId)] || [];
+  const five = startersOf(g.here); const before = startersOf(g.earlier[g.earlier.length - 1]);
+  if (five.length !== 5 || before.length !== 5) return '';
+  const fresh = five.filter((name) => !inGame(name, before))
+    .map((name) => (g.earlier.some((r) => inGame(name, startersOf(r))) ? name : `${name} (his first start this season)`));
+  return fresh.length ? `not in the five for the team's game before: ${fresh.join(', ')}` : '';
+}
+
 /** When a player last left the floor, from a stored game ("last left in the 2nd quarter with 3:19 left"); null when the
  * game is not stored, he has no exit on file, or he sat at a quarter's end that the record did not follow to the second. */
 export function lastLeft(rec, name) {
