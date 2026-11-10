@@ -146,16 +146,25 @@ export function turnoverDetail(summary) {
     if (hasPick) { if (at >= 0 && pickFirst && events.length) events.length = 0; else events.push({ by: startT }); }
     for (const e of events) {
       const to = other(e.by), base = prev ? scoreOf(prev, to) : 0;
-      let last = scoreOf(p, to), j = i;
+      // The possession that followed (Nov 10 2026 check of all 685 games: a timeout is logged under the team that called it
+      // and ended 225 of these possessions early, Missouri's timeout before Texas's touchdown off a fumble among them, and
+      // ESPN tells some turnovers twice under different clocks; both are passed over, their scores unread). A score that
+      // goes down from one row to the next (74 of 1,717 turnovers: rows logged out of order or carrying a later score) leaves
+      // that team's points off turnovers unsaid, as an unsure count does.
+      const told = (q) => `${q?.period?.number}|${finalRuling(q?.text).replace(/forced by.*$/i, '').slice(0, 50)}`;
+      let last = scoreOf(p, to), j = i, messy = Number.isFinite(base) && last < base;
       while (j + 1 < plays.length) {
         const n = plays[j + 1], nStart = String(n?.start?.team?.id ?? '');
+        if (/^timeout\b/i.test(String(n?.type?.text || '')) || (finalRuling(p.text).length > 20 && told(n) === told(p))) { j += 1; continue; }
+        const s = scoreOf(n, to);
+        if (Number.isFinite(s) && s < last) messy = true;
         if (nStart && nStart !== to) break;
-        if (/end of (?:half|game|regulation)|end (?:of )?(?:2nd|4th) quarter/i.test(String(n?.type?.text || ''))) break;
-        j += 1; if (Number.isFinite(scoreOf(n, to))) last = scoreOf(n, to);
+        if (/end of (?:half|game|regulation)|end (?:of )?(?:2nd|4th) quarter/i.test(`${n?.type?.text || ''} ${n?.text || ''}`)) break;
+        j += 1; if (Number.isFinite(s)) last = s;
       }
       const pts = last - base;
       out[to].takeaways += 1;
-      if (Number.isFinite(pts) && pts >= 0 && pts <= 8) { out[to].pointsOff += pts; if (e.fumble) e.fumble.credit = { to, pts }; } else out[to].unsure = true;
+      if (!messy && Number.isFinite(pts) && pts >= 0 && pts <= 8) { out[to].pointsOff += pts; if (e.fumble) e.fumble.credit = { to, pts }; } else out[to].unsure = true;
     }
   }
   return out;
@@ -617,7 +626,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v27 (round 18): a drive ESPN logs twice is one; early exits judged by the score when the player left.
   // v28 (Nov 5 2026): runs and pass plays by the score at the snap.
   // v29 (Nov 9 2026): how the turnovers happened (fumbles on the ground, the ones lost, points off them).
-  return cachedResearch(`espn_cfb_box_v29:${eventId}`, async () => {
+  // v30 (Nov 10 2026): points off a turnover read past timeouts and a turnover told twice.
+  return cachedResearch(`espn_cfb_box_v30:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {

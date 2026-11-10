@@ -72,4 +72,23 @@ describe('how a college game\'s turnovers happened', () => {
     expect(d['1']).toMatchObject({ fumbles: 2, lost: 1, picks: 1, pointsOff: 0 });
     expect(d['2']).toMatchObject({ fumbles: 0, lost: 0, picks: 0, takeaways: 2, pointsOff: 14 });
   });
+
+  // Texas at Missouri (Oct 17 2026): Missouri's timeout after the fumble is logged under Missouri, and the touchdown that
+  // followed read as 0 points off it.
+  it('reads the possession after a turnover past the other team\'s timeout and the same turnover told twice', () => {
+    const withTimeout = { ...summary, drives: { previous: [
+      { team: { id: '1' }, plays: [
+        play('(13:40) #5 A.Back rush left for 2 yards gain to the AAA30 fumbled by #5 A.Back at AAA30 forced by #44 H.Hit recovered by HHH #44 H.Hit at AAA30', '1', '2', 0, 0, { clock: { displayValue: '13:40' } }),
+        play('(13:40) #5 A.Back rush left for 2 yards gain to the AAA30 fumbled by #5 A.Back at AAA30 forced by #45 H.Help recovered by HHH #44 H.Hit at AAA30', '1', '2', 0, 21, { clock: { displayValue: '13:31' } }),
+      ] },
+      { team: { id: '2' }, plays: [
+        play('(13:20) #22 R.Home rush middle for 4 yards gain to the AAA26', '2', '2', 0, 0, { clock: { displayValue: '13:20' } }),
+        play('Timeout AAA, clock 13:05', '1', '2', 0, 0, { clock: { displayValue: '13:05' }, type: { text: 'Timeout' } }),
+        play('(13:00) #12 Q.Home pass complete to #1 W.Out for 26 yards to the AAA00 TOUCHDOWN, clock 12:52 #3 K.Kick kick attempt good', '2', '2', 0, 7, { clock: { displayValue: '13:00' } }),
+      ] },
+    ] } };
+    const d = turnoverDetail(withTimeout);
+    expect(d['1']).toMatchObject({ fumbles: 1, lost: 1 });
+    expect(d['2']).toMatchObject({ takeaways: 1, pointsOff: 7, unsure: false });
+  });
 });
