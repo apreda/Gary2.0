@@ -292,12 +292,15 @@ export function rosterWeekWords(roster, injuries = null) {
 /** The team's quarterbacks each week, keyed "season|week|TEAM": every passer with 5+ attempts, most first (Oct 29 2026
  * hunt, round 7: the Ravens' receivers read the same with Lamar Jackson and with Tyler Huntley). */
 export function weekPassers(rows) {
-  const by = new Map();
+  const by = new Map(), few = new Map();
   for (const r of rows || []) {
-    if (!(n(r.attempts) >= 5)) continue;
     const k = `${r.season}|${Number(r.week)}|${r.team}`;
-    by.set(k, [...(by.get(k) || []), r]);
+    if (n(r.attempts) >= 5) by.set(k, [...(by.get(k) || []), r]);
+    else if (r.position === 'QB' && n(r.attempts) > 0) few.set(k, [...(few.get(k) || []), r]);
   }
+  // A side that threw under five passes all game still had a quarterback (Nov 10 2026: Baker Mayfield threw three in the
+  // Buccaneers' Week 8 win, and their receivers' rows for that game named no quarterback).
+  for (const [k, list] of few) if (!by.has(k)) by.set(k, list);
   return new Map([...by].map(([k, list]) => [k, list.sort((a, b) => n(b.attempts) - n(a.attempts)).map((r) => r.player_display_name)]));
 }
 

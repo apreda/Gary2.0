@@ -21,7 +21,7 @@ import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
 import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
-import { withOptionalData } from '../../pickDataIntegrity.js';
+import { withOptionalData, PickDataError } from '../../pickDataIntegrity.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
@@ -87,7 +87,12 @@ export async function buildNflReadStory(desk, { homeTeam, awayTeam, gameId, game
       `${skillPlayers(data, awayTeam, before, sectionOf(desk, 'INJURY REPORT'), { skip: sheetPlayers })}\n${skillPlayers(data, homeTeam, before, sectionOf(desk, 'INJURY REPORT'), { skip: sheetPlayers })}`],
     ['SCHEDULE, TRAVEL AND WEATHER', situation],
   ];
-  return { line, story: parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n') };
+  const story = parts.map((p) => (Array.isArray(p) ? (p[1] ? `${p[0]}\n${p[1]}` : null) : p)).filter(Boolean).join('\n\n');
+  // NO DATA, NO PICK (nflBettorData.js loadBettorData stops on a file that did not load): a line here saying a source did
+  // not load (a club's ESPN roster or depth chart) stops the read the same way, before any ask.
+  const holes = [...new Set((story.match(/[^().;·\n]*did not load[^().;·\n]*/g) || []).map((s) => s.trim()))];
+  if (holes.length) throw new PickDataError(holes.map((source) => ({ source, code: 'in the game read' })));
+  return { line, story };
 }
 
 /** One game on Gary's morning board (winners/nflBoard.js): the spread, the quarterbacks, who's out, how good, the

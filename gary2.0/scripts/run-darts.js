@@ -227,10 +227,10 @@ async function throwLeague(league) {
       for (const f of board.frames) f.extra = [...(f.extra || []), ...(await stadiumWeatherLines({ homeTeam: f.homeFull, awayTeam: f.awayFull, commence: f.commence, season: board.season }).catch(() => ['Stadium and kickoff weather: not on file.']))];
       // Each club's roster moves since its last game, as the game reads have them (round 13: the deadline trades of Jeffery
       // Simmons, Quenton Nelson and DeForest Buckner were nowhere in darts).
-      const bettor = await loadBettorData(board.season).catch(() => null);
-      for (const f of board.frames) f.extra = [...(f.extra || []), bettor
-        ? `Roster moves since each club's last game:\n${await rosterMoves(bettor, f.homeFull, f.awayFull, nflEtDate(new Date(f.commence))).catch((e) => `not on file (${e.message})`)}`
-        : "Roster moves since each club's last game: not on file (the weekly files did not load)"];
+      // The game data stops itself when a source did not load (nflBettorData.js); here that is no darts, tried again next run.
+      const bettor = await loadBettorData(board.season).catch((e) => { throw new DartsDataMissing(e.failures?.length ? e.failures.map((x) => `${x.source} did not load`) : [`the game data did not load (${e.message})`]); });
+      for (const f of board.frames) f.extra = [...(f.extra || []),
+        `Roster moves since each club's last game:\n${await rosterMoves(bettor, f.homeFull, f.awayFull, nflEtDate(new Date(f.commence))).catch((e) => `not on file (${e.message})`)}`];
       // TODAY'S NEWS in each frame, from the news desk the game read and the props desk read (founder, Nov 2 2026, MNF:
       // the darts read no news, so Zach Charbonnet's first game since a torn ACL, and Jadarian Price off IR, were a bare
       // "no games yet" row; the Wilson TD dart read the backfield as Wilson's). The desk reads the frame as Gary has it.

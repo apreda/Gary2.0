@@ -2,7 +2,7 @@ import { assessPropEvidence, recordJevDecision, JEV_PROPS_SHA } from '../../prov
 import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { filterStandardPropMarkets, STANDARD_PROPS_SHA } from '../standardPropMarkets.js';
 import { nflLadderAllowance } from './nflPropLadders.js';
-import { withPickDataIntegrity, assertPickDataIntegrity } from '../pickDataIntegrity.js';
+import { withPickDataIntegrity, assertPickDataIntegrity, PickDataError } from '../pickDataIntegrity.js';
 /**
  * THE FOOTBALL PROPS DESK — NFL + NCAAF props on the same system as MLB
  * (founder GO, Aug 20 2026: "it needs to be the same system as MLB").
@@ -239,6 +239,13 @@ async function loadNflSheetContext({ season, game, players }) {
     getNflSchedule().catch(() => null),
     loadNflverseFile('roster_weekly', season).catch(() => null),
   ]);
+  // NO DATA, NO PICK (founder, Nov 10 2026: "we have to make sure the bad inputs dont exist"; nflBettorData.js): a sheet
+  // source that did not load stops this game's props before any ask, and the game's next tier loads it again.
+  const lost = [[rows?.length, 'the weekly player stats'], [snapFile?.size, 'the snap counts'], [days?.size, 'the game days'],
+    [schedule && !schedule.unavailable, 'the schedule file'], [roster && !roster.unavailable, 'the weekly rosters'],
+    [rz?.byName?.size, 'the red zone file'], [defCur?.size, "the defenses' games by position"]]
+    .filter(([ok]) => !ok).map(([, source]) => ({ source, code: 'did not load' }));
+  if (lost.length) throw new PickDataError(lost);
   const snaps = aliasByRoster(snapFile, rows, roster && !roster.unavailable ? roster.rows : null);
   // The league's official report for this game's week over the feed's rows (withOfficialReport).
   const week = schedule && !schedule.unavailable ? Number(scheduleRowFor(schedule, season, nflverseCode(game.home_team), nflverseCode(game.away_team), game.commence_time)?.week) || null : null;
@@ -404,7 +411,7 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
   if (league === 'NFL') {
     const sheetMarkets = board.markets;
     const sheetContext = await loadNflSheetContext({ season: Number(context.dataWindow?.season), game, players: [...new Set(sheetMarkets.map((m) => m.player))] })
-      .catch((e) => { console.warn(`   [Football Props] sheet context unavailable: ${e.message}`); return {}; });
+      .catch((e) => { throw e instanceof PickDataError ? e : new PickDataError([{ source: "the prop sheets' data", code: e.message }]); });
     const sheets = buildFootballPropSheets({
       storyHasReport: true,
       context: sheetContext,
@@ -422,8 +429,10 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
       sheetsBlock = `\n\n${sheets.text}`;
       console.log(`   [Football Props] sheets: ${sheets.players} player(s) of ${readBoard.players.size} on the board`);
     } else {
-      sheetsBlock = "\n\n═══ THE PROP SHEETS ═══\nNot on file: the players' games did not load.";
+      throw new PickDataError([{ source: "the players' games for the prop sheets", code: 'did not load' }]);
     }
+    const holes = [...new Set((sheetsBlock.match(/[^().;·\n]*did not load[^().;·\n]*/g) || []).map((s) => s.trim()))];
+    if (holes.length) throw new PickDataError(holes.map((source) => ({ source, code: 'in the prop sheets' })));
   }
 
   // The story after the sheets: CARRIES AND TARGETS leaves out the players whose sheet is below and keeps their

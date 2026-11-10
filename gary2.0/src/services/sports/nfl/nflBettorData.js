@@ -16,6 +16,7 @@ import { loadNflGameWeather, gameWeatherLine } from './nflGameWeather.js';
 import { withOfficialBox } from './espnNflBox.js';
 import { getNflHeadCoach } from '../../providers/espnNflCoaches.js';
 import { finalReportIn } from './nflAvailability.js';
+import { PickDataError } from '../../gary/pickDataIntegrity.js';
 
 const nameOf = Object.fromEntries(Object.entries(NFLVERSE_TEAM_CODES).map(([n, c]) => [c, n]));
 export const codeOf = (team) => NFLVERSE_TEAM_CODES[team];
@@ -83,6 +84,18 @@ export async function loadBettorData(season) {
   // the second system printed the schedule's out-of-date "coach Sean McDermott" on every Bills game). Null: not on file.
   const coaches = new Map(await Promise.all(Object.entries(NFLVERSE_TEAM_CODES).map(async ([name, code]) => [code, await getNflHeadCoach(name, season).catch(() => null)])));
   const retired = await espnRetirements(season);
+  // NO DATA, NO PICK (founder, Nov 10 2026: "we have to make sure the bad inputs dont exist"). On Nov 8 the Bengals at
+  // Falcons read went to Gary at 5:36 AM without the weekly player stats: 65 lines read "not on file" and the pick was
+  // made. A source that did not load stops everything built on this data before any ask (the game read, the props desk,
+  // the Winners board, the darts' game packet); the pick's next tier and the darts' next run load it again. A file
+  // nflverse has not published yet (a season's first week) is not a failed load.
+  const lost = (f) => !f || (f.unavailable && !/has not published/.test(String(f.reason || '')));
+  const failed = [[schedule, 'the schedule file'], [tw, 'the weekly team stats'], [pw, 'the weekly player stats'], [sc, 'the snap counts'],
+    [rw, 'the weekly rosters'], [led, 'the play-by-play ledger'], [pp, 'the pass charting'], [dp, 'the defense charting'], [rr, 'the run charting'],
+    [recAdv, 'the receiving charting'], [ij, 'the injury report file'], [weather, 'the game weather'], [official, 'the official box scores']]
+    .filter(([f]) => lost(f)).map(([, source]) => ({ source, code: 'did not load' }));
+  if ([...(weather?.values() || [])].some((w) => w?.missing)) failed.push({ source: 'the game weather at a stadium', code: 'did not load' });
+  if (failed.length) throw new PickDataError(failed);
   return { season, schedule: scheduleRows, scheduleMissing: !schedule || Boolean(schedule.unavailable), retired, recAdv: recAdv && !recAdv.unavailable ? recAdv.rows : null,
     teamWeek: rows(tw), playerWeek: official?.rows ?? rows(pw), officialCorrections: official?.corrected ?? null, snaps: rows(sc), rosterWeekly: rows(rw),
     ledgerGames: ledger ? new Map((ledger.games || []).map((g) => [g.game_id, g])) : null, weather, coaches,
@@ -117,8 +130,12 @@ const yards = (r) => n(r.passing_yards) - Math.abs(n(r.sack_yards_lost)) + n(r.r
 // played start to finish (Oct 23 2026 data check), and it is never used in its place (founder, Oct 23: no fallback that
 // gives different data when the source fails): without the player stats, who played says "not on file".
 function passersOf(d, g, code) {
-  const list = (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code && n(r.attempts) >= 5)
-    .sort((a, b) => n(b.attempts) - n(a.attempts));
+  const side = (d.playerWeek || []).filter((r) => r.game_id === g.game_id && r.team === code).sort((a, b) => n(b.attempts) - n(a.attempts));
+  let list = side.filter((r) => n(r.attempts) >= 5);
+  // A side that threw under five passes all game still had a quarterback (Nov 10 2026: Baker Mayfield threw three in the
+  // Buccaneers' 16-0 Week 8 win, so that game had no quarterback and every Buccaneers read since said his games at
+  // quarterback were "not on file (the weekly player stats did not load)").
+  if (!list.length) list = side.filter((r) => r.position === 'QB' && n(r.attempts) > 0);
   // The quarterback who started and left early is on the list whatever his attempts (Oct 27 2026 data loop: Darnold,
   // Murray, Dart and Mariota each started a game and threw under five passes, and their games read as games they missed).
   const starter = startedEarlyExit(d, g, code);
