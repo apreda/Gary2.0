@@ -844,7 +844,7 @@ function offenseLines(team, reported, rows, results, onFile, core, exempt = []) 
  * whether he is on this week's report; a player on it has his last games beside his status in the availability section,
  * so here he gets his status only.
  */
-function regularsLines(team, reported, rows, results, onFile, core, plays = null, starts = new Map(), state = 'checked', exempt = []) {
+export function regularsLines(team, reported, rows, results, onFile, core, plays = null, starts = new Map(), state = 'checked', exempt = []) {
   // Not on the report only when the report was read (Oct 29 2026 hunt, round 7: Kansas State's Avery Johnson, Out on the
   // Big 12's report the build had not read, read "not on this week's availability report").
   const offReport = state === 'checked' ? "not on this week's availability report" : "this week's availability report not read";
@@ -898,12 +898,17 @@ function regularsLines(team, reported, rows, results, onFile, core, plays = null
   // A regular with no stat row who is in the last game's official starting lineup played it (round 11: Brandon Finney
   // Jr., an Oregon starter at Illinois, read as a regular with no row).
   const startedLast = (p) => Boolean(lastLineup && startedIn(lastLineup, p.name, p.entry.position));
+  // Whether the last game's play-by-play names him (Nov 10 2026 college round 5: "stat rows in 4 of 5 earlier games, the
+  // last Oct 3" read as "missed the BYU game", and he played it). A regular it names is not listed (kept above); one it
+  // does not name by any jersey says so, when that game's play-by-play is on file.
+  const lastNamed = plays?.named?.get(String(last.gameId));
+  const notInPlays = (entry) => (lastNamed?.length && !namedInPlays(lastNamed, { first: entry.first, last: entry.last }) ? "; the last game's play-by-play does not name him" : '');
   const missing = kept.map((p) => {
     const report = onReport(p.name, reported, exempt);
     if (startedLast(p)) return `  ${p.name}${p.entry.position ? ` (${p.entry.position})` : ''}: no stat row, but in the last game's official starting lineup${report ? ` · ${report.status} on this week's availability report` : ''}`;
     const who = `  ${p.name}${p.entry.position || report?.position ? ` (${p.entry.position || report.position})` : ''}`;
     if (report) return `${who}: ${report.status} on this week's availability report`;
-    return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}; `
+    return `${who}: stat rows in ${p.played.length} of ${earlier.length} earlier games, the last ${day(p.played.at(-1))} ${versus(p.played.at(-1))}${notInPlays(p.entry)}; `
       + `${core.has(p.name) ? UNDER_OFFENSE : recentGames(p.entry, earlier)} · ${offReport}`;
   });
   return [`${head}${notOnFile(games.slice(0, -1), onFile)}:`, ...(missing.length ? missing : [lineup.length ? '  no regular without a stat row' : '  none']),
