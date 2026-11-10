@@ -94,7 +94,11 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
     for (const r of rows) { const k = String(r.player_id); if (!byPlayer.has(k)) byPlayer.set(k, []); byPlayer.get(k).push(r); }
     const lines = [head.join(' · ')];
     if (pricesFailed) lines.push("  players' prices not on file (the props feed did not load)");
-    lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report)}`).join(' · ')}`);
+    lines.push(`  tonight's injury report${report ? ` (${report.postedAt ? new Date(report.postedAt).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }) + ' ET' : ''})` : ''}: ${[away, home].map((t) => `${t.abbreviation} ${listedLine(listings.get(String(g.id))?.[t.full_name], report, recordsOf.get(String(t.id)), t.id, feedNames(t.id))}`).join(' · ')}`);
+    for (const t of [away, home]) {
+      const back = backTonight(listings.get(String(g.id))?.[t.full_name], recordsOf.get(String(t.id)), t.id, feedNames(t.id));
+      if (back.length) lines.push(`  ${t.abbreviation} out in its last game and not listed out, doubtful or questionable tonight: ${back.join(', ')}`);
+    }
     // Each team's last five games with their scores, so a sheet is read against tonight's opponent too (round 12: NBA
     // darts carried nothing about the other team).
     for (const t of [away, home]) {
@@ -145,12 +149,56 @@ export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) 
   return { league: 'NBA', games: games.length, season, text: `## TODAY'S NBA BOARD\n\n${blocks.join('\n\n')}`, candidates, eligible, frames, abbrById, recordsOf, oppRecord, byTeam };
 }
 
-// A team's side of tonight's report in a few words: who is out, doubtful or questionable.
-function listedLine(side, report) {
+/**
+ * What a named player has been to his team this season, from its game records (newest first): the games he played and
+ * started, when he last played, the games missed since, and his minutes in the last three he played. Nov 10 2026: Utah's
+ * line read "out Keyonte George, Jaren Jackson Jr., Jusuf Nurkic", one word for a starter out for the first time, a
+ * player six games gone and one who has not played this season. The game read says the same of its absences.
+ */
+function seasonOf(name, recs, teamId, peers = []) {
+  if (!recs?.length) return null;
+  const s = { games: recs.length, played: 0, starts: 0, last: null, missedSince: 0, minutes: [] };
+  for (const r of recs) {
+    const side = String(r.record.home?.id) === String(teamId) ? 'home' : 'away';
+    const mates = (r.record.players || []).filter((p) => p.side === side);
+    const hit = samePlayerIn(name, mates.map((p) => p.name), [...new Set([...peers, name])]);
+    const me = hit ? mates.find((p) => p.name === hit) : null;
+    if (me?.min > 0) { s.played++; if (me.starter) s.starts++; if (!s.last) s.last = r.game_date; if (s.minutes.length < 3) s.minutes.push(Math.round(me.min)); }
+    else if (!s.last) s.missedSince++;
+  }
+  return s;
+}
+const seasonWords = (s) => (!s ? null
+  : !s.played ? `not in any of the team's ${s.games} game${s.games === 1 ? '' : 's'}`
+    : `played ${s.played === s.games ? `all ${s.games}` : `${s.played} of the team's ${s.games}`} game${s.games === 1 ? '' : 's'}, ${s.starts} start${s.starts === 1 ? '' : 's'}, last on ${shortDay(s.last)}${s.missedSince ? `, ${s.missedSince} missed since` : ''}; his minutes, newest first: ${s.minutes.join(', ')}`);
+
+/**
+ * The regulars out in the team's last game who are not out, doubtful or questionable tonight (Nov 10 2026: the newest
+ * rows describe a team without him, and nothing said he is back). A regular played 15+ minutes in one of its games.
+ */
+function backTonight(side, recs, teamId, peers = []) {
+  if (!side || side === 'unfiled' || !recs?.length) return [];
+  const rec = recs[0].record; const sd = String(rec.home?.id) === String(teamId) ? 'home' : 'away';
+  const tonight = [...side.values()];
+  const all = [...new Set([...peers, ...tonight.map((r) => r.name)])];
+  const regular = (name) => recs.some((r) => (r.record.players || []).some((p) => p.side === (String(r.record.home?.id) === String(teamId) ? 'home' : 'away') && p.min >= 15 && samePlayerIn(name, [p.name], all)));
+  return (rec.report?.[sd]?.rows || []).filter((r) => r.status === 'Out' && !/g league - two-way/i.test(r.reason || '') && regular(r.name)).map((r) => {
+    const now = samePlayerIn(r.name, tonight.map((x) => x.name), all);
+    const row = now ? tonight.find((x) => x.name === now) : null;
+    if (row && LISTED.includes(row.status)) return null;
+    const words = seasonWords(seasonOf(r.name, recs, teamId, all));
+    return `${r.name} (${row && row.status !== 'Available' ? `listed ${String(row.status).toLowerCase()}` : 'not on the report'}${words ? `; ${words}` : ''})`;
+  }).filter(Boolean);
+}
+
+// A team's side of tonight's report in a few words: who is out, doubtful or questionable, and what each has been to the team.
+function listedLine(side, report, recs = null, teamId = null, peers = []) {
   if (!report) return 'not on file (the report did not load)';
   if (!side || side === 'unfiled') return 'not filed yet';
+  const all = [...new Set([...peers, ...[...side.values()].map((r) => r.name)])];
   // Each with the report's reason, without its "Injury/Illness - " prefix (round 13: a status only).
-  const why = (r) => { const t = String(r.reason || '').replace(/^\s*injury\/illness\s*-\s*/i, '').trim(); return t ? `${r.name} (${t.replace(/;\s*/g, ', ')})` : r.name; };
+  const why = (r) => { const t = String(r.reason || '').replace(/^\s*injury\/illness\s*-\s*/i, '').trim(); const been = seasonWords(seasonOf(r.name, recs, teamId, all));
+    const inside = [t ? t.replace(/;\s*/g, ', ') : null, been].filter(Boolean).join('; '); return inside ? `${r.name} (${inside})` : r.name; };
   const by = LISTED.map((st) => [st, [...side.values()].filter((r) => r.status === st && !/g league - two-way/i.test(r.reason)).map(why)]).filter(([, names]) => names.length);
   return by.length ? by.map(([st, names]) => `${st.toLowerCase()} ${names.join(', ')}`).join('; ') : 'nobody listed';
 }
@@ -224,10 +272,17 @@ function gameLines(c, records, stat, abbrById, oppRecord = null, byTeam = null) 
     // The attempts behind the stat (round 11: "3" threes read the same on 3 of 10 as on 3 of 4).
     const fields = Array.isArray(stat) ? stat : [stat];
     const m = x.me, shots = m.fga == null ? null
-      : fields.some((f) => f === 'pts' || f === 'pra') ? `${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
+      // A points + rebounds + assists row says what the sum was made of (Nov 10 2026: "46" alone).
+      : fields.some((f) => f === 'pts' || f === 'pra') ? `${stat === 'pra' ? `${m.pts} pts, ${m.reb} reb, ${m.ast} ast; ` : ''}${m.fgm}-${m.fga} FG, ${m.fg3m}-${m.fg3a} 3PT, ${m.ftm}-${m.fta} FT`
         : fields.includes('fg3m') ? `${m.fg3m}-${m.fg3a} 3PT` : null;
-    const theirs = oppWithout(x.rec, x.side === 'home' ? 'away' : 'home', byTeam);
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${theirs.length ? ` · ${x.opp} without ${theirs.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
+    // The misses behind a rebound count, as the attempts sit behind the shooting (Nov 10 2026: a rebounds row was a bare
+    // number; 13 reads one way off 45 missed field goals and another off 60).
+    const T = x.rec.teams, other = x.side === 'home' ? 'away' : 'home';
+    const missed = (sd) => (T?.[sd]?.fga != null && T?.[sd]?.fgm != null ? T[sd].fga - T[sd].fgm : null);
+    const boards = fields.includes('reb') && m.oreb != null && m.dreb != null && missed(x.side) != null && missed(other) != null
+      ? `${m.oreb} offensive of his team's ${missed(x.side)} missed field goals, ${m.dreb} defensive of ${x.opp}'s ${missed(other)}` : null;
+    const theirs = oppWithout(x.rec, other, byTeam);
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${boards ? ` (${shots ? 'rebounds: ' : ''}${boards})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${theirs.length ? ` · ${x.opp} without ${theirs.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
   });
 }
 
@@ -254,7 +309,10 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     // The one-line board Gary picks his sheets from carries his last three games, as MLB's and the NFL's lines carry
     // theirs (Oct 27 2026 darts bug audit: the NBA line was a name and a price, so a full slate's first pick was made
     // from names alone).
-    const recent = lastThree.map((p) => (p?.min > 0 ? one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat]) : 'did not play'));
+    // Each number with the minutes it came in, and threes with the attempts (Nov 10 2026: Embiid's "18, 6, 26" read as
+    // three nights' work; the 6 was 25 minutes of a game he left in the 3rd quarter. The sheet said so, the list did not,
+    // and the list is where Gary chooses whose sheet to read).
+    const recent = lastThree.map((p) => (p?.min > 0 ? `${m.stat === 'fg3m' && p.fg3a != null ? `${p.fg3m} of ${p.fg3a}` : one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat])} (${Math.round(p.min)} min)` : 'did not play'));
     // A failed load is not a team with no games (round 12).
     const line = `${head} · ${!teamRecs ? "this season's games not on file (the game records did not load)" : recent.length ? `his team's last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
     menu.push({ id, gameId: c.gameId, line, sheet: sheet.join('\n') });
