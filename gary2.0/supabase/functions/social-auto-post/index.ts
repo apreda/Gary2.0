@@ -360,7 +360,10 @@ const GAME_DAILY_CAP = 24;
 const RANKED_ONLY = ["NCAAF", "NCAAB"];
 
 async function runGamePicks(today: string, nowMs: number, dryRun: boolean, previewAll = false): Promise<any[]> {
-  if (!dryRun && Deno.env.get("GAME_PICKS_ON_X") === "0") return [];
+  // OFF (founder, Nov 10 2026, the same day: "we dont need to do a pick for every game that had nothing to do with
+  // the views"). He is right on the per-post number: one free pick a day drew 340 to 2,052 views from Oct 9 to 18.
+  // The lane runs only with GAME_PICKS_ON_X=1; a dry run still previews it.
+  if (!dryRun && Deno.env.get("GAME_PICKS_ON_X") !== "1") return [];
   const { data: cands, error } = await sb.from("winners_candidates")
     .select("id, league, pick_text, odds, commence_time, away:pick_snapshot->>awayTeam, home:pick_snapshot->>homeTeam, summary:pick_snapshot->brief->>summary")
     .eq("game_date", today).eq("kind", "game").order("commence_time").order("id");
