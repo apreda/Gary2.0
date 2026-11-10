@@ -293,7 +293,19 @@ const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /,
  * started; the official box's lineup does, where a school posts it (Oct 27
  * 2026), and marks him.
  */
-function quarterbackOfGame(rows, result, onFile, starters = null) {
+/**
+ * Whether a game's starting quarterback started none of the team's earlier games this season (round 4 of the Nov 10
+ * 2026 college review: Ohio State's row at USC read "Luke Fahey (started)" and only the older rows showed Sayin had
+ * started every game before). `earlier` holds each earlier game's starting lineup; with no earlier game, or any of them
+ * without a starting quarterback on file, it is not known and the row says nothing.
+ */
+export function firstStartThisSeason(earlier, name) {
+  const qbsOf = (lineup) => (lineup || []).filter((x) => /^QB$/i.test(String(x.position || '')));
+  if (!earlier?.length || earlier.some((lineup) => !qbsOf(lineup).length)) return false;
+  return !earlier.some((lineup) => startedIn(qbsOf(lineup), name));
+}
+
+function quarterbackOfGame(rows, result, onFile, starters = null, earlier = null) {
   if (!onFile.has(String(result.gameId))) return 'quarterback: the box score\'s player lines are not on file for this game';
   const passers = (rows || [])
     .filter((row) => String(row?.game?.id) === String(result.gameId) && row?.player?.first_name && Number(row.passing_attempts) > 0)
@@ -309,13 +321,14 @@ function quarterbackOfGame(rows, result, onFile, starters = null) {
   const shown = passers.filter((row, index) => index === 0 || Number(row.passing_attempts) >= 5 || started(row)
     || /^QB$/i.test(row.player.position_abbreviation || row.player.position || ''));
   // A starter who threw no pass (hurt on the first series) is named too.
-  const unseen = qbs.filter((x) => !passers.some((row) => startedIn([x], nameOf(row)))).map((x) => `${x.name} started, no pass`);
+  const first = (name) => (firstStartThisSeason(earlier, name) ? ', his first start this season' : '');
+  const unseen = qbs.filter((x) => !passers.some((row) => startedIn([x], nameOf(row)))).map((x) => `${x.name} started${first(x.name)}, no pass`);
   // His running too (Oct 23 2026 data check: a dual-threat quarterback's line showed passing only, in four of nine
   // games); college box scores count sacks as runs, so the line says so.
   const runs = (row) => (Number(row.rushing_attempts) > 0 ? `; ${plural(row.rushing_attempts, 'run')} for ${row.rushing_yards ?? '?'} yds${Number(row.rushing_touchdowns) > 0 ? `, ${row.rushing_touchdowns} TD` : ''} (sacks included)` : '');
   // When each was in, once two or more are listed (round 4 of the Nov 10 2026 college review: who took over and when).
   const span = (row) => (shown.length > 1 && passerSpanText(row.passer_span) ? `, passing or running ${passerSpanText(row.passer_span)}` : '');
-  return `quarterback: ${[...unseen, ...shown.map((row) => `${nameOf(row)}${started(row) ? ' (started)' : ''} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
+  return `quarterback: ${[...unseen, ...shown.map((row) => `${nameOf(row)}${started(row) ? ` (started${first(nameOf(row))})` : ''} ${row.passing_completions ?? '?'}-of-${row.passing_attempts}, `
     + `${row.passing_yards ?? '?'} yds, ${row.passing_touchdowns ?? '?'} TD, ${row.passing_interceptions ?? '?'} INT${runs(row)}${span(row)}`)].join('; ')}`;
 }
 
@@ -1093,7 +1106,7 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
         : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date });
       if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
       const against = opponentClause(oppText, theirQb);
-      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: against ? `opponent: ${against}` : null, opponentFirst: true })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId))), rows[i], r, units)}\n${units.join('\n')}`
+      return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: against ? `opponent: ${against}` : null, opponentFirst: true })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId)), r.week != null && Number(r.week) <= 1 ? null : s.results.filter((x) => new Date(x.date) < new Date(r.date)).map((x) => starts[i].get(String(x.gameId)))), rows[i], r, units)}\n${units.join('\n')}`
         // The scoring line says every score's kind; "points from" only stands in when that line is missing (round 16).
         + (played[i].flow?.get(String(r.gameId)) ? '' : `\n      ${points || 'points from: not on file for this game'}`)
         + `\n      ${played[i].kicking?.get(String(r.gameId)) || 'kicking: not on file for this game'}`

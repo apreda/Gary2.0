@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
-import { opponentClause } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
+import { opponentClause, firstStartThisSeason } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -92,5 +92,15 @@ North Carolina Tar Heels (5-3):
       .toBe('ACC, talent No. 35 of 138 · its quarterback that day: A 25-of-38, 290 yds; B 4-of-5, 30 yds · its games, newest first: W 42-41 (OT) @ UConn Huskies');
     const row = `THIS SEASON GAME BY GAME (2026)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nEvery completed game this season, newest first.\n\nNorth Carolina Tar Heels (1-0):\n  Sat, Sep 12 · vs East Tennessee State Buccaneers — opponent: ${opponentClause('FCS', 'Mason Mims (started) 23-of-31, 178 yds')} — W 35-3 — by quarter 7-14-14-0, opponent 0-0-0-3\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     expect(seasonGames(row)[0].games[0]).toMatchObject({ result: 'W', pf: 35, pa: 3, fcs: true, oppNow: 'FCS' });
+  });
+
+  // Round 5: Ohio State at USC, Fahey's first start after Sayin started every game before; silent when any earlier
+  // game's starting quarterback is not on file, and with no earlier game.
+  it('says a first start of the season only when every earlier starter is known', () => {
+    const qb = (name) => [{ name, key: name.toLowerCase().replace(/[^a-z]/g, ''), position: 'QB' }];
+    expect(firstStartThisSeason([qb('Julian Sayin'), qb('Julian Sayin')], 'Luke Fahey')).toBe(true);
+    expect(firstStartThisSeason([qb('Julian Sayin'), qb('Luke Fahey')], 'Luke Fahey')).toBe(false);
+    expect(firstStartThisSeason([qb('Julian Sayin'), undefined], 'Luke Fahey')).toBe(false);
+    expect(firstStartThisSeason([], 'Luke Fahey')).toBe(false);
   });
 });
