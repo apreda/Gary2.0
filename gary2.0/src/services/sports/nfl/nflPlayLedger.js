@@ -58,7 +58,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // score at the snap (within one score, ahead by 9 or more, behind by 9 or more).
 // 12 (Oct 29 2026, loop 2): each team's first downs (its drives' first downs) beside its plays.
 // 22 (Nov 10 2026, NFL data round 1): kneel-downs and spikes counted as third and fourth downs, as the official box has them.
-const LEDGER_SCHEMA = 22;
+// 23 (same round): each team's plays as the official box counts them (kneel-downs and spikes in, two-point tries out).
+const LEDGER_SCHEMA = 23;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -86,7 +87,9 @@ const WANTED = [
   // Oct 23 2026 data audit: the score by quarter, and who took each kneel-down.
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
   // Oct 29 2026: the game clock, who scored and who kicked, and each drive's time of possession.
-  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession'
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession',
+  // Nov 10 2026 (NFL data round 1): a two-point try is not a play from scrimmage in the official box.
+  'two_point_attempt'
 ];
 
 const num = (v) => {
@@ -242,7 +245,7 @@ function extraUnit() {
     puntsBlocked: 0, punts: 0, puntYards: 0, puntsInside20: 0, longReturns: [], stFumbles: 0, stFumblesLost: 0, onside: 0,
     penalties: 0, penaltyYards: 0,
     contestPlays: 0, contestEpa: 0, contestEpaN: 0, contestSucc: 0, contestSuccN: 0,
-    thirdDowns: [], fourthDowns: [], bigPlays: [],
+    thirdDowns: [], fourthDowns: [], bigPlays: [], boxPlays: 0,
     byScore: { close: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, ahead: { runs: 0, runYards: 0, passes: 0, passYards: 0 }, behind: { runs: 0, runYards: 0, passes: 0, passYards: 0 } }
   };
 }
@@ -321,6 +324,9 @@ function addGameDetail(perGame, playType, posteam, defteam, g) {
     if (down === 4 && togo != null && settled('fourth_down')) E(posteam).fourthDowns.push({ togo, made: flag(g('fourth_down_converted')) || flag(g('touchdown')) && g('td_team') === posteam,
       yardline: num(g('yardline_100')), q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')), ...kind });
   }
+  // The offense's plays as the official box counts them: runs, passes, kneel-downs and spikes, two-point tries aside (NFL
+  // data round 1, Nov 10 2026: runs and passes alone, two-point tries in, matched ESPN's count in 119 of 272 team games).
+  if (DOWN_PLAYS.has(playType) && !flag(g('two_point_attempt')) && E(posteam)) E(posteam).boxPlays += 1;
   // Plays of 20 yards or more and who made them, and the runs and passes by the score at the snap (Oct 29 2026,
   // founder: a defense gives up yards differently when it is far ahead or far behind). Penalty-nullified snaps carry
   // play_type no_play and are not here.
@@ -457,7 +463,7 @@ function finishGameDetail(e) {
     special_teams_fumbles: e.stFumbles, special_teams_fumbles_lost: e.stFumblesLost,
     onside_recoveries: e.onside,
     penalties: e.penalties, penalty_yards: e.penaltyYards,
-    third_downs: e.thirdDowns, fourth_downs: e.fourthDowns, big_plays: e.bigPlays, by_score: e.byScore,
+    third_downs: e.thirdDowns, fourth_downs: e.fourthDowns, big_plays: e.bigPlays, box_plays: e.boxPlays, by_score: e.byScore,
     contest_plays: e.contestPlays,
     contest_epa_per_play: e.contestEpaN ? Number((e.contestEpa / e.contestEpaN).toFixed(3)) : null,
     contest_success_rate: e.contestSuccN ? Number((e.contestSucc / e.contestSuccN).toFixed(4)) : null

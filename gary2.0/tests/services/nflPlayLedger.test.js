@@ -31,7 +31,7 @@ const HEADER = [
   'fixed_drive', 'fixed_drive_result', 'drive_first_downs', 'drive_inside20', 'drive_start_yard_line',
   'posteam_score', 'posteam_score_post', 'roof', 'temp', 'wind', 'stadium', 'weather',
   'home_team', 'away_team', 'total_home_score', 'total_away_score', 'rusher_player_id',
-  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession', 'desc', 'punt_inside_twenty', 'third_down_failed', 'fourth_down_failed'
+  'time', 'td_player_name', 'kicker_player_name', 'drive_time_of_possession', 'desc', 'punt_inside_twenty', 'third_down_failed', 'fourth_down_failed', 'two_point_attempt'
 ];
 
 describe('CSV parsing refuses to lose a row', () => {
@@ -327,6 +327,13 @@ describe('a parsed season', () => {
     ].join('\n');
     const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
     expect(led.games[0].lines.AAA.third_downs).toEqual([{ togo: 6, made: false, kneel: true }, { togo: 8, made: false, spike: true }]);
+  });
+
+  it('counts the plays as the official box does: kneel-downs and spikes in, two-point tries out (Nov 10 2026)', async () => {
+    const body = [HEADER.join(','), row(), row({ play_type: 'run' }), row({ play_type: 'qb_kneel' }), row({ play_type: 'qb_spike' }),
+      row({ play_type: 'pass', down: '', two_point_attempt: '1' })].join('\n');
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
+    expect(led.games[0].lines.AAA.box_plays).toBe(4);
   });
 
   it('kicks and punts are excluded from scrimmage splits', async () => {

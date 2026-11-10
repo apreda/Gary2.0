@@ -845,7 +845,8 @@ function bigPlaysLine(x, code) {
   // Each team's plays and first downs, and its returns of 40+ yards (loop 2, Oct 29 2026: counted, never printed).
   const one = (c) => {
     const l = L[c], b = l.big_plays;
-    const plays = (Number(l.offense_runs) || 0) + (Number(l.offense_pass_plays) || 0);
+    // As the official box counts them (NFL data round 1: runs and passes alone read 119 of 272 games right).
+    const plays = Number(l.box_plays) || 0;
     const returns = (l.long_returns || []).map((r) => `${r.kind} return ${r.yards}`).join(', ');
     return `${nickname(c)} ${b.length ? b.map((p) => `${p.who} ${p.yards} ${p.kind === 'pass' ? 'catch' : 'run'}`).join(', ') : 'none'} (${plays} plays, ${l.first_downs ?? '?'} first downs${returns ? `; returns of 40+: ${returns}` : ''})`;
   };
