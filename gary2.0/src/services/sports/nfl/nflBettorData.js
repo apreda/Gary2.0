@@ -610,7 +610,13 @@ export function skillPlayers(d, team, before, reportText = '', { skip = null } =
     const status = (reportLine?.match(/^\s*•\s*[^(]+\([^)]*\)\s*\(([^)]+)\)/) || [])[1]
       || (/reserve lists?:/i.test(reportLine || '') ? [...reportLine.split(/reserve lists?:/i)[1].matchAll(/\s*([^,(]+?) \(([^)]+)\)/g)]
         .find((m) => sameKey(m[1]) === sameKey(last.player_display_name))?.[2] : undefined);
-    const listed = text.includes(sameKey(last.player_display_name)) ? ` · ${status ? `${status} on` : 'on'} this week\'s injury report` : '';
+    // A player the club released (or who retired) is not on the injury report: the line says so, with the week of the
+    // roster row (round 4, Nov 10 2026: Dameon Pierce read "Released on this week's injury report").
+    const gone = /^(released|retired)$/i.test(status || '') ? String(status).toLowerCase() : null;
+    const goneWeek = gone && Math.max(0, ...(d.rosterWeekly || []).filter((r) => r.gsis_id === last.player_id && r.team === c
+      && String(r.season) === String(d.season) && String(r.status || '').toUpperCase() === (gone === 'released' ? 'CUT' : 'RET')).map((r) => n(r.week)));
+    const listed = !text.includes(sameKey(last.player_display_name)) ? '' : gone ? ` · ${gone}${goneWeek ? ` (the club's Wk ${goneWeek} roster)` : ''}`
+      : ` · ${status ? `${status} on` : 'on'} this week\'s injury report`;
     return `  ${last.player_display_name} (${last.position})${listed}: ${recent.join('; ')}`;
   });
   return [`${team}:`, ...lines].join('\n');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineStory, quarterbacks } from '../../src/services/sports/nfl/nflBettorData.js';
+import { lineStory, quarterbacks, skillPlayers } from '../../src/services/sports/nfl/nflBettorData.js';
 
 // lineStory is shared by the NFL, college and the NBA.
 describe('lineStory with no listed move', () => {
@@ -27,5 +27,18 @@ describe('THE QUARTERBACKS with the starter on this week\'s report', () => {
     const text = quarterbacks(d, desk, 'New Orleans Saints', 'Cleveland Browns', '2026-11-08', { chart });
     expect(text.split('\n')[0]).toBe("Cleveland Browns: Deshaun Watson (Questionable on this week's injury report, concussion; next on ESPN's depth chart: Shedeur Sanders)");
     expect(text).toMatch(/^New Orleans Saints: Tyler Shough$/m);
+  });
+});
+
+// Round 4, Nov 10 2026: Dameon Pierce, released by the Eagles, read "Released on this week's injury report".
+describe('CARRIES AND TARGETS for a released player', () => {
+  it('says he was released and the roster week, not that he is on the report', () => {
+    const g = { game_id: 'g7', season: '2026', game_type: 'REG', week: '7', gameday: '2026-10-25', home_team: 'PHI', away_team: 'NYG', home_score: '20', away_score: '10' };
+    const d = { season: 2026, schedule: [g], teamWeek: [], snaps: [],
+      playerWeek: [{ player_id: 'p1', player_display_name: 'Dameon Pierce', position: 'RB', team: 'PHI', game_id: 'g7', week: '7', season: '2026', carries: 9, rushing_yards: 40 }],
+      rosterWeekly: [{ gsis_id: 'p1', team: 'PHI', season: '2026', week: '9', status: 'CUT' }] };
+    const text = skillPlayers(d, 'Philadelphia Eagles', '2026-11-12', '• Dameon Pierce (Running Back) (Released) - The Eagles released Pierce.');
+    expect(text).toMatch(/Dameon Pierce \(RB\) · released \(the club's Wk 9 roster\): Wk 7/);
+    expect(text).not.toMatch(/injury report/);
   });
 });
