@@ -509,7 +509,11 @@ function defensePlaysLine(box, us, them, name) {
   const one = (t) => {
     const mine = (box.players || []).filter((p) => p.teamId === t.id);
     const list = (get) => mine.map((p) => [p.name, Number(get(p)) || 0]).filter(([n, v]) => n && v > 0).sort((a, b) => b[1] - a[1]).map(([n, v]) => `${n}${v === 1 ? '' : ` ${v}`}`).join(', ') || 'nobody';
-    return `${name(t.id)} sacks by ${list((p) => p.stats?.defensive?.sacks)}; interceptions by ${list((p) => p.stats?.interceptions?.interceptions)}`;
+    // The sack credits only when they add up to the box's own team count (Nov 10 2026 college audit: they ran over it in 34 of
+    // 1,370 team-games, Tennessee's credits 7 against 6, and CFBD's count sided with the team's in 33).
+    const credited = mine.reduce((a, p) => a + (Number(p.stats?.defensive?.sacks) || 0), 0), team = Number(box.defTotals?.[t.id]?.sacks);
+    const sacks = Number.isFinite(team) && Math.abs(credited - team) > 0.01 ? 'sacks by: not on file (the box\'s player credits do not add up to its team count)' : `sacks by ${list((p) => p.stats?.defensive?.sacks)}`;
+    return `${name(t.id)} ${sacks}; interceptions by ${list((p) => p.stats?.interceptions?.interceptions)}`;
   };
   return (box.players || []).length ? `who made the defensive plays: ${one(us)} · ${one(them)}` : null;
 }

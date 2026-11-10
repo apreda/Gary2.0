@@ -152,3 +152,15 @@ describe('quarterback hurries', () => {
     expect(ncaafFlowLines(box, '1', {}, { cfbd: { 1: cfbd(1), 2: cfbd(1) } })[1]).toContain('quarterback hurries not on file');
   });
 });
+
+// Tennessee (Sep 12 2026): ESPN's players were credited with 7 sacks, its team row and CFBD with 6.
+describe('who made the sacks', () => {
+  it('names the sackers only when their credits add up to the team count', () => {
+    const box = (team) => ({ teams: [{ id: '1', homeAway: 'home', totals: {} }, { id: '2', homeAway: 'away', totals: {} }], scoring: [], bigPlays: [],
+      defTotals: { 1: { sacks: team }, 2: { sacks: 0 } },
+      players: [{ teamId: '1', name: 'X Gilliam', stats: { defensive: { sacks: 3 } } }, { teamId: '1', name: 'E Spillman', stats: { defensive: { sacks: 1 } } }] });
+    const line = (b) => ncaafFlowLines(b, '1', { 1: 'Tennessee', 2: 'Opp' }).find((l) => l.startsWith('who made'));
+    expect(line(box(4))).toContain('Tennessee sacks by X Gilliam 3, E Spillman;');
+    expect(line(box(3))).toContain('Tennessee sacks by: not on file');
+  });
+});
