@@ -49,6 +49,14 @@ describe('official box starters', () => {
     expect(startedIn(starters, 'Nate Gabriel')).toBe(false);
   });
 
+  it("with the report's jersey, the one starter with his last name and number", () => {
+    const starters = [{ name: 'Daveon Crouch', key: 'daveoncrouch', jersey: '7' }, { name: 'Tucker Jr.', key: 'tucker', jersey: '23' }];
+    expect(startedIn(starters, 'Bam Crouch', 'LB')).toBe(false);
+    expect(startedIn(starters, 'Bam Crouch', 'LB', '7')).toBe(true);
+    expect(startedIn(starters, 'Brandon Tucker', 'LB', '23')).toBe(true);
+    expect(startedIn(starters, 'Bam Crouch', 'LB', '8')).toBe(false);
+  });
+
   it('pairs a nickname by last name on the same side of the ball, when no other starter shares it', () => {
     const starters = [{ name: 'Ezekiel Durham-Campbell', key: 'ezekieldurhamcampbell', unit: 'defense' }, { name: 'Nick Krahe', key: 'nickkrahe', unit: 'offense' },
       { name: 'Kevin Brown', key: 'kevinbrown', unit: 'offense' }];

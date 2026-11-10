@@ -664,9 +664,11 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
   // the starting left tackle or a reserve): the official box's starting lineup of each game the schools post one for.
   const lineups = [...results].sort((a, b) => new Date(a.date) - new Date(b.date)).filter((r) => starts.has(String(r.gameId)));
   // A lineup is the 11 on offense and 11 on defense: kickers, punters and snappers are never in it.
-  const started = (name, position) => {
+  // The report's jersey number, from its row ("LB #7 listed Questionable on the Big 12 Update 2 report").
+  const jersey = (injury) => injury?.number ?? String(injury?.description || '').match(/^\S+ #(\d+) listed /)?.[1] ?? null;
+  const started = (name, position, injury = null) => {
     if (!lineups.length || /^(PK|K|P|LS)$/i.test(position || '')) return '';
-    const mine = lineups.filter((r) => startedIn(starts.get(String(r.gameId)), name, position));
+    const mine = lineups.filter((r) => startedIn(starts.get(String(r.gameId)), name, position, jersey(injury)));
     return `started ${mine.length} of ${lineups.length < results.length ? `the ${lineups.length} games with a starting lineup on file` : `${lineups.length} games`}${mine.length ? `, the last ${day(mine.at(-1))}` : ''}`;
   };
   const byPlayer = playersOf(rows, games);
@@ -709,7 +711,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
       // Whether the absence is new or already in the numbers (Oct 24 2026): his game-day status on the season's earlier
       // reports, from the conference's report archive.
       const earlier = historyLine(history, name);
-      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${started(name, position) ? `${started(name, position)} · ` : ''}${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}${earlier ? ` · ${earlier}` : ''}`);
+      lines.push(`  ${name}${position ? ` ${position}` : ''} — ${status(injury)} · ${started(name, position, injury) ? `${started(name, position, injury)} · ` : ''}${gameByGame(found[0], found[1])}${said ? ` · report: ${said}` : ''}${earlier ? ` · ${earlier}` : ''}`);
       if (!positions.includes(position)) positions.push(position);
       continue;
     }
@@ -718,7 +720,7 @@ function availabilityLines(team, reported, rows, results, state = 'checked', onF
     // (no pass, carry, catch or tackle recorded)" on ten lines; the searched notes beside them only restated the status,
     // "listed out Friday; reason unspecified").
     const earlier = historyLine(history, name, { short: true });
-    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)}${started(name, position) ? `; ${started(name, position)}` : ''}${earlier ? `; ${earlier}` : ''})`;
+    const entry = `${name}${position ? ` ${position}` : ''} (${status(injury)}${started(name, position, injury) ? `; ${started(name, position, injury)}` : ''}${earlier ? `; ${earlier}` : ''})`;
     if (/^(OL|OT|OG|T|G|C|LT|RT|LG|RG|IOL)$/i.test(position)) linemen.push(entry); else none.push(entry);
   }
   if (none.length) lines.push(`  ${games.length ? 'no stat row this season' : 'player lines not on file for any game this season'}: ${none.join(', ')}`);

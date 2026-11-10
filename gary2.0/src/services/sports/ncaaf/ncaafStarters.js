@@ -228,10 +228,17 @@ const groupOf = (p) => GROUPS.find(([, re]) => re.test(String(p || '').trim()))?
 /** Whether a game's starters include this player: the same name; else the one starter with his last name and first
  * initial, when the first names are one short for the other (Sam, Samuel) or the positions agree (Oct 29 2026 hunt:
  * Oregon's Dante Moore, QB, out three straight game days, read "started 7 of 7" on Dakorien Moore's starts at receiver). */
-export function startedIn(starters, name, position = null) {
+// With the report's jersey number, the one starter with his last name and that number is him (round 3: Kansas's report
+// lists "Bam Crouch" #7, the lineups "Daveon Crouch" #7, and the desk read "started 0 of 8" for a 6-of-8 starter; a site
+// that writes "Tucker,Jr." leaves the lineup "Tucker Jr." with no first name).
+export function startedIn(starters, name, position = null, jersey = null) {
   if (!starters) return null;
   const key = nameKey(name), w = words(name);
   if (starters.some((s) => s.key === key)) return true;
+  if (jersey != null && w.length) {
+    const same = starters.filter((s) => words(s.name).at(-1) === w[w.length - 1] && String(s.jersey ?? '') === String(jersey));
+    if (same.length === 1) return true;
+  }
   const near = starters.filter((s) => { const v = words(s.name); return v.length && w.length && v[v.length - 1] === w[w.length - 1] && v[0][0] === w[0][0]; });
   if (near.length !== 1) return false;
   const v = words(near[0].name);
