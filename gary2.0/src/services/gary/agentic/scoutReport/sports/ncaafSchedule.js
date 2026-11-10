@@ -36,7 +36,7 @@ import { loadTeamResults, gameStoryLine, homeAwaySplit } from '../../tools/statR
 import { CONF_NAME, FBS } from './ncaafFcsGap.js';
 import { loadNcaafLeagueContext, opponentSeasonClause } from '../../tools/statRouters/footballLeagueContext.js';
 import { ncaafTeamConferenceId } from '../../../../sports/ncaaf/ncaafGamePolicy.js';
-import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns, publishedFumbles } from './ncaafGameBox.js';
+import { getNcaafGameBox, getNcaafRosterPositions, boxAddsUp, playerGameRows, pointsByKind, kindsInWords, namedInPlays, ncaafDriveTally, ncaafFlowLines, espnUnitTotals, espnGameClause, placeHurt, ncaafRedZone, ncaafReturns, publishedFumbles, officialSackPlays } from './ncaafGameBox.js';
 import { teamStarters, startedIn, nameKey as starterKey, officialSacks } from '../../../../sports/ncaaf/ncaafStarters.js';
 
 const SPORT = 'americanfootball_ncaaf';
@@ -1044,7 +1044,7 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       const official = sackBoxes[i]?.get(String(r.gameId));
       const totals = played[i].unitTotals?.get(String(r.gameId));
       const withSacks = official ? { own: new Map([...(totals?.own || []), ['sacks', official.made[0]]]), opp: new Map([...(totals?.opp || []), ['sacks', official.taken[0]]]) } : totals;
-      const units = boxes.lines(s.team, r, played[i].sackPlays?.get(String(r.gameId)), withSacks, played[i].turnoverPlays?.get(String(r.gameId)));
+      const units = boxes.lines(s.team, r, officialSackPlays(played[i].sackPlays?.get(String(r.gameId)), official), withSacks, played[i].turnoverPlays?.get(String(r.gameId)));
       const points = played[i].points.get(String(r.gameId));
       const listedQb = played[i].oppQb?.get(String(r.gameId)), starter = oppStarter.get(`${i}|${r.gameId}`);
       const lastName = (nm) => String(nm || '').trim().split(/\s+/).filter((w) => !/^(jr|sr|ii|iii|iv)\.?$/i.test(w)).pop()?.toLowerCase();

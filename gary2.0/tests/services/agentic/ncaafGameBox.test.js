@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -131,5 +131,14 @@ describe('a team\'s returns', () => {
     expect(ncaafReturns(box, '251', cfbd({ kickReturns: '1', kickReturnYards: '21' }))).toBe('1 kickoff return for 21 (long 21)');
     expect(ncaafReturns(box, '251', cfbd({ kickReturns: '2', kickReturnYards: '19', puntReturns: '1', puntReturnYards: '4' }))).toBe('2 kickoff returns for 19, 1 punt return for 4');
     expect(ncaafReturns(box, '251', null)).toBe('1 kickoff return for 21 (long 21)');
+  });
+});
+
+// Auburn at Arkansas (Nov 7 2026): the plays gave Arkansas's six sacks taken 35 yards, the school's box 42.
+describe('the sacks split out of the runs', () => {
+  it('takes the official box\'s count and yards when it has them, else the plays\'', () => {
+    const plays = { mine: { n: 6, yards: -35 }, theirs: { n: 2, yards: -10 } };
+    expect(officialSackPlays(plays, { made: [2, 10], taken: [6, 42] })).toEqual({ mine: { n: 6, yards: -42 }, theirs: { n: 2, yards: -10 } });
+    expect(officialSackPlays(plays, undefined)).toBe(plays);
   });
 });

@@ -552,6 +552,16 @@ export function namedInPlays(named, { first, last, jersey } = {}) {
 }
 
 /** ESPN's team totals for one side of a game as the unit lines read them (CFBD's keys; "26/36" as "26-36"), or null. */
+/** The sacks each offense took in one game, as the unit lines split them out of the runs: the school's official box's count
+ * and yards when it gives them (`official` is { made: [n, yds], taken: [n, yds] }), else the play-by-play's (Nov 10 2026
+ * college audit: against 88 official boxes whose sack count the plays matched, the plays' sack yards were right in 83; an
+ * intentional grounding, a strip-sack's lost ground and shared sacks read 1 to 8 yards off). */
+export function officialSackPlays(plays, official) {
+  const one = (x) => (Array.isArray(x) && Number.isFinite(Number(x[0])) && Number.isFinite(Number(x[1])) ? { n: Number(x[0]), yards: -Math.abs(Number(x[1])) } : null);
+  const mine = one(official?.taken), theirs = one(official?.made);
+  return mine && theirs ? { mine, theirs } : plays;
+}
+
 /** A hurt player the box does not place, placed by jersey and name on either team's ESPN roster (round 13; both
  * systems, round 14). Sets `teamId` on the box's hurt rows it can place. */
 export async function placeHurt(box, teamIds) {
