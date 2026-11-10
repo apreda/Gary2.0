@@ -114,6 +114,28 @@ function earlierGames(byTeam, teamId, gameId, expected) {
   return { earlier: list.slice(0, k), here: list[k] };
 }
 const inGame = (name, names) => Boolean(samePlayerIn(name, names, names.includes(name) ? names : [...names, name]));
+const gamesWord = (n) => (n === 1 ? 'game' : `${n} games`);
+
+/** Who played in this game after missing the team's games just before it (Nov 10 2026 data round 4: the recaps of 8 of
+ * 40 games named a return or a first game, Jalen Johnson's 30 points "in his return after missing three games", and the
+ * row read his minutes like any other night). Only those `keep` passes. '' when nobody did or the team's games are not all
+ * stored. */
+export function backFromMissing(byTeam, teamId, gameId, expected, keep = () => true) {
+  const g = earlierGames(byTeam, teamId, gameId, expected);
+  if (!g || !g.earlier.length) return '';
+  const side = summarySide(g.here.summary, teamId);
+  const back = (g.here.summary.played?.[side] || []).filter(keep).map((name) => {
+    let missed = 0;
+    for (let i = g.earlier.length - 1; i >= 0; i--) {
+      const r = g.earlier[i];
+      if (inGame(name, r.summary.played?.[summarySide(r.summary, teamId)] || [])) break;
+      missed++;
+    }
+    if (!missed) return null;
+    return `${name} (${missed === g.earlier.length ? `not in any of the team's ${g.earlier.length === 1 ? 'one game' : `${g.earlier.length} games`} before this one` : `not in the team's last ${gamesWord(missed)}`})`;
+  }).filter(Boolean);
+  return back.length ? `back from missing: ${back.join(', ')}` : '';
+}
 
 /** Who started this game and not the team's game before it, and whose first start of the season it was (round 4: 10 of
  * 40 recaps named a change to the five, Meleek Thomas "making his first NBA start", read on the row as one more name on

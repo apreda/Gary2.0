@@ -1,7 +1,8 @@
-// A game row says who joined the five from the team's stored games before it (Nov 10 2026 data round 4: Cleveland's
-// Nov 2 row named Meleek Thomas among the starters with nothing to say it was his first start).
+// A game row says who joined the five and who came back, from the team's stored games before it (Nov 10 2026 data round
+// 4: Cleveland's Nov 2 row named Meleek Thomas among the starters with nothing to say it was his first start; Atlanta's
+// Nov 7 row read Jalen Johnson's 36 minutes with nothing to say he had missed three games).
 import { describe, expect, it } from 'vitest';
-import { newToTheFive, summariesByTeam } from '../../src/services/sports/nba/nbaGameRecordText.js';
+import { backFromMissing, newToTheFive, summariesByTeam } from '../../src/services/sports/nba/nbaGameRecordText.js';
 
 const cle = { id: 5, abbr: 'CLE' }, opp = { id: 9, abbr: 'OPP' };
 const game = (id, date, starters, played) => ({ game_id: String(id), game_date: date,
@@ -20,5 +21,13 @@ describe('newToTheFive', () => {
   });
   it('says nothing when a game before this one is not stored', () => {
     expect(newToTheFive(byTeam, 5, 3, 3)).toBe('');
+  });
+});
+
+describe('backFromMissing', () => {
+  it("names who played after missing the team's last games, and one in none of them", () => {
+    const later = summariesByTeam([...byTeam.get('5'), game(4, '2026-11-04', five, [...five, 'Sam Merrill', 'Bench Guy'])]);
+    expect(backFromMissing(later, 5, 4, 3)).toBe("back from missing: Sam Merrill (not in the team's last game), Bench Guy (not in any of the team's 3 games before this one)");
+    expect(backFromMissing(later, 5, 4, 3, (name) => name !== 'Bench Guy')).toBe("back from missing: Sam Merrill (not in the team's last game)");
   });
 });

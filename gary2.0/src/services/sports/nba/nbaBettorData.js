@@ -12,7 +12,7 @@ import { findTeam } from '../../gary/agentic/scoutReport/shared/utilities.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { espnTeamBox, withOfficialPlayerLines } from './espnNbaGame.js';
 import { recordsById, seasonSummaries, seasonTeamBoxes } from '../../gamebygame/gameRecordStore.js';
-import { flowFacts, lastLeft, newToTheFive, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
+import { backFromMissing, flowFacts, lastLeft, newToTheFive, nextListed, olderGameFacts, reasonsOnce, summariesByTeam, wonLost } from './nbaGameRecordText.js';
 import { threesByDefender, threesByDefenderText } from './nbaThreesByDefender.js';
 
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
@@ -454,11 +454,15 @@ export async function gameByGame(team, league, before = new Date(), { season = n
       const played = box?.[mine]?.fga != null && box?.[theirs]?.fga != null ? `; about ${box[mine].possessions} possessions; ${boxWords(box[mine])}; allowed ${boxWords(box[theirs])}` : '';
       return `${score} (their out: ${outWords(r, mine, teamId)}; ${r.summary[theirs].abbr || r.summary[theirs].name} out: ${outWords(r, theirs, r.summary[theirs].id)}${played})`; }).join(', ');
   };
-  // Who joined the five, from the stored games before this one (Nov 10 2026 data round 4: 10 of 40 ESPN recaps named a
-  // change to the five, and the row's started line said only who started).
+  // Who came back and who joined the five, from the stored games before this one (Nov 10 2026 data round 4: of 40 ESPN
+  // recaps, 8 named a return or a first game and 10 a change to the five, and the row said neither). A return is said
+  // for a starter or a player with 10+ minutes that night (a bench player back from a night without minutes is not one).
   const withChanges = (text, g, i) => {
-    const five = newToTheFive(byTeamSummaries, ts.id, g.id, games.length - 1 - i);
-    return text.replace(/^( {6}started: .+)$/m, (l) => (five && !/not on file$/.test(l) ? `${l}; ${five}` : l));
+    const before = games.length - 1 - i;
+    const box = boxes[i] || [];
+    const real = (name) => { const k = samePlayerIn(name, box.map((p) => p.name), box.map((p) => p.name)); const p = box.find((x) => x.name === k); return Boolean(p && (p.min >= 10 || (starters[i] || []).includes(p.name))); };
+    const five = newToTheFive(byTeamSummaries, ts.id, g.id, before), back = backFromMissing(byTeamSummaries, ts.id, g.id, before, real);
+    return text.replace(/^( {6}started: .+)$/m, (l) => (five && !/not on file$/.test(l) ? `${l}; ${five}` : l)).replace(/^( {6}minutes: .+)$/m, (l) => (back ? `${l}; ${back}` : l));
   };
   const rows = games.slice(0, GAMES_SHOWN).map((g, i) => {
     const home = g.home_team?.id === ts.id;
