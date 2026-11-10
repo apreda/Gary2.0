@@ -20,8 +20,6 @@ import { assertEverythingLoaded } from '../../pickDataIntegrity.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords, reportClock } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey } from '../../../providers/nbaOfficialInjuryReport.js';
-import { teamStints } from '../../../gamebygame/gameRecordStore.js';
-import { withoutHimLine, projectedFives, MIN_MINUTES } from '../../../sports/nba/nbaWithoutHim.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { espnVenue } from '../../../sports/nba/espnNbaGame.js';
 import { NBA_ARENAS } from '../../../sports/nba/nbaArenas.js';
@@ -203,33 +201,6 @@ async function outLastGameSection(desk, seasons, { homeTeam, awayTeam, tip, asOf
     return lines.length ? `Out for the team's last game, and not listed Out, Doubtful, Questionable or Probable tonight:\n${lines.join('\n')}` : '';
   } catch (e) {
     return `Out for the team's last game, and not listed tonight: not on file (${e.message})`;
-  }
-}
-
-// Each regular listed Out, Doubtful or Questionable tonight whose absence is new: his team's minutes without him this season,
-// with who was on the floor and when, and the full games he missed (Nov 10 2026, founder GO; nbaWithoutHim.js). '' when no
-// player has enough minutes for a line.
-async function withoutSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }) {
-  const anchor = await reportOfDesk(desk, { homeTeam, awayTeam, gameDate: reportDay(tip || asOf), asOf }).catch(() => null);
-  if (!anchor) return '';
-  try {
-    const listing = gameListing(await latestOfficialReport({ now: new Date(anchor.postedAt), lookbackHours: 0.25 }), reportDay(tip || asOf), homeTeam, awayTeam);
-    const fives = projectedFives(sectionOf(desk, 'STARTING LINEUPS'));
-    const lines = [];
-    for (const [tag, team, ts] of [['AWAY', awayTeam, seasons?.[1]], ['HOME', homeTeam, seasons?.[0]]]) {
-      const side = listing[team];
-      if (!ts?.id || !side || side === 'unfiled') continue;
-      const rows = [...side.values()].filter((r) => ['Out', 'Doubtful', 'Questionable'].includes(r.status) && !/g league - two-way/i.test(r.reason || ''));
-      if (!rows.length) continue;
-      const games = await teamStints('NBA', nbaSeason(), ts.id, etDate(tip || asOf));
-      for (const r of rows) {
-        const line = withoutHimLine(games, { teamId: ts.id, team, name: r.name, status: r.status, projected: fives[team] || null });
-        if (line) lines.push(`[${tag}] ${line}`);
-      }
-    }
-    return lines.length ? `Minutes without a regular listed tonight, from the play-by-play (only past ${MIN_MINUTES} minutes without him outside garbage time; garbage time is the 4th quarter with the teams 20+ points apart and more than 6:00 left, or 15+ after):\n${lines.join('\n')}` : '';
-  } catch (e) {
-    return `Minutes without a regular listed tonight: not on file (${e.message})`;
   }
 }
 
@@ -882,7 +853,7 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   ]);
   const line = nbaLineOf(desk);
   const tip = tipOf(desk, asOf);
-  const [homeLog, awayLog, injuries, back, available, nextGames, cup, without] = await Promise.all([
+  const [homeLog, awayLog, injuries, back, available, nextGames, cup] = await Promise.all([
     gameLog(desk, ratings, homeTeam, asOf, seasons[0], awayTeam, seasons[1]),
     gameLog(desk, ratings, awayTeam, asOf, seasons[1], null, null, { team: homeTeam, data: seasons[0] }),
     injurySection(desk, { homeTeam, awayTeam, tip, asOf }),
@@ -890,11 +861,10 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
     availableListed(desk, { homeTeam, awayTeam, tip, asOf, seasons }),
     Promise.all([awayTeam, homeTeam].map((t) => nextGameLine(t, tip).catch(() => null))),
     tonightCupLine(homeTeam, awayTeam, tip).catch(() => null),
-    withoutSection(desk, seasons, { homeTeam, awayTeam, tip, asOf }),
   ]);
   const parts = [
     [matchupHeader(desk), cup, spreadInWords(line)].filter(Boolean).join('\n'),
-    ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back, without].filter(Boolean).join('\n\n')],
+    ['WHO IS PLAYING', [projectedStarters(desk), injuries, available, back].filter(Boolean).join('\n\n')],
     ['THIS SEASON, GAME BY GAME', `${awayLog}\n\n${homeLog}`],
     ['SCHEDULE AND TRAVEL', [await situation(seasons, homeTeam, awayTeam, tip, asOf), ...nextGames.filter(Boolean)].filter(Boolean).join('\n')],
   ];

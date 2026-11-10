@@ -41,18 +41,6 @@ export async function teamRecords(league, season, teamId, beforeDate, limit = 10
   return data || [];
 }
 
-/** One team's games with who was on the floor in each stretch (Nov 10 2026, nbaWithoutHim.js): the teams, the final,
- * the periods, the players and the stretches only, newest first, before `beforeDate`. */
-export async function teamStints(league, season, teamId, beforeDate, limit = 100) {
-  const id = String(teamId);
-  const { data, error } = await db().from(TABLE)
-    .select('game_id, game_date, home:record->home, away:record->away, final:record->final, periods:record->periods, players:record->players, stints:record->stints, stintQuarters:record->stintQuarters')
-    .eq('league', league).eq('season', season).or(`home_team_id.eq.${id},away_team_id.eq.${id}`)
-    .lt('game_date', beforeDate).order('game_date', { ascending: false }).limit(limit);
-  if (error) throw new Error(`game records store: team ${id} stretches failed: ${error.message}`);
-  return data || [];
-}
-
 /** Every game's one-line summary in a season before `beforeDate` (for the opponent lines), oldest first. */
 export async function seasonSummaries(league, season, beforeDate) {
   const out = [];
