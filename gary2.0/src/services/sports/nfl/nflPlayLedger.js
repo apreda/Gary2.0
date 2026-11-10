@@ -61,7 +61,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 23 (same round): each team's plays as the official box counts them (kneel-downs and spikes in, two-point tries out).
 // 24 (same round): every drive the feed flags as reaching the 20 is a red-zone trip, as the official box counts them.
 // 25 (same round): the extra point after a kickoff-return touchdown joins that touchdown in the scoring.
-const LEDGER_SCHEMA = 25;
+// 26 (Nov 10 2026, NFL round 4b): each quarterback's first dropback of the game, with the score then.
+const LEDGER_SCHEMA = 26;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -583,6 +584,18 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
       for (const m of text.matchAll(/(?<![\w-])\d{1,2}-([A-Z][\w'-]*\.\s?[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))?)/g)) {
         (game.lastNamed ||= {})[m[1].replace(/\.\s/, '.')] = { q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null };
       }
+      // Each quarterback's first dropback, kneel-down or spike of the game, by club, in the order they came, with the score
+      // at the snap from his side (NFL round 4b: Anthony Richardson came in for the Colts at Q4 11:08 down 35, and the row
+      // said "relief"). A designed run is not one: J.J. McCarthy's one package run at Q2 3:18 came long before he took over
+      // at Q4 11:03. A snap wiped out by a foul names its passer only in the text (Shedeur Sanders's Q1 13:33 pass).
+      {
+        const wiped = playType === 'no_play' ? (text.match(/(?<![\w-])\d{1,2}-([A-Z][\w'-]*\.[A-Z][\w'-]+) (?:pass|scrambles|sacked|spiked|kneels)/) || [])[1] : null;
+        const dropRusher = flag(g('qb_dropback')) || playType === 'qb_kneel' || playType === 'qb_spike' ? g('rusher_player_name') : null;
+        const team = g('posteam'); const fp = (game.qbFirst ||= {});
+        for (const who of [g('passer_player_name'), dropRusher, wiped]) {
+          if (who && team && !fp[`${team}|${who}`]) fp[`${team}|${who}`] = { i: Object.keys(fp).length, q: num(g('qtr')), clock: String(g('time') || '').replace(/^0(\d)/, '$1') || null, diff: num(g('score_differential')) };
+        }
+      }
       if (g('posteam')) { const q = num(g('qtr')); (game.teamLastQ ||= {})[g('posteam')] = Math.max(game.teamLastQ[g('posteam')] || 0, q || 0); }
       // "LAC-99-J.Caldwell was injured during the play": club, jersey, name (a spaced surname too: "G.Van Roten").
       for (const m of text.matchAll(/\b([A-Z]{2,3})-(?:(\d{1,2})-)?([A-Z][\w'-]*\.[A-Z][\w'-]+(?: (?:[A-Z][\w'-]+|Jr\.|Sr\.|II|III|IV))*) was injured during the play/g)) {
@@ -801,7 +814,7 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
     const flow = g.flow ? { home: g.flow.home, away: g.flow.away, events: g.flow.events.map(({ q, clock, team, pts, how, home, away }) => ({ q, clock, team, pts, how, home, away })),
       lead: g.flow.lead, lead_changes: g.flow.changes } : null;
     const hurt = (g.hurt || []).map(({ team, who, q, clock, later }) => ({ team, who, q, clock, later }));
-    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ || {} };
+    return { game_id: g.game_id, week: g.week, season_type: g.season_type, roof: g.roof, temp: g.temp, wind: g.wind, stadium: g.stadium, conditions: g.conditions, starters, lines, quarters, flow, hurt, ejected: g.ejected || [], lastPlay: g.lastPlay || {}, lastNamed: g.lastNamed || {}, teamLastQ: g.teamLastQ || {}, qbFirst: g.qbFirst || {} };
   }).sort((a, b) => (a.week || 0) - (b.week || 0));
 
   const out = { schema: LEDGER_SCHEMA, season, generated_at: new Date().toISOString(), plays_parsed: rows, malformed_rows: malformed, teams: {}, games: gameList };

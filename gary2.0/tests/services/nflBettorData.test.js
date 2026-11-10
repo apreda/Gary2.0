@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineStory, quarterbacks, skillPlayers } from '../../src/services/sports/nfl/nflBettorData.js';
+import { gameByGame, lineStory, quarterbacks, skillPlayers } from '../../src/services/sports/nfl/nflBettorData.js';
 
 // lineStory is shared by the NFL, college and the NBA.
 describe('lineStory with no listed move', () => {
@@ -40,5 +40,19 @@ describe('CARRIES AND TARGETS for a released player', () => {
     const text = skillPlayers(d, 'Philadelphia Eagles', '2026-11-12', '• Dameon Pierce (Running Back) (Released) - The Eagles released Pierce.');
     expect(text).toMatch(/Dameon Pierce \(RB\) · released \(the club's Wk 9 roster\): Wk 7/);
     expect(text).not.toMatch(/injury report/);
+  });
+});
+
+// Round 4b, Nov 10 2026: the Colts' Wk 8 head read "Anthony Richardson (relief)" with no word that he came in at Q4 11:08
+// down 35, and the Ravens' listed Fagnano before Huntley, who came in first.
+describe('the game head\'s quarterbacks', () => {
+  it('lists them in the order they played, with when each later one first dropped back and the score then', () => {
+    const g = { game_id: 'g8', season: '2026', game_type: 'REG', week: '8', gameday: '2026-11-01', home_team: 'BUF', away_team: 'BAL', home_score: '30', away_score: '6' };
+    const qb = (name, att) => ({ player_id: name, player_display_name: name, position: 'QB', team: 'BAL', game_id: 'g8', week: '8', season: '2026', attempts: att, completions: 1 });
+    const d = { season: 2026, schedule: [g], teamWeek: [], snaps: [], playerWeek: [qb('Lamar Jackson', 1), qb('Joe Fagnano', 21), qb('Tyler Huntley', 4)],
+      ledgerGames: new Map([['g8', { game_id: 'g8', starters: { BAL: { name: 'J.Fagnano', started: 'L.Jackson' } },
+        qbFirst: { 'BAL|L.Jackson': { i: 0, q: 1, clock: '15:00', diff: 0 }, 'BAL|T.Huntley': { i: 1, q: 1, clock: '10:00', diff: -7 }, 'BAL|J.Fagnano': { i: 2, q: 2, clock: '9:39', diff: -6 } } }]]) };
+    const head = gameByGame(d, 'Baltimore Ravens', '2026-11-12').split('\n').find((l) => /^  Wk 8 /.test(l));
+    expect(head).toMatch(/QB Lamar Jackson \(started, left early\) 1-of-1.*; Tyler Huntley \(relief, first dropback Q1 10:00, down 7\) 1-of-4.*; Joe Fagnano \(first dropback Q2 9:39, down 6\) 1-of-21/);
   });
 });

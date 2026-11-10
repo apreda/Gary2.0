@@ -158,6 +158,17 @@ function startedEarlyExit(d, g, code) {
     && String(r.player_display_name).toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').trim().split(/\s+/).pop().replace(/[^a-z]/g, '') === last);
   return rows.length === 1 ? rows[0] : null;
 }
+// The play-by-play's "A.Richardson" for the box's "Anthony Richardson": the same first initial and last name.
+const lastOf = (name) => String(name || '').toLowerCase().replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').trim().split(/\s+/).pop().replace(/[^a-z]/g, '');
+function abbrMatches(abbr, display) {
+  const [initial, ...rest] = String(abbr || '').toLowerCase().split('.');
+  return Boolean(initial) && String(display || '').toLowerCase().charAt(0) === initial.charAt(0) && lastOf(display) === rest.join('').replace(/[^a-z]/g, '');
+}
+// A quarterback's first dropback, kneel-down or spike in the game (the play ledger's qbFirst), when one name on his club fits.
+function qbEntry(ledger, code, r) {
+  const fits = Object.entries(ledger?.qbFirst || {}).filter(([k]) => k.startsWith(`${code}|`) && abbrMatches(k.slice(code.length + 1), r.player_display_name));
+  return fits.length === 1 ? fits[0][1] : null;
+}
 const starterOf = (x) => x.qb || null;
 // The same quarterback under two spellings: suffixes and punctuation aside, the same last name and first initial
 // ("Michael Penix Jr." / "Michael Penix", "Cam Ward" / "Cameron Ward", "C.J. Stroud" / "CJ Stroud").
@@ -993,8 +1004,18 @@ export function gameByGame(d, team, before, { meetingUnder = null, read = null }
     // Week 1 read "Carson Wentz 12-of-19 ...; Kyler Murray 3-of-5", Murray's start read as late relief).
     const st = startedEarlyExit(d, x.g, c);
     const all = [...x.passers, ...(x.relief || [])];
-    const ordered = st && all.includes(st) ? [st, ...all.filter((r) => r !== st)] : all;
-    const qb = x.passers.length ? ` · QB ${ordered.map((r) => `${r.player_display_name}${r === st ? ' (started, left early)' : x.relief?.includes(r) ? ' (relief)' : ''} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
+    // In the order they played: the starter first, then each by his first play (NFL round 4b: the Ravens' Wk 8 list read
+    // Fagnano before Huntley; Huntley came in at Q1 10:00, Fagnano at Q2 9:39).
+    const entries = new Map(all.map((r) => [r, qbEntry(x.ledger, c, r)]));
+    const byEntry = all.every((r) => entries.get(r)) ? all.slice().sort((a, b) => entries.get(a).i - entries.get(b).i) : all;
+    const ordered = st && all.includes(st) ? [st, ...byEntry.filter((r) => r !== st)] : byEntry;
+    const opener = x.ledger?.starters?.[c] ? (x.ledger.starters[c].started || x.ledger.starters[c].name) : null;
+    // A quarterback who did not start: his first dropback in the play-by-play and the score then. One who only handed off
+    // has none, and nothing is said for him.
+    const cameIn = (r) => { const e = r !== st && r.position === 'QB' && opener && !abbrMatches(opener, r.player_display_name) ? entries.get(r) : null;
+      return e ? `first dropback Q${e.q === 5 ? 'OT' : e.q}${e.clock ? ` ${e.clock}` : ''}, ${e.diff > 0 ? `up ${e.diff}` : e.diff < 0 ? `down ${-e.diff}` : 'tied'}` : null; };
+    const tag = (r) => { const parts = [r === st ? 'started, left early' : x.relief?.includes(r) ? 'relief' : null, cameIn(r)].filter(Boolean); return parts.length ? ` (${parts.join(', ')})` : ''; };
+    const qb = x.passers.length ? ` · QB ${ordered.map((r) => `${r.player_display_name}${tag(r)} ${n(r.completions)}-of-${n(r.attempts)}, ${n(r.passing_yards)} yds, ${n(r.passing_tds)} TD, ${n(r.passing_interceptions)} INT`).join('; ')}`
       : ' · QB not on file';
     // Who the opponent was without that day: its own regulars who did not play, its quarterback first, at most four
     // (Oct 23 2026 data audit: Herbert's 121 yards in Week 5 came against a Denver secondary without Pat Surtain II and
