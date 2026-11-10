@@ -444,6 +444,13 @@ function snapLines(team, snaps, injuries) {
   return lines;
 }
 
+/** "Released" or "Retired" when a player's newest weekly roster row is this club's CUT or RET row, after his last game. */
+export function offRosterStatus(rows, code, lastPlayedWeek) {
+  const now = [...(rows || [])].sort((a, b) => Number(b.week) - Number(a.week))[0];
+  if (!now || now.team !== code || !(Number(now.week) > Number(lastPlayedWeek))) return null;
+  return { CUT: 'Released', RET: 'Retired' }[String(now.status || '').toUpperCase()] || null;
+}
+
 /**
  * DID HE PLAY THE TEAM'S LAST GAMES (founder GO, Oct 4 2026). The injury row's tag was the age of the latest
  * report, and the NFL re-lists every injured player every week: Caleb Williams read "FRESH — Reported Oct 2
@@ -525,6 +532,10 @@ export async function attachNflParticipation({ homeTeam, awayTeam, home, away, s
       const earlier = weeks.filter((w) => w < lastPlayedWeek).sort((a, b) => b - a).slice(0, 5)
         .map((w) => { const x = shares.get(w); return `Wk ${w} ${!x ? (statusAt(w) || 'did not play') : x.kick ? `${x.st}%` : x.share != null ? `${x.share}%` : 'special teams only'}`; });
       injury.participation = { missed: missedWeeks.length, missedWeeks, lastPlayedWeek, lastShare: last.share ?? null, lastText: textOf(last), earlier };
+      // Off the club's roster since his last game is not a status this week (round 3, Nov 10 2026: Dameon Pierce, released
+      // from IR with an injury settlement two days before the game, read "Questionable" on the Nov 8 Eagles report).
+      const gone = injury.officialStatus ? null : offRosterStatus(rosterRows.filter((x) => (injury.gsis_id && x.gsis_id === injury.gsis_id) || (x.pfr_id && x.pfr_id === pfrOf.get(player)) || (x.team === code0 && nk(x.full_name) === nk(player))), code0, lastPlayedWeek);
+      if (gone) injury.status = gone;
     }
     // A listed player with no offensive or defensive snap all season says so (Oct 23 2026 data audit: Kansas City's 4-0
     // was all without Josh Simmons and his row carried no tag). Decided only on an exact name match in this team's
