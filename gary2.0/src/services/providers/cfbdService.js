@@ -196,6 +196,9 @@ export async function getWeekAdvancedGames(season, week, opts = {}) {
 export async function getWeekBoxScores(season, week, opts = {}) {
   // FBS games, and FBS teams' games against FCS teams, which CFBD lists under FCS only (Oct 24 2026 read check: Baylor's
   // game against Prairie View had no team line, so its player lines and units read "not on file").
+  // CFBD numbers the first week 1 and refuses week 0 (HTTP 400), which is never cached, so every desk build asked again
+  // (Nov 10 2026 college audit: 2 to 4 of the 1,000 a month each build). Week 0 is an empty week with no call.
+  if (!(Number(week) >= 1)) return { rows: [] };
   const [fbs, fcs] = await Promise.all([
     bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fbs`, `boxweek_${season}_${week}`, opts),
     bulkGet(`/games/teams?year=${season}&week=${week}&seasonType=regular&classification=fcs`, `boxweek_fcs_${season}_${week}`, opts),
