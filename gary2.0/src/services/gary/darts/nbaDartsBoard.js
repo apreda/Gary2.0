@@ -281,8 +281,12 @@ function gameLines(c, records, stat, abbrById, oppRecord = null, byTeam = null) 
     const missed = (sd) => (T?.[sd]?.fga != null && T?.[sd]?.fgm != null ? T[sd].fga - T[sd].fgm : null);
     const boards = fields.includes('reb') && m.oreb != null && m.dreb != null && missed(x.side) != null && missed(other) != null
       ? `${m.oreb} offensive of his team's ${missed(x.side)} missed field goals, ${m.dreb} defensive of ${x.opp}'s ${missed(other)}` : null;
+    // The passes behind an assist count (Nov 10 2026, record version 21): his potential assists, the passes that led to
+    // a teammate's shot, and his passes. A game the tracking never posted says so.
+    const dimes = fields.includes('ast') ? (m.potAst != null ? `${m.potAst} potential assists, ${m.passes} passes` : 'potential assists not on file for this game') : null;
+    const many = Array.isArray(stat);
     const theirs = oppWithout(x.rec, other, byTeam);
-    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${boards ? ` (${shots ? 'rebounds: ' : ''}${boards})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${theirs.length ? ` · ${x.opp} without ${theirs.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
+    return `${where}: ${x.me.starter ? 'started' : 'off the bench'}, ${Math.round(x.me.min)} min${fouls}${gone}, ${typeof x.value === 'string' ? x.value : one(x.value)}${shots ? ` (${shots})` : ''}${boards ? ` (${many ? 'rebounds: ' : ''}${boards})` : ''}${dimes ? ` (${many ? 'assists: ' : ''}${dimes})` : ''}${without.length ? ` · without ${without.join(', ')}` : ''}${theirs.length ? ` · ${x.opp} without ${theirs.join(', ')}` : ''}${shortStarters.length ? ` · ${shortStarters.join(', ')}` : ''}`;
   });
 }
 
@@ -312,7 +316,7 @@ export async function screenNbaCategory({ kind, board, asOf = new Date() }) {
     // Each number with the minutes it came in, and threes with the attempts (Nov 10 2026: Embiid's "18, 6, 26" read as
     // three nights' work; the 6 was 25 minutes of a game he left in the 3rd quarter. The sheet said so, the list did not,
     // and the list is where Gary chooses whose sheet to read).
-    const recent = lastThree.map((p) => (p?.min > 0 ? `${m.stat === 'fg3m' && p.fg3a != null ? `${p.fg3m} of ${p.fg3a}` : one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat])} (${Math.round(p.min)} min)` : 'did not play'));
+    const recent = lastThree.map((p) => (p?.min > 0 ? `${m.stat === 'fg3m' && p.fg3a != null ? `${p.fg3m} of ${p.fg3a}` : m.stat === 'ast' && p.potAst != null ? `${p.ast} on ${p.potAst} potential` : one(m.stat === 'pra' ? p.pts + p.reb + p.ast : p[m.stat])} (${Math.round(p.min)} min)` : 'did not play'));
     // A failed load is not a team with no games (round 12).
     const line = `${head} · ${!teamRecs ? "this season's games not on file (the game records did not load)" : recent.length ? `his team's last ${recent.length === 1 ? 'game' : `${recent.length} games`}, newest first: ${recent.join(', ')}` : 'no games yet this season'}`;
     menu.push({ id, gameId: c.gameId, line, sheet: sheet.join('\n') });

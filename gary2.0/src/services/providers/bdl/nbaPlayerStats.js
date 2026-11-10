@@ -163,13 +163,27 @@ export const nbaPlayerStatsMethods = {
    * tracked, 22-46 in the box). An empty list until it posts; null when the feed fails.
    */
   async getNbaShootingByDefender(gameId, ttlMinutes = 120) {
+    return this.getNbaTracking(gameId, 'shooting', 'defender_distance', ttlMinutes);
+  },
+
+  /**
+   * One game's passing by player (BDL /nba/v1/stats/tracking, type=passing; Nov 10 2026, founder: a number needs what
+   * it came from, and an assist count sat alone): passes made and potential assists (passes that led to a shot). Posts
+   * hours to a day after the final; 153 of 154 finals had it on Nov 10 (not Denver at Indiana, Nov 7). An empty list
+   * until it posts; null when the feed fails.
+   */
+  async getNbaPassingTracking(gameId, ttlMinutes = 120) {
+    return this.getNbaTracking(gameId, 'tracking', 'passing', ttlMinutes);
+  },
+
+  async getNbaTracking(gameId, family, type, ttlMinutes = 120) {
     if (!gameId) return null;
     try {
-      return await getCachedOrFetch(`nba_shooting_defender_${gameId}`, async () => {
+      return await getCachedOrFetch(family === 'shooting' ? `nba_shooting_defender_${gameId}` : `nba_${family}_${type}_${gameId}`, async () => {
         const rows = [];
         let cursor = null;
         do {
-          const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/stats/shooting?game_ids[]=${gameId}&type=defender_distance&per_page=100${cursor ? `&cursor=${cursor}` : ''}`;
+          const url = `${BALLDONTLIE_API_BASE_URL}/nba/v1/stats/${family}?game_ids[]=${gameId}&type=${type}&per_page=100${cursor ? `&cursor=${cursor}` : ''}`;
           const resp = await bdlHttp.get(url, { headers: { 'Authorization': API_KEY } });
           rows.push(...(Array.isArray(resp?.data?.data) ? resp.data.data : []));
           cursor = resp?.data?.meta?.next_cursor ?? null;
@@ -177,8 +191,8 @@ export const nbaPlayerStatsMethods = {
         return rows;
       }, ttlMinutes);
     } catch (e) {
-      recordPickDataFailure('BDL:getNbaShootingByDefender', e);
-      console.error('[Ball Don\'t Lie] getNbaShootingByDefender error:', e.message);
+      recordPickDataFailure(`BDL:getNbaTracking:${family}:${type}`, e);
+      console.error(`[Ball Don't Lie] getNbaTracking ${family}/${type} error:`, e.message);
       return null;
     }
   },

@@ -22,7 +22,7 @@ import { milesBetween, utcOffsetHours, placeOf } from './nbaArenas.js';
 import { espnVenue, espnTeamBox, espnPlayerLines, officialLineFor, espnNameKey } from './espnNbaGame.js';
 import { threesByDefender } from './nbaThreesByDefender.js';
 
-export const NBA_RECORD_VERSION = 20;
+export const NBA_RECORD_VERSION = 21;
 
 const get = async (path) => (await bdlHttp.get(`${BALLDONTLIE_API_BASE_URL}${path}`, { headers: { Authorization: API_KEY } })).data;
 // "32:00", "6" or "33:26" to minutes with one decimal.
@@ -237,7 +237,7 @@ export async function buildNbaGameRecord(gameId) {
   if (!box) throw new Error(`game ${gameId}: box score not on file`);
   const ots = [1, 2, 3].filter((k) => g[`home_ot${k}`] != null);
   const periods = [1, 2, 3, 4, ...ots.map((k) => 4 + k)];
-  const [byPeriod, lineups, advanced, plays, report, homeGames, awayGames, shooting] = await Promise.all([
+  const [byPeriod, lineups, advanced, plays, report, homeGames, awayGames, shooting, passing] = await Promise.all([
     Promise.all(periods.map(async (q) => new Map(((await get(`/nba/v1/stats?game_ids[]=${g.id}&period=${q}&per_page=100`))?.data || []).map((r) => [r.player.id, r])))),
     ballDontLieService.getNbaLineups([g.id]).catch(() => []),
     ballDontLieService.getNbaAdvancedBox(g.id),
@@ -246,6 +246,7 @@ export async function buildNbaGameRecord(gameId) {
     ballDontLieService.getGames('basketball_nba', { team_ids: [g.home_team.id], seasons: [g.season], per_page: 100, paginateAll: true }),
     ballDontLieService.getGames('basketball_nba', { team_ids: [g.visitor_team.id], seasons: [g.season], per_page: 100, paginateAll: true }),
     ballDontLieService.getNbaShootingByDefender(g.id),
+    ballDontLieService.getNbaPassingTracking(g.id),
   ]);
   const starters = new Set((lineups || []).filter((r) => r.starter).map((r) => r.player?.id));
   const checks = [];
@@ -258,6 +259,10 @@ export async function buildNbaGameRecord(gameId) {
       players.push(row);
     }
   }
+  // The passes behind each player's assists (Nov 10 2026, version 21): his passes and his potential assists, the passes
+  // that led to a teammate's shot. A game the tracking has not posted leaves them off, and the check below says so.
+  const passBy = new Map((passing || []).map((r) => [r.player_id, r.stats || {}]));
+  for (const p of players) { const t = passBy.get(p.id); if (t?.potential_ast != null) { p.potAst = Number(t.potential_ast); p.passes = Number(t.passes_made) || 0; } }
   // Each player's line against the official box (ESPN), before the quarters are laid out (round 14: a box read early in
   // the game had the minutes of the first quarter and every player's quarters were dropped): where a count differs, the official one stands (Oct 27 2026
   // loop: 13 differences in 1,180 lines, among them Boozer's 16 points, officially 14, and Marshall's missing shot). A
@@ -375,6 +380,7 @@ export async function buildNbaGameRecord(gameId) {
   // Posts hours to a day after the final, and a few games never get it (LAC at OKC, Oct 25 2026): the late rebuild tries
   // again for two days (ensureNbaRecords).
   checks.push({ check: 'the closest-defender shooting is on file', ok: Boolean(teams.home.threes && teams.away.threes) });
+  checks.push({ check: 'the passing tracking is on file', ok: players.some((p) => p.potAst != null) });
   checks.push({ check: 'the injury report at tip is on file', ok: !report.home.notOnFile && !report.away.notOnFile, detail: report.home.notOnFile || report.away.notOnFile || null });
 
   const home = teamOf(g.home_team), away = teamOf(g.visitor_team);

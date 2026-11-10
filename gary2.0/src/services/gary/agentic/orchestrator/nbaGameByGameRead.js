@@ -38,7 +38,7 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   // final read "0 by quarter" for every player).
   const recent = new Date(Date.now() - 2 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const LATE = ['the advanced box is on file', 'the official team box is on file', 'the venue is on file', 'the injury report at tip is on file',
-    "each player's quarters add up to his minutes and points", 'the closest-defender shooting is on file'];
+    "each player's quarters add up to his minutes and points", 'the closest-defender shooting is on file', 'the passing tracking is on file'];
   // The league corrects a box days after the final (Oct 28 2026: Clingan's 10 rebounds at Sacramento on Oct 23 became
   // 11 and Camara's 3 became 2 after the record was built on Oct 27): a game is built again the morning after (8 AM ET;
   // Oct 29 2026 hunt: ESPN moved Washington's fast-break points at Cleveland from 10 to 12 overnight), two days and seven
