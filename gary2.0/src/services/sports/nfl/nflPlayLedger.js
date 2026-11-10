@@ -60,7 +60,8 @@ const DISK_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 // 22 (Nov 10 2026, NFL data round 1): kneel-downs and spikes counted as third and fourth downs, as the official box has them.
 // 23 (same round): each team's plays as the official box counts them (kneel-downs and spikes in, two-point tries out).
 // 24 (same round): every drive the feed flags as reaching the 20 is a red-zone trip, as the official box counts them.
-const LEDGER_SCHEMA = 24;
+// 25 (same round): the extra point after a kickoff-return touchdown joins that touchdown in the scoring.
+const LEDGER_SCHEMA = 25;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 /** Only these columns are kept. The other ~340 are discarded while streaming. */
@@ -610,7 +611,9 @@ async function streamAndAggregate(season, { fetchImpl = globalThis.fetch } = {})
           f.tryOpen = pts >= 6;
         }
       }
-      if (playType === 'kickoff') f.tryOpen = false;
+      // The next kickoff closes the try; a kickoff returned for the touchdown opens it (NFL data round 1, Nov 10 2026: the
+      // Raiders' extra point after Dylan Laube's Week 8 kickoff-return touchdown read as its own score, "1 points").
+      if (playType === 'kickoff' && !(dh > 0 || da > 0)) f.tryOpen = false;
       f.last = [homeNow, awayNow];
       const diff = homeNow - awayNow;
       for (const [side, by] of [['home', diff], ['away', -diff]]) {

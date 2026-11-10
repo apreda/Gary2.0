@@ -345,6 +345,15 @@ describe('a parsed season', () => {
     expect([led.games[0].lines.AAA.red_zone_trips, led.games[0].lines.AAA.drive_end_of_half]).toEqual([1, 1]);
   });
 
+  it('joins the extra point to a kickoff-return touchdown (Nov 10 2026: the Raiders read "1 points" as its own score)', async () => {
+    const body = [HEADER.join(','),
+      row({ play_type: 'kickoff', touchdown: '1', td_team: 'AAA', td_player_name: 'D.Laube', total_away_score: '6', time: '10:56' }),
+      row({ play_type: 'extra_point', extra_point_result: 'good', total_away_score: '7', time: '10:44' }),
+    ].join('\n');
+    const led = await _internals.streamAndAggregate(2025, { fetchImpl: async () => ({ ok: true, status: 200, body: streamOf(body) }) });
+    expect(led.games[0].flow.events.map((e) => [e.how, e.away])).toEqual([['TD, D.Laube kickoff return', 7]]);
+  });
+
   it('kicks and punts are excluded from scrimmage splits', async () => {
     const body = [HEADER.join(','), row(), row({ play_type: 'punt' }), row({ play_type: 'kickoff' })].join('\n');
     const fetchImpl = async () => ({ ok: true, status: 200, body: streamOf(body) });
