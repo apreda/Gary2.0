@@ -555,7 +555,8 @@ async function playerGames(sides, boxes) {
         await placeHurt(box, [found.teamId, oppId]);
         // Labeled by school (round 16: the full "School Mascot" on every score, lead, big play and hurt player).
         const shortOf = (id) => (box.teams || []).find((t) => t.id === String(id))?.short;
-        const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: shortOf(found.teamId) || s.team, [oppId]: shortOf(oppId) || r.opponent || 'opponent' });
+        const lines = ncaafFlowLines(box, found.teamId, { [String(found.teamId)]: shortOf(found.teamId) || s.team, [oppId]: shortOf(oppId) || r.opponent || 'opponent' },
+          { cfbd: cfbdSame ? { [String(found.teamId)]: found.own, [oppId]: found.opp } : null });
         if (lines) flow.set(String(r.gameId), lines.join('\n      '));
       }
     }

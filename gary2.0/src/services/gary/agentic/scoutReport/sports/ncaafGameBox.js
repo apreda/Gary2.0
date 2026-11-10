@@ -623,7 +623,7 @@ export function espnUnitTotals(box, teamId) {
 /** A game's flow from one team's side, from the box: every score in order with the score after it (that team's first),
  * the largest lead each way, lead changes, possession, quarterback hurries and plays of 20+ yards for both (Oct 29 2026,
  * founder: "who got ahead, how, when did the team go up 14 versus being close the whole game"). Null without scoring. */
-export function ncaafFlowLines(box, teamId, names = {}) {
+export function ncaafFlowLines(box, teamId, names = {}, { cfbd = null } = {}) {
   const us = (box?.teams || []).find((t) => t.id === String(teamId)), them = (box?.teams || []).find((t) => t.id !== String(teamId));
   if (!us || !them || !Array.isArray(box?.scoring)) return null;
   const name = (id) => names[id] || (id === us.id ? 'them' : 'opponent');
@@ -645,7 +645,10 @@ export function ncaafFlowLines(box, teamId, names = {}) {
   const hurries = (id) => (box.players || []).filter((p) => p.teamId === id).reduce((a, p) => a + (Number(p.stats?.defensive?.hurries) || 0), 0);
   // None credited to either side is a stat crew that does not chart hurries, not zero pressure (round 9: Georgia's and
   // Maryland's home boxes show "-" in every QH column, and ESPN writes 0).
-  const hurryText = hurries(us.id) + hurries(them.id) === 0 ? 'quarterback hurries not charted in this game\'s box' : `quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`;
+  // Nothing said when CFBD's team box (`cfbd`: team id -> category map) gives another count (Nov 10 2026 college audit: the
+  // two differed in 35 of 1,370 team-games).
+  const differ = [us.id, them.id].some((id) => cfbd?.[id]?.get && Number(cfbd[id].get('qbHurries') ?? 0) !== hurries(id));
+  const hurryText = differ ? 'quarterback hurries not on file (the two box scores differ)' : hurries(us.id) + hurries(them.id) === 0 ? 'quarterback hurries not charted in this game\'s box' : `quarterback hurries made ${hurries(us.id)}, taken ${hurries(them.id)}`;
   const big = (id) => (box.bigPlays === null ? 'not on file' : (box.bigPlays || []).filter((b) => b.teamId === id).map((b) => `${b.who || '?'} ${b.yards} ${b.kind}`).join(', ') || 'none');
   return [
     `scoring: ${plays.length ? plays.map((p) => `${when(p)} ${p.teamId === us.id ? name(us.id) : name(them.id)} ${scoringWords(p.text)} (${/not on file/.test(p.note || '') ? p.note : `${score(p)}${p.note ? `; ${p.note}` : ''}`})`).join(' · ') : 'none'}`,

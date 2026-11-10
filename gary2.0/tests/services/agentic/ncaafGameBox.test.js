@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
+import { pointsByKind, kindsInWords, boxAddsUp, turnoverDetail, publishedFumbles, gameBoxFromSummary, ncaafReturns, officialSackPlays, ncaafFlowLines } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 // Duke 20, North Carolina 24 (Oct 17 2026): Duke's 20 held a fumble-return TD, so its offense scored 13.
 const box = (scoring, away = 24) => ({
@@ -140,5 +140,15 @@ describe('the sacks split out of the runs', () => {
     const plays = { mine: { n: 6, yards: -35 }, theirs: { n: 2, yards: -10 } };
     expect(officialSackPlays(plays, { made: [2, 10], taken: [6, 42] })).toEqual({ mine: { n: 6, yards: -42 }, theirs: { n: 2, yards: -10 } });
     expect(officialSackPlays(plays, undefined)).toBe(plays);
+  });
+});
+
+describe('quarterback hurries', () => {
+  it('says nothing when CFBD\'s team box gives another count', () => {
+    const box = { teams: [{ id: '1', homeAway: 'home', totals: {} }, { id: '2', homeAway: 'away', totals: {} }], scoring: [], bigPlays: [],
+      players: [{ teamId: '1', stats: { defensive: { hurries: 5 } } }, { teamId: '2', stats: { defensive: { hurries: 1 } } }] };
+    const cfbd = (n) => new Map([['qbHurries', String(n)]]);
+    expect(ncaafFlowLines(box, '1', {}, { cfbd: { 1: cfbd(5), 2: cfbd(1) } })[1]).toContain('quarterback hurries made 5, taken 1');
+    expect(ncaafFlowLines(box, '1', {}, { cfbd: { 1: cfbd(1), 2: cfbd(1) } })[1]).toContain('quarterback hurries not on file');
   });
 });
