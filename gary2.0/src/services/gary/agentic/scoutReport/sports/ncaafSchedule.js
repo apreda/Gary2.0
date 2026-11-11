@@ -289,13 +289,13 @@ export function opponentClause(oppText, theirQb) {
 }
 
 /**
- * One entry's brackets in an opponent's games on a game row: in full by default, who played quarterback for it that day
- * with its runs, passing, sacks and what it allowed, and the "under X's game above" pointers (Nov 10 2026, founder:
- * nothing is cut because Gary did not use it; a bare result is nothing to go off of). Unset or NCAAF_OPP_GAMES_DETAIL=1
- * is the full form; NCAAF_OPP_GAMES_DETAIL=0 gives the trimmed rows of earlier that day (the quarterback only, every row
- * its own list), kept for later and off. The HOME AND ROAD lines keep their entries either way.
+ * One entry's brackets in an opponent's games on a game row: who played quarterback for it that day, nothing after, and
+ * every row prints its own list (Nov 10 2026, late, founder: "Maybe Gary just needs a general understanding of the good
+ * teams and the bad teams ... we don't need to get too granular, or too wide of a net"). The row's own game keeps
+ * everything. Unset or NCAAF_OPP_GAMES_DETAIL=0 is this short form; NCAAF_OPP_GAMES_DETAIL=1 gives the full entries (its
+ * runs, passing, sacks and what it allowed) and the "under X's game above" pointers. HOME AND ROAD keeps its entries.
  */
-export const oppGamesDetail = () => process.env.NCAAF_OPP_GAMES_DETAIL !== '0';
+export const oppGamesDetail = () => process.env.NCAAF_OPP_GAMES_DETAIL === '1';
 export function oppGamesEntry(clause) {
   if (oppGamesDetail()) return clause;
   return String(clause || '').match(/^QB [^;]*/)?.[0] || null;
@@ -1162,7 +1162,7 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       // Each opponent's games in full once, later rows pointing to them, and never the game the row is (round 16: an
       // opponent both teams played printed its season twice, and each list opened with the row's own score).
       const etDayOf = (x) => new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      // Every row prints its own list in full (Nov 10 2026: each pointer's list left out a different game than the row's).
+      // Every row prints its own short list (Nov 10 2026, late, founder); NCAAF_OPP_GAMES_DETAIL=1 gives the pointers back.
       const seen = oppGamesDetail() ? shownOpponents.get(Number(r.opponentId)) : null;
       const short = label(r.opponentId, { full: false, when: r.date });
       const oppText = seen ? `${short}${short ? ' · ' : ''}its games: under ${seen} above`
