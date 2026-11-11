@@ -262,12 +262,13 @@ function runsWithQb(g, side) {
 }
 // `read`: the live read's memory across both teams' lists (round 16): its games against tonight's two teams are bare
 // results (each is a full row in that team's list).
-// `head`: the game row's head in THIS SEASON, GAME BY GAME, where each other game is its result, site, opponent and who
-// played quarterback, every row in full (NFL pass 2, Nov 10 2026: the per-game yards, sacks and giveaways were 12% of the
-// desk and one answer in 27 used them; the "under X above" pointer's list held this row's own game and not the earlier
-// one). NFL_OPP_GAMES_DETAIL=1 brings back the yards, sacks and giveaways and the pointers.
+// `head`: the game row's head in THIS SEASON, GAME BY GAME. Each other game reads in full by default, its quarterback with
+// its yards, sacks and giveaways both ways, and the "under X above" pointers (Nov 10 2026, founder: nothing is cut because
+// Gary did not use it; a bare result is nothing to go off of). Unset or NFL_OPP_GAMES_DETAIL=1 is the full form;
+// NFL_OPP_GAMES_DETAIL=0 gives the trimmed head of earlier that day (result, site, opponent and quarterback only, every row
+// its own list), kept for later and off.
 function opponentThatDay(d, before, x, read = null, head = false) {
-  const detail = !head || process.env.NFL_OPP_GAMES_DETAIL === '1';
+  const detail = !head || process.env.NFL_OPP_GAMES_DETAIL !== '0';
   const games = teamGames(d, x.opp, d.season, before);
   const seen = detail ? read?.shown?.get(x.opp) : null;
   // The starter who left early is named too (Oct 29 2026 hunt, round 7: the Patriots' Week 1 opponent read "Drew Lock at
