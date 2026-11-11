@@ -22,7 +22,7 @@ import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLa
 import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../../providers/nbaOfficialInjuryReport.js';
 import { calculateRestSituation, formatRestSituation } from '../scoutReport/shared/dataFetchers/recentGames.js';
 import { espnVenue } from '../../../sports/nba/espnNbaGame.js';
-import { NBA_ARENAS } from '../../../sports/nba/nbaArenas.js';
+import { NBA_ARENAS, placeOf } from '../../../sports/nba/nbaArenas.js';
 import { GAME_PICK_MODEL, GAME_ML_CAP } from './orchestratorConfig.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
@@ -303,16 +303,30 @@ async function tonightWhere(seasons, homeTeam, awayTeam, tip) {
   const v = tip ? await espnVenue({ date: etDate(tip), home_team: { name: h?.nickname || homeTeam }, visitor_team: { name: a?.nickname || awayTeam } }).catch(() => null) : null;
   const hostCity = NBA_ARENAS[abbrOf(h)]?.city;
   if (!v?.city || !hostCity) return null;
-  if (v.neutral) return { home: `at a neutral site in ${v.city}`, away: `at a neutral site in ${v.city}` };
+  if (v.neutral) return { home: `at a neutral site in ${v.city}`, away: `at a neutral site in ${v.city}`, city: v.city };
   if (v.city === hostCity) return null;
-  return { home: `a home game played in ${v.city}`, away: `at ${h?.city || homeTeam}, played in ${v.city}` };
+  return { home: `a home game played in ${v.city}`, away: `at ${h?.city || homeTeam}, played in ${v.city}`, city: v.city };
+}
+// The tip line for a game away from the home arena, in the venue's own clock and city (Nov 10 2026 data round, pass 2:
+// Nuggets vs Pacers in Mexico City on Nov 7 read "Tip: 5:00 PM ET in Indiana."; it was 4:00 PM local in Mexico City).
+// The same window as the home arena's line: before 6:00 or from 9:00 PM local. Null for an evening tip or an unknown one.
+export function venueTip(tip, city) {
+  const tz = placeOf(city)?.tz;
+  if (!tz || !tip || Number.isNaN(Date.parse(tip))) return null;
+  const clock = (timeZone) => new Date(tip).toLocaleTimeString('en-US', { timeZone, hour: 'numeric', minute: '2-digit' });
+  const [h, m] = new Date(tip).toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).split(':').map(Number);
+  if (h * 60 + m >= 18 * 60 && h * 60 + m < 21 * 60) return null;
+  return `Tip: ${clock('America/New_York')} ET${clock(tz) === clock('America/New_York') ? '' : `, ${clock(tz)} local`} in ${city}.`;
 }
 async function situation(seasons, homeTeam, awayTeam, tip, asOf) {
   const at = tip || new Date(asOf).toISOString();
   const rest = [homeTeam, awayTeam].map((team, i) => (seasons[i]?.games?.length ? calculateRestSituation(seasons[i].games, at, team) : null));
   const [homeWhere, awayWhere, tonight] = await Promise.all([lastGameWhere(seasons[0]), lastGameWhere(seasons[1]), tonightWhere(seasons, homeTeam, awayTeam, tip)]);
-  return formatRestSituation(homeTeam, awayTeam, rest[0], rest[1], { city: seasons[0]?.city || null, tip, where: { home: homeWhere, away: awayWhere }, tonight })
-    .split('\n').filter((l) => !/: Rest data unavailable$/.test(l)).join('\n').trim();
+  const lines = formatRestSituation(homeTeam, awayTeam, rest[0], rest[1], { city: seasons[0]?.city || null, tip, where: { home: homeWhere, away: awayWhere }, tonight })
+    .split('\n').filter((l) => !/: Rest data unavailable$/.test(l));
+  // Away from the home arena the tip is read on the venue's clock, not the home team's.
+  const placed = tonight?.city && placeOf(tonight.city)?.tz ? [...lines.filter((l) => !/^Tip: /.test(l)), venueTip(tip, tonight.city)].filter(Boolean) : lines;
+  return placed.join('\n').trim();
 }
 
 // THE NEWS GARY READS: the desk's news search (the part after its own injury lists), without betting lines, past
