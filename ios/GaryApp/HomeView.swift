@@ -1038,24 +1038,11 @@ struct HomeView: View {
         let marqueeEntries = self.marqueeEntries
         let sheetRows = self.sheetRows
 
-        // ── THE MARQUEE — the day's big games, tracked live (founder): countdown → live score + where Gary
-        // stands → result → the next one. Above Gary (founder, Oct 30 2026: "get the scoreboard back up ... if
-        // it was above Gary"), and on a day with no big game it counts down to tomorrow's.
-        if !marqueeEntries.isEmpty || marqueeTomorrowTease != nil {
-            HomeMarqueeTracker(entries: marqueeEntries,
-                               tomorrowTease: marqueeTomorrowTease,
-                               onOpenGame: { m, league in openGame(matchup: m, league: league) })
-                .allowsHitTesting(!boardLifted)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
-        }
-
         // ── GARY (founder, Oct 30 2026): Gary in his vest, labelled like a diagram with last night and his run
         // of nights, plus two prompts that change with the day (the parlay of the day, the darts; TONIGHT and
         // the picks prompt came off Nov 10), in place of the Bento ("it's not an analytics dashboard"). Each finished
         // game's story opens from its own row on the board (HomeBoardStory).
-        // Talking to him brings all of him on screen, the captions under him included (he sits under the
-        // scoreboard, so they'd start below the fold).
+        // Talking to him brings all of him on screen, the captions under him included.
         ScrollViewReader { proxy in
             HomeGaryOpening(ask: talkAvailable ? talkQuestion : nil,
                             talkCue: talkCue,
@@ -1071,7 +1058,20 @@ struct HomeView: View {
         }
         .allowsHitTesting(!boardLifted)
         .opacity(animateIn ? 1 : 0)
-        .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
+
+        // ── THE MARQUEE — the day's big games, tracked live (founder): countdown → live score + where Gary
+        // stands → result → the next one. Under Gary now (founder, Nov 10 2026: "if the scoreboard and gary
+        // swapped positions"; it sat above him from Oct 30), and on a day with no big game it counts down to
+        // tomorrow's.
+        if !marqueeEntries.isEmpty || marqueeTomorrowTease != nil {
+            HomeMarqueeTracker(entries: marqueeEntries,
+                               tomorrowTease: marqueeTomorrowTease,
+                               onOpenGame: { m, league in openGame(matchup: m, league: league) })
+                .allowsHitTesting(!boardLifted)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeOut(duration: 0.6).delay(0.05), value: animateIn)
+        }
 
         // ── ALL-STAR WEEK — the break takeover (Jul 13-14 2026). Gary works
         // the exhibitions, so the dark days lead with them instead of a void.

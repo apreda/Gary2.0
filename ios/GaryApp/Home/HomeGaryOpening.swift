@@ -64,8 +64,10 @@ struct HomeGaryOpening: View {
     static let height: CGFloat = 408
     /// The ASK GARY label's top: under last night's.
     private static let askY: CGFloat = 100
-    private static let garyHeight: CGFloat = 344
-    private static let garyTop: CGFloat = 28
+    /// 10% smaller than the 344 he stood at, shrunk about his middle so the labels stay put (founder, Nov 10 2026:
+    /// "Gary just like 10% smaller ... only Gary").
+    private static let garyHeight: CGFloat = 310
+    private static let garyTop: CGFloat = 45
 
     private var slate: String { SupabaseAPI.todayEST() }
     private var live: Bool { activePage && scenePhase == .active }
