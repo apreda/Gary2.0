@@ -522,7 +522,9 @@ function lineupChanges(d, code, gs) {
     const snapsBefore = (id) => prior.reduce((a, e) => a + of(e, id), 0);
     // The regulars who left early or were held to a few snaps, as an opponent's line reads them too (Oct 28 2026 data
     // check: the 49ers' Week 6 win read without Washington losing McLaurin in the first quarter).
-    out.limited.set(g.g.game_id, limited.map((id) => label(g, id, true)));
+    // By the same rule as the team's own line, the drop under his own earlier games included (NFL pass 2: the opponent's
+    // line still read the 25% rule alone).
+    out.limited.set(g.g.game_id, [...limited.map((id) => label(g, id, true)), ...dropped.map(droppedLabel)]);
     out.departed.set(g.g.game_id, departed.map((id) => `${name.get(id).name} (${[name.get(id).pos, offWord(g, id), movedTo(g, id)].filter(Boolean).join(', ')})`));
     out.absent.set(g.g.game_id, absent.slice().sort((a, b) => (name.get(b).pos === 'QB') - (name.get(a).pos === 'QB') || snapsBefore(b) - snapsBefore(a))
       .map((id) => ({ name: name.get(id).name, pos: posAt.get(`${g.g.game_id}|${id}`) || name.get(id).pos, why: why(g, id) })));
