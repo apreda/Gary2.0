@@ -261,4 +261,18 @@ describe('ncaafRedZone', () => {
     expect(ncaafRedZone([d('FG', true), d('TD', true), d('PUNT', false), d('INT', true), d('INT', true), d('FG', true)])).toBe('red zone 5 trips (2 FG, 1 TD, 2 interceptions)');
     expect(ncaafRedZone([d('PUNT', false)])).toBe('no red-zone trips');
   });
+
+  // A kneel at the 16 read "1 end of game" inside the trips, like a trip that failed (Nov 10 2026 college pass 3).
+  it('says a trip that ended in kneel-downs, and keeps end of half for one the clock ran out on', () => {
+    const play = (text) => ({ text, type: { text: 'Rush' }, start: { team: { id: '1' }, yardsToEndzone: 16 }, period: { number: 4 } });
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'rushing', keys: ['rushingAttempts'], athletes: [{ athlete: { id: '5', firstName: 'A', lastName: 'B', displayName: 'A B' }, stats: ['1'] }] }] }] },
+      drives: { previous: [
+        { team: { id: '1' }, result: 'END OF HALF', plays: [play('(00:12) #5 A.B rush middle for 3 yards gain to the X13')] },
+        { team: { id: '1' }, result: 'END OF GAME', plays: [play('(01:10) Kneel down by #12 R.Puglisi at VAN11 for loss of 1 yard'), play('(00:35) Kneel down by #12 R.Puglisi at VAN12 for loss of 1 yard')] },
+      ] },
+    };
+    expect(ncaafRedZone(gameBoxFromSummary(summary, '1').drives)).toBe('red zone 2 trips (1 end of half, 1 kneel-down to end the game)');
+  });
 });

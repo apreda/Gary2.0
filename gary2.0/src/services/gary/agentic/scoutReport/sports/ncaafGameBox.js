@@ -327,7 +327,10 @@ export function gameBoxFromSummary(summary, eventId) {
     const inside20 = [...snaps, ...fouls].some((p) => { const y = Number(p?.start?.yardsToEndzone); return Number.isFinite(y) && y > 0 && y <= 20; });
     // An overtime possession starts at the 25 by rule (round 10: Miami's two overtime TDs read as short fields).
     const ot = Number(d?.start?.period?.number ?? d?.plays?.[0]?.period?.number) > 4;
-    return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20, ot };
+    // A drive the clock ran out on whose last snap was a kneel-down (Nov 10 2026 college pass 3: "red zone 3 trips (2 TD,
+    // 1 end of game)" read a kneel at the 16 as a trip that failed; 48 of the 79 such red-zone drives were kneels).
+    const kneelEnd = /^END OF (?:GAME|HALF)$/.test(result) && /\bkneel/i.test(String(snaps.at(-1)?.text || ''));
+    return { teamId: String(d?.team?.id ?? ''), result, oppHalf, inside20, ot, ...(kneelEnd ? { kneel: true } : {}) };
   });
   // Each offense's sacks and the yards they lost, from the play-by-play (Oct 25 2026 read review: college counts sacks as
   // runs, and Auburn's, Texas's and Cincinnati's rushing totals were read with the sack losses inside them).
@@ -721,7 +724,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v34 (Nov 10 2026 review, round 4): each passer's first and last play (passerSpans).
   // v35 (Nov 10 2026 data round): a hurt player whose name ends in "Jr." is found on later plays.
   // v36 (Nov 10 2026 college pass 3): a passer's lone snap away from his stretch (passerSpans loneFirst, loneLast).
-  return cachedResearch(`espn_cfb_box_v36:${eventId}`, async () => {
+  // v37 (Nov 10 2026 college pass 3): a drive the clock ran out on that ended in kneel-downs (drives kneel).
+  return cachedResearch(`espn_cfb_box_v37:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -925,7 +929,8 @@ export const NCAAF_DRIVE_WORD = { TD: 'TD', FG: 'FG', 'MISSED FG': 'missed FG', 
   INT: 'interception', FUMBLE: 'fumble', DOWNS: 'on downs', SAFETY: 'safety', SF: 'safety', 'INT TD': 'interception returned for a TD',
   'FUMBLE TD': 'fumble returned for a TD', 'FUMBLE RETURN TD': 'fumble returned for a TD', 'PUNT RETURN TD': 'punt returned for a TD', 'PUNT TD': 'punt returned for a TD',
   'BLOCKED PUNT TD': 'blocked punt returned for a TD', 'BLOCKED PUNT SAFETY': 'blocked punt for a safety', 'BLOCKED FG TD': 'blocked FG returned for a TD', 'MISSED FG TD': 'missed FG returned for a TD',
-  'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file' };
+  'END OF HALF': 'end of half', 'END OF GAME': 'end of game', 'NO RESULT': 'result not on file',
+  'KNEEL END OF HALF': 'kneel-down to end the half', 'KNEEL END OF GAME': 'kneel-down to end the game' };
 export const ncaafDriveWord = (result) => NCAAF_DRIVE_WORD[String(result || '').toUpperCase()] || String(result || '').toLowerCase();
 /** A team's kickoff and punt returns in one game from the box (round 10: the return game was in neither read): "returns:
  * 3 kickoff returns for 71 (long 38), 2 punt returns for 45 (long 31, 1 TD)". Null when the box has no return groups. */
@@ -957,12 +962,13 @@ export function ncaafReturns(box, teamId, cfbd = null) {
 export function ncaafRedZone(drives) {
   if (!drives?.length || drives.every((d) => d.inside20 === undefined)) return null;
   const trips = drives.filter((d) => d.inside20);
-  return trips.length ? `red zone ${trips.length} trip${trips.length === 1 ? '' : 's'} (${ncaafDriveTally(trips.map((d) => d.result))})` : 'no red-zone trips';
+  // A trip that ended in kneel-downs says so, not "end of game" (one the clock ran out on while trying to score keeps it).
+  return trips.length ? `red zone ${trips.length} trip${trips.length === 1 ? '' : 's'} (${ncaafDriveTally(trips.map((d) => (d.kneel ? `KNEEL ${d.result}` : d.result)))})` : 'no red-zone trips';
 }
 
 /** Drive results counted in words: "6 punts, 1 safety, 3 on downs, 1 TD". */
 export function ncaafDriveTally(results) {
   const counts = new Map();
   for (const r of results) { const w = ncaafDriveWord(r); counts.set(w, (counts.get(w) || 0) + 1); }
-  return [...counts].map(([w, n]) => `${n} ${n === 1 || /on downs|TD$|FG$|^end of|not on file$/.test(w) ? w : w === 'safety' ? 'safeties' : `${w}s`}`).join(', ');
+  return [...counts].map(([w, n]) => `${n} ${n === 1 || /on downs|TD$|FG$|^end of|not on file$/.test(w) ? w : w === 'safety' ? 'safeties' : /^kneel-down /.test(w) ? w.replace('kneel-down', 'kneel-downs') : `${w}s`}`).join(', ');
 }
