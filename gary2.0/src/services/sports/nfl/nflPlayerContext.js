@@ -17,6 +17,15 @@ const pfrRows = async (asset, season) => {
   return null;
 };
 
+// The weekly player rows and snap counts through the same loader as the game reads (Nov 10 2026: on Nov 8 the darts'
+// own downloads timed out and read "snaps 0"): one download per process, two tries, and the copy on disk when they fail.
+// The same rows as the plain download, field for field. A failed load throws, as the plain download did.
+const releaseRows = async (asset, season) => {
+  const r = await loadNflverseFile(asset, season);
+  if (!r?.rows) throw new Error(r?.reason || `${asset}_${season}.csv did not load`);
+  return r.rows;
+};
+
 const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const day = (d) => { const [, m, dd] = String(d || '').split('-').map(Number); return m ? `${MONTHS[m - 1]} ${dd}` : null; };
@@ -34,8 +43,7 @@ const once = (key, fn) => {
 /** One season's weekly player rows (nflverse stats_player_week), regular season, in the official box's counts
  * (espnNflBox.js; Oct 27 2026: Brock Bowers' 13 targets were officially 14). */
 export const weeklyRows = (season) => once(`week|${season}`, async () => {
-  const url = `${RELEASE_BASE}/stats_player/stats_player_week_${season}.csv`;
-  const rows = (await fetchCsv(url).catch(() => fetchCsv(url))).filter((r) => r.season_type === 'REG');
+  const rows = (await releaseRows('stats_player_week', season)).filter((r) => r.season_type === 'REG');
   // Without the schedule or the official box, nflverse's own counts are used this once and the official ones asked for
   // again on the next call (round 14: a failed schedule download kept nflverse's counts for the whole run).
   const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => null);
@@ -99,7 +107,7 @@ export const receiverDrops = (season, roster = null) => once(`drops|${season}|${
 export const snapCounts = (season) => once(`snaps|${season}`, async () => {
   // `.byPfr`: the same lists by PFR id, for players the stats feed spells differently (aliasByRoster).
   const out = new Map(); out.byPfr = new Map();
-  for (const r of await fetchCsv(`${RELEASE_BASE}/snap_counts/snap_counts_${season}.csv`)) {
+  for (const r of await releaseRows('snap_counts', season)) {
     if (r.game_type !== 'REG') continue;
     // A special-teams-only game is kept apart on the list as `.stOnly` (week -> special-teams snaps), so it reads as a game
     // he played on special teams, not as one he missed (round 11: Dean Connors read "did not play" on 16 special-teams
