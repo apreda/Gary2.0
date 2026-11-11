@@ -64,6 +64,10 @@ function flowText(rec, us) {
   const them = other(us); const f = rec.flow;
   const q = (s) => `${rec[s].short} ${rec.quarters[s].map((v) => v ?? '?').join('-')}`;
   const parts = [`by quarter: ${q(us)} · ${q(them)}`, `about ${rec.teams[us].possessions} possessions each`];
+  // The score at the half, from the official quarters as the score after three is (Nov 10 2026 data round, pass 2: 20 of
+  // 40 recaps gave the halftime score, "it was down to 58-54 at halftime", and the row left it to adding two quarters).
+  const half = (s) => { const [a, b] = rec.quarters?.[s] || []; return Number.isFinite(a) && Number.isFinite(b) ? a + b : null; };
+  if (half(us) != null && half(them) != null) parts.push(`at the half ${half(us)}-${half(them)}`);
   if (rec.afterThree) parts.push(`after three ${rec.afterThree[us]}-${rec.afterThree[them]}`);
   if (!f) return `${parts.join('; ')}; leads, runs and the late score not on file (the play-by-play does not end at the final)`;
   if (f.fiveLeft) parts.push(`with 5:00 left ${f.fiveLeft[us]}-${f.fiveLeft[them]}`);
