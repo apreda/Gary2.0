@@ -273,7 +273,7 @@ function opponentThatDay(d, before, x, read = null) {
     // read: Dallas's 48 rushing against Green Bay was Dallas's usual output; only scores were shown).
     // With its sacks and turnovers both ways too (round 13: a pass rush's sacks could not be read against the lines it faced).
     .map((g) => { if (read?.tonight?.has(g.opp)) return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}`;
-      const u = g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sacks made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '';
+      const u = g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sack${g.def.sacked === 1 ? '' : 's'} made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '';
       return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}${g.passers?.length || u ? ` (${g.passers?.length ? qbsText(g.passers, g.startedQb, true) : 'QB not on file'}${u})` : ''}`; });
   if (read?.shown && !seen) read.shown.set(x.opp, read.label);
   // The meeting with tonight's other team: each of its other games is a full row in its own list, printed next (round 17:
@@ -1560,7 +1560,7 @@ export function nflGameFull(d, x, code, before, read = null) {
   // The opponent coming in: its record before this game and its games before it, then its record before tonight.
   const prior = oppGames.filter((g) => g.date < x.date);
   // With what it ran and passed for and allowed in each (round 12: as on the live read's opponent lines).
-  const units = (g) => (g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sacks made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '');
+  const units = (g) => (g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sack${g.def.sacked === 1 ? '' : 's'} made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '');
   const res = (g) => `Wk ${g.week} ${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, nickname(g.opp), true)}${g.passers?.length || units(g) ? ` (${g.passers?.length ? `QB ${qbsText(g.passers, g.startedQb)}` : 'QB not on file'}${units(g)})` : ''}`;
   // A game listed under an earlier row in this read is pointed to there (round 17: Seattle's Weeks 1-5 printed word for word
   // under the Chiefs' Week 7 row and again under the Broncos' Week 6 row).
