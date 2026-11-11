@@ -347,11 +347,11 @@ export async function nextGameLine(team, tip, season = nbaSeason()) {
   return `${t.name}: next game ${when}, ${home ? 'at home vs' : 'at'} ${opp}${off <= 0 ? ' (tonight is the first night of a back-to-back)' : `, after ${off} day${off === 1 ? '' : 's'} off`}`;
 }
 
-// An opponent's other games, in the first line of each row (Nov 10 2026, founder: no noisy or duplicate data): each entry
-// is its result only, "W 119-80 @ CHA". The Out lists, possessions and box lines inside each entry were about half the
-// desk; of 84 answers since Oct 30 none used them, and who an opponent was missing is on the row's own Out lines.
-// NBA_OPP_GAMES_DETAIL=1 prints the full entries again.
-export const oppGamesDetail = () => process.env.NBA_OPP_GAMES_DETAIL === '1';
+// An opponent's other games, in the first line of each row: each entry reads in full by default, who was out on each side,
+// its possessions and both box lines (Nov 10 2026, founder: nothing is cut because Gary did not use it; "L 118-125 vs TOR"
+// alone is nothing to go off of). Unset or NBA_OPP_GAMES_DETAIL=1 is the full form; NBA_OPP_GAMES_DETAIL=0 gives the
+// trimmed entries of earlier that day, the result only, "W 119-80 @ CHA", kept for later and off.
+export const oppGamesDetail = () => process.env.NBA_OPP_GAMES_DETAIL !== '0';
 const boxWords = (t) => `${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} rebounds (${t.oreb} offensive), ${t.turnover} turnovers`;
 /** One entry of team `teamId`'s list of its other games, from its stored summary `r`. With `detail`: who was out on each
  * side (`outWords`) and how it played both ways (`box`, the game's team boxes); a game against `tonightId` is its result
@@ -457,7 +457,8 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // played both ways, so a result can be read against who was on the floor. A player counts as out only if he has played
   // for that team this season: someone who hasn't played yet is no change from what the team has been. Tonight's own
   // team keeps the bare score, since those games are full rows in its list.
-  // Nov 10 2026 (founder: no noisy or duplicate data): each entry is its result only (otherGameEntry).
+  // Nov 10 2026 (founder: nothing is cut because Gary did not use it): the full entries are the default, and the season's
+  // team boxes load for them; NBA_OPP_GAMES_DETAIL=0 gives results only and skips the boxes (otherGameEntry).
   const detail = oppGamesDetail();
   const teamBoxes = detail && byTeamSummaries ? await seasonTeamBoxes('NBA', season, asOfDay).catch(() => null) : null;
   const playedFor = (teamId) => [...new Set((byTeamSummaries?.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[String(r.summary.home.id) === String(teamId) ? 'home' : 'away'] || []))];

@@ -1,5 +1,5 @@
-// An opponent's other games in a row's first line are their results only (Nov 10 2026: the Out lists and box lines inside
-// each entry were about half the desk and no answer used them); NBA_OPP_GAMES_DETAIL=1 prints them again.
+// An opponent's other games in a row's first line read in full by default (Nov 10 2026, founder: nothing is cut because
+// Gary did not use it); NBA_OPP_GAMES_DETAIL=0 gives the results only, kept for later.
 import { afterEach, describe, expect, it } from 'vitest';
 import { otherGameEntry, oppGamesDetail } from '../../src/services/sports/nba/nbaBettorData.js';
 
@@ -11,13 +11,16 @@ const env = process.env.NBA_OPP_GAMES_DETAIL;
 afterEach(() => { if (env === undefined) delete process.env.NBA_OPP_GAMES_DETAIL; else process.env.NBA_OPP_GAMES_DETAIL = env; });
 
 describe("NBA game rows: an opponent's other games", () => {
-  it('prints each as its result only', () => {
+  const full = 'W 125-124 (OT) vs BKN (their out: Jayson Tatum; BKN out: nobody; about 99 possessions; '
+    + '40-88 FG, 12-35 3PT, 33-40 FT, 45 rebounds (10 offensive), 12 turnovers; allowed 44-90 FG, 10-30 3PT, 26-30 FT, 40 rebounds (8 offensive), 14 turnovers)';
+  it('prints the full entry by default, the same as NBA_OPP_GAMES_DETAIL=1', () => {
     delete process.env.NBA_OPP_GAMES_DETAIL;
-    expect(otherGameEntry(r, 2, 7, { detail: oppGamesDetail(), box, outWords })).toBe('W 125-124 (OT) vs BKN');
-  });
-  it('prints the full entry again with NBA_OPP_GAMES_DETAIL=1', () => {
+    expect(otherGameEntry(r, 2, 7, { detail: oppGamesDetail(), box, outWords })).toBe(full);
     process.env.NBA_OPP_GAMES_DETAIL = '1';
-    expect(otherGameEntry(r, 2, 7, { detail: oppGamesDetail(), box, outWords })).toBe('W 125-124 (OT) vs BKN (their out: Jayson Tatum; BKN out: nobody; about 99 possessions; '
-      + '40-88 FG, 12-35 3PT, 33-40 FT, 45 rebounds (10 offensive), 12 turnovers; allowed 44-90 FG, 10-30 3PT, 26-30 FT, 40 rebounds (8 offensive), 14 turnovers)');
+    expect(otherGameEntry(r, 2, 7, { detail: oppGamesDetail(), box, outWords })).toBe(full);
+  });
+  it('prints each as its result only with NBA_OPP_GAMES_DETAIL=0', () => {
+    process.env.NBA_OPP_GAMES_DETAIL = '0';
+    expect(otherGameEntry(r, 2, 7, { detail: oppGamesDetail(), box, outWords })).toBe('W 125-124 (OT) vs BKN');
   });
 });
