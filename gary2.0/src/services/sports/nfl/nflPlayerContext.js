@@ -9,6 +9,7 @@ import { normName } from '../../gary/darts/dartsCommon.js';
 import { withOfficialBox } from './espnNflBox.js';
 import { loadNflverseFile, nflverseCode } from '../../providers/nflverseService.js';
 import { filedThisWeek, noteRulesOut } from './nflAvailability.js';
+import { getNflSchedule } from './nflSchedule.js';
 
 // PFR's charting files through the desk's disk-cached loader, asked twice (round 16: a fresh download failed in one of
 // two identical darts builds, and every drop note vanished as if no receiver had dropped a ball). Null when both fail.
@@ -25,6 +26,16 @@ const releaseRows = async (asset, season) => {
   if (!r?.rows) throw new Error(r?.reason || `${asset}_${season}.csv did not load`);
   return r.rows;
 };
+
+// The schedule file, downloaded as before; when that fails, the schedule loader's copy (nflSchedule.js: its memo, or its
+// copy on disk under 12 hours, which the hourly warm keeps fresh). Its rows are the same file's; only `roof` differs on
+// a few overseas games, which nothing here reads. Throws when neither answers, as the download did.
+const scheduleRows = () => fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(async (error) => {
+  const s = await getNflSchedule().catch(() => null);
+  if (!s?.rows?.length) throw error;
+  console.warn(`[NFL data] schedules/games.csv: download failed (${error?.message || error}); using the schedule loader's copy`);
+  return s.rows;
+});
 
 const n = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -46,7 +57,7 @@ export const weeklyRows = (season) => once(`week|${season}`, async () => {
   const rows = (await releaseRows('stats_player_week', season)).filter((r) => r.season_type === 'REG');
   // Without the schedule or the official box, nflverse's own counts are used this once and the official ones asked for
   // again on the next call (round 14: a failed schedule download kept nflverse's counts for the whole run).
-  const schedule = await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => null);
+  const schedule = await scheduleRows().catch(() => null);
   const official = schedule ? (await withOfficialBox(rows, schedule, season).catch(() => null))?.rows : null;
   if (official) return official;
   rows.retry = true; rows.officialMissing = true;
@@ -58,7 +69,7 @@ export const weeklyRows = (season) => once(`week|${season}`, async () => {
 export const gameDays = () => once('days', async () => {
   // `.result`: how each team's game ended, "W 27-24" or "L 13-35, OT" (round 12: the dart and prop rows never said).
   const out = new Map(); out.site = new Map(); out.opp = new Map(); out.result = new Map();
-  for (const g of await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`)) {
+  for (const g of await scheduleRows()) {
     for (const t of [g.home_team, g.away_team]) {
       const key = `${g.season}|${Number(g.week)}|${t}`;
       out.set(key, g.gameday);
@@ -596,7 +607,7 @@ export function withOfficialReport(injuries, reports, roster = null) {
 
 /** A club's regular season from the schedule: "11-6, 25.1 points a game, 19.2 allowed (17 games)"; null before a final. */
 export async function teamSeasonLine(season, abbr) {
-  const games = (await fetchCsv(`${RELEASE_BASE}/schedules/games.csv`).catch(() => []))
+  const games = (await scheduleRows().catch(() => []))
     .filter((g) => Number(g.season) === Number(season) && g.game_type === 'REG' && g.home_score !== '' && g.away_score !== '' && (g.home_team === abbr || g.away_team === abbr));
   if (!games.length) return null;
   let w = 0, l = 0, t = 0, pf = 0, pa = 0;

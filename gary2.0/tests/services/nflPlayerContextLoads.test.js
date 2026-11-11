@@ -14,7 +14,15 @@ vi.mock('../../src/services/providers/nflverseService.js', async (real) => ({
   ...(await real()),
   loadNflverseFile: async (asset, season) => { asked.push(`${asset}_${season}`); return files[asset]; }
 }));
-const { snapCounts, weeklyRows } = await import('../../src/services/sports/nfl/nflPlayerContext.js');
+vi.mock('../../src/services/sports/nfl/nflStreaksService.js', async (real) => ({
+  ...(await real()),
+  fetchCsv: async (url) => { throw new Error(`nflverse timeout for ${url}`); }
+}));
+vi.mock('../../src/services/sports/nfl/nflSchedule.js', async (real) => ({
+  ...(await real()),
+  getNflSchedule: async () => ({ rows: [{ season: '2026', week: '9', game_type: 'REG', home_team: 'ATL', away_team: 'CIN', gameday: '2026-11-08', location: 'Neutral', home_score: '20', away_score: '17', overtime: '0' }], stale: 7 })
+}));
+const { snapCounts, weeklyRows, gameDays } = await import('../../src/services/sports/nfl/nflPlayerContext.js');
 
 describe('the darts read snaps and weekly rows through the loader', () => {
   it('builds the snap lists from the loader\'s rows, a copy on disk included', async () => {
@@ -28,6 +36,15 @@ describe('the darts read snaps and weekly rows through the loader', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await weeklyRows(2026)).toBeNull();
     expect(warn.mock.calls[0][0]).toMatch(/week\|2026 did not load: Could not reach nflverse for stats_player_week_2026\.csv/);
+    warn.mockRestore();
+  });
+
+  it('the schedule, when its download fails, comes from the schedule loader\'s copy', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const days = await gameDays();
+    expect(days.get('2026|9|CIN')).toBe('2026-11-08');
+    expect(days.site.get('2026|9|ATL')).toBe('neutral');
+    expect(days.result.get('2026|9|CIN')).toBe('L 17-20');
     warn.mockRestore();
   });
 });
