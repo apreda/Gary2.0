@@ -476,6 +476,11 @@ const WARM_FILES = ['injuries', 'roster_weekly', 'roster', 'stats_team_week', 's
 export async function warmNflverseCopies({ season = null, fetchImpl = globalThis.fetch, diskDir = DISK_DIR, timeoutMs = 45_000 } = {}) {
   const year = season ?? (await import('../../utils/dateUtils.js')).nflSeason();
   const started = Date.now();
+  // The schedule's own copy too (nflSchedule.js, 12 hours, its own 30 s limit): without it no per-game copy may stand
+  // in. Only on a real download, so a test's stand-in never reaches that copy.
+  const schedule = fetchImpl === globalThis.fetch
+    ? import('../sports/nfl/nflSchedule.js').then((m) => m.getNflSchedule({ force: true })).catch((e) => ({ unavailable: true, reason: e?.message }))
+    : null;
   const files = await Promise.all(WARM_FILES.map(async (asset) => {
     try {
       const r = await fetchRelease(`${RELEASE_BASE}/${RELEASE_TAGS[asset] || asset}/${asset}_${year}.csv`, fetchImpl, timeoutMs);
@@ -486,6 +491,8 @@ export async function warmNflverseCopies({ season = null, fetchImpl = globalThis
       return { asset, saved: false, why: error?.name === 'AbortError' ? `no answer in ${Math.round(timeoutMs / 1000)} s` : (error?.message || String(error)) };
     }
   }));
+  const s = await schedule;
+  if (s) files.push(s?.rows && s.stale === false ? { asset: 'schedule', saved: true } : { asset: 'schedule', saved: false, why: s?.reason || 'the download failed; the copy on disk was left as it was' });
   return { season: year, ms: Date.now() - started, bytes: files.reduce((a, f) => a + (f.bytes || 0), 0), files };
 }
 
