@@ -567,14 +567,18 @@ export async function runPropsDeskBrain({ systemPrompt, userMessage, corpus, rec
 
     // A test run's transcript (GARY_PROPS_TRANSCRIPT_DIR, Oct 26 2026 side-by-side sheets test): what was asked and the
     // answer, so the founder and the session can read both arms' reads.
-    if (process.env.GARY_PROPS_TRANSCRIPT_DIR) {
-      try {
-        const { mkdirSync, writeFileSync } = await import('node:fs');
-        const dir = process.env.GARY_PROPS_TRANSCRIPT_DIR; mkdirSync(dir, { recursive: true });
-        const name = (String(userMessage).match(/## THE DESK — ([^\n]+)/)?.[1] || `props-${Date.now()}`).replace(/[^\w@ -]+/g, '').replace(/\s+/g, '_');
-        writeFileSync(`${dir}/${name}.${process.env.GARY_PROP_SHEETS || 'current'}.md`, `########## ASKED\n${userMessage}\n\n########## ANSWER\n${res.content}\n`);
-      } catch (e) { console.warn(`[Props Brain] transcript not written: ${e.message}`); }
-    }
+    // Every live props ask is kept too (Nov 10 2026: only test runs kept theirs, so no live props ask was on file to
+    // check, as no dart's was before Nov 6): ~/Library/Logs/gary-props-read, one file a game a day, each pass added to it.
+    try {
+      const { mkdirSync, writeFileSync, appendFileSync } = await import('node:fs');
+      const { homedir } = await import('node:os');
+      const test = process.env.GARY_PROPS_TRANSCRIPT_DIR;
+      const dir = test || `${homedir()}/Library/Logs/gary-props-read`; mkdirSync(dir, { recursive: true });
+      const name = (String(userMessage).match(/## THE DESK — ([^\n]+)/)?.[1] || `props-${Date.now()}`).replace(/[^\w@ -]+/g, '').replace(/\s+/g, '_');
+      if (test) writeFileSync(`${dir}/${name}.${process.env.GARY_PROP_SHEETS || 'current'}.md`, `########## ASKED\n${userMessage}\n\n########## ANSWER\n${res.content}\n`);
+      else appendFileSync(`${dir}/${new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}_${name}.md`,
+        `########## SYSTEM\n${systemPrompt}\n\n########## ASKED\n${userMessage}\n\n########## ANSWERED (${responder})\n${res.content}\n\n`);
+    } catch (e) { console.warn(`[Props Brain] transcript not written: ${e.message}`); }
     return { parsed, audits, usage, explicitPass, respondingModel: responder };
   };
 
