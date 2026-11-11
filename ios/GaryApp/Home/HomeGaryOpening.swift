@@ -180,7 +180,7 @@ struct HomeGaryOpening: View {
                             }
                             .offset(x: x, y: place.y)
                     }
-                    Text("FIG. 1 — GARY")
+                    Text("FIG. 1 · GARY")
                         .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
                         .foregroundStyle(CR.mute2)
                         .offset(x: 0, y: Self.height - 20)
@@ -369,7 +369,8 @@ struct HomeGaryOpening: View {
                 Group { if hot { GaryFlame(nights: r.count).scaleEffect(0.7) } else { ColdMark() } }
                     .padding(.top, 2)
             }
-            Text(hot ? "NIGHTS\nIN A ROW" : "COLD\nNIGHTS")
+            // One night is a night (Nov 10 2026: "1 COLD NIGHTS").
+            Text(hot ? (r.count == 1 ? "WINNING\nNIGHT" : "NIGHTS\nIN A ROW") : (r.count == 1 ? "COLD\nNIGHT" : "COLD\nNIGHTS"))
                 .font(GaryFonts.kicker(9.5, .bold)).tracking(1.4)
                 .foregroundStyle(hot ? GaryColors.gold : GaryColors.silver)
                 .lineSpacing(1)

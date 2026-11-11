@@ -131,7 +131,8 @@ struct NBAGameIntelView: View {
             }
             ScoutBigNumbersRail(rows: bigNumberRows)
             GameH2HSection(edges: mine)
-            PlayerIntelSection(matchup: matchup, league: "NBA", gameId: exactGameID, gameDate: gameDate)
+            PlayerIntelSection(matchup: matchup, league: "NBA", gameId: exactGameID, gameDate: gameDate,
+                               alreadyShown: [plate(side: "away"), plate(side: "home")].compactMap { $0?.fullName })
             NBAAvailabilityCard(awayLabel: awayAbbr, homeLabel: homeAbbr,
                                 awayName: sides.away, homeName: sides.home,
                                 away: injuries(abbr: awayAbbr), home: injuries(abbr: homeAbbr))

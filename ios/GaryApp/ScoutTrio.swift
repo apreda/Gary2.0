@@ -26,7 +26,8 @@ enum ScoutMock {
     /// One line that shrinks to fit, or every word wrapped (`wraps`); never "…".
     @ViewBuilder static func kicker(_ s: String, size: CGFloat = 9, wraps: Bool = false) -> some View {
         let text = Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
-            .tracking(1.2).foregroundStyle(warm.opacity(0.42))
+            // 0.52, not 0.42: the stat labels measured 3.7 to 1 on the plates (Nov 10 2026); this is 5 to 1.
+            .tracking(1.2).foregroundStyle(warm.opacity(0.52))
         if wraps { text } else { text.fitsOneLine() }
     }
     static func value(_ s: String, size: CGFloat = 12.5) -> Text {
@@ -1029,6 +1030,9 @@ struct PlayerIntelSection: View {
     /// Both league and exact game/date are required, including historical MLB.
     var gameId: String? = nil
     var gameDate: String? = nil
+    /// Players the page already shows above (the NBA page's two stars), by name. They don't get a second row
+    /// here saying the same numbers (Nov 10 2026: Brunson's 26.2 read three times on one page).
+    var alreadyShown: [String] = []
     @State private var rows: [PlayerInsightCardRow] = []
     @State private var selected: PlayerInsightCardRow? = nil
     @State private var playerLoad = GamePageLoadState()
@@ -1038,7 +1042,9 @@ struct PlayerIntelSection: View {
     }
     private var visibleRows: [PlayerInsightCardRow] {
         guard let scope = playerScope, loadedPlayerScope == scope else { return [] }
-        return rows
+        // Left out here, not at load: the page's stars can arrive after these rows do.
+        let shown = Set(alreadyShown.map { $0.lowercased() })
+        return Array(rows.filter { !shown.contains(($0.player_name ?? "").lowercased()) }.prefix(Self.maxRows))
     }
 
     /// Keeps the page scannable — the slate page is a stack, not a roster dump.
@@ -1060,9 +1066,11 @@ struct PlayerIntelSection: View {
         VStack(spacing: 0) {
             if !visibleRows.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
+                    // The same gold heading THE STARS and AVAILABILITY wear on this page (Nov 10 2026: it was
+                    // the one grey mono heading between two gold ones).
                     Text("PLAYER INTEL")
-                        .font(GaryFonts.mono(9.5, bold: true)).tracking(1)
-                        .foregroundStyle(.white.opacity(0.62))
+                        .font(GaryFonts.display(14)).tracking(0.8)
+                        .foregroundStyle(GaryColors.gold)
                         .padding(.horizontal, 16).padding(.top, 4)
                     VStack(spacing: 0) {
                         ForEach(Array(visibleRows.enumerated()), id: \.element.id) { idx, row in
@@ -1093,13 +1101,26 @@ struct PlayerIntelSection: View {
             let mine = Self.cardsForGame(all, league: scope.league, gameId: String(scope.gameID), matchup: matchup)
             // Pitchers lead (they drive the matchup) — quarterbacks are the
             // football counterpart — then everyone else by name.
+            // NBA rows go by scoring instead (Nov 10 2026): by name, the eight kept were the first eight in the
+            // alphabet, so a game listed Andre Drummond and cut every scorer from M to Z.
+            let nba = scope.league.uppercased() == "NBA"
             rows = Array(mine.sorted { a, b in
                 let leads: Set<String> = ["pitcher", "quarterback"]
                 let ap = leads.contains(a.payload?.type ?? ""), bp = leads.contains(b.payload?.type ?? "")
                 if ap != bp { return ap }
+                if nba {
+                    let x = Self.leadingNumber(a.payload?.season?.line1), y = Self.leadingNumber(b.payload?.season?.line1)
+                    if x != y { return x > y }
+                }
                 return (a.player_name ?? "") < (b.player_name ?? "")
-            }.prefix(Self.maxRows))
+            }.prefix(Self.maxRows + alreadyShown.count + 2))
             loadedPlayerScope = scope
+    }
+
+    /// "26.2 pts · 3 reb · 5.6 ast" reads 26.2; a line with no number first reads -1.
+    static func leadingNumber(_ line: String?) -> Double {
+        guard let token = line?.split(separator: " ").first else { return -1 }
+        return Double(token.replacingOccurrences(of: ",", with: "")) ?? -1
     }
 
     private func intelRow(_ row: PlayerInsightCardRow) -> some View {

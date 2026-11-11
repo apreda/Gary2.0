@@ -193,7 +193,8 @@ struct CashRailCard: View {
                     Text("$10 PAID")
                 }
                 .font(CR.sys(9.5, .bold)).tracking(1.52)
-                .foregroundStyle(CR.mute2)
+                // mute, not mute2: mute2 on the card measured 2.8 to 1 (Nov 10 2026).
+                .foregroundStyle(CR.mute)
                 .padding(.top, 12).padding(.bottom, 3)
                 .overlay(alignment: .top) { Rectangle().fill(CR.line).frame(height: 1) }
                 let rows = Array(board.ranked.prefix(3))
@@ -318,8 +319,10 @@ struct CashRailHeroView: View {
             .font(CR.sys(10, .bold)).tracking(1.6)
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
+                    // The price steps down and the player and the play step up (Nov 10 2026): the odds were the
+                    // biggest type on Home and the play the smallest, on a card that celebrates plays.
                     Text(CashRailFormat.price(hit.price))
-                        .font(CR.bebas(50)).tracking(0.5)
+                        .font(CR.bebas(44)).tracking(0.5)
                         .foregroundStyle(GaryColors.lightGold)
                         .shadow(color: GaryColors.lightGold.opacity(glowKey ? 0.9 : 0), radius: 13)
                         .matchedGeometryEffect(id: "price-\(hit.key)", in: space)
@@ -331,7 +334,7 @@ struct CashRailHeroView: View {
                 }
                 .frame(width: 118, alignment: .leading)
                 VStack(alignment: .leading, spacing: 0) {
-                    (Text(hit.who.uppercased()).font(CR.bebas(24)).tracking(0.84).foregroundColor(CR.ink)
+                    (Text(hit.who.uppercased()).font(CR.bebas(27)).tracking(0.84).foregroundColor(CR.ink)
                      + garyTag(hit, size: 9.5))
                         .padding(.top, 2)
                     Text(hit.displayMarket)
@@ -340,9 +343,9 @@ struct CashRailHeroView: View {
                         .padding(.top, 5)
                     if let play = hit.play, !play.isEmpty {
                         Text(play)
-                            .font(.system(size: 12))
-                            .foregroundStyle(CR.mute)
-                            .padding(.top, 3)
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(GaryColors.lightGold)
+                            .padding(.top, 4)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -652,7 +652,9 @@ struct WinnersLabView: View {
                     // unlock from any of them.
                     ForEach(openSlots) { slot in
                         timeHead(slot.clock)
-                        ForEach(slot.groups) { group in module(group, sealable: true) }
+                        // The time head above says the start once; the play under it doesn't repeat it
+                        // (Nov 10 2026: "9:00 PM" over a pack that said "9:00 PM").
+                        ForEach(slot.groups) { group in module(group, sealable: true, showsClock: slot.clock.isEmpty) }
                     }
                     packsToCome
                     if board != nil, filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
@@ -674,7 +676,10 @@ struct WinnersLabView: View {
                             HStack(alignment: .firstTextBaseline) {
                                 Text("YESTERDAY").font(GaryFonts.display(21)).tracking(1.2).foregroundStyle(GaryColors.gold)
                                 Spacer()
-                                Text(LabFormat.shortDateWords(LabFormat.yesterday(of: today))).font(GaryFonts.ui(13)).foregroundStyle(LabInk.dim)
+                                // The money's scale, once, where the dollars start (Nov 10 2026: Home counts $10 bets
+                                // and $100 a pick, and these stakes ran $300 and $600 with nothing saying why).
+                                Text("\(LabFormat.shortDateWords(LabFormat.yesterday(of: today))) · $\(Int(LabFormat.unitDollars)) a unit")
+                                    .font(GaryFonts.ui(13)).foregroundStyle(LabInk.dim)
                             }
                             .frame(height: 34)
                         }
@@ -923,7 +928,12 @@ struct WinnersLabView: View {
             }
             if sealedToday.count > 1 || revealTask != nil {
                 Button(action: revealAll) {
-                    Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.2)
+                    // An action wears a chevron (design.md); without it this read as a second lit tab
+                    // beside ALL (Nov 10 2026).
+                    HStack(spacing: 4) {
+                        Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.2)
+                        Image(systemName: "chevron.right").font(.system(size: 8.5, weight: .heavy))
+                    }
                         .foregroundStyle(GaryColors.gold.opacity(revealTask == nil ? 0.85 : 0.4))
                         .fixedSize()
                         .padding(.vertical, 6).contentShape(Rectangle())
@@ -983,7 +993,7 @@ struct WinnersLabView: View {
         }
     }
 
-    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakBest: Int = 0) -> some View {
+    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakBest: Int = 0, showsClock: Bool = true) -> some View {
         // A scratched play is no longer a play: it never unveils as one.
         let sealed = sealable && !unveiled.contains(group.lead.candidateID) && !group.lead.scratched
         return LabPlayModule(group: LabPlayModule.Model(
@@ -991,6 +1001,7 @@ struct WinnersLabView: View {
             leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
             streak: streak,
             streakBest: streakBest,
+            showsClock: showsClock,
             celebrate: revealing == group.lead.candidateID,
             onOpen: { ticket in
                 AppCounts.once(.openedWinners)
@@ -1074,6 +1085,8 @@ struct LabPlayModule: View {
     var streak: Int? = nil
     /// Gary's longest run of streak-pick wins.
     var streakBest: Int = 0
+    /// False under a time head, which already says when it starts.
+    var showsClock: Bool = true
     /// Opening in place right now (REVEAL ALL): gold flies off the tear.
     var celebrate: Bool = false
     let onOpen: (LabBoardTicket) -> Void
@@ -1111,7 +1124,9 @@ struct LabPlayModule: View {
                         .clipsWithoutEllipsis()
                 }
                 Spacer()
-                Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                if showsClock {
+                    Text(LabFormat.timeET(group.lead.commence)).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
+                }
             }
             .frame(height: headRow)
             .padding(.horizontal, 16).padding(.top, streak == nil ? 13 : 17)

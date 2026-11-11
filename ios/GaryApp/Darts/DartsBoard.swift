@@ -648,7 +648,9 @@ struct StreakMarketMap: View {
             let weights = lengths.map { pow($0, 1.4) }
             let total = weights.reduce(0, +)
             // Tall enough that the smallest tile still holds its name.
-            let height = min(440, max(120, CGFloat(5200 * total / ((weights.last ?? 1) * 357))))
+            // Up to 520 (Nov 10 2026): at 440 a 20-club night's smallest tiles were 41pt tall, too short for
+            // a name over its figure.
+            let height = min(520, max(120, CGFloat(5200 * total / ((weights.last ?? 1) * 357))))
             VStack(alignment: .leading, spacing: 6) {
                 // A plain label like the columns' above it, no band (founder,
                 // Sep 23 2026: no "market map inside of a rectangle container").
@@ -703,24 +705,51 @@ struct StreakMarketMap: View {
         let n = r.length ?? 0
         let team = r.subject ?? ""
         let name = LabFormat.nickname(team)
-        let figure = min(44, max(22, min(size.width, size.height) * 0.3)) / 1.08
+        let ideal = min(44, max(22, min(size.width, size.height) * 0.3)) / 1.08
+        // A short tile can't hold a name over a full-size figure: the two ran into each other ("Nets" under
+        // "L2", Nov 10 2026). It tightens its margins and the figure takes what the name leaves.
+        let nameLine: CGFloat = 13
+        let tight = size.height < ideal + nameLine + 16
+        let topPad: CGFloat = tight ? 5 : 7, bottomPad: CGFloat = tight ? 2 : 6
+        // The name's caps end 14.5pt down; the figure's caps start 1.08 of its size above its bottom margin.
+        // 5pt of air between them.
+        let figure = tight ? max(12, min(ideal, (size.height - bottomPad - 19.5) / 1.08)) : ideal
         return Button { if let lg = r.league { onTeam(team, lg) } } label: {
-            ZStack(alignment: .topLeading) {
-                Color.clear
-                ViewThatFits(in: .horizontal) {
-                    Text(name).font(GaryFonts.ui(13, .semibold)).fixedSize()
-                    Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
-                    Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize()
-                    // Never broken mid-word or cut ("National / s", "Buccan…"):
-                    // a tile too small for the name wears the club's letters.
-                    Text(teamAbbrevFromName(team, league: r.league).uppercased()).font(GaryFonts.ui(11.5, .bold)).fixedSize()
+            // A strip too short to stack a name over a figure sets them side by side (Nov 10 2026: "Trail
+            // Blazers" ran into its "L2").
+            Group {
+            if size.height < 38 {
+                HStack(alignment: .center, spacing: 6) {
+                    ViewThatFits(in: .horizontal) {
+                        Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
+                        Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize()
+                        Text(teamAbbrevFromName(team, league: r.league).uppercased()).font(GaryFonts.ui(11.5, .bold)).fixedSize()
+                    }
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(won ? "W" : "L")\(n)").font(GaryFonts.display(min(ideal, 16))).foregroundStyle(tint).monospacedDigit().fixedSize()
                 }
-                .foregroundStyle(GaryColors.warmWhite)
-                .frame(maxWidth: max(0, size.width - 16), alignment: .leading)
-                .padding(.leading, 8).padding(.top, 7)
-                Text("\(won ? "W" : "L")\(n)").font(GaryFonts.display(figure)).foregroundStyle(tint).monospacedDigit().fixedSize()
-                    .padding(.trailing, 8).padding(.bottom, 6)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+            ZStack(alignment: .topLeading) {
+                    Color.clear
+                    ViewThatFits(in: .horizontal) {
+                        if !tight { Text(name).font(GaryFonts.ui(13, .semibold)).fixedSize() }
+                        Text(name).font(GaryFonts.ui(11.5, .semibold)).fixedSize()
+                        Text(name).font(GaryFonts.ui(10, .semibold)).fixedSize()
+                        // Never broken mid-word or cut ("National / s", "Buccan…"):
+                        // a tile too small for the name wears the club's letters.
+                        Text(teamAbbrevFromName(team, league: r.league).uppercased()).font(GaryFonts.ui(11.5, .bold)).fixedSize()
+                    }
+                    .foregroundStyle(GaryColors.warmWhite)
+                    .frame(maxWidth: max(0, size.width - 16), alignment: .leading)
+                    .padding(.leading, 8).padding(.top, topPad)
+                    Text("\(won ? "W" : "L")\(n)").font(GaryFonts.display(figure)).foregroundStyle(tint).monospacedDigit().fixedSize()
+                        .padding(.trailing, 8).padding(.bottom, bottomPad)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                }
+            }
             }
             .contentShape(Rectangle())
         }

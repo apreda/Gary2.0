@@ -413,6 +413,17 @@ struct SignalRow: View {
         return (echoes && !rest.isEmpty) ? rest : detail
     }
 
+    /// The value under a headline that already says it ("NYK on 3d, MIL on 2d" over "3d vs 2d") is the same
+    /// fact twice (Nov 10 2026). True when every figure in the value is already a word of the headline.
+    private var valueEchoesHeadline: Bool {
+        let words: (String) -> [String] = { $0.lowercased().split { !($0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == "+" || $0 == "%") }.map(String.init) }
+        let filler: Set<String> = ["vs", "v", "to", "and", "-"]
+        let figures = words(s.value).filter { !filler.contains($0) }
+        guard !figures.isEmpty else { return false }
+        let head = Set(words(s.headline))
+        return figures.allSatisfy(head.contains)
+    }
+
     let s: Signal
     /// nil = a read-only row (Picks tab's edge lists) — no navigation
     /// promise. The Hub passes a handler and gets it once the row has no read
@@ -457,7 +468,7 @@ struct SignalRow: View {
                     // Full-width headlines avoid squeezing a sentence into a
                     // narrow column beside a large, repeated statistic.
                     headline
-                    if (!s.value.isEmpty && s.kind != .streak) || sampleLabel != nil {
+                    if (!s.value.isEmpty && s.kind != .streak && !valueEchoesHeadline) || sampleLabel != nil {
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             metricValue
                             Spacer(minLength: 6)

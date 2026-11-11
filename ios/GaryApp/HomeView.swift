@@ -127,6 +127,10 @@ struct HomeView: View {
     /// Game ids on today's Winners board, so the board can mark Gary's Winners
     /// picks in place. Empty while a paid board is locked or not loaded.
     @State private var winnersBoardGameIDs: Set<Int> = []
+    /// Each Winners game's pack, and the packs opened on this phone. A star on a game still in its pack named
+    /// the game the pack is hiding (Nov 10 2026), so the star waits for the pack to be opened or the game to end.
+    @State private var winnersBoardPackIDs: [Int: Int] = [:]
+    @AppStorage("winnersLab.unveiled") private var winnersUnveiledRaw: String = ""
     @State private var initialLive: [LiveScore] = []
     @ObservedObject private var liveCache = LiveScoreCache.shared
     /// The signed-in user's bets for TODAY — feeds the board's YOU tab
@@ -434,7 +438,7 @@ struct HomeView: View {
                     let previousTodayPicks = sameSlate ? todayPicks : []
                     if !sameSlate {
                         slateGames = []; todayPicks = []; sheetGameResults = []
-                        winnersBoardGameIDs = []
+                        winnersBoardGameIDs = []; winnersBoardPackIDs = [:]
                     }
 
                     // Start all fetches in parallel using async let
@@ -494,6 +498,11 @@ struct HomeView: View {
                     async let winnersBoardF: Void = { @MainActor in
                         if let fresh = try? await SupabaseAPI.fetchWinnersBoard(date: date), canPublish() {
                             winnersBoardGameIDs = Set(fresh.games.compactMap { $0.game_id })
+                            var packs: [Int: Int] = [:]
+                            for (pick, pack) in zip(fresh.games, fresh.gamePublicationIDs) {
+                                if let game = pick.game_id, let id = Int(pack) { packs[game] = id }
+                            }
+                            winnersBoardPackIDs = packs
                         }
                     }()
                     // Yesterday's Winners receipt is independent of news/props.
@@ -1268,6 +1277,7 @@ struct HomeView: View {
         let featured = bigOneModel
         let games = slateGames
         guard !games.isEmpty else { return [] }
+        let openedWinnersPacks = Set(winnersUnveiledRaw.split(separator: ",").compactMap { Int($0) })
         var out: [HomeSheetRow] = []
         for (i, g) in games.enumerated() {
             let away = g.away_team ?? "", home = g.home_team ?? ""
@@ -1464,7 +1474,11 @@ struct HomeView: View {
                 statusText: statusText,
                 statusColor: statusColor,
                 bigOne: featured.map { Self.homeBoardPick($0, matches: g) } ?? false,
-                onWinnersBoard: g.bdl_game_id.map { winnersBoardGameIDs.contains($0) } ?? false,
+                onWinnersBoard: g.bdl_game_id.map { id in
+                    guard winnersBoardGameIDs.contains(id) else { return false }
+                    if zone == .settled { return true }
+                    return winnersBoardPackIDs[id].map { openedWinnersPacks.contains($0) } ?? false
+                } ?? false,
                 commence: g.commence_time ?? "",
                 hitLines: hitLines
             )

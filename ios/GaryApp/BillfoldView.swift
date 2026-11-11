@@ -1914,8 +1914,9 @@ private struct GaryBankrollPanel: View {
                     }
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 20) {
                         metric("WIN RATE", b.win_pct.map { String(format: "%.1f%%", $0) } ?? "—")
-                        metric("RECORD", "\(b.wins)–\(b.losses)–\(b.pushes)")
-                        metric("GROWTH", String(format: "%+.1f%%", b.growth_pct))
+                        metric("RECORD", "\(b.wins)-\(b.losses)-\(b.pushes)")
+                        // GROWTH came off (Nov 10 2026): the line under the bankroll already says the percent,
+                        // and it left MAX DRAWDOWN alone on a row of its own.
                         metric("UNITS", signedUnits(b.profit_units))
                         metric("AVAILABLE", dollars(b.available_units))
                         metric("AT RISK · \(b.pending) OPEN", dollars(b.at_risk_units))
@@ -1924,17 +1925,25 @@ private struct GaryBankrollPanel: View {
                     if !b.curve.isEmpty {
                         // A date axis, labeled once a week (Oct 28 2026: each day was its own
                         // category, and forty labels squeezed into "SSSS…CCCC" under the line).
-                        let curve = b.curve.compactMap { p in Self.chartDay(p.date).map { (date: $0, net: p.net_units * garyUnitDollars) } }
+                        // The line is the bankroll itself (Nov 10 2026): it drew profit from -$4,000 to +$2,000
+                        // under a $9,639 headline, so the chart and the number above it were on different scales.
+                        // It now starts at the opening bankroll and ends on the number above.
+                        let opening = b.initial_units * garyUnitDollars
+                        let curve = b.curve.compactMap { p in Self.chartDay(p.date).map { (date: $0, net: opening + p.net_units * garyUnitDollars) } }
                         let start = curve.first.flatMap { Calendar(identifier: .gregorian).date(byAdding: .day, value: -1, to: $0.date) }
-                        let points = (start.map { [(date: $0, net: 0.0)] } ?? []) + curve
+                        let points = (start.map { [(date: $0, net: opening)] } ?? []) + curve
                         Chart(points.indices, id: \.self) { i in
-                            LineMark(x: .value("Date", points[i].date, unit: .day), y: .value("Net", points[i].net))
+                            LineMark(x: .value("Date", points[i].date, unit: .day), y: .value("Bankroll", points[i].net))
                                 .foregroundStyle(gold)
                         }
+                        .chartYScale(domain: .automatic(includesZero: false))
                         .chartXAxis {
-                            AxisMarks(preset: .aligned, values: .stride(by: .day, count: 7)) { _ in
+                            // Every two weeks (Nov 10 2026): weekly put nine dates in a row that touched each
+                            // other and ran off the left edge.
+                            AxisMarks(preset: .aligned, values: .stride(by: .day, count: 14)) { _ in
                                 AxisGridLine()
-                                AxisValueLabel(format: .dateTime.month(.abbreviated).day(), centered: false)
+                                // Each date starts at its own line, so the first one stays inside the page margin.
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).day(), centered: false, anchor: .topLeading)
                             }
                         }
                         .chartYAxis {
@@ -1948,7 +1957,7 @@ private struct GaryBankrollPanel: View {
                             }
                         }
                         .frame(height: 200)
-                        .accessibilityLabel("Cumulative dollars: Gary \(signedDollars(b.profit_units))")
+                        .accessibilityLabel("Gary's bankroll by day, now \(dollars(b.bankroll_units))")
                     } else {
                         Text(b.bets > 0 ? "The curve begins when the first bets settle." : "Ready for the next published Winners bets.")
                             .font(.system(size: 14)).foregroundStyle(.secondary)
@@ -2034,7 +2043,9 @@ private struct GaryBankrollPanel: View {
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 21, weight: .semibold, design: .monospaced)).fitsOneLine()
+            // The app's own sans with even-width digits (Nov 10 2026): the typewriter face here was a third
+            // typeface on the page and set "53 . 6%" with a gap either side of the point.
+            Text(value).font(.system(size: 21, weight: .semibold).monospacedDigit()).fitsOneLine()
         }
     }
 

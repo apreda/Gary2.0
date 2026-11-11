@@ -362,12 +362,20 @@ struct SettingsSheetView: View {
     
     var body: some View {
         NavigationStack {
+            // Done is gold text, as on the profile (Nov 10 2026): a toolbar button drew it as a filled
+            // capsule, the one shape design.md rules out.
             SettingsView()
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                .toolbar(.hidden, for: .navigationBar)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    HStack {
+                        Spacer()
                         Button("Done") { dismiss() }
+                            .font(GaryFonts.text(15, .semibold))
+                            .foregroundStyle(GaryColors.gold)
+                            .frame(minWidth: 64, minHeight: 44)
                             .accessibilityLabel("Close Settings")
                     }
+                    .padding(.horizontal, 16)
                 }
         }
         .preferredColorScheme(.dark)
@@ -421,18 +429,22 @@ struct GaryCenteredTabBar: View {
         .padding(.bottom, GaryDockLayout.bottomPadding(safeAreaInset: bottomSafeAreaInset))
         .background(alignment: .bottom) {
             // The fade IS the bar: page ink rising from the bottom edge, so
-            // content scrolls visibly underneath and dissolves into the dock.
-            // Anchored to the page background's own bottom tone (#0B0A09) for
-            // a seamless meet. Transparent through the frame's upper third;
-            // the dissolve happens across the icon band itself (founder,
-            // Sep 21 2026: "go back to a floating nav bar").
+            // content dissolves into the dock. Anchored to the page
+            // background's own bottom tone (#0B0A09) for a seamless meet
+            // (founder, Sep 21 2026: "go back to a floating nav bar").
+            // Nov 10 2026: the dissolve used to happen across the icon band,
+            // so rows still read at half strength behind HOME, DARTS and
+            // PICKS. It now starts 44pt above the dock and is nearly full ink
+            // by the top of the icons: nothing readable sits under a label.
             LinearGradient(stops: [
-                .init(color: Color(hex: "#0B0A09").opacity(0.04), location: 0),
-                .init(color: Color(hex: "#0B0A09").opacity(0.14), location: 0.26),
-                .init(color: Color(hex: "#0B0A09").opacity(0.68), location: 0.54),
-                .init(color: Color(hex: "#0B0A09").opacity(0.97), location: 0.78),
+                .init(color: Color(hex: "#0B0A09").opacity(0), location: 0),
+                .init(color: Color(hex: "#0B0A09").opacity(0.12), location: 0.16),
+                .init(color: Color(hex: "#0B0A09").opacity(0.58), location: 0.34),
+                .init(color: Color(hex: "#0B0A09").opacity(0.94), location: 0.50),
+                .init(color: Color(hex: "#0B0A09").opacity(0.99), location: 0.62),
                 .init(color: Color(hex: "#0B0A09"), location: 1),
             ], startPoint: .top, endPoint: .bottom)
+            .padding(.top, -44)
             .ignoresSafeArea(edges: .bottom)
             .allowsHitTesting(false)
         }
@@ -483,7 +495,10 @@ struct GaryCenteredTabBar: View {
                 Text("WINNERS")
                     .font(GaryFonts.ui(10, .semibold))
                     .tracking(0.8)
-                    .foregroundStyle(GaryColors.gold.opacity(active ? 1 : 0.85))
+                    // Gold only when Winners is the page (Nov 10 2026: always
+                    // gold, it read as a second selected tab on every screen).
+                    // The mark above it stays gold; it is the brand.
+                    .foregroundStyle(active ? GaryColors.gold : .white.opacity(0.45))
             }
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)

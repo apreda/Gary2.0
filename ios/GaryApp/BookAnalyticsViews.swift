@@ -121,6 +121,22 @@ struct BookCalendarView: View {
     /// Weeks that hold at least one day of this month.
     private var weeks: [[BookDayCell]] { grid.weeks.filter { $0.contains(where: \.inMonth) } }
 
+    /// One figure size for the whole month, set by its longest figure (Nov 10 2026). Each tile used to shrink
+    /// its own, so the size ran against the money: -$46 printed twice the size of -$1,570 beside it.
+    @State private var gridWidth: CGFloat = 0
+    private var figureSize: CGFloat {
+        let figures = weeks.flatMap { $0 }.filter(\.inMonth).compactMap { figure($0) }
+        guard gridWidth > 0, let widest = figures.map(Self.inkWidth).max(), widest > 0 else { return 17 }
+        let cell = (gridWidth - Self.spacing * 6) / 7 - 6
+        return min(17, max(9, (cell / widest * 2).rounded(.down) / 2))
+    }
+    /// A figure's width in ems of the display face: a digit, a "$" or a sign near 0.44, a comma 0.22. The
+    /// money is set in the app's condensed money face, as on Winners, so a four-figure day still prints large
+    /// (founder, Sep 29 2026: "the important part is the + and - money").
+    private static func inkWidth(_ s: String) -> CGFloat {
+        s.reduce(0) { $0 + ($1 == "," || $1 == "." ? 0.22 : 0.44) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 6) {
@@ -168,6 +184,7 @@ struct BookCalendarView: View {
                         }
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
             }
         }
     }
@@ -196,7 +213,8 @@ struct BookCalendarView: View {
     private func tile(_ cell: BookDayCell) -> (fill: Color, edge: Color, ink: Color) {
         switch sign(cell) {
         case .some(let s) where s > 0:
-            return style.isGary ? (GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.45), GaryColors.win)
+            // A lighter green on Gary's gold tile: the app's win green on it measured 3.4 to 1 (Nov 10 2026).
+            return style.isGary ? (GaryColors.gold.opacity(0.4), GaryColors.gold.opacity(0.45), Color(hex: "#86EFAC"))
                                 : (GaryColors.win.opacity(0.24), .clear, GaryColors.win)
         case .some(let s) where s < 0:
             return style.isGary ? (Color.black, GaryColors.gold.opacity(0.35), GaryColors.loss)
@@ -229,7 +247,7 @@ struct BookCalendarView: View {
                     .foregroundStyle(isToday && figure == nil ? GaryColors.gold : .white.opacity(figure == nil ? 0.92 : 0.75))
                 if let figure {
                     Text(figure)
-                        .font(Self.number(16, .heavy))
+                        .font(GaryFonts.display(figureSize)).monospacedDigit()
                         .foregroundStyle(t.ink)
                         .fitsOneLine()
                 } else if cell.pendingCount > 0 {

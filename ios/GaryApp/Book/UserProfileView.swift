@@ -45,6 +45,13 @@ struct ProfileView: View {
     @State private var openingPortal = false
     @State private var loadedOwner: String?
     @State private var requestID = UUID()
+    /// The page's own height, so the signed-out sheet ends where its words end (Nov 10 2026: it opened full
+    /// height with the bottom half empty).
+    @State private var contentHeight: CGFloat = 0
+    private var sheetDetents: Set<PresentationDetent> {
+        guard !auth.isAuthenticated, !auth.isLoading, contentHeight > 0 else { return [.large] }
+        return [.height(contentHeight + 22)]
+    }
 
     private var verified: [UserBet] { bets.filter { $0.isVerified } }
     private var settled: [UserBet] { verified.filter { $0.graded_by == "system" && ["won", "lost"].contains($0.status) } }
@@ -86,9 +93,11 @@ struct ProfileView: View {
                         if AppFlags.purchasesEnabled { membershipCard }
                         accountFooter
                     }
-                }.padding(18).padding(.bottom, 35)
+                }.padding(18).padding(.bottom, auth.isAuthenticated ? 35 : 6)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }.refreshable { await load(); await access.refresh() }
         }
+        .presentationDetents(sheetDetents)
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
                 Spacer()

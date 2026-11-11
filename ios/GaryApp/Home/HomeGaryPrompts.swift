@@ -53,7 +53,9 @@ enum GaryPrompts {
                                   news: "\(words.name)\n\(words.what)", hook: best.odds.map(odds), hookWins: true)
             }
             let longest = today.compactMap(\.odds).max()
-            return GaryPrompt(spot: .hip, key: "darts-up:\(date)", kicker: "DARTS", newKicker: "JUST IN",
+            // The kicker never repeats the line under it (Nov 10 2026: "DARTS" over "23 DARTS", "PARLAY" over
+            // "PARLAY OF THE DAY").
+            return GaryPrompt(spot: .hip, key: "darts-up:\(date)", kicker: "ON THE BOARD", newKicker: "JUST IN",
                               news: "\(today.count) \(today.count == 1 ? "DART" : "DARTS")\nUP TONIGHT",
                               hook: longest.flatMap { $0 > 0 ? "LONGEST \(odds($0))" : nil }, hookWins: false)
         }
@@ -79,14 +81,14 @@ enum GaryPrompts {
             return GaryPrompt(spot: .shoulder, key: "parlay-won:\(date)", kicker: "IT HIT", newKicker: nil,
                               news: name, hook: odds(p.odds), hookWins: true)
         case "lost":
-            return GaryPrompt(spot: .shoulder, key: nil, kicker: "PARLAY", newKicker: nil,
+            return GaryPrompt(spot: .shoulder, key: nil, kicker: "\(p.legs) LEGS", newKicker: nil,
                               news: name, hook: odds(p.odds), hookWins: false)
         default:
             if p.landed > 0 {
                 return GaryPrompt(spot: .shoulder, key: "parlay-legs:\(date):\(p.landed)", kicker: "\(p.landed) OF \(p.legs) IN",
                                   newKicker: nil, news: name, hook: odds(p.odds), hookWins: false)
             }
-            return GaryPrompt(spot: .shoulder, key: "parlay:\(date)", kicker: "PARLAY", newKicker: "JUST IN",
+            return GaryPrompt(spot: .shoulder, key: "parlay:\(date)", kicker: "\(p.legs) LEGS", newKicker: "JUST IN",
                               news: name, hook: odds(p.odds), hookWins: false)
         }
     }

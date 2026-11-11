@@ -110,6 +110,7 @@ struct GaryRecordPanel: View {
                     .foregroundStyle(won > lost ? GaryColors.win : won < lost ? GaryColors.loss : GaryColors.warmWhite)
                     .monospacedDigit()
                 chart
+                chartKey
             } else {
                 Text("No games yet.").font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
             }
@@ -118,6 +119,26 @@ struct GaryRecordPanel: View {
         // Its own card (mock B), lit red on a losing run and green on a winning one.
         .dartsCard(tint: (won < lost ? GaryColors.loss : GaryColors.win).opacity(won == lost ? 0 : 0.14),
                    glowAt: UnitPoint(x: 0.2, y: 0.3), face: [Color(hex: "#201A15"), Color(hex: "#13110D")])
+    }
+
+    /// What the bars and the line are, and the days the chart runs between (Nov 10 2026: the chart had no
+    /// axis, no dates and no key, so the gold line read as decoration).
+    private var chartKey: some View {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "America/New_York"); f.dateFormat = "MMM d"
+        let first = points.first.map { f.string(from: $0.date) } ?? "", last = points.last.map { f.string(from: $0.date) } ?? ""
+        return HStack(spacing: 8) {
+            Text(first)
+            Spacer(minLength: 6)
+            RoundedRectangle(cornerRadius: 2).fill(GaryColors.win.opacity(0.9)).frame(width: 7, height: 9)
+            Text("DAY")
+            Capsule().fill(GaryColors.gold).frame(width: 14, height: 2).padding(.leading, 6)
+            Text("RUNNING")
+            Spacer(minLength: 6)
+            Text(last)
+        }
+        .font(GaryFonts.ui(10.5, .semibold)).tracking(0.8)
+        .foregroundStyle(LabInk.dim)
+        .accessibilityHidden(true)
     }
 
     private var chart: some View {

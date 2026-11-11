@@ -11,6 +11,15 @@ struct HomeSheetRowView: View {
     /// Where the score and the call sit on the board, so a lifted story knows a tap on a score from a tap off
     /// (founder, Oct 29 2026: "every click has to be on the score and then every click off is a true click off").
     var onScoreFrame: ((CGRect) -> Void)? = nil
+    /// The scoreboard card's own clock for the game it is tracking, so the board row and the card over it never
+    /// show two clocks for one game (Nov 10 2026: the card read Q2 12:00 while this row still read Q1 1:09).
+    @ObservedObject private var rail = CashRailStore.shared
+    private var clockText: String? {
+        guard row.zone == .live, let id = row.gameID,
+              let board = rail.board(league: row.league, gameID: String(id)), board.status != "final",
+              let clock = board.clock?.trimmingCharacters(in: .whitespaces), !clock.isEmpty else { return row.clockText }
+        return "▶ \(clock.uppercased())"
+    }
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -26,7 +35,7 @@ struct HomeSheetRowView: View {
                     // The clock belongs to the SCORE (founder, Aug 5): "LAA 2 ·
                     // BAL 3   ▶ INN 8". Gold while live, neutral once final —
                     // the same weight the verdict slot used to carry it at.
-                    if let clock = row.clockText {
+                    if let clock = clockText {
                         Text(clock)
                             .font(.system(size: 13, weight: .semibold).monospacedDigit())
                             .foregroundStyle(

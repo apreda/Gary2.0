@@ -163,9 +163,10 @@ struct SettingsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // The page-title face every other page wears (Nov 10 2026: this one was set in the mono face).
             Text("SETTINGS")
-                .font(GaryFonts.mono(23, bold: false))
-                .foregroundStyle(GaryColors.gold)
+                .font(GaryFonts.display(27))
+                .foregroundStyle(GaryColors.warmWhite)
             SettingsStitch()
                 .stroke(GaryColors.gold.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
                 .frame(height: 1)
