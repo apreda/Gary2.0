@@ -65,16 +65,21 @@ struct HomeGaryOpening: View {
     private var moodPreview: String? { nil }
     #endif
 
-    static let height: CGFloat = 408
+    /// The stage is his own height and no more (founder, Nov 10 2026: "fully remove all that extra space below
+    /// and above Gary ... he doesn't need a lot of extra space", so the scoreboard under him comes up). While
+    /// you talk to him it grows by the room his captions take under him, and gives it back after.
+    static let height: CGFloat = 334
+    private static let talkHeight: CGFloat = 379
+    private var stageHeight: CGFloat { talkOn ? Self.talkHeight : Self.height }
     /// One label of the figure: the side it sits on, its top, the most width Gary leaves it there, and the spot
     /// on his outline it points at.
     private struct Slot { let key: String; let left: Bool; let y: CGFloat; let width: CGFloat; let anchor: CGPoint }
     /// Two rows, each level across him: the top pair at his head, the lower pair under his elbows, where each
     /// leader runs in below his fist.
-    private static let topRow: CGFloat = 60, lowRow: CGFloat = 214
+    private static let topRow: CGFloat = 31, lowRow: CGFloat = 185
     private static let askSlot = Slot(key: "ask", left: true, y: topRow, width: 104, anchor: GaryIdleFigure.jaw)
     private static let lastSlot = Slot(key: "last", left: true, y: lowRow, width: 104, anchor: GaryIdleFigure.pocket)
-    private static let runSlot = Slot(key: "run", left: true, y: 304, width: 104, anchor: GaryIdleFigure.leftLeg)
+    private static let runSlot = Slot(key: "run", left: true, y: 268, width: 104, anchor: GaryIdleFigure.leftLeg)
     private static func slot(_ spot: GaryPrompt.Spot) -> Slot {
         switch spot {
         // Clear of his cigar and above his arm (founder, Oct 30 2026: "move the parlay of the day thing down a
@@ -86,7 +91,9 @@ struct HomeGaryOpening: View {
     /// 10% smaller than the 344 he stood at, shrunk about his middle so the labels stay put (founder, Nov 10 2026:
     /// "Gary just like 10% smaller ... only Gary").
     private static let garyHeight: CGFloat = 310
-    private static let garyTop: CGFloat = 45
+    /// The room over his head is what his tallest prop takes: the basketball he spins reaches 14pt above him at
+    /// this size (measured across all twelve clips; every other clip stays within 3pt of his ears).
+    private static let garyTop: CGFloat = 16
 
     private var slate: String { SupabaseAPI.todayEST() }
     private var live: Bool { activePage && scenePhase == .active }
@@ -185,11 +192,6 @@ struct HomeGaryOpening: View {
                             tap(Self.door(p.spot), key: p.key) { promptLabel(p, isNew: isNew(p, among: prompts)) }
                         }
                     }
-                    Text("FIG. 1 · GARY")
-                        .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
-                        .foregroundStyle(CR.mute2)
-                        .offset(x: 0, y: Self.height - 20)
-                        .accessibilityHidden(true)
                 }
                 .opacity(talkOn ? 0 : 1)
                 .allowsHitTesting(!talkOn)
@@ -202,7 +204,10 @@ struct HomeGaryOpening: View {
             }
             .animation(.easeInOut(duration: 0.45), value: talkOn)
         }
-        .frame(height: Self.height)
+        .frame(height: stageHeight)
+        .animation(.easeInOut(duration: 0.45), value: talkOn)
+        // Closer to the header than Home's own gap between sections.
+        .padding(.top, -8)
         .pageGutter()
         .onChange(of: talkCue) { cue in
             guard let cue, ask != nil else { return }
@@ -263,11 +268,11 @@ struct HomeGaryOpening: View {
     private func talking(width w: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             GaryTalkScrim(talk: talk)
-                .frame(width: w + 2 * GaryLayout.gutter, height: Self.height - 214)
-                .offset(x: -GaryLayout.gutter, y: 214)
+                .frame(width: w + 2 * GaryLayout.gutter, height: Self.talkHeight - 185)
+                .offset(x: -GaryLayout.gutter, y: 185)
             GaryTalkCaptions(talk: talk)
-                .frame(width: w, height: Self.height - 262, alignment: .bottomLeading)
-                .offset(y: 254)
+                .frame(width: w, height: Self.talkHeight - 233, alignment: .bottomLeading)
+                .offset(y: 225)
             Button(action: endTalk) {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
