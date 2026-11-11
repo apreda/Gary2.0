@@ -32,6 +32,9 @@
 		777E3671E910DCC68EC80983 /* LabModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 958086BBEEB1C76916D435F9 /* LabModels.swift */; };
 		94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */; };
 		4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E364F49796338B2D876663BF /* LabTracker.swift */; };
+		A40FD5661B5DA2591BDD2A5F /* WinnersDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC03D58C9F6DCE2FD27BD2B7 /* WinnersDesign.swift */; };
+		4B0815606DED3C548F6B5159 /* WinnersPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA4D48D367F9FA814488A1C /* WinnersPage.swift */; };
+		C499A5129DBFE54F357F45CC /* WinnersMore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1E44759EC291CE2910071A /* WinnersMore.swift */; };
 		0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */ = {isa = PBXBuildFile; fileRef = D06F096559C9E3D36757ACB7 /* LabUnveil.swift */; };
 		AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 320096A3A5042DB0448CB598 /* LabPlayView.swift */; };
 		D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */; };
@@ -122,6 +125,12 @@
 		8D5767617569EF3EA45DC781 /* HomeSheetPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A836D05EE2951750872171D4 /* HomeSheetPanel.swift */; };
 		938E3FFBE59972BA9FD4D008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = FBB94BA05B70C7412D0F1576 /* PrivacyInfo.xcprivacy */; };
 		C9D20866E8F16B3704D1D729 /* Caveat-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */; };
+		40E3B8A44300AC2104FA00A6 /* MonaSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 42190B117BAAA874ABA0CE1B /* MonaSans-Regular.ttf */; };
+		07937F70075D90DD406D3CD6 /* MonaSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E9FFE6BE40E4DD0ACF46D8F /* MonaSans-Medium.ttf */; };
+		4310742F870283FD48C29628 /* MonaSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 34486E4C348B00EB4CB09E96 /* MonaSans-SemiBold.ttf */; };
+		CB8C53468A3FDA0FBCE46338 /* MonaSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A01A482B15B289CCF4D605BE /* MonaSans-Bold.ttf */; };
+		262BC54D89F6CB657E26E15C /* MonaSansExpanded-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2A09DFABBBE73A7120282BAA /* MonaSansExpanded-Bold.ttf */; };
+		0927AB358BEDCD188C1CF235 /* MonaSansExpanded-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B24A0CCE3B4F28DEEFE4666F /* MonaSansExpanded-ExtraBold.ttf */; };
 		975A2414CA2CDA99B994CD68 /* BookAnalyticsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F3557965FA818108DAF7FD /* BookAnalyticsViews.swift */; };
 		989A25F815F1F1ED8BFE1866 /* TomorrowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F62E8DD5CE44661D27A5143 /* TomorrowModels.swift */; };
 		997E07EB4DB05CD9DD443484 /* HubPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB725EF39FDFF327B15AFAA0 /* HubPresentation.swift */; };
@@ -215,6 +224,9 @@
 		958086BBEEB1C76916D435F9 /* LabModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabModels.swift; sourceTree = "<group>"; };
 		C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabDesign.swift; sourceTree = "<group>"; };
 		E364F49796338B2D876663BF /* LabTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabTracker.swift; sourceTree = "<group>"; };
+		AC03D58C9F6DCE2FD27BD2B7 /* WinnersDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersDesign.swift; sourceTree = "<group>"; };
+		4FA4D48D367F9FA814488A1C /* WinnersPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersPage.swift; sourceTree = "<group>"; };
+		1D1E44759EC291CE2910071A /* WinnersMore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersMore.swift; sourceTree = "<group>"; };
 		D06F096559C9E3D36757ACB7 /* LabUnveil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabUnveil.swift; sourceTree = "<group>"; };
 		320096A3A5042DB0448CB598 /* LabPlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabPlayView.swift; sourceTree = "<group>"; };
 		EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinnersLabView.swift; sourceTree = "<group>"; };
@@ -293,6 +305,12 @@
 		6D9EACB65E985E02C49B0BB2 /* HubShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HubShared.swift; sourceTree = "<group>"; };
 		6F2107D9710A39A5B377E6F9 /* HomeMarqueeHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeMarqueeHero.swift; sourceTree = "<group>"; };
 		361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-SemiBold.ttf"; sourceTree = "<group>"; };
+		42190B117BAAA874ABA0CE1B /* MonaSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSans-Regular.ttf"; sourceTree = "<group>"; };
+		6E9FFE6BE40E4DD0ACF46D8F /* MonaSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSans-Medium.ttf"; sourceTree = "<group>"; };
+		34486E4C348B00EB4CB09E96 /* MonaSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSans-SemiBold.ttf"; sourceTree = "<group>"; };
+		A01A482B15B289CCF4D605BE /* MonaSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSans-Bold.ttf"; sourceTree = "<group>"; };
+		2A09DFABBBE73A7120282BAA /* MonaSansExpanded-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSansExpanded-Bold.ttf"; sourceTree = "<group>"; };
+		B24A0CCE3B4F28DEEFE4666F /* MonaSansExpanded-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MonaSansExpanded-ExtraBold.ttf"; sourceTree = "<group>"; };
 		7350DDC8DF76DFF4835A6B82 /* PickInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickInfoSheet.swift; sourceTree = "<group>"; };
 		73F3557965FA818108DAF7FD /* BookAnalyticsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookAnalyticsViews.swift; sourceTree = "<group>"; };
 		75D0D53F888AA7207B8B1AF3 /* BookUnitSizeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookUnitSizeSheet.swift; sourceTree = "<group>"; };
@@ -519,6 +537,12 @@
 			children = (
 				C20455738476664B4F69306C /* BebasNeue-Regular.ttf */,
 				361AC934E889F1A4E76271A1 /* Caveat-SemiBold.ttf */,
+				42190B117BAAA874ABA0CE1B /* MonaSans-Regular.ttf */,
+				6E9FFE6BE40E4DD0ACF46D8F /* MonaSans-Medium.ttf */,
+				34486E4C348B00EB4CB09E96 /* MonaSans-SemiBold.ttf */,
+				A01A482B15B289CCF4D605BE /* MonaSans-Bold.ttf */,
+				2A09DFABBBE73A7120282BAA /* MonaSansExpanded-Bold.ttf */,
+				B24A0CCE3B4F28DEEFE4666F /* MonaSansExpanded-ExtraBold.ttf */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -654,6 +678,9 @@
 				958086BBEEB1C76916D435F9 /* LabModels.swift */,
 				C209BDACA3D9ED22D288F8C6 /* LabDesign.swift */,
 				E364F49796338B2D876663BF /* LabTracker.swift */,
+				AC03D58C9F6DCE2FD27BD2B7 /* WinnersDesign.swift */,
+				4FA4D48D367F9FA814488A1C /* WinnersPage.swift */,
+				1D1E44759EC291CE2910071A /* WinnersMore.swift */,
 				D06F096559C9E3D36757ACB7 /* LabUnveil.swift */,
 				320096A3A5042DB0448CB598 /* LabPlayView.swift */,
 				EB621D6FF82298D494AFDCEA /* WinnersLabView.swift */,
@@ -750,6 +777,12 @@
 				5EDA0A1CBF608AE80BCACE1A /* LaunchScreen.storyboard in Resources */,
 				938E3FFBE59972BA9FD4D008 /* PrivacyInfo.xcprivacy in Resources */,
 				C9D20866E8F16B3704D1D729 /* Caveat-SemiBold.ttf in Resources */,
+				40E3B8A44300AC2104FA00A6 /* MonaSans-Regular.ttf in Resources */,
+				07937F70075D90DD406D3CD6 /* MonaSans-Medium.ttf in Resources */,
+				4310742F870283FD48C29628 /* MonaSans-SemiBold.ttf in Resources */,
+				CB8C53468A3FDA0FBCE46338 /* MonaSans-Bold.ttf in Resources */,
+				262BC54D89F6CB657E26E15C /* MonaSansExpanded-Bold.ttf in Resources */,
+				0927AB358BEDCD188C1CF235 /* MonaSansExpanded-ExtraBold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -786,6 +819,9 @@
 				777E3671E910DCC68EC80983 /* LabModels.swift in Sources */,
 				94DDC0A3C2FE7474DE8E1359 /* LabDesign.swift in Sources */,
 				4B822311B9F05FD311BBA679 /* LabTracker.swift in Sources */,
+				A40FD5661B5DA2591BDD2A5F /* WinnersDesign.swift in Sources */,
+				4B0815606DED3C548F6B5159 /* WinnersPage.swift in Sources */,
+				C499A5129DBFE54F357F45CC /* WinnersMore.swift in Sources */,
 				0F4A58D8C33C5B88D3B12895 /* LabUnveil.swift in Sources */,
 				AAB58AEA0974CF2B67EB8ACE /* LabPlayView.swift in Sources */,
 				D64345313C551A85E494BEBC /* WinnersLabView.swift in Sources */,

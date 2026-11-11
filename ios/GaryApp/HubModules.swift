@@ -459,7 +459,10 @@ struct SignalRow: View {
                         .foregroundStyle(contained ? .white.opacity(0.62) : GaryColors.gold)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).fitsOneLine()
+                    // On a game's own page the row does not repeat that game (Nov 10 2026).
+                    if !contained {
+                        Text(s.game.uppercased()).font(GaryFonts.mono(9, bold: false)).tracking(0.6).foregroundStyle(.white.opacity(0.62)).fitsOneLine()
+                    }
                     if contained {
                         disclosure(hasDetail: !detail.isEmpty)
                     }

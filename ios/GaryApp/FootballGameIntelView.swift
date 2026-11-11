@@ -973,7 +973,7 @@ private struct FootballAvailabilityCard: View {
                 HStack(spacing: 5) { dot("LP"); Text("LIMITED") }
                 HStack(spacing: 5) { dot("DNP"); Text("DID NOT PRACTICE") }
             }
-            Text("PRACTICE AND GAME STATUS · BDL")
+            Text("PRACTICE AND GAME STATUS")
                 .tracking(1.1)
         }
         .font(GaryFonts.data(9.5, .semibold)).foregroundStyle(.white.opacity(0.42))

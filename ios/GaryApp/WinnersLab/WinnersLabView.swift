@@ -47,6 +47,20 @@ struct WinnersLabView: View {
     /// Today's game times still ahead, by league: the packs still to come.
     @State private var windows: [ComingWindow] = []
     @State private var propResults: [String: PropResult] = [:]
+    /// The page's view: Tonight, Results or Record (founder GO, Nov 10 2026, "version A, the new look").
+    @State private var section = "Tonight"
+    /// The play on screen in Tonight's pager.
+    @State private var playSelection = ""
+    /// The play whose reasons are up.
+    @State private var why: WPlay?
+    /// The night on the Results view (empty: the latest night with results) and the older boards it has read.
+    @State private var resultsDate = ""
+    @State private var resultsBoards: [String: LabBoard] = [:]
+    /// Gary's bankroll and where his money has come from, for Results and Record.
+    @State private var bankroll: GaryBankrollSnapshot?
+    @State private var splits: WSplits?
+    /// Lays Tonight out as a short phone does (tour verb, for checking the scrolling page).
+    @State private var forceScroll = false
     @ObservedObject private var liveCache = LiveScoreCache.shared
     @ObservedObject private var access = WinnersAccessStore.shared
     @EnvironmentObject private var authManager: AuthManager
@@ -62,32 +76,16 @@ struct WinnersLabView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                GaryStageBackground()
-                ScrollViewReader { proxy in
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        header
-                        // Yesterday's line rides the header, between the date and
-                        // the profile (founder, Sep 23 2026), so the page starts
-                        // higher. The sport tabs ride TODAY's row (Sep 24); they
-                        // take a row of their own only above yesterday's recap.
-                        if sports.count > 1 && showsRecap {
-                            LabTextTabs(items: tabItems, selected: sportTab, size: 14).padding(.top, 10).pageGutter()
-                        }
-                        content.padding(.top, 12)
-                        Color.clear.frame(height: 170)
+                WStage()
+                VStack(alignment: .leading, spacing: 0) {
+                    pageHead
+                    WTabs(items: ["Tonight", "Results", "Record"], selection: $section)
+                        .padding(.horizontal, 20).padding(.top, 2)
+                    switch section {
+                    case "Results": resultsView
+                    case "Record": WinnersRecord(snapshot: bankroll, splits: splits)
+                    default: tonightView
                     }
-                    // The lamp hangs over today's first plays and scrolls with them.
-                    .background(alignment: .top) { StageLamp(radius: 380).offset(y: -130) }
-                }
-                .refreshable { await load() }
-                .onChange(of: revealTarget) { id in
-                    guard let id else { return }
-                    // The streak pick rides its own card; every other play is keyed
-                    // by its section (see `groups`).
-                    let target = id == todayStreakTicket?.candidateID ? "streak-\(id)" : "today-\(id)"
-                    withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(target, anchor: .center) }
-                }
                 }
                 StatusBarScrim()
             }
@@ -120,6 +118,14 @@ struct WinnersLabView: View {
                            onAccount: { showPlans = false; NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil) })
         })
         .background(Color.clear.sheet(item: $checkoutURL) { url in SafariView(url: url).ignoresSafeArea() })
+        .sheet(item: $why) { play in
+            WinnersWhySheet(play: play, onFull: {
+                why = nil
+                path.append(LabRoute.play(play.ticket.candidateID))
+            })
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         .task { await load() }
         .task(id: refreshKey) {
             guard refreshActive, !rollToToday() else { return }
@@ -140,6 +146,13 @@ struct WinnersLabView: View {
         .onGaryTour { verb, arg in
             guard verb == "lab" else { return }
             switch arg {
+            case "tonight": section = "Tonight"
+            case "results": section = "Results"
+            case "record": section = "Record"
+            case "short": forceScroll.toggle()
+            case "why": why = tonightPlays.first { $0.id == playSelection } ?? tonightPlays.first
+            case "earlier": stepResults(-1)
+            case "later": stepResults(1)
             case "reseal": unveiledRaw = ""
             case "reveal all": revealAll()
             case "close": if let t = unveil { markUnveiled(t.candidateID); unveil = nil }
@@ -155,6 +168,9 @@ struct WinnersLabView: View {
                     return
                 }
                 #endif
+                if arg.hasPrefix("card "), let n = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)), tonightPlays.indices.contains(n) {
+                    playSelection = tonightPlays[n].id; return
+                }
                 if arg.hasPrefix("unveil "), let id = Int(arg.dropFirst(7).trimmingCharacters(in: .whitespaces)),
                    let ticket = board?.tickets.first(where: { $0.candidateID == id }) { unveil = ticket; return }
                 if arg.hasPrefix("open "), let id = Int(arg.dropFirst(5).trimmingCharacters(in: .whitespaces)) { path.append(LabRoute.play(id)) }
@@ -271,10 +287,143 @@ struct WinnersLabView: View {
             return try? JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
         }()
         let fresh = try? await SupabaseAPI.fetchWinnersRun()
-        let bankroll = await money
+        let snapshot = await money
         guard accepts(generation, date: want, account: account) else { return }
         if let fresh, fresh != run { run = fresh }
-        if let face = bankroll?.lastNight(before: want)?.face, face != lastNightFace { lastNightFace = face }
+        if let face = snapshot?.lastNight(before: want)?.face, face != lastNightFace { lastNightFace = face }
+        if let snapshot { bankroll = snapshot }
+        if let fresh = await WSplits.fetch(), accepts(generation, date: want, account: account), fresh != splits { splits = fresh }
+    }
+
+    // MARK: - The page (Nov 2026)
+
+    private var pageHead: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text("Winners").font(W.wide(34)).tracking(-0.85).foregroundStyle(W.bone).fitsOneLine()
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            if section == "Tonight" {
+                Text(LabFormat.shortDateWords(today)).font(W.text(14, .medium)).foregroundStyle(W.dim).fixedSize()
+            }
+            ProfileHeaderChip()
+        }
+        .padding(.leading, 20).padding(.trailing, 12).padding(.top, 2)
+    }
+
+    /// A ticket as the page draws it. `sealable`: one of today's plays, sealed until the fan opens it.
+    private func wplay(_ t: LabBoardTicket, sealable: Bool, free: Bool = false, biggest: Bool = false) -> WPlay {
+        let live = liveScore(t)
+        var stage = WPlay.Stage.upcoming
+        var result: String?
+        var detail: String?
+        switch state(t) {
+        case .final(let word, _): stage = .final; result = word
+        case .live(let clock, _): stage = .live; detail = clock
+        case .sealed: break
+        }
+        if sealable, !unveiled.contains(t.candidateID) { stage = .sealed }
+        return WPlay(ticket: t, stage: stage, result: result, live: live, liveDetail: detail, isFree: free, biggest: biggest)
+    }
+    private func byStart(_ a: LabBoardTicket, _ b: LabBoardTicket) -> Bool {
+        let ta = LabFormat.parseISO(a.commence) ?? .distantFuture, tb = LabFormat.parseISO(b.commence) ?? .distantFuture
+        return ta == tb ? a.candidateID < b.candidateID : ta < tb
+    }
+
+    /// Today's plays in start order, in the fan's league.
+    private var tonightPlays: [WPlay] {
+        let free = todayStreakTicket?.candidateID
+        let league = tonightSport
+        var list = (board?.tickets ?? []).filter { !$0.scratched && (league == nil || $0.league.uppercased() == league) }
+        // The paywall preview shows the page as a non-member finds it: the free pick alone.
+        if WinnersGate.preview { list = list.filter { $0.candidateID == free } }
+        let stakes = list.map { $0.stakeUnits ?? 0 }
+        let top = stakes.max() ?? 0
+        let oneTop = stakes.filter { $0 == top }.count == 1 && list.count > 1 && top > 0
+        return list.sorted(by: byStart).map {
+            wplay($0, sealable: true, free: $0.candidateID == free, biggest: oneTop && ($0.stakeUnits ?? 0) == top)
+        }
+    }
+    private var tonightLocked: [WLocked] {
+        guard AppFlags.purchasesEnabled else { return [] }
+        var seen: [String: Int] = [:]
+        return lockedPacks.map { pack in
+            let n = seen[pack.league, default: 0]
+            seen[pack.league] = n + 1
+            return WLocked(league: pack.league, index: n)
+        }
+    }
+    /// The leagues with a play on today's card, in the page's order. Yesterday's are not Tonight's.
+    private var tonightSports: [String] {
+        let free = todayStreakTicket?.candidateID
+        var leagues = (board?.tickets ?? []).filter { !$0.scratched && (!WinnersGate.preview || $0.candidateID == free) }.map { $0.league.uppercased() }
+        if AppFlags.purchasesEnabled { leagues += (board?.boards ?? []).filter { $0.locked && $0.count > 0 }.map { $0.league.uppercased() } }
+        let present = Set(leagues)
+        return Self.sportOrder.filter(present.contains) + present.subtracting(Self.sportOrder).sorted()
+    }
+    /// The league the Tonight row is on. All when the row is not showing or the league has no play today,
+    /// so a league chosen on another day can never leave the page empty.
+    private var tonightSport: String? {
+        let leagues = tonightSports
+        return leagues.count > 1 && leagues.contains(sport.uppercased()) ? sport.uppercased() : nil
+    }
+    private var tonightView: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { tick in tonight(now: tick.date) }
+    }
+    private func tonight(now: Date) -> some View {
+        WinnersTonight(plays: tonightPlays, locked: tonightLocked, sports: tonightSports.count > 1 ? tonightSports : [], sport: $sport,
+                       selection: $playSelection, nextGame: comingPacks.first, loading: board == nil && loading,
+                       failed: board == nil && error != nil, now: now, forceScroll: forceScroll,
+                       onRetry: { Task { await load() } },
+                       onOpen: { ticket in
+                           AppCounts.once(.openedWinners)
+                           unveil = ticket
+                       },
+                       onWhy: { play in
+                           AppCounts.once(.openedWinners)
+                           why = play
+                       },
+                       onUnlock: { league in plansFocus = league; showPlans = true })
+    }
+
+    /// The latest night with results: today once a play has settled, else yesterday.
+    private var latestResultsDate: String { todayHasResult ? today : LabFormat.yesterday(of: today) }
+    private var shownResultsDate: String { resultsDate.isEmpty || resultsDate > latestResultsDate ? latestResultsDate : resultsDate }
+    private func resultsBoard(_ day: String) -> LabBoard? {
+        day == today ? board : day == LabFormat.yesterday(of: today) ? (yesterdayBoard ?? resultsBoards[day]) : resultsBoards[day]
+    }
+    private func stepResults(_ delta: Int) {
+        let from = shownResultsDate
+        let next = LabFormat.dayOffset(from, delta)
+        guard next <= latestResultsDate, next >= (bankroll?.started_date ?? "2026-09-16") else { return }
+        resultsDate = next
+        guard resultsBoard(next) == nil else { return }
+        Task { @MainActor in
+            if let fresh = try? await SupabaseAPI.fetchLabBoard(date: next) { resultsBoards[next] = fresh }
+            // A night that will not load is not a night without plays: step back to the one that was up.
+            else if resultsDate == next { resultsDate = from }
+        }
+    }
+    /// The month the night belongs to: "November so far", record and money.
+    private func monthLine(_ day: String) -> WinnersResults.Month? {
+        let prefix = String(day.prefix(7))
+        let days = (bankroll?.days ?? []).filter { $0.date.hasPrefix(prefix) }
+        guard !days.isEmpty, let month = Int(day.dropFirst(5).prefix(2)), (1...12).contains(month) else { return nil }
+        let name = DateFormatter().monthSymbols[month - 1]
+        return WinnersResults.Month(label: prefix == String(today.prefix(7)) ? "\(name) so far" : name,
+                                    wins: days.reduce(0) { $0 + $1.wins }, losses: days.reduce(0) { $0 + $1.losses },
+                                    net: days.reduce(0) { $0 + $1.net_units } * LabFormat.unitDollars)
+    }
+    private var resultsView: some View {
+        let day = shownResultsDate
+        let dayBoard = resultsBoard(day)
+        var plays = (dayBoard?.tickets ?? []).filter { !$0.scratched }.sorted(by: byStart).map { wplay($0, sealable: false) }
+        // Today's night shows what has settled; the rest is on Tonight.
+        if day == today { plays = plays.filter { $0.net != nil } }
+        return WinnersResults(date: day, canGoLater: day < latestResultsDate, plays: plays, loading: dayBoard == nil,
+                              face: bankroll?.days?.first { $0.date == day }?.face,
+                              lastNight: day == LabFormat.yesterday(of: today), tonight: day == today, month: monthLine(day),
+                              onStep: stepResults,
+                              onOpen: { path.append(LabRoute.play($0.candidateID)) })
     }
 
     @MainActor private func loadDetails(date want: String, since: String, generation: UUID, account: String?) async {
@@ -496,29 +645,6 @@ struct WinnersLabView: View {
 
     // MARK: - Header, tape, filters
 
-    /// The header (founder GO, Oct 7 2026, from mocks 38, 39 and 42): the
-    /// logo is hot Gary on a winning run of two or more and cold Gary on a
-    /// losing one; a small line of his money over his last ten plays, with the
-    /// run, sits by the profile; the gold rule under it is the day's plays,
-    /// each as long as its bet. The day's record and money ride TODAY's row.
-    private var header: some View {
-        GaryPageHeader(title: "Winners", accentMenu: AnyView(
-            Text(LabFormat.shortDateWords(today))
-                .font(GaryFonts.kicker(11)).foregroundStyle(.white.opacity(0.55))
-                .fixedSize()),
-            rule: AnyView(LabDayBar(segments: dayBarSegments)),
-            mark: runMark,
-            markSize: 52,
-            trailing: {
-                if let run { WinnersRunSpark(run: run) }
-            })
-    }
-
-    /// The logo is how Gary did the night before (founder, Oct 30 2026: it
-    /// "hasn't been changing based on how gary did the day before" — it had
-    /// followed his run of plays, which can stay hot through a losing night).
-    private var runMark: String { lastNightFace ?? GaryBrand.mark }
-
     /// Today's first play has started (founder, Oct 9 2026: "as soon as our first game starts this
     /// should flip to showing today 0-0"), or one already has a result.
     private var todayUnderway: Bool {
@@ -531,48 +657,6 @@ struct WinnersLabView: View {
     /// The day the record and the bar show: today from the moment its first play starts,
     /// yesterday until then; at midnight today becomes yesterday and it repeats.
     private var shownDayBoard: LabBoard? { todayUnderway ? board : yesterdayBoard }
-
-    private var dayBarSegments: [LabDayBar.Segment] {
-        (shownDayBoard?.tickets ?? []).filter { !$0.scratched }
-            .sorted { a, b in
-                let ta = LabFormat.parseISO(a.commence) ?? .distantFuture
-                let tb = LabFormat.parseISO(b.commence) ?? .distantFuture
-                return ta == tb ? a.candidateID < b.candidateID : ta < tb
-            }
-            .map { t in
-                let tone: LabDayBar.Tone
-                switch resultWord(t) {
-                case "won": tone = .won
-                case "lost": tone = .lost
-                case "push": tone = .push
-                default: tone = .open
-                }
-                return LabDayBar.Segment(id: t.candidateID, units: t.stakeUnits ?? 1, tone: tone)
-            }
-    }
-
-    /// The day's record and money on TODAY's row (founder, Oct 7 2026, mock
-    /// 35), across every sport: today's from the moment its first play starts,
-    /// 0-0 until a result lands (Oct 9 2026); before that yesterday's, marked so in small type.
-    @ViewBuilder private func dayNumbers(size: CGFloat) -> some View {
-        let isToday = todayUnderway
-        let line = dayLine(shownDayBoard)
-        if isToday || line.won + line.lost + line.push > 0 {
-            let tint = line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                if !isToday {
-                    Text("Yesterday").font(GaryFonts.kicker(10.5)).foregroundStyle(LabInk.dim)
-                }
-                Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")")
-                    .font(GaryFonts.display(size)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
-                Text(LabFormat.unitsNet(line.units))
-                    .font(GaryFonts.display(size)).foregroundStyle(tint).monospacedDigit()
-                    .shadow(color: tint.opacity(0.55), radius: 6)
-            }
-            .fixedSize()
-            .accessibilityElement(children: .combine)
-        }
-    }
 
     private var filtering: Bool { kindFilter != .all || statusFilter != .all }
     /// A play the fan's filter keeps.
@@ -591,122 +675,6 @@ struct WinnersLabView: View {
     }
 
     // MARK: - Content
-
-    @ViewBuilder
-    private var content: some View {
-        if let error, board == nil {
-            VStack(spacing: 8) {
-                Text(error).font(GaryFonts.ui(12)).foregroundStyle(LabInk.dim).multilineTextAlignment(.center)
-                Button("TRY AGAIN") { Task { await load() } }
-                    .font(GaryFonts.display(15)).foregroundStyle(GaryColors.gold)
-            }
-            .frame(maxWidth: .infinity).padding(.top, 40).pageGutter()
-        } else {
-            LazyVStack(alignment: .leading, spacing: 12) {
-                if error != nil || yesterdayError != nil {
-                    Button(error ?? yesterdayError ?? "Try again") { Task { await load(quiet: true) } }
-                        .font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.gold)
-                        .frame(minHeight: 44)
-                        .accessibilityHint("Tap to retry. Previously loaded content stays visible.")
-                }
-                if showsRecap {
-                    // Until 10 AM ET, before today's first play (founder, Sep 24
-                    // 2026): the top is yesterday's day, then its plays.
-                    yesterdayCard { yesterdayRecap.padding(.bottom, 8) }
-                    if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
-                    // The morning page stays full too (founder, Oct 15 2026): today's
-                    // three COMING SOON packs sit under yesterday's plays.
-                    VStack(alignment: .leading, spacing: 12) { packsToCome }.padding(.top, 18)
-                } else {
-                    todayHead
-                    if !streakSettledToday, let ticket = todayStreakTicket { streakCard(ticket) }
-                    // A play behind the paywall is its own pack: the fan sees
-                    // each one waiting and taps to unlock it.
-                    ForEach(AppFlags.purchasesEnabled ? lockedPacks : []) { pack in
-                        LabPackCard(league: pack.league, clock: nil, word: "UNLOCK", lock: true) {
-                            plansFocus = pack.league; showPlans = true
-                        }
-                    }
-                    if !AppFlags.purchasesEnabled, !lockedBoards.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Some Winners plays are locked for this account.")
-                                .font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-                            Button {
-                                if authManager.isAuthenticated {
-                                    Task { await access.refresh(); await load(quiet: true) }
-                                } else {
-                                    NotificationCenter.default.post(name: Notification.Name("ShowProfile"), object: nil)
-                                }
-                            } label: {
-                                Text(authManager.isAuthenticated ? "REFRESH ACCESS ›" : "SIGN IN ›")
-                                    .font(GaryFonts.ui(12, .semibold)).foregroundStyle(GaryColors.gold)
-                                    .fixedSize(horizontal: false, vertical: true).frame(minHeight: 44)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    // The plays still to play under their start times (founder,
-                    // Oct 3 2026: "sport and time to break it up"). The game
-                    // times still ahead wear the pack before their play lands;
-                    // it says so instead of OPEN. A fan who isn't a member can
-                    // unlock from any of them.
-                    ForEach(openSlots) { slot in
-                        timeHead(slot.clock)
-                        // The time head above says the start once; the play under it doesn't repeat it
-                        // (Nov 10 2026: "9:00 PM" over a pack that said "9:00 PM").
-                        ForEach(slot.groups) { group in module(group, sealable: true, showsClock: slot.clock.isEmpty) }
-                    }
-                    packsToCome
-                    if board != nil, filtering && todayPlays.isEmpty && todayStreakTicket.map({ keeps($0) && inSport($0.league) }) != true && lockedBoards.isEmpty {
-                        Text("NO PLAYS").font(GaryFonts.display(14)).tracking(1.2).foregroundStyle(LabInk.dimmer)
-                            .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    }
-                    if let msg = checkoutError { Text(msg).font(GaryFonts.ui(12, .medium)).foregroundStyle(GaryColors.loss) }
-
-                    // Today's graded plays sit under their own break, below
-                    // everything still to play (founder, Sep 29 2026), one line
-                    // each (Oct 3 2026).
-                    if !todaySettled.isEmpty || streakSettledToday {
-                        sectionHead("SETTLED", note: nil).padding(.top, 18)
-                        resultRows((streakSettledToday ? [todayStreakTicket].compactMap { $0 } : []) + todaySettled.map(\.lead), section: "settled")
-                    }
-
-                    if !yesterdayPlays.isEmpty && !todayHasResult {
-                        yesterdayCard {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text("YESTERDAY").font(GaryFonts.display(21)).tracking(1.2).foregroundStyle(GaryColors.gold)
-                                Spacer()
-                                // The money's scale, once, where the dollars start (Nov 10 2026: Home counts $10 bets
-                                // and $100 a pick, and these stakes ran $300 and $600 with nothing saying why).
-                                Text("\(LabFormat.shortDateWords(LabFormat.yesterday(of: today))) · $\(Int(LabFormat.unitDollars)) a unit")
-                                    .font(GaryFonts.ui(13)).foregroundStyle(LabInk.dim)
-                            }
-                            .frame(height: 34)
-                        }
-                        .padding(.top, 14)
-                    }
-                }
-            }
-            .pageGutter()
-        }
-    }
-
-    /// The page turns over at 10 AM ET (founder, Sep 24 2026): until then,
-    /// and until today's first play lands, yesterday leads; from then today's
-    /// packs lead and yesterday drops below.
-    private var todayLeads: Bool {
-        if !todayPlays.isEmpty || !lockedBoards.isEmpty || todayStreakTicket != nil { return true }
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
-        return cal.component(.hour, from: Date()) >= 10
-    }
-    private var showsRecap: Bool { !todayLeads && !yesterdayPlays.isEmpty }
-    /// A member (paid, founding or preview access), unless the paywall
-    /// preview is on to show the page as a non-member finds it.
-    private var isMember: Bool {
-        guard !WinnersGate.preview, let snap = access.snapshot else { return false }
-        return snap.isFreeAccess || !snap.sports.isEmpty
-    }
 
     /// One pack a locked play, by league.
     private struct LockedPack: Identifiable { let id: String; let league: String }
@@ -729,285 +697,6 @@ struct WinnersLabView: View {
             .filter { window in window.start > soon && (active == nil || active == window.league) }
             .filter { !lockedLeagues.contains($0.league) }
             .filter { w in !held.contains { $0.0 == w.league && abs($0.1.timeIntervalSince(w.start)) < 60 } }
-    }
-    /// "NCAAF", "MLB · NFL": the leagues with games still ahead, when no play is on today's card yet.
-    private var pendingLeagues: String? {
-        guard todayOpen.isEmpty else { return nil }
-        var seen: [String] = []
-        for w in comingPacks where !seen.contains(w.league) { seen.append(w.league) }
-        return seen.isEmpty ? nil : seen.joined(separator: " · ")
-    }
-
-    /// Before any play lands, one pack for the day with no time on it; then the page stays full
-    /// (founder, Oct 14 2026: one open play, "two other picks below that that would be coming
-    /// soon"): today's packs fill out to three with COMING SOON packs.
-    @ViewBuilder private var comingSoonPacks: some View {
-        SwiftUI.Group {
-            if let leagues = pendingLeagues {
-                LabPackCard(league: leagues, clock: nil, word: "COMING SOON",
-                            action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = comingPacks.first?.league; showPlans = true })
-            }
-            ForEach(0..<fillerPacks, id: \.self) { i in
-                LabPackCard(league: fillerLeague, clock: nil, word: "COMING SOON",
-                            action: isMember || !AppFlags.purchasesEnabled ? nil : { plansFocus = activeSport; showPlans = true })
-                    .id("filler-\(i)")
-            }
-        }
-    }
-
-    /// Until today's board comes back the page is drawn anyway (founder,
-    /// Oct 23 2026: a fresh open was a blank spinner for about six seconds):
-    /// three sealed packs hold today's place, each turning in the pack.
-    @ViewBuilder private var packsToCome: some View {
-        if board == nil {
-            ForEach(0..<3, id: \.self) { i in
-                LabPackCard(league: activeSport ?? "WINNERS", clock: nil, word: "", waiting: true).id("waiting-\(i)")
-            }
-        } else {
-            comingSoonPacks
-        }
-    }
-
-    /// COMING SOON packs that fill today's list out to three packs (founder, Oct 14 2026), under the plays.
-    private var fillerPacks: Int {
-        guard !filtering else { return 0 }
-        let shown = (AppFlags.purchasesEnabled ? lockedPacks.count : 0)
-            + openSlots.reduce(0) { $0 + $1.groups.count } + (pendingLeagues == nil ? 0 : 1)
-        return max(0, 3 - shown)
-    }
-    private var fillerLeague: String { activeSport ?? pendingLeagues ?? todayOpen.first?.lead.league ?? "WINNERS" }
-
-    /// One start time on today's card and its plays. Times organize plays that exist, never promises.
-    private struct TimeSlot: Identifiable {
-        let clock: String
-        let start: Date
-        var groups: [Group] = []
-        var id: String { "slot-\(clock)" }
-    }
-    private var openSlots: [TimeSlot] {
-        var slots: [String: TimeSlot] = [:]
-        for g in todayOpen {
-            let clock = LabFormat.timeET(g.lead.commence)
-            slots[clock, default: TimeSlot(clock: clock, start: g.commence ?? .distantFuture)].groups.append(g)
-        }
-        return slots.values.sorted { $0.start < $1.start }
-    }
-    @ViewBuilder private func timeHead(_ clock: String) -> some View {
-        if !clock.isEmpty {
-            HStack(spacing: 10) {
-                Text(clock).font(GaryFonts.display(15)).tracking(1).foregroundStyle(LabInk.dim).fixedSize()
-                LabHairline()
-            }
-            .padding(.top, 8)
-            .accessibilityAddTraits(.isHeader)
-        }
-    }
-
-    /// Settled plays one line each (founder, Oct 3 2026: when games are done
-    /// "they kinda all run together"): the result, the pick and the money.
-    /// A tap opens the play. The section names the row, so a play that moves
-    /// from the open list never keeps its old live card.
-    private func resultRows(_ tickets: [LabBoardTicket], section: String, inCard: Bool = false) -> some View {
-        VStack(spacing: 0) {
-            ForEach(tickets, id: \.candidateID) { t in
-                resultRow(t, inCard: inCard).id("\(section)-\(t.candidateID)")
-            }
-        }
-    }
-
-    /// Yesterday on one plate (founder, Oct 30 2026, Winners facelift mock 1):
-    /// its heading, then its plays, a gold edge round both.
-    private func yesterdayCard<Head: View>(@ViewBuilder head: () -> Head) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            head()
-            resultRows(yesterdayPlays.map(\.lead), section: "yesterday", inCard: true)
-        }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: "#1C1914"), Color(hex: "#131110")], startPoint: .top, endPoint: .bottom))
-                .shadow(color: .black.opacity(0.4), radius: 11, y: 10)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(GaryColors.gold.opacity(0.45), lineWidth: 1))
-    }
-
-    private func resultRow(_ t: LabBoardTicket, inCard: Bool = false) -> some View {
-        let word = resultWord(t)
-        let label: String, tint: Color, money: String
-        let stake = t.stakeUnits ?? 0
-        switch word {
-        case "won"?: label = "WIN"; tint = GaryColors.win; money = LabFormat.unitsNet(stake * LabFormat.payout(t.price))
-        case "lost"?: label = "LOSS"; tint = GaryColors.loss; money = LabFormat.unitsNet(-stake)
-        case "push"?: label = "PUSH"; tint = GaryColors.silver; money = "$0"
-        case "scratched"?: label = "SCRATCHED"; tint = LabInk.dimmer; money = ""
-        case .some(let other): label = other.uppercased(); tint = GaryColors.silver; money = ""
-        case .none: label = "PENDING"; tint = LabInk.dim; money = ""
-        }
-        let title = LabPlayModule.shortTitle(LabFormat.ticketBody(t.pickText).uppercased(), player: t.prop?.player, matchup: t.matchup)
-        return Button { path.append(LabRoute.play(t.candidateID)) } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(label).font(GaryFonts.display(15)).tracking(inCard ? 1.2 : 0.8).foregroundStyle(tint)
-                    .frame(width: inCard && label.count <= 4 ? 38 : 58, alignment: .leading)
-                Text(title).font(GaryFonts.display(18)).foregroundStyle(word == "scratched" ? LabInk.dim : GaryColors.warmWhite)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Text(money).font(GaryFonts.display(inCard ? 20 : 18)).monospacedDigit()
-                    .foregroundStyle(word == "won" ? GaryColors.win : word == "lost" ? GaryColors.loss : GaryColors.silver)
-                    .fixedSize()
-            }
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // In the card the rule sits above each row, under the heading,
-            // and the plate's edge closes the last one.
-            .overlay(alignment: inCard ? .top : .bottom) { LabHairline() }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens the play")
-    }
-
-    /// YESTERDAY at the top of its card (founder, Sep 24 2026: "very subtle,
-    /// straightforward, simple"; in a container since Oct 30 2026): the date,
-    /// the record and the money, and word that today's plays are on the way.
-    private var yesterdayRecap: some View {
-        let line = dayLine(yesterdayBoard)
-        let decided = line.won + line.lost + line.push > 0
-        let tint = line.units > 0.049 ? GaryColors.win : line.units < -0.049 ? GaryColors.loss : GaryColors.silver
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("YESTERDAY").font(GaryFonts.display(15)).tracking(1.4).foregroundStyle(GaryColors.gold)
-                Text(LabFormat.shortDateWords(LabFormat.yesterday(of: today))).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim)
-            }
-            if decided {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("\(line.won)-\(line.lost)\(line.push > 0 ? "-\(line.push)" : "")")
-                        .font(GaryFonts.display(30)).foregroundStyle(GaryColors.warmWhite).monospacedDigit()
-                    Text(LabFormat.unitsNet(line.units)).font(GaryFonts.display(30)).foregroundStyle(tint).monospacedDigit()
-                    if line.open > 0 { Text("\(line.open) OPEN").font(GaryFonts.display(15)).tracking(1).foregroundStyle(GaryColors.sweating) }
-                }
-            } else if line.open > 0 {
-                Text("\(line.open) PENDING").font(GaryFonts.display(15)).foregroundStyle(LabInk.dim)
-            }
-            Text("Gary's \(LabFormat.weekdayWord(today)) plays are on the way.")
-                .font(GaryFonts.ui(13, .medium)).foregroundStyle(LabInk.dim)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// TODAY, the league filter and the day's line on one row right under
-    /// the header (founder, Sep 24 2026: "all that's on one line, or one
-    /// row... everything is basically moving up"). The filter sits toward
-    /// the middle of the page.
-    /// TODAY, the league tabs, REVEAL ALL and the filter on one row (founder,
-    /// Sep 24 2026: "I don't want that to bring everything down a line").
-    /// The day's record and money ride this row, before the filter (Oct 7 2026).
-    private var todayHead: some View {
-        ViewThatFits(in: .horizontal) {
-            todayRow(tab: 14, spacing: 12, numbers: 18)
-            todayRow(tab: 12.5, spacing: 8, numbers: 16)
-            todayRow(tab: 12.5, spacing: 6, numbers: 14)
-            // REVEAL ALL on a normal phone (Nov 6 2026): the row ran wide and pushed the money and the filter off the
-            // screen. The numbers give way, and yesterday's are in the card further down the page.
-            todayRow(tab: 12.5, spacing: 6, numbers: 14, showNumbers: false)
-        }
-        .padding(.top, 2)
-    }
-
-    private func todayRow(tab: CGFloat, spacing: CGFloat, numbers: CGFloat, showNumbers: Bool = true) -> some View {
-        HStack(alignment: .center, spacing: spacing) {
-            Text("TODAY").font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold).fixedSize()
-            Spacer(minLength: 4)
-            if sports.count > 1 {
-                LabTextTabs(items: tabItems, selected: sportTab, size: tab).fixedSize()
-                Spacer(minLength: 4)
-            }
-            if sealedToday.count > 1 || revealTask != nil {
-                Button(action: revealAll) {
-                    // An action wears a chevron (design.md); without it this read as a second lit tab
-                    // beside ALL (Nov 10 2026).
-                    HStack(spacing: 4) {
-                        Text("REVEAL ALL").font(GaryFonts.display(13)).tracking(1.2)
-                        Image(systemName: "chevron.right").font(.system(size: 8.5, weight: .heavy))
-                    }
-                        .foregroundStyle(GaryColors.gold.opacity(revealTask == nil ? 0.85 : 0.4))
-                        .fixedSize()
-                        .padding(.vertical, 6).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(revealTask != nil)
-                .accessibilityLabel("Reveal all of today's plays")
-            }
-            if showNumbers { dayNumbers(size: numbers) }
-            filterMenu
-        }
-    }
-
-    /// The filter every app has: game picks or props, open or settled.
-    private var filterMenu: some View {
-        Menu {
-            Section("Show") {
-                Picker("Show", selection: $kindFilter) {
-                    ForEach(PlayKindFilter.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.inline).labelsHidden()
-            }
-            Section("Status") {
-                Picker("Status", selection: $statusFilter) {
-                    ForEach(PlayStatusFilter.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.inline).labelsHidden()
-            }
-        } label: {
-            Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                .font(.system(size: 19, weight: .regular))
-                .foregroundStyle(filtering ? GaryColors.gold : LabInk.dim)
-                .frame(width: 28, height: 28).contentShape(Rectangle())
-        }
-        .accessibilityLabel(filtering ? "Filter, on" : "Filter")
-    }
-
-    private func sectionHead(_ title: String, note: String?) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).font(GaryFonts.display(18)).tracking(1.2).foregroundStyle(GaryColors.gold)
-            Spacer()
-            if let note { Text(note).font(GaryFonts.ui(12, .medium)).foregroundStyle(LabInk.dim) }
-        }
-        .padding(.top, 2)
-    }
-
-    /// Every ticket uses the same current card, including the free streak pick.
-    /// On ALL it leads the page under its own heading (founder, Oct 8 2026),
-    /// the same card at the same size; on its sport's tab it rides the top as before.
-    @ViewBuilder private func streakCard(_ ticket: LabBoardTicket) -> some View {
-        if keeps(ticket) && inSport(ticket.league) {
-            VStack(alignment: .leading, spacing: 8) {
-                module(Group(key: "streak-\(ticket.candidateID)", lead: ticket, riders: []),
-                       sealable: true, streak: streak?.current ?? 0, streakBest: streak?.best ?? 0)
-            }
-            .id("streak-\(ticket.candidateID)")
-        }
-    }
-
-    private func module(_ group: Group, sealable: Bool, streak: Int? = nil, streakBest: Int = 0, showsClock: Bool = true) -> some View {
-        // A scratched play is no longer a play: it never unveils as one.
-        let sealed = sealable && !unveiled.contains(group.lead.candidateID) && !group.lead.scratched
-        return LabPlayModule(group: LabPlayModule.Model(
-            lead: group.lead, riders: group.riders, units: group.units, sealed: sealed,
-            leadState: state(group.lead), riderStates: group.riders.map { state($0) }),
-            streak: streak,
-            streakBest: streakBest,
-            showsClock: showsClock,
-            celebrate: revealing == group.lead.candidateID,
-            onOpen: { ticket in
-                AppCounts.once(.openedWinners)
-                if sealed { unveil = group.lead } else { path.append(LabRoute.play(ticket.candidateID)) }
-            },
-            onReseal: { if !sealed { reseal(group.lead.candidateID) } })
     }
 
     /// Today's plays still sealed, in page order: the streak pick, then the board.

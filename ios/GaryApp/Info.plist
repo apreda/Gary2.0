@@ -34,6 +34,12 @@
 	<array>
 		<string>BebasNeue-Regular.ttf</string>
 		<string>Caveat-SemiBold.ttf</string>
+		<string>MonaSans-Regular.ttf</string>
+		<string>MonaSans-Medium.ttf</string>
+		<string>MonaSans-SemiBold.ttf</string>
+		<string>MonaSans-Bold.ttf</string>
+		<string>MonaSansExpanded-Bold.ttf</string>
+		<string>MonaSansExpanded-ExtraBold.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

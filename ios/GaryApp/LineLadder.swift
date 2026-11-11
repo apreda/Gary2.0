@@ -319,13 +319,14 @@ struct LineLadderTable: View {
         if let o = story.moneylineOpen, let a = story.moneylineText(o), let b = story.moneylineText(n) { out.append(Row(id: "MONEYLINE", open: a, now: b, badge: story.moneylineBadge)) }
         return out
     }
-    private static let labelWidth: CGFloat = 60
+    private static let labelWidth: CGFloat = 72
     private static let badgeWidth: CGFloat = 46
 
     /// A column label that never trims: the kicker face, shrunk to fit.
-    private func label(_ text: String, color: Color = ScoutMock.warm.opacity(0.42)) -> some View {
+    private func label(_ text: String, color: Color = ScoutMock.warm.opacity(0.52)) -> some View {
+        // 10.5 at 0.52, the page's label size and contrast (Nov 10 2026: this table was 9 pt at 0.42).
         Text(text.uppercased())
-            .font(.system(size: 9, weight: .semibold).monospacedDigit()).tracking(1.0)
+            .font(.system(size: 10.5, weight: .semibold).monospacedDigit()).tracking(0.8)
             .foregroundStyle(color)
             .fitsOneLine().allowsTightening(true)
     }

@@ -24,7 +24,8 @@ enum ScoutMock {
     static let warm = Color(hex: "#F2EDE4")
     static let hairline = Color(hex: "#FFF8EB").opacity(0.09)
     /// One line that shrinks to fit, or every word wrapped (`wraps`); never "…".
-    @ViewBuilder static func kicker(_ s: String, size: CGFloat = 9, wraps: Bool = false) -> some View {
+    /// 10.5, not 9: the stat labels were the smallest type on the Picks page (Nov 10 2026).
+    @ViewBuilder static func kicker(_ s: String, size: CGFloat = 10.5, wraps: Bool = false) -> some View {
         let text = Text(s.uppercased()).font(.system(size: size, weight: .semibold).monospacedDigit())
             // 0.52, not 0.42: the stat labels measured 3.7 to 1 on the plates (Nov 10 2026); this is 5 to 1.
             .tracking(1.2).foregroundStyle(warm.opacity(0.52))

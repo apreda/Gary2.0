@@ -1211,7 +1211,8 @@ struct PicksCarouselView: View {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(GaryColors.warmWhite.opacity(0.85))
-                        .frame(width: 32, height: 32).contentShape(Rectangle())
+                        // The glyph keeps its 32 pt footprint; the touch area is a full 44 (Nov 10 2026).
+                        .frame(width: 32, height: 32).frame(width: 44, height: 44).contentShape(Rectangle()).padding(-6)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Search picks")
@@ -1505,7 +1506,7 @@ struct PicksCarouselView: View {
             Image(systemName: "calendar")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(viewingPastDay ? GaryColors.gold : GaryColors.warmWhite.opacity(0.85))
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).frame(width: 44, height: 44).contentShape(Rectangle()).padding(-6)
         }
         .accessibilityLabel(usesFootballWeeks ? "Choose a week" : "Choose a day")
     }

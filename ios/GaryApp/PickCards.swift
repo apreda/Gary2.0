@@ -635,8 +635,9 @@ struct CompactPickRow: View {
                         Image(systemName: "info.circle")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(shareTint)
-                            .frame(width: 22, height: 22)
-                            .contentShape(Rectangle())
+                            // A 22 pt glyph with a 44 pt tall touch area (Nov 10 2026).
+                            .frame(width: 22, height: 22).frame(width: 36, height: 44)
+                            .contentShape(Rectangle()).padding(.horizontal, -7).padding(.vertical, -11)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("How the picks work")
@@ -648,8 +649,8 @@ struct CompactPickRow: View {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(shareTint)
-                            .frame(width: 26, height: 22)
-                            .contentShape(Rectangle())
+                            .frame(width: 26, height: 22).frame(width: 40, height: 44)
+                            .contentShape(Rectangle()).padding(.horizontal, -7).padding(.vertical, -11)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Share this pick")
