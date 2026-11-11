@@ -176,6 +176,21 @@ describe('a failed download and the copy on disk', () => {
     expect(recent.fromDisk).toBe(true);
   });
 
+  it('a 404 for a file with a copy on disk is a failed download, not "not published", and is not kept', async () => {
+    const dir = copyOnDisk('injuries', 'season,team,week\n2026,ATL,9', 30);
+    const r = await loadNflverseFile('injuries', 2026, opts(dir, notFound));
+    expect(r.unavailable).toBe(true);
+    expect(r.reason).toBe('Could not reach nflverse for injuries_2026.csv: HTTP 404');
+    let asked = 0;
+    const good = async () => { asked += 1; return { status: 200, ok: true, text: async () => 'season,team,week\n2026,ATL,10' }; };
+    const next = await loadNflverseFile('injuries', 2026, opts(dir, good));
+    expect(asked).toBe(1);
+    expect(next.rows[0].week).toBe('10');
+    // A complete per-game copy stands in for the 404.
+    const team = await loadNflverseFile('stats_team_week', 2026, opts(copyOnDisk('stats_team_week', complete, 30), notFound));
+    expect(team.fromDisk).toBe(true);
+  });
+
   it('a 404 with no copy on disk still reads "has not published"', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'nflverse-empty-'));
     const r = await loadNflverseFile('stats_team_week', 2026, opts(dir, notFound));

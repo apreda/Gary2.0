@@ -24,7 +24,7 @@
  * today; Week 1 is Sep 9). That is reported as a stated fact, never as an
  * empty result — a missing file must not read as "nobody is hurt".
  */
-import { mkdirSync, writeFileSync, readFileSync, statSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -179,7 +179,10 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
   for (let attempt = 0; attempt < 2 && !value; attempt++) {
     try {
       const r = await fetchRelease(url, fetchImpl);
-      if (r.status === 404) {
+      if (r.status === 404 && disk && existsSync(file)) {
+        // A file with a copy on disk has been published: a 404 is nflverse re-uploading it, a failed download.
+        lastError = new Error('HTTP 404');
+      } else if (r.status === 404) {
         // The season has not started. A stated fact, never an empty list.
         value = { unavailable: true, reason: `nflverse has not published ${asset}_${season}.csv yet — that file appears once the ${season} season begins.` };
       } else if (r.status !== 200) {
