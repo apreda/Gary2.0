@@ -24,7 +24,7 @@
  * today; Week 1 is Sep 9). That is reported as a stated fact, never as an
  * empty result — a missing file must not read as "nobody is hurt".
  */
-import { mkdirSync, writeFileSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, statSync, existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -101,9 +101,9 @@ export function parseCsv(text) {
 const RELEASE_TAGS = { roster: 'rosters', roster_weekly: 'weekly_rosters', stats_team_week: 'stats_team', stats_player_week: 'stats_player',
   advstats_week_pass: 'pfr_advstats', advstats_week_def: 'pfr_advstats', advstats_week_rush: 'pfr_advstats', advstats_week_rec: 'pfr_advstats' };
 
-async function fetchRelease(url, fetchImpl) {
+async function fetchRelease(url, fetchImpl, timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, { signal: controller.signal });
     if (response.status === 404) return { status: 404 };
@@ -167,6 +167,18 @@ async function standInWhy(asset, season, rows, ageMs, scheduleRows) {
   return ageMs < DISK_MAX_AGE_MS ? 'it is under 12 hours old' : null;
 }
 
+// A good download's copy on disk, written whole and then moved into place, so a run reading it at that moment never gets
+// half a file (Nov 10 2026: the hourly warm below rewrites these every hour while picks read them).
+function saveCopy(diskDir, file, r) {
+  try {
+    mkdirSync(diskDir, { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, r.text); renameSync(tmp, file);
+    if (r.modified) writeFileSync(`${file}.modified`, r.modified);
+    return true;
+  } catch { return false; /* the copy is a convenience */ }
+}
+
 async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk = fetchImpl === globalThis.fetch, diskDir = DISK_DIR, scheduleRows = null } = {}) {
   const key = `${asset}_${season}`;
   const hit = cache.get(key);
@@ -189,7 +201,7 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
         lastError = new Error(`HTTP ${r.status}`);
       } else {
         value = { rows: parseCsv(r.text), modified: r.modified || null, real: disk };
-        if (disk) { try { mkdirSync(diskDir, { recursive: true }); writeFileSync(file, r.text); if (r.modified) writeFileSync(`${file}.modified`, r.modified); } catch { /* the copy is a convenience */ } }
+        if (disk) saveCopy(diskDir, file, r);
       }
     } catch (error) {
       lastError = error;
@@ -453,6 +465,28 @@ export async function getRosterTurnover(teamName, priorSeason, currentSeason, { 
 /** One nflverse season file as parsed rows, or { unavailable, reason }: weekly team and player stats, rosters. */
 export function loadNflverseFile(asset, season, opts = {}) {
   return loadRelease(asset, season, opts);
+}
+
+// THE HOURLY WARM (Nov 10 2026). The copies above are only as fresh as the last run that downloaded them, and on a
+// Sunday after a Thursday-only week the first NFL run is the 5:30 AM read: the injury report and weekly rosters were
+// over 12 hours old, so an outage at that hour would still stop the pick. The hourly NFL availability job (5:05 AM to
+// 11:05 PM) calls this after its lanes: every file loadRelease serves, downloaded once, each copy rewritten when its
+// download works and left as it was when it fails. It reads nothing back and fills no memo.
+const WARM_FILES = ['injuries', 'roster_weekly', 'roster', 'stats_team_week', 'stats_player_week', 'snap_counts', ...POSTED_LATER_FILES];
+export async function warmNflverseCopies({ season = null, fetchImpl = globalThis.fetch, diskDir = DISK_DIR, timeoutMs = 45_000 } = {}) {
+  const year = season ?? (await import('../../utils/dateUtils.js')).nflSeason();
+  const started = Date.now();
+  const files = await Promise.all(WARM_FILES.map(async (asset) => {
+    try {
+      const r = await fetchRelease(`${RELEASE_BASE}/${RELEASE_TAGS[asset] || asset}/${asset}_${year}.csv`, fetchImpl, timeoutMs);
+      if (r.status !== 200) return { asset, saved: false, why: `HTTP ${r.status}` };
+      const saved = saveCopy(diskDir, join(diskDir, `${asset}_${year}.csv`), r);
+      return { asset, saved, bytes: Buffer.byteLength(r.text), ...(saved ? {} : { why: 'could not write the copy' }) };
+    } catch (error) {
+      return { asset, saved: false, why: error?.name === 'AbortError' ? `no answer in ${Math.round(timeoutMs / 1000)} s` : (error?.message || String(error)) };
+    }
+  }));
+  return { season: year, ms: Date.now() - started, bytes: files.reduce((a, f) => a + (f.bytes || 0), 0), files };
 }
 
 /** Test seam. */

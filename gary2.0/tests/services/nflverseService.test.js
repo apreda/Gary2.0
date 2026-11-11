@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   parseCsv, nflverseCode, getPracticeReport, getSnapShare,
-  NFLVERSE_TEAM_CODES, _clearNflverseCache, loadNflverseFile
+  NFLVERSE_TEAM_CODES, _clearNflverseCache, loadNflverseFile, warmNflverseCopies
 } from '../../src/services/providers/nflverseService.js';
-import { mkdtempSync, writeFileSync, utimesSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, utimesSync, existsSync, statSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -208,5 +208,23 @@ describe('a failed download and the copy on disk', () => {
     expect(existsSync(join(dir, 'stats_team_week_2026.csv.modified'))).toBe(true);
     await loadNflverseFile('stats_team_week', 2026, opts(dir, good));
     expect(asked).toBe(1);
+  });
+
+  it('the hourly warm rewrites each copy whose download works and leaves the others as they were', async () => {
+    const dir = copyOnDisk('injuries', 'season,team,week\n2026,ATL,9', 30);
+    const before = statSync(join(dir, 'injuries_2026.csv')).mtimeMs;
+    const fetchImpl = async (url) => (url.includes('/injuries/') ? timeout()
+      : url.includes('roster_weekly') ? { status: 500, ok: false }
+        : { status: 200, ok: true, text: async () => `body of ${url.split('/').pop()}`, headers: { get: () => null } });
+    const r = await warmNflverseCopies({ season: 2026, fetchImpl, diskDir: dir });
+    expect(r.files).toHaveLength(10);
+    expect(r.files.filter((f) => f.saved).map((f) => f.asset).sort()).toEqual(['advstats_week_def', 'advstats_week_pass', 'advstats_week_rec',
+      'advstats_week_rush', 'roster', 'snap_counts', 'stats_player_week', 'stats_team_week']);
+    expect(r.files.find((f) => f.asset === 'roster_weekly').why).toBe('HTTP 500');
+    expect(readFileSync(join(dir, 'snap_counts_2026.csv'), 'utf8')).toBe('body of snap_counts_2026.csv');
+    expect(readFileSync(join(dir, 'injuries_2026.csv'), 'utf8')).toBe('season,team,week\n2026,ATL,9');
+    expect(statSync(join(dir, 'injuries_2026.csv')).mtimeMs).toBe(before);
+    expect(existsSync(join(dir, 'roster_weekly_2026.csv'))).toBe(false);
+    expect(readdirSync(dir).some((f) => f.endsWith('.tmp'))).toBe(false);
   });
 });

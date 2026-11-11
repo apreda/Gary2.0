@@ -1145,6 +1145,21 @@ async function run() {
     }
   }
 
+  // NFL: refresh the nflverse copies on disk that a pick falls back on when a download fails (Nov 10 2026). Its own
+  // time limit; a failure is one log line and never fails or holds up this job.
+  if (leagues.includes('NFL') && !judgmentsOnly && !cardsOnly) {
+    try {
+      const warm = await Promise.race([
+        import('./src/services/providers/nflverseService.js').then((m) => m.warmNflverseCopies({ timeoutMs: 45_000 })),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('no answer in 50 s')), 50_000).unref()),
+      ]);
+      const failed = warm.files.filter((f) => !f.saved);
+      console.log(`   [nflverse copies] ${warm.files.length - failed.length} of ${warm.files.length} saved, ${(warm.bytes / 1e6).toFixed(1)} MB in ${(warm.ms / 1000).toFixed(1)} s${failed.length ? `; not saved: ${failed.map((f) => `${f.asset} (${f.why})`).join(', ')}` : ''}`);
+    } catch (error) {
+      console.warn(`   [nflverse copies] not refreshed: ${error?.message || error}`);
+    }
+  }
+
   console.log(
     `\n${dryRun ? '🧪 DRY RUN complete' : '✅ Done'} — ${totalRows} row(s) ` +
       `${dryRun ? 'computed' : 'processed'} for ${targetDate}.`
