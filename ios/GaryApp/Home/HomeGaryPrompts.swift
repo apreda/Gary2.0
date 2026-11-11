@@ -1,12 +1,11 @@
 import Foundation
 
-/// One of the three prompts around Gary on Home (founder, Oct 30 2026: "prompting people to look at the Dart
-/// page or the Parlay of the day has arrived and those kinds of things", beside last night, tonight and the
-/// run). Each spot on Gary owns one page: his shoulder the parlay of the day, his pocket the darts, his shoe the
-/// picks. `key` names the news and changes when the news does, so a prompt reads as new (green dot, the spot
+/// One of the two prompts around Gary on Home (founder, Oct 30 2026: "prompting people to look at the Dart
+/// page or the Parlay of the day has arrived and those kinds of things", beside last night and the run). Each
+/// spot on Gary owns one page: his shoulder the parlay of the day, his hip the darts. `key` names the news and changes when the news does, so a prompt reads as new (green dot, the spot
 /// on Gary pulsing) until it has been seen; a prompt with no key is never news.
 struct GaryPrompt: Equatable {
-    enum Spot: String { case shoulder, pocket, shoe }
+    enum Spot: String { case shoulder, hip }
     let spot: Spot
     let key: String?
     let kicker: String
@@ -42,25 +41,25 @@ enum GaryPrompts {
         let legs: Int
     }
 
-    /// His pocket: tonight's darts once they're up, then the biggest one that hit. Before the day's darts,
+    /// His hip: tonight's darts once they're up, then the biggest one that hit. Before the day's darts,
     /// last night's hits. The Darts page only celebrates hits, and so does this.
     static func darts(date: String, today: [Dart], yesterdayHits: [Dart]) -> GaryPrompt? {
         if !today.isEmpty {
             let hits = today.filter { $0.result == "hit" }
             if let best = biggest(hits) {
                 let words = dartWords(best)
-                return GaryPrompt(spot: .pocket, key: "darts-hit:\(date):\(hits.count)",
+                return GaryPrompt(spot: .hip, key: "darts-hit:\(date):\(hits.count)",
                                   kicker: hits.count == 1 ? "A DART HIT" : "\(hits.count) DARTS HIT", newKicker: nil,
                                   news: "\(words.name)\n\(words.what)", hook: best.odds.map(odds), hookWins: true)
             }
             let longest = today.compactMap(\.odds).max()
-            return GaryPrompt(spot: .pocket, key: "darts-up:\(date)", kicker: "DARTS", newKicker: "JUST IN",
+            return GaryPrompt(spot: .hip, key: "darts-up:\(date)", kicker: "DARTS", newKicker: "JUST IN",
                               news: "\(today.count) \(today.count == 1 ? "DART" : "DARTS")\nUP TONIGHT",
                               hook: longest.flatMap { $0 > 0 ? "LONGEST \(odds($0))" : nil }, hookWins: false)
         }
         guard let best = biggest(yesterdayHits) else { return nil }
         let n = yesterdayHits.count
-        return GaryPrompt(spot: .pocket, key: nil, kicker: "LAST NIGHT", newKicker: nil,
+        return GaryPrompt(spot: .hip, key: nil, kicker: "LAST NIGHT", newKicker: nil,
                           news: n == 1 ? "A DART\nHIT" : "\(n) DARTS\nHIT", hook: best.odds.map(odds), hookWins: true)
     }
 
@@ -90,18 +89,6 @@ enum GaryPrompts {
             return GaryPrompt(spot: .shoulder, key: "parlay:\(date)", kicker: "PARLAY", newKicker: "JUST IN",
                               news: name, hook: odds(p.odds), hookWins: false)
         }
-    }
-
-    /// His shoe: tonight's slate until Gary picks, then his picks, new again with every pick that lands.
-    static func picks(date: String, picks: Int, games: Int) -> GaryPrompt? {
-        if picks > 0 {
-            return GaryPrompt(spot: .shoe, key: "picks:\(date):\(picks)", kicker: "PICKS", newKicker: "JUST IN",
-                              news: "GARY'S PICKS\nARE IN",
-                              hook: picks >= games ? "ALL \(picks) GAMES" : "\(picks) OF \(games) GAMES", hookWins: false)
-        }
-        guard games > 0 else { return nil }
-        return GaryPrompt(spot: .shoe, key: nil, kicker: "PICKS", newKicker: nil,
-                          news: "\(games) \(games == 1 ? "GAME" : "GAMES")\nTONIGHT", hook: nil, hookWins: false)
     }
 
     /// "+170", "−110".

@@ -8,17 +8,15 @@ import SwiftUI
 /// container ... like a scientific diagram", replacing the Bento: "it's not an analytics dashboard").
 /// Gary is an old-school gambler, not a flashy one ("think more Mike Ditka"): sweater vest, loosened tie,
 /// pencil behind his ear. He's alive (GaryIdleFigure): he stands a while, then lives a moment from a drawn
-/// clip. Six labels point at his outline the way a diagram labels a figure: last night at his sunglasses,
-/// tonight's Winners at his hip, the run of nights at his leg, and three prompts that change through the day
-/// (founder: "the Parlay of the day has arrived and those kinds of things"): the parlay at his shoulder, the
-/// darts at his other hip, his picks at his shoe. A prompt that's new
-/// wears a green dot and its spot on Gary pulses until it's been seen. Gary and his three open Winners.
+/// clip. Labels point at his outline the way a diagram labels a figure: last night at his sunglasses and ASK
+/// GARY at his jaw on the left; on the right two prompts that change through the day (founder: "the Parlay of
+/// the day has arrived and those kinds of things"), the parlay at his shoulder and the darts at his hip, then
+/// the run of nights at his leg. (Nov 10 2026, founder: TONIGHT and the picks prompt came off, and the darts
+/// moved right, to free up the left.) A prompt that's new wears a green dot and its spot on Gary pulses until
+/// it's been seen. Gary and his last night open Winners.
 struct HomeGaryOpening: View {
-    enum Door { case winners, darts, parlay, picks }
+    enum Door { case winners, darts, parlay }
 
-    /// Gary's picks on today's slate, and the games on it (the board's own counts).
-    var picks = 0
-    var games = 0
     /// The question his ASK GARY label offers (founder, Oct 30 2026: "give the Gary on the home page of the
     /// App a real voice people can ask questions to"). Tapping the label, he listens right here (HomeGaryTalk);
     /// the question waits under LISTENING to tap instead. Nil, no label and no talking.
@@ -34,11 +32,9 @@ struct HomeGaryOpening: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var figureOnScreen = true
     @State private var bankroll: GaryBankrollSnapshot?
-    @State private var tonight: LabBoard?
     @State private var darts: DartsBoard?
     @State private var parlay: ParlaySlipModel?
     @State private var lastParlay: ParlaySlipModel?
-    @State private var now = Date()
     /// His prop is out past him (the whiteboard up, a ball spinning by his head): the leaders step back so no
     /// pin lands on it, and he plays in front of the labels.
     @State private var performing = false
@@ -66,7 +62,7 @@ struct HomeGaryOpening: View {
     #endif
 
     static let height: CGFloat = 408
-    /// The ASK GARY label's top: under last night's, clear of the darts prompt at his pocket.
+    /// The ASK GARY label's top: under last night's.
     private static let askY: CGFloat = 100
     private static let garyHeight: CGFloat = 344
     private static let garyTop: CGFloat = 28
@@ -164,28 +160,25 @@ struct HomeGaryOpening: View {
                         tap(.winners, key: nil) { lastNightLabel(d) }
                             .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
                     }
-                    tap(.winners, key: nil) { tonightLabel }
-                        .fixedSize()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["tonight"] = $0 }
-                        .offset(x: rightX("tonight", w, 100), y: 226)
                     if run.count > 0 {
                         tap(.winners, key: nil) { streakLabel }
                             .fixedSize()
                             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["streak"] = $0 }
                             .offset(x: rightX("streak", w, 94), y: 316)
                     }
+                    // Both prompts sit on the right, flush to the edge by their own width; a long dart name
+                    // shrinks to the width his hip leaves.
                     ForEach(prompts, id: \.spot) { p in
-                        let place = Self.place(p.spot, width: w)
-                        if p.spot == .shoulder {
-                            tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                                .fixedSize()
-                                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["shoulder"] = $0 }
-                                .offset(x: rightX("shoulder", w, place.width), y: place.y)
-                        } else {
-                            tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                                .frame(width: place.width, alignment: .leading)
-                                .offset(x: place.x, y: place.y)
-                        }
+                        let place = Self.place(p.spot)
+                        let key = p.spot.rawValue
+                        let x = rightX(key, w, place.width, cap: place.cap)
+                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
+                            .frame(width: w - x, alignment: .leading)
+                            .background(alignment: .topLeading) {
+                                promptLabel(p).fixedSize().hidden()
+                                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths[key] = $0 }
+                            }
+                            .offset(x: x, y: place.y)
                     }
                     Text("FIG. 1 — GARY")
                         .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
@@ -211,9 +204,6 @@ struct HomeGaryOpening: View {
             if cue.close { endTalk() } else { startTalk(first: cue.first) }
         }
         .task(id: live) {
-            if tonight == nil {
-                tonight = SupabaseAPI.cachedLabBoard(date: slate, account: AuthManager.shared.currentUser?.id)
-            }
             guard live else { return }
             while !Task.isCancelled {
                 await refresh()
@@ -288,50 +278,44 @@ struct HomeGaryOpening: View {
 
     // MARK: - The figure
 
-    /// Where each prompt sits around him (x from the left edge, the label's width).
-    private static func place(_ spot: GaryPrompt.Spot, width w: CGFloat) -> (x: CGFloat, y: CGFloat, width: CGFloat) {
+    /// Where each prompt sits on the right (its top, its width before it's measured, the most it may take).
+    private static func place(_ spot: GaryPrompt.Spot) -> (y: CGFloat, width: CGFloat, cap: CGFloat) {
         switch spot {
         // A touch lower than it was, clear of his cigar and above his arm (founder, Oct 30 2026: "move the
         // parlay of the day thing down a bit just so it's not blocking his cigar").
-        case .shoulder: return (w - 94, 64, 94)
-        case .pocket: return (0, 196, 100)
-        case .shoe: return (0, 294, 92)
+        case .shoulder: return (64, 94, .infinity)
+        // Where TONIGHT sat, its leader level with his hip; no wider than the darts were on the left.
+        case .hip: return (206, 100, 100)
         }
     }
 
     private static func door(_ spot: GaryPrompt.Spot) -> Door {
         switch spot {
         case .shoulder: return .parlay
-        case .pocket: return .darts
-        case .shoe: return .picks
+        case .hip: return .darts
         }
     }
 
-    /// Where a right-hand label starts: flush to the right edge by its own width.
-    private func rightX(_ key: String, _ w: CGFloat, _ fallback: CGFloat) -> CGFloat {
-        w - (rightWidths[key] ?? fallback)
+    /// Where a right-hand label starts: flush to the right edge by its own width, at most `cap` of it.
+    private func rightX(_ key: String, _ w: CGFloat, _ fallback: CGFloat, cap: CGFloat = .infinity) -> CGFloat {
+        w - min(rightWidths[key] ?? fallback, cap)
     }
 
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
     /// The diagram's lines; while you talk to him, only ASK's, at his mouth.
     private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt], talking: Bool = false) -> some View {
-        let tx = rightX("tonight", w, 100), sx = rightX("streak", w, 94)
+        let sx = rightX("streak", w, 94)
         var lines: [(CGPoint, CGPoint, CGPoint)] = []
         if !talking {
-            lines.append((CGPoint(x: tx - 6, y: 232), CGPoint(x: tx - 20, y: 232), at(GaryIdleFigure.hip)))
             if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
             if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
         }
         if ask != nil { lines.append((CGPoint(x: 84, y: Self.askY + 30), CGPoint(x: 100, y: Self.askY + 30), at(GaryIdleFigure.jaw))) }
         for p in talking ? [] : prompts {
-            let to = at(GaryIdleFigure.anchor(p.spot))
-            switch p.spot {
-            case .shoulder:
-                let px = rightX("shoulder", w, 94)
-                lines.append((CGPoint(x: px - 6, y: 80), CGPoint(x: px - 20, y: 80), to))
-            case .pocket: lines.append((CGPoint(x: 84, y: 214), CGPoint(x: 100, y: 214), to))
-            case .shoe: lines.append((CGPoint(x: 78, y: 320), CGPoint(x: 94, y: 320), to))
-            }
+            let place = Self.place(p.spot)
+            let px = rightX(p.spot.rawValue, w, place.width, cap: place.cap)
+            let y = place.y + (p.spot == .shoulder ? 16 : 18)
+            lines.append((CGPoint(x: px - 6, y: y), CGPoint(x: px - 20, y: y), at(GaryIdleFigure.anchor(p.spot))))
         }
         return Canvas { ctx, _ in
             for (from, elbow, to) in lines {
@@ -374,34 +358,6 @@ struct HomeGaryOpening: View {
         }
     }
 
-    private var tonightLabel: some View {
-        let t = tonightWords
-        return VStack(alignment: .leading, spacing: 2) {
-            kicker("TONIGHT")
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(t.top)
-                    .font(GaryFonts.display(25)).foregroundStyle(GaryColors.warmWhite)
-                    .monospacedDigit().fitsOneLine()
-                if let state = t.state {
-                    Text(state)
-                        .font(GaryFonts.kicker(9, .bold)).tracking(1.2)
-                        .foregroundStyle(state == "LIVE" ? GaryColors.win : GaryColors.silver)
-                        .fixedSize()
-                }
-            }
-            if let money = t.money {
-                HStack(spacing: 4) {
-                    Text(LabFormat.unitsNet(money))
-                        .font(GaryFonts.display(19)).foregroundStyle(moneyColor(money))
-                        .monospacedDigit().fitsOneLine()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(GaryColors.gold)
-                }
-            }
-        }
-    }
-
     private var streakLabel: some View {
         let r = run
         let hot = r.sign > 0
@@ -429,7 +385,7 @@ struct HomeGaryOpening: View {
 
     // MARK: - The prompts
 
-    /// The three around him, as the day stands.
+    /// The two around him, as the day stands.
     private var prompts: [GaryPrompt] {
         let today = (darts?.today ?? []).filter { !$0.isScratched }.map {
             GaryPrompts.Dart(id: $0.id, player: $0.player, kind: $0.kind, prop: $0.prop, bet: $0.bet, odds: $0.odds, result: $0.result)
@@ -441,7 +397,6 @@ struct HomeGaryOpening: View {
         return [
             GaryPrompts.parlay(date: slate, today: parlay.map(Self.lean), yesterday: lastParlay.map(Self.lean)),
             darts == nil ? nil : GaryPrompts.darts(date: slate, today: today, yesterdayHits: yesterday),
-            GaryPrompts.picks(date: slate, picks: picks, games: games),
         ].compactMap { $0 }
     }
 
@@ -553,17 +508,14 @@ struct HomeGaryOpening: View {
     }
 
     @MainActor private func refresh() async {
-        now = Date()
-        async let board = try? SupabaseAPI.fetchLabBoard(date: slate)
         async let money: GaryBankrollSnapshot? = {
             guard let data = try? await WinnersAccessStore.request("rest/v1/rpc/get_gary_bankroll", body: [:]) else { return nil }
             return try? JSONDecoder().decode(GaryBankrollSnapshot.self, from: data)
         }()
         async let dartBoard = try? SupabaseAPI.fetchDarts(date: slate)
         async let todayParlay = try? SupabaseAPI.fetchParlay(date: slate)
-        let (b, m, d, p) = await (board, money, dartBoard, todayParlay)
+        let (m, d, p) = await (money, dartBoard, todayParlay)
         guard !Task.isCancelled else { return }
-        if let b { tonight = b }
         if let m { bankroll = m }
         if let d { darts = d }
         if let p { parlay = p }
@@ -621,42 +573,6 @@ struct HomeGaryOpening: View {
         units > 0.0049 ? GaryColors.win : units < -0.0049 ? GaryColors.loss : GaryColors.silver
     }
 
-    // MARK: - Tonight
-
-    private var bets: [LabBoardTicket] { (tonight?.tickets ?? []).filter { !$0.scratched } }
-    private var lockedCount: Int { (tonight?.boards ?? []).filter(\.locked).reduce(0) { $0 + $1.count } }
-    private var sealed: Bool { lockedCount > 0 && bets.isEmpty }
-    private func settled(_ t: LabBoardTicket) -> Bool { t.outcome?.result.map { !$0.isEmpty } ?? false }
-    private var underway: Bool {
-        bets.contains { settled($0) || (LabFormat.parseISO($0.commence).map { $0 <= now } ?? false) }
-    }
-
-    /// Tonight's line once a bet has started: the record and the money so far.
-    private var tonightLine: (record: String, units: Double) {
-        var won = 0, lost = 0, units = 0.0
-        for t in bets where settled(t) {
-            let stake = t.stakeUnits ?? 0
-            switch LabTicketState(result: t.outcome?.result) {
-            case .won: won += 1; units += stake * LabFormat.payout(t.price)
-            case .lost: lost += 1; units -= stake
-            case .push, .open: break
-            }
-        }
-        return ("\(won)–\(lost)", units)
-    }
-
-    /// The hand's label: tonight's Winners headline, LIVE or FINAL beside it, and the money once there is some.
-    private var tonightWords: (state: String?, top: String, money: Double?) {
-        let count = bets.count + lockedCount
-        if sealed { return (nil, "SEALED", nil) }
-        if !underway { return (nil, count > 0 ? "\(count) \(count == 1 ? "BET" : "BETS")" : "WINNERS", nil) }
-        if !bets.contains(where: settled) {
-            let live = bets.filter { LabFormat.parseISO($0.commence).map { $0 <= now } ?? false }.count
-            return ("LIVE", "\(live) ON", nil)
-        }
-        let line = tonightLine
-        return (bets.allSatisfy(settled) ? "FINAL" : "LIVE", line.record, line.units)
-    }
 }
 
 /// Gary alive on Home (founder, Oct 30 2026: "a live character who is fluid, does his own thing, moves around
@@ -689,13 +605,11 @@ struct GaryIdleFigure: View {
     /// Where the labels point on the stance: always his outline, about level with each label, so a line never
     /// crosses him and his hands never cover one (founder, Oct 30 2026: "the lines should stay to the outer
     /// parts of Gary"). The edge of his sunglasses, his right hip, the outside of his right leg, his right
-    /// shoulder, his left hip, the toe of his left shoe.
+    /// shoulder.
     static let head = CGPoint(x: 0.34, y: 0.09)
     static let hip = CGPoint(x: 0.75, y: 0.59)
     static let leg = CGPoint(x: 0.645, y: 0.86)
     static let shoulder = CGPoint(x: 0.73, y: 0.25)
-    static let pocket = CGPoint(x: 0.29, y: 0.57)
-    static let shoe = CGPoint(x: 0.12, y: 0.955)
     /// The left of his jaw, under the sunglasses: where ASK GARY points.
     static let jaw = CGPoint(x: 0.33, y: 0.2)
 
@@ -703,8 +617,7 @@ struct GaryIdleFigure: View {
     static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {
         switch spot {
         case .shoulder: return shoulder
-        case .pocket: return pocket
-        case .shoe: return shoe
+        case .hip: return hip
         }
     }
 

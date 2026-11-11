@@ -1041,23 +1041,21 @@ struct HomeView: View {
                 .animation(.easeOut(duration: 0.6).delay(0.04), value: animateIn)
         }
 
-        // ── GARY (founder, Oct 30 2026): Gary in his vest, labelled like a diagram with last night, tonight's
-        // Winners and his run of nights, plus three prompts that change with the day (the parlay of the day,
-        // the darts, his picks), in place of the Bento ("it's not an analytics dashboard"). Each finished
+        // ── GARY (founder, Oct 30 2026): Gary in his vest, labelled like a diagram with last night and his run
+        // of nights, plus two prompts that change with the day (the parlay of the day, the darts; TONIGHT and
+        // the picks prompt came off Nov 10), in place of the Bento ("it's not an analytics dashboard"). Each finished
         // game's story opens from its own row on the board (HomeBoardStory).
         // Talking to him brings all of him on screen, the captions under him included (he sits under the
         // scoreboard, so they'd start below the fold).
         ScrollViewReader { proxy in
-            HomeGaryOpening(picks: todayPicks.filter { !$0.isScratched }.count,
-                            games: sheetRows.filter { $0.league != HomeBoardLeague.you.rawValue }.count,
-                            ask: talkAvailable ? talkQuestion : nil,
+            HomeGaryOpening(ask: talkAvailable ? talkQuestion : nil,
                             talkCue: talkCue,
                             onTalk: { on in
                                 guard on else { return }
                                 withAnimation(.easeInOut(duration: 0.5)) { proxy.scrollTo("garyOpening", anchor: .center) }
                             }) { door in
                 if door == .parlay { UserDefaults.standard.set(true, forKey: DartsView.openParlayKey) }
-                let tab: Int = { switch door { case .winners: return 1; case .darts, .parlay: return 2; case .picks: return 3 } }()
+                let tab: Int = { switch door { case .winners: return 1; case .darts, .parlay: return 2 } }()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedTab = tab }
             }
             .id("garyOpening")
