@@ -105,18 +105,21 @@ North Carolina Tar Heels (5-3):
   });
 });
 
-// Nov 10 2026: an opponent's games keep who played quarterback that day and drop the figures after him.
+// Nov 10 2026, founder: nothing is cut because Gary did not use it. An opponent's games read in full by default;
+// NCAAF_OPP_GAMES_DETAIL=0 keeps who played quarterback that day and drops the figures after him, kept for later.
 describe('oppGamesEntry', () => {
   const full = 'QB Nate Bennett (started) and Edward Griffin; ran 223 on 40, passed for 333, sacked 1; allowed 36 rushing (including 4 sacks), 74 passing, 4 sacks made';
-  it('keeps the quarterback only, and nothing when no quarterback is named', () => {
+  const withEnv = (v, fn) => { const was = process.env.NCAAF_OPP_GAMES_DETAIL; if (v === undefined) delete process.env.NCAAF_OPP_GAMES_DETAIL; else process.env.NCAAF_OPP_GAMES_DETAIL = v;
+    try { return fn(); } finally { if (was === undefined) delete process.env.NCAAF_OPP_GAMES_DETAIL; else process.env.NCAAF_OPP_GAMES_DETAIL = was; } };
+  it('gives the full entry by default and with NCAAF_OPP_GAMES_DETAIL=1', () => {
+    expect(withEnv(undefined, () => oppGamesEntry(full))).toBe(full);
+    expect(withEnv('1', () => oppGamesEntry(full))).toBe(full);
+  });
+  it('keeps the quarterback only with NCAAF_OPP_GAMES_DETAIL=0, and nothing when no quarterback is named', () => withEnv('0', () => {
     expect(oppGamesEntry(full)).toBe('QB Nate Bennett (started) and Edward Griffin');
     expect(oppGamesEntry('ran 120 on 30, passed for 310')).toBe(null);
     expect(oppGamesEntry('units not on file')).toBe(null);
-  });
-  it('gives back the full entry with NCAAF_OPP_GAMES_DETAIL=1', () => {
-    process.env.NCAAF_OPP_GAMES_DETAIL = '1';
-    try { expect(oppGamesEntry(full)).toBe(full); } finally { delete process.env.NCAAF_OPP_GAMES_DETAIL; }
-  });
+  }));
 });
 
 describe('usualStartersMissing', () => {
