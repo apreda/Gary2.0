@@ -8,12 +8,15 @@ import SwiftUI
 /// container ... like a scientific diagram", replacing the Bento: "it's not an analytics dashboard").
 /// Gary is an old-school gambler, not a flashy one ("think more Mike Ditka"): sweater vest, loosened tie,
 /// pencil behind his ear. He's alive (GaryIdleFigure): he stands a while, then lives a moment from a drawn
-/// clip. Labels point at his outline the way a diagram labels a figure: last night at his sunglasses and ASK
-/// GARY at his jaw on the left; on the right two prompts that change through the day (founder: "the Parlay of
-/// the day has arrived and those kinds of things"), the parlay at his shoulder and the darts at his hip, then
-/// the run of nights at his leg. (Nov 10 2026, founder: TONIGHT and the picks prompt came off, and the darts
-/// moved right, to free up the left.) A prompt that's new wears a green dot and its spot on Gary pulses until
-/// it's been seen. Gary and his last night open Winners.
+/// clip. Labels point at his outline the way a diagram labels a figure, two a side (Nov 10 2026, founder on
+/// the five that stood round him: "a lot of stuff around gary that needs like reformed or just re organized").
+/// His left is Gary himself: ASK GARY at his jaw, and under it last night's money at his pocket. His right is
+/// tonight, two prompts that change through the day (founder: "the Parlay of the day has arrived and those
+/// kinds of things"): the parlay at his shoulder, the darts at his hip. Every label is the same three lines, a
+/// small gold kicker, the words, a gold hook with a chevron; the left ones sit on the left margin and the
+/// right ones on the right. The run of nights is a line under last night, and only a winning run of three or
+/// more gets its own figure and flame, at his leg. One thing at a time reads as new: a green dot on its
+/// kicker and its spot on Gary pulsing until it's been seen. Gary and his last night open Winners.
 struct HomeGaryOpening: View {
     enum Door { case winners, darts, parlay }
 
@@ -38,9 +41,10 @@ struct HomeGaryOpening: View {
     /// His prop is out past him (the whiteboard up, a ball spinning by his head): the leaders step back so no
     /// pin lands on it, and he plays in front of the labels.
     @State private var performing = false
-    /// The right-hand labels' own widths, so each sits flush to the right edge as the left ones sit to the left
-    /// (founder, Oct 30 2026: "bumped away from Gary so it's closer to the edge the way the other side is").
-    @State private var rightWidths: [String: CGFloat] = [:]
+    /// Each label's own width and its kicker's, so its leader starts where the kicker's words end and turns
+    /// toward Gary clear of the longest line.
+    @State private var blockWidths: [String: CGFloat] = [:]
+    @State private var kickerWidths: [String: CGFloat] = [:]
     /// Prompt keys already seen, newest last.
     @AppStorage("garyPromptsSeen") private var seenRaw = ""
     /// He's been talked to once: the ASK label stops wearing NEW.
@@ -62,8 +66,23 @@ struct HomeGaryOpening: View {
     #endif
 
     static let height: CGFloat = 408
-    /// The ASK GARY label's top: under last night's.
-    private static let askY: CGFloat = 100
+    /// One label of the figure: the side it sits on, its top, the most width Gary leaves it there, and the spot
+    /// on his outline it points at.
+    private struct Slot { let key: String; let left: Bool; let y: CGFloat; let width: CGFloat; let anchor: CGPoint }
+    /// Two rows, each level across him: the top pair at his head, the lower pair under his elbows, where each
+    /// leader runs in below his fist.
+    private static let topRow: CGFloat = 60, lowRow: CGFloat = 214
+    private static let askSlot = Slot(key: "ask", left: true, y: topRow, width: 104, anchor: GaryIdleFigure.jaw)
+    private static let lastSlot = Slot(key: "last", left: true, y: lowRow, width: 104, anchor: GaryIdleFigure.pocket)
+    private static let runSlot = Slot(key: "run", left: true, y: 304, width: 104, anchor: GaryIdleFigure.leftLeg)
+    private static func slot(_ spot: GaryPrompt.Spot) -> Slot {
+        switch spot {
+        // Clear of his cigar and above his arm (founder, Oct 30 2026: "move the parlay of the day thing down a
+        // bit just so it's not blocking his cigar").
+        case .shoulder: return Slot(key: "shoulder", left: false, y: topRow, width: 112, anchor: GaryIdleFigure.shoulder)
+        case .hip: return Slot(key: "hip", left: false, y: lowRow, width: 108, anchor: GaryIdleFigure.hip)
+        }
+    }
     /// 10% smaller than the 344 he stood at, shrunk about his middle so the labels stay put (founder, Nov 10 2026:
     /// "Gary just like 10% smaller ... only Gary").
     private static let garyHeight: CGFloat = 310
@@ -130,13 +149,8 @@ struct HomeGaryOpening: View {
 
                 Group {
                     leaders(width: w, at: at, prompts: prompts, talking: talkOn)
-                    if !talkOn {
-                        ForEach(prompts.filter { fresh($0) }, id: \.spot) { p in
-                            PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.anchor(p.spot)))
-                        }
-                        if ask != nil && !talkSeen {
-                            PromptPulse(still: reduceMotion).position(at(GaryIdleFigure.jaw))
-                        }
+                    if !talkOn, let spot = newSpot(prompts) {
+                        PromptPulse(still: reduceMotion).position(at(spot))
                     }
                 }
                 .opacity(performing ? 0 : 1)
@@ -144,43 +158,32 @@ struct HomeGaryOpening: View {
                 if let ask {
                     if talkOn {
                         GaryTalkStateLabel(talk: talk, suggestion: ask) { q in talk.ask(q, spoken: true) }
-                            .frame(width: 104, alignment: .leading)
-                            .offset(x: 0, y: Self.askY)
+                            .frame(width: Self.askSlot.width, alignment: .leading)
+                            .offset(x: 0, y: Self.askSlot.y)
                             .transition(.opacity)
                     } else {
-                        Button { startTalk(first: nil) } label: { askLabel(ask).contentShape(Rectangle()) }
+                        placed(Self.askSlot, w) {
+                            Button { startTalk(first: nil) } label: {
+                                askLabel(ask, isNew: askIsNew(prompts)).contentShape(Rectangle())
+                            }
                             .buttonStyle(.plain)
-                            .frame(width: 100, alignment: .leading)
-                            .offset(x: 0, y: Self.askY)
                             .accessibilityLabel("Ask Gary")
                             .accessibilityHint("He listens. Or say: \(ask)")
-                            .transition(.opacity)
+                        }
+                        .transition(.opacity)
                     }
                 }
                 Group {
                     if let d = lastNight {
-                        tap(.winners, key: nil) { lastNightLabel(d) }
-                            .frame(width: 100, alignment: .leading).offset(x: 0, y: 22)
+                        placed(Self.lastSlot, w) { tap(.winners, key: nil) { lastNightLabel(d) } }
                     }
-                    if run.count > 0 {
-                        tap(.winners, key: nil) { streakLabel }
-                            .fixedSize()
-                            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths["streak"] = $0 }
-                            .offset(x: rightX("streak", w, 94), y: 316)
+                    if showsRun {
+                        placed(Self.runSlot, w) { tap(.winners, key: nil) { streakLabel } }
                     }
-                    // Both prompts sit on the right, flush to the edge by their own width; a long dart name
-                    // shrinks to the width his hip leaves.
                     ForEach(prompts, id: \.spot) { p in
-                        let place = Self.place(p.spot)
-                        let key = p.spot.rawValue
-                        let x = rightX(key, w, place.width, cap: place.cap)
-                        tap(Self.door(p.spot), key: p.key) { promptLabel(p) }
-                            .frame(width: w - x, alignment: .leading)
-                            .background(alignment: .topLeading) {
-                                promptLabel(p).fixedSize().hidden()
-                                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rightWidths[key] = $0 }
-                            }
-                            .offset(x: x, y: place.y)
+                        placed(Self.slot(p.spot), w) {
+                            tap(Self.door(p.spot), key: p.key) { promptLabel(p, isNew: isNew(p, among: prompts)) }
+                        }
                     }
                     Text("FIG. 1 · GARY")
                         .font(.system(size: 9, weight: .semibold).italic()).tracking(1.2)
@@ -280,17 +283,6 @@ struct HomeGaryOpening: View {
 
     // MARK: - The figure
 
-    /// Where each prompt sits on the right (its top, its width before it's measured, the most it may take).
-    private static func place(_ spot: GaryPrompt.Spot) -> (y: CGFloat, width: CGFloat, cap: CGFloat) {
-        switch spot {
-        // A touch lower than it was, clear of his cigar and above his arm (founder, Oct 30 2026: "move the
-        // parlay of the day thing down a bit just so it's not blocking his cigar").
-        case .shoulder: return (64, 94, .infinity)
-        // Where TONIGHT sat, its leader level with his hip; no wider than the darts were on the left.
-        case .hip: return (206, 100, 100)
-        }
-    }
-
     private static func door(_ spot: GaryPrompt.Spot) -> Door {
         switch spot {
         case .shoulder: return .parlay
@@ -298,26 +290,38 @@ struct HomeGaryOpening: View {
         }
     }
 
-    /// Where a right-hand label starts: flush to the right edge by its own width, at most `cap` of it.
-    private func rightX(_ key: String, _ w: CGFloat, _ fallback: CGFloat, cap: CGFloat = .infinity) -> CGFloat {
-        w - min(rightWidths[key] ?? fallback, cap)
+    /// A label in its slot: on the left margin or the right one, its width kept for its leader.
+    private func placed<L: View>(_ slot: Slot, _ w: CGFloat, @ViewBuilder _ label: () -> L) -> some View {
+        label()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { blockWidths[slot.key] = $0 }
+            .frame(width: slot.width, alignment: slot.left ? .leading : .trailing)
+            .offset(x: slot.left ? 0 : w - slot.width, y: slot.y)
+    }
+
+    /// A label's leader: out from the end of its kicker, level with it, past its longest line, then to Gary.
+    private func leader(_ slot: Slot, _ w: CGFloat, _ at: (CGPoint) -> CGPoint, drop: CGFloat = 6) -> (CGPoint, CGPoint, CGPoint) {
+        let block = min(blockWidths[slot.key] ?? slot.width, slot.width)
+        let kick = min(kickerWidths[slot.key] ?? block, block)
+        let y = slot.y + drop
+        let start = kick + 6, turn = max(block + 8, kick + 20)
+        return slot.left ? (CGPoint(x: start, y: y), CGPoint(x: turn, y: y), at(slot.anchor))
+                         : (CGPoint(x: w - start, y: y), CGPoint(x: w - turn, y: y), at(slot.anchor))
     }
 
     /// Thin gold leaders from each label to the spot on Gary it names, a dot and a ring at his end.
     /// The diagram's lines; while you talk to him, only ASK's, at his mouth.
     private func leaders(width w: CGFloat, at: @escaping (CGPoint) -> CGPoint, prompts: [GaryPrompt], talking: Bool = false) -> some View {
-        let sx = rightX("streak", w, 94)
         var lines: [(CGPoint, CGPoint, CGPoint)] = []
-        if !talking {
-            if lastNight != nil { lines.append((CGPoint(x: 84, y: 35), CGPoint(x: 100, y: 35), at(GaryIdleFigure.head))) }
-            if run.count > 0 { lines.append((CGPoint(x: sx - 6, y: 326), CGPoint(x: sx - 20, y: 326), at(GaryIdleFigure.leg))) }
-        }
-        if ask != nil { lines.append((CGPoint(x: 84, y: Self.askY + 30), CGPoint(x: 100, y: Self.askY + 30), at(GaryIdleFigure.jaw))) }
-        for p in talking ? [] : prompts {
-            let place = Self.place(p.spot)
-            let px = rightX(p.spot.rawValue, w, place.width, cap: place.cap)
-            let y = place.y + (p.spot == .shoulder ? 16 : 18)
-            lines.append((CGPoint(x: px - 6, y: y), CGPoint(x: px - 20, y: y), at(GaryIdleFigure.anchor(p.spot))))
+        if talking {
+            // From the state label that stands where the question stood, as wide as its slot.
+            let x = Self.askSlot.width + 2, y = Self.askSlot.y + 6
+            if ask != nil { lines.append((CGPoint(x: x, y: y), CGPoint(x: x + 12, y: y), at(Self.askSlot.anchor))) }
+        } else {
+            if ask != nil { lines.append(leader(Self.askSlot, w, at)) }
+            if lastNight != nil { lines.append(leader(Self.lastSlot, w, at)) }
+            // The run has no kicker: its line leaves from the middle of its figure.
+            if showsRun { lines.append(leader(Self.runSlot, w, at, drop: 22)) }
+            for p in prompts { lines.append(leader(Self.slot(p.spot), w, at)) }
         }
         return Canvas { ctx, _ in
             for (from, elbow, to) in lines {
@@ -344,37 +348,71 @@ struct HomeGaryOpening: View {
 
     // MARK: - The labels
 
-    private func kicker(_ s: String) -> some View {
-        Text(s).font(GaryFonts.kicker(9.5, .bold)).tracking(1.5).foregroundStyle(GaryColors.gold).fitsOneLine()
+    /// A label's first line: small caps in gold, green with a dot on the one thing that's new. Its width is
+    /// kept, so its leader starts where its words end.
+    private func kickerRow(_ key: String, _ s: String, icon: String? = nil, isNew: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            if isNew {
+                Circle().fill(GaryColors.win).frame(width: 6, height: 6)
+                    .background(Circle().fill(GaryColors.win.opacity(0.22)).frame(width: 12, height: 12))
+            }
+            if let icon { Image(systemName: icon).font(.system(size: 8.5, weight: .bold)) }
+            Text(s).font(GaryFonts.kicker(9.5, .bold)).tracking(1.5).fitsOneLine()
+        }
+        .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { kickerWidths[key] = $0 }
     }
 
+    /// The mark on a line that opens something.
+    private var chevron: some View {
+        Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold)).foregroundStyle(GaryColors.gold)
+    }
+
+    /// Last night at his pocket: the money, then the record as its hook, then the run it belongs to.
     private func lastNightLabel(_ d: Day) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            kicker(dayWord(d.date))
+            kickerRow(Self.lastSlot.key, dayWord(d.date))
             Text(LabFormat.unitsNet(d.net_units))
                 .font(GaryFonts.display(28)).foregroundStyle(moneyColor(d.net_units))
                 .monospacedDigit().fitsOneLine()
-            Text("\(d.wins)–\(d.losses)")
-                .font(GaryFonts.kicker(11, .semibold)).tracking(1.2)
-                .foregroundStyle(GaryColors.silver)
+            HStack(spacing: 4) {
+                Text("\(d.wins)-\(d.losses)")
+                    .font(GaryFonts.display(18)).foregroundStyle(GaryColors.lightGold).monospacedDigit()
+                chevron
+            }
+            runLine
+        }
+    }
+
+    /// A winning run of three nights or more stands on its own at his leg, figure and flame.
+    private var showsRun: Bool { run.sign > 0 && run.count >= 3 }
+
+    /// Any other run, as one small line under last night. One night alone is last night said twice (Nov 10
+    /// 2026: "-$596, 2-3" in one corner and a big "1 COLD NIGHT" in the other), so it gets no line.
+    @ViewBuilder private var runLine: some View {
+        let r = run
+        if r.count >= 2, !showsRun {
+            HStack(spacing: 4) {
+                if r.sign < 0 { Image(systemName: "snowflake").font(.system(size: 9, weight: .bold)) }
+                Text(r.sign > 0 ? "\(r.count) IN A ROW" : "\(r.count) COLD NIGHTS")
+                    .font(GaryFonts.kicker(9.5, .bold)).tracking(1.4).fitsOneLine()
+            }
+            .foregroundStyle(r.sign > 0 ? GaryColors.gold : Color(hex: "#9DBBD3"))
+            .padding(.top, 2)
         }
     }
 
     private var streakLabel: some View {
-        let r = run
-        let hot = r.sign > 0
-        return VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .top, spacing: 5) {
-                Text("\(r.count)")
+                Text("\(run.count)")
                     .font(GaryFonts.display(38)).foregroundStyle(GaryColors.warmWhite)
                     .fixedSize()
-                Group { if hot { GaryFlame(nights: r.count).scaleEffect(0.7) } else { ColdMark() } }
-                    .padding(.top, 2)
+                GaryFlame(nights: run.count).scaleEffect(0.7).padding(.top, 2)
             }
-            // One night is a night (Nov 10 2026: "1 COLD NIGHTS").
-            Text(hot ? (r.count == 1 ? "WINNING\nNIGHT" : "NIGHTS\nIN A ROW") : (r.count == 1 ? "COLD\nNIGHT" : "COLD\nNIGHTS"))
+            Text("NIGHTS\nIN A ROW")
                 .font(GaryFonts.kicker(9.5, .bold)).tracking(1.4)
-                .foregroundStyle(hot ? GaryColors.gold : GaryColors.silver)
+                .foregroundStyle(GaryColors.gold)
                 .lineSpacing(1)
                 .fixedSize()
         }
@@ -411,6 +449,22 @@ struct HomeGaryOpening: View {
     private var seen: Set<String> { Set(seenRaw.split(separator: "|").map(String.init)) }
     private func fresh(_ p: GaryPrompt) -> Bool { p.key.map { !seen.contains($0) } ?? false }
 
+    /// The one prompt that reads as new (Nov 10 2026: three green dots at once said nothing). Something that
+    /// happened tonight (a dart hit, the parlay or a leg of it in) goes before something that only arrived.
+    private func newest(_ prompts: [GaryPrompt]) -> String? {
+        let news = prompts.filter(fresh)
+        let happened = news.first { p in ["darts-hit", "parlay-won", "parlay-legs"].contains { (p.key ?? "").hasPrefix($0) } }
+        return (happened ?? news.first)?.key
+    }
+    private func isNew(_ p: GaryPrompt, among prompts: [GaryPrompt]) -> Bool { p.key != nil && p.key == newest(prompts) }
+    /// ASK GARY wears the dot only when no prompt does, until he's been talked to once.
+    private func askIsNew(_ prompts: [GaryPrompt]) -> Bool { ask != nil && !talkSeen && newest(prompts) == nil }
+    /// Where on Gary the new thing points.
+    private func newSpot(_ prompts: [GaryPrompt]) -> CGPoint? {
+        if let p = prompts.first(where: { isNew($0, among: prompts) }) { return Self.slot(p.spot).anchor }
+        return askIsNew(prompts) ? Self.askSlot.anchor : nil
+    }
+
     private func markSeen(_ keys: [String]) {
         var list = seenRaw.split(separator: "|").map(String.init)
         for k in keys where !list.contains(k) { list.append(k) }
@@ -432,33 +486,17 @@ struct HomeGaryOpening: View {
     }
 
     /// ASK GARY at his mouth: the question in his diagram's display type.
-    private func askLabel(_ q: String) -> some View {
-        let isNew = !talkSeen
+    private func askLabel(_ q: String, isNew: Bool) -> some View {
         let lines = Self.labelLines(q.uppercased())
         return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                if isNew {
-                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
-                        .background(Circle().fill(GaryColors.win.opacity(0.22)).frame(width: 12, height: 12))
-                }
-                Image(systemName: "mic.fill").font(.system(size: 8.5, weight: .bold))
-                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
-                Text("ASK GARY")
-                    .font(GaryFonts.kicker(9.5, .bold)).tracking(1.5)
-                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
-                    .fitsOneLine()
-            }
+            kickerRow(Self.askSlot.key, "ASK GARY", icon: "mic.fill", isNew: isNew)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     HStack(spacing: 5) {
                         Text(line)
                             .font(GaryFonts.display(21)).foregroundStyle(GaryColors.warmWhite)
                             .fitsOneLine()
-                        if i == lines.count - 1 {
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(GaryColors.gold)
-                        }
+                        if i == lines.count - 1 { chevron }
                     }
                     .frame(height: 23, alignment: .leading)
                 }
@@ -467,25 +505,13 @@ struct HomeGaryOpening: View {
         }
     }
 
-    private func promptLabel(_ p: GaryPrompt) -> some View {
-        let isNew = fresh(p)
-        let chevron = Image(systemName: "chevron.right")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundStyle(GaryColors.gold)
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                if isNew {
-                    Circle().fill(GaryColors.win).frame(width: 6, height: 6)
-                        .background(Circle().fill(GaryColors.win.opacity(0.22)).frame(width: 12, height: 12))
-                }
-                Text(isNew ? (p.newKicker ?? p.kicker) : p.kicker)
-                    .font(GaryFonts.kicker(9.5, .bold)).tracking(1.5)
-                    .foregroundStyle(isNew ? GaryColors.win : GaryColors.gold)
-                    .fitsOneLine()
-            }
-            // Display lines set tight, the way a label on a diagram reads (the face's own leading is loose).
-            let lines = p.news.components(separatedBy: "\n")
-            VStack(alignment: .leading, spacing: 0) {
+    /// A prompt on his right: every line ends on the right margin.
+    private func promptLabel(_ p: GaryPrompt, isNew: Bool) -> some View {
+        // Display lines set tight, the way a label on a diagram reads (the face's own leading is loose).
+        let lines = p.news.components(separatedBy: "\n")
+        return VStack(alignment: .trailing, spacing: 2) {
+            kickerRow(Self.slot(p.spot).key, isNew ? (p.newKicker ?? p.kicker) : p.kicker, isNew: isNew)
+            VStack(alignment: .trailing, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     HStack(spacing: 5) {
                         Text(line)
@@ -493,7 +519,7 @@ struct HomeGaryOpening: View {
                             .fitsOneLine()
                         if p.hook == nil, i == lines.count - 1 { chevron }
                     }
-                    .frame(height: 23, alignment: .leading)
+                    .frame(height: 23)
                 }
             }
             .padding(.vertical, 1)
@@ -607,22 +633,15 @@ struct GaryIdleFigure: View {
 
     /// Where the labels point on the stance: always his outline, about level with each label, so a line never
     /// crosses him and his hands never cover one (founder, Oct 30 2026: "the lines should stay to the outer
-    /// parts of Gary"). The edge of his sunglasses, his right hip, the outside of his right leg, his right
-    /// shoulder.
-    static let head = CGPoint(x: 0.34, y: 0.09)
+    /// parts of Gary"). On his right, his shoulder and his hip.
     static let hip = CGPoint(x: 0.75, y: 0.59)
-    static let leg = CGPoint(x: 0.645, y: 0.86)
     static let shoulder = CGPoint(x: 0.73, y: 0.25)
     /// The left of his jaw, under the sunglasses: where ASK GARY points.
     static let jaw = CGPoint(x: 0.33, y: 0.2)
-
-    /// The spot on him each prompt points at.
-    static func anchor(_ spot: GaryPrompt.Spot) -> CGPoint {
-        switch spot {
-        case .shoulder: return shoulder
-        case .hip: return hip
-        }
-    }
+    /// His left hip, at the pocket: where last night's money points.
+    static let pocket = CGPoint(x: 0.345, y: 0.575)
+    /// The outside of his left leg: a winning run.
+    static let leftLeg = CGPoint(x: 0.205, y: 0.86)
 
     var body: some View {
         // While a clip plays nothing around it moves (no breath, no smoke, no fade), so the page doesn't redraw for it.
@@ -1186,16 +1205,6 @@ private struct FlameCore: Shape {
         path.addCurve(to: p(0.50, 0.96), control1: p(0.74, 0.86), control2: p(0.66, 0.96))
         path.closeSubpath()
         return path
-    }
-}
-
-/// A cold run's mark: an ice shard, quiet silver-blue.
-private struct ColdMark: View {
-    var body: some View {
-        Image(systemName: "snowflake")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(Color(hex: "#9DBBD3"))
-            .accessibilityHidden(true)
     }
 }
 
