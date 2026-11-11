@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   parseCsv, nflverseCode, getPracticeReport, getSnapShare,
-  NFLVERSE_TEAM_CODES, _clearNflverseCache, loadNflverseFile, warmNflverseCopies
+  NFLVERSE_TEAM_CODES, _clearNflverseCache, loadNflverseFile, warmNflverseCopies, getPassRushAndCoverage
 } from '../../src/services/providers/nflverseService.js';
 import { mkdtempSync, writeFileSync, utimesSync, existsSync, statSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -226,5 +226,25 @@ describe('a failed download and the copy on disk', () => {
     expect(statSync(join(dir, 'injuries_2026.csv')).mtimeMs).toBe(before);
     expect(existsSync(join(dir, 'roster_weekly_2026.csv'))).toBe(false);
     expect(readdirSync(dir).some((f) => f.endsWith('.tmp'))).toBe(false);
+  });
+
+  it('the season PFR file: two tries, then the copy on disk at any age; with no copy the failure reads as before', async () => {
+    const body = 'season,player,pos,tm,g,prss,sk\n2026,Aidan Hutchinson,DE,DET,9,40,8';
+    const dir = mkdtempSync(join(tmpdir(), 'nflverse-pfr-'));
+    let asked = 0;
+    const good = async () => { asked += 1; return { status: 200, ok: true, text: async () => body, headers: { get: () => null } }; };
+    const fresh = await getPassRushAndCoverage('Detroit Lions', 2026, { fetchImpl: good, disk: true, diskDir: dir });
+    expect(fresh.pass_rush[0]).toMatchObject({ player: 'Aidan Hutchinson', pressures: 40 });
+    expect(readFileSync(join(dir, 'advstats_season_def.csv'), 'utf8')).toBe(body);
+    _clearNflverseCache();
+    const t = (Date.now() - 80 * 3600_000) / 1000; utimesSync(join(dir, 'advstats_season_def.csv'), t, t);
+    asked = 0;
+    const down = async () => { asked += 1; return timeout(); };
+    const stood = await getPassRushAndCoverage('Detroit Lions', 2026, { fetchImpl: down, disk: true, diskDir: dir });
+    expect(asked).toBe(2);
+    expect(stood).toEqual(fresh);
+    _clearNflverseCache();
+    const none = await getPassRushAndCoverage('Detroit Lions', 2026, { fetchImpl: down, disk: true, diskDir: mkdtempSync(join(tmpdir(), 'nflverse-pfr-none-')) });
+    expect(none.reason).toBe('Could not reach nflverse for advstats_season_def.csv: The operation was aborted due to timeout');
   });
 });

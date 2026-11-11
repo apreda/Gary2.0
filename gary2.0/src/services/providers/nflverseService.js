@@ -541,7 +541,9 @@ const PFR_FILES = {
  * file per season, so loadRelease's `${asset}_${season}.csv` shape does not
  * apply here.
  */
-async function loadPfr(kind, { fetchImpl = globalThis.fetch } = {}) {
+// Two tries, and when both fail the copy on disk at any age, as the weekly PFR files (Nov 10 2026): PFR's charting is
+// posted days after a game anyway. With no copy the failure reads as before.
+async function loadPfr(kind, { fetchImpl = globalThis.fetch, disk = fetchImpl === globalThis.fetch, diskDir = DISK_DIR } = {}) {
   const spec = PFR_FILES[kind];
   if (!spec) return { unavailable: true, reason: `Unknown PFR file "${kind}".` };
   const key = `pfr_${kind}`;
@@ -549,27 +551,38 @@ async function loadPfr(kind, { fetchImpl = globalThis.fetch } = {}) {
   if (hit && hit.expires > Date.now()) return hit.value;
 
   const url = `${RELEASE_BASE}/pfr_advstats/${spec.asset}.csv`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let value;
-  try {
-    const response = await fetchImpl(url, { signal: controller.signal });
-    if (!response.ok) {
-      value = { unavailable: true, reason: `nflverse returned HTTP ${response.status} for ${spec.asset}.csv.` };
-    } else {
-      const rows = parseCsv(await response.text());
-      if (rows.length && !(spec.teamColumn in rows[0])) {
-        // The column spelling changed upstream. Say so rather than returning
-        // rows whose team can never be matched.
-        value = { unavailable: true, reason: `${spec.asset}.csv no longer has a "${spec.teamColumn}" column; PFR advanced stats need remapping.` };
+  const file = join(diskDir, `${spec.asset}.csv`);
+  // The column spelling changed upstream: say so rather than returning rows whose team can never be matched.
+  const checked = (rows) => (rows.length && !(spec.teamColumn in rows[0])
+    ? { unavailable: true, reason: `${spec.asset}.csv no longer has a "${spec.teamColumn}" column; PFR advanced stats need remapping.` }
+    : { rows, teamColumn: spec.teamColumn });
+  let value; let failed;
+  for (let attempt = 0; attempt < 2 && !value; attempt++) {
+    try {
+      const r = await fetchRelease(url, fetchImpl);
+      if (r.status !== 200) {
+        failed = { value: { unavailable: true, reason: `nflverse returned HTTP ${r.status} for ${spec.asset}.csv.` }, keep: true };
       } else {
-        value = { rows, teamColumn: spec.teamColumn };
+        value = checked(parseCsv(r.text));
+        if (disk && !value.unavailable) saveCopy(diskDir, file, r);
       }
+    } catch (error) {
+      failed = { value: { unavailable: true, reason: `Could not reach nflverse for ${spec.asset}.csv: ${error.message}` }, keep: false };
     }
-  } catch (error) {
-    return { unavailable: true, reason: `Could not reach nflverse for ${spec.asset}.csv: ${error.message}` };
-  } finally {
-    clearTimeout(timer);
+  }
+  if (!value) {
+    if (disk) {
+      try {
+        const ageHours = Math.round((Date.now() - statSync(file).mtimeMs) / 3600000);
+        const copy = checked(parseCsv(readFileSync(file, 'utf8')));
+        if (!copy.unavailable && copy.rows.length) {
+          console.warn(`[nflverse] ${spec.asset}.csv: download failed (${failed.value.reason}); using the copy on disk from ${ageHours} hours ago, because PFR charting is posted days after a game`);
+          return { ...copy, fromDisk: true, ageHours };
+        }
+      } catch { /* no copy */ }
+    }
+    if (!failed.keep) return failed.value;
+    value = failed.value;
   }
   cache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });
   return value;
