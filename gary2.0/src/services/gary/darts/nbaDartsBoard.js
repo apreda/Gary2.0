@@ -34,15 +34,21 @@ export const NBA_MARKET = {
 const LABEL = { pts: 'POINTS', reb: 'REBOUNDS', ast: 'ASSISTS', threes: 'THREES', pra: 'PTS+REB+AST' };
 const one = (v) => (v == null ? '–' : Number.isInteger(v) ? String(v) : (Math.round(v * 10) / 10).toFixed(1));
 
-export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) {
-  const season = nbaSeason(new Date(`${date}T16:00:00Z`));
+/** The day's games still to start, first tip first: the board's games. With `started`, every game that day: the
+ * first one sets the darts start (run-darts.js), and a start that has come stays come after that game tips. */
+export async function nbaGamesLeft({ date, now = Date.now(), started = false }) {
   const listed = [...await bdl.getGames('basketball_nba', { dates: [date] }).catch(() => []), ...await bdl.getGames('basketball_nba', { dates: [nextUtcDay(date)] }).catch(() => [])];
   const seen = new Set();
-  const games = listed
+  return listed
     .filter((g) => g?.id != null && !seen.has(g.id) && seen.add(g.id))
-    .filter((g) => etDate(Date.parse(g.datetime)) === date && Date.parse(g.datetime) > now + START_BUFFER_MS)
-    .filter((g) => !/final|qtr|half|ot/i.test(String(g.status || '')) || /T\d/.test(String(g.status || '')))
+    .filter((g) => etDate(Date.parse(g.datetime)) === date && (started || Date.parse(g.datetime) > now + START_BUFFER_MS))
+    .filter((g) => started || !/final|qtr|half|ot/i.test(String(g.status || '')) || /T\d/.test(String(g.status || '')))
     .sort((a, b) => Date.parse(a.datetime) - Date.parse(b.datetime));
+}
+
+export async function buildNbaDartsBoard({ date, now = Date.now(), used = {} }) {
+  const season = nbaSeason(new Date(`${date}T16:00:00Z`));
+  const games = await nbaGamesLeft({ date, now });
   if (!games.length) return { league: 'NBA', games: 0, text: '', candidates: new Map(), eligible: {}, frames: [] };
 
   const teams = await bdl.getTeams('basketball_nba').catch(() => []);

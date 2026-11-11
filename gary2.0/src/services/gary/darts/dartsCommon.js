@@ -214,6 +214,32 @@ export function etMinutes(ms = Date.now()) {
   return h * 60 + m;
 }
 
+// WHEN THE DARTS ARE THROWN (founder, Nov 10 2026: "10am or even 11am EST feels smarter just for us to have more
+// time on certain factors"): each league's start in ET, and earlier on a day its first game is early.
+export const DARTS_START_DEFAULT = Object.freeze({ MLB: '05:30', NFL: '10:00', NBA: '11:00' });
+export const DARTS_FLOOR_MIN = 5 * 60 + 30;
+export const DARTS_LEAD_MIN = 3 * 60 + 30;
+// The room a normal NFL Sunday has (10:00 to the 1 PM kickoffs): a first game with less moves the start.
+export const DARTS_ROOM_MIN = 3 * 60;
+const clockMin = (v) => {
+  const hit = /^\s*(\d{1,2})(?::(\d{2}))?\s*$/.exec(String(v ?? ''));
+  return hit ? Number(hit[1]) * 60 + Number(hit[2] || 0) : null;
+};
+
+/**
+ * The league's start today, in ET minutes. DARTS_START_ET_<LEAGUE> sets one league, the old DARTS_START_ET all three.
+ * When the day's first game still to start begins less than 3 hours after that (a normal 1 PM Sunday is exactly 3
+ * hours after 10:00 and keeps 10:00), the start is 3 h 30 min before the game, never before 05:30 and never later than
+ * the usual time (Munich Sunday 9:30 kickoff: 6:00; a noon tip: 8:30; Thanksgiving's 12:30 kickoff: 9:00).
+ */
+export function dartsStartMin(league, { env = {}, firstGameMs = null } = {}) {
+  const normal = clockMin(env[`DARTS_START_ET_${league}`]) ?? clockMin(env.DARTS_START_ET) ?? clockMin(DARTS_START_DEFAULT[league] || '05:30');
+  if (firstGameMs == null || !Number.isFinite(firstGameMs)) return normal;
+  const first = etMinutes(firstGameMs);
+  if (first - normal >= DARTS_ROOM_MIN) return normal;
+  return Math.min(normal, Math.max(DARTS_FLOOR_MIN, first - DARTS_LEAD_MIN));
+}
+
 /** "Christian Encarnación-Strand Jr." → "christian encarnacion strand" */
 /**
  * Offensive skill positions: the only players NFL props and darts price. nflverse shares display names across

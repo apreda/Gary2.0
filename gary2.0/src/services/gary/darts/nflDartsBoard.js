@@ -113,16 +113,22 @@ function statText(pos, s, teamWeeks = null, elsewhere = () => null) {
   return `${s.games} game${s.games === 1 ? '' : 's'}; ${teamWeeks?.length ? `his team's last ${last.length}` : `last ${last.length}`}, newest first: ${last.join('; ')}`;
 }
 
+/** The day's games still to kick off, first one first: the board's games. With `started`, every game that day: the
+ * first one sets the darts start (run-darts.js), and a start that has come stays come after that game kicks off. */
+export async function nflGamesLeft({ date, now = Date.now(), started = false }) {
+  const listed = [...await bdl.getNflGamesForDate(date), ...await bdl.getNflGamesForDate(nextUtcDay(date))];
+  const seen = new Set();
+  return listed
+    .filter((g) => g?.id != null && !seen.has(g.id) && seen.add(g.id))
+    .filter((g) => etDate(Date.parse(g.date)) === date && (started || Date.parse(g.date) > now + START_BUFFER_MS))
+    .filter((g) => started || !/final|progress|half|quarter|overtime/i.test(String(g.status || '')))
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+}
+
 export async function buildNflDartsBoard({ date, now = Date.now(), used = {}, supabase = null, dataTries = {} }) {
   // The season the date falls in, not its calendar year (Oct 29 2026 hunt: Week 18 and the playoffs are in January).
   const season = nflSeason(new Date(`${date}T17:00:00Z`));
-  const listed = [...await bdl.getNflGamesForDate(date), ...await bdl.getNflGamesForDate(nextUtcDay(date))];
-  const seen = new Set();
-  const games = listed
-    .filter((g) => g?.id != null && !seen.has(g.id) && seen.add(g.id))
-    .filter((g) => etDate(Date.parse(g.date)) === date && Date.parse(g.date) > now + START_BUFFER_MS)
-    .filter((g) => !/final|progress|half|quarter|overtime/i.test(String(g.status || '')))
-    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+  const games = await nflGamesLeft({ date, now });
   if (!games.length) return { league: 'NFL', games: 0, text: '', candidates: new Map(), eligible: {} };
 
   // No data, no darts (founder, Nov 9 2026; dartsDataGuard.js): the files every line and sheet is built from, asked for

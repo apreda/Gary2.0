@@ -4,8 +4,16 @@
  * Never game picks, never prop picks, never graded, never on any record.
  *
  * Each run (com.gary.darts, every 20 minutes):
- *  1. From DARTS_START_ET (05:30; 09:15 until Oct 20 2026, founder: "Do 5am for all of
- *     them so if I'm up at 6am I see it all there") on, for each league with games still to
+ *  1. From each league's start on (founder, Nov 10 2026: "5:40am is far to early for those so
+ *     much would still be like unknown right 10am or even 11am EST feels smarter"): NBA 11:00
+ *     ET, NFL 10:00 ET, MLB 05:30 ET (05:30 for all three from Oct 20 to Nov 10 2026, 09:15
+ *     before). DARTS_START_ET_NBA, _NFL and _MLB set one league; the old DARTS_START_ET sets
+ *     all three. A day whose first game begins less than 3 hours after the league's start
+ *     (a 1 PM Sunday keeps 10:00) starts 3 h 30 min before that game, never before 05:30
+ *     (Munich Sunday, 9:30 kickoff: 6:00; a noon tip: 8:30). The whole league board is
+ *     thrown then, as before. The day's first game is read only between 05:30 and the
+ *     league's usual start, from the games list the board reads first (dartsCommon.js
+ *     dartsStartMin). For each league with games still to
  *     start: fill every category to five from the day's real markets. The
  *     first run of the day throws the board; later runs only fill categories
  *     that were short because their markets had not posted yet, at most once
@@ -20,14 +28,15 @@
  *   node scripts/run-darts.js --league MLB --force --dry --fresh   # read the board as if empty
  *   node scripts/run-darts.js --league MLB --force --dry --fresh --as-of 2026-09-24T13:00:00Z   # as it stood that morning
  *   node scripts/run-darts.js --scratch-only
+ *   node scripts/run-darts.js --starts [--date 2026-11-15] [--at 09:00]   # each league's start that day; throws nothing
  */
 import '../src/loadEnv.js';
 import { createClient } from '@supabase/supabase-js';
 
-const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, REPEAT_PAIRS, repeatKey } = await import('../src/services/gary/darts/dartsCommon.js');
+const { DART_CATEGORIES, FLEX_KINDS, FLEX_MIN, dartCounts, etDate, etMinutes, etClock, REPEAT_PAIRS, repeatKey, dartsStartMin, DARTS_FLOOR_MIN } = await import('../src/services/gary/darts/dartsCommon.js');
 const { buildMlbDartsBoard, mlbDartRow } = await import('../src/services/gary/darts/mlbDartsBoard.js');
-const { buildNflDartsBoard, nflDartRow } = await import('../src/services/gary/darts/nflDartsBoard.js');
-const { buildNbaDartsBoard, screenNbaCategory, nbaDartRow, NBA_MARKET } = await import('../src/services/gary/darts/nbaDartsBoard.js');
+const { buildNflDartsBoard, nflDartRow, nflGamesLeft } = await import('../src/services/gary/darts/nflDartsBoard.js');
+const { buildNbaDartsBoard, screenNbaCategory, nbaDartRow, NBA_MARKET, nbaGamesLeft } = await import('../src/services/gary/darts/nbaDartsBoard.js');
 const { throwCategory, DARTS_PROMPT_SHA, PER_CLUB_ONE_GAME, FORMULA_FILL } = await import('../src/services/gary/darts/dartsBrain.js');
 const { screenMlbCategory, screenNflCategory, loadMlbRows, loadNflContexts, mlbGameBlock, nflGameBlock } = await import('../src/services/gary/darts/dartsScreen.js');
 const { loadMlbGameFrames, loadMlbPlayerSplits } = await import('../src/services/sports/mlb/mlbGameFrames.js');
@@ -70,8 +79,30 @@ const fresh = dry && !!args.fresh;
 const asOfArg = argAfter('as-of') || args['as-of'];
 const asOf = dry && asOfArg && Number.isFinite(Date.parse(asOfArg)) ? Date.parse(asOfArg) : undefined;
 
-const START = String(process.env.DARTS_START_ET || '05:30').split(':').map(Number);
-const START_MIN = START[0] * 60 + (START[1] || 0);
+const LEAGUES = ['MLB', 'NFL', 'NBA'];
+// The day's first game, for the early-game start: before it starts it is the first game still to start, and once it
+// has started the day's start stays behind it (Munich Sunday stays open at 9:40). MLB has none: its 05:30 is the floor
+// already. The games list is the board's own first read, kept in memory for minutes, so a run that throws asks once.
+const GAMES_LEFT = { NFL: nflGamesLeft, NBA: nbaGamesLeft };
+async function firstGameMs(league, day) {
+  if (!GAMES_LEFT[league]) return null;
+  const g = (await GAMES_LEFT[league]({ date: day, started: true }).catch(() => []))[0];
+  const t = Date.parse(g?.datetime || g?.date || '');
+  return Number.isFinite(t) ? t : null;
+}
+const hhmm = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+/** Whether this league's start has come today. Before 05:30 and after its usual start nothing is read. */
+async function startReached(league, now = Date.now()) {
+  if (force || date !== etDate(now)) return true;
+  const nowMin = etMinutes(now);
+  const usual = dartsStartMin(league, { env: process.env });
+  if (nowMin >= usual) return true;
+  if (nowMin < DARTS_FLOOR_MIN) return false;
+  const first = await firstGameMs(league, date);
+  const start = dartsStartMin(league, { env: process.env, firstGameMs: first });
+  if (start < usual) log(`${league}: first game ${etClock(first)}, darts start ${hhmm(start)} ET today${nowMin >= start ? '' : ', waiting'}`);
+  return nowMin >= start;
+}
 const REFILL_GAP_MS = 55 * 60 * 1000;
 const RUN_MAX_MS = 90 * 60 * 1000;
 
@@ -350,10 +381,26 @@ async function throwLeague(league) {
   }
 }
 
+// --starts: each league's start on --date (today by default) from its real games, and with --at HH:MM (ET) what the
+// start gate answers at that time on that day. Reads the games list only; no darts, no scratches, no model.
+if (args.starts) {
+  const at = argAfter('at') || (typeof args.at === 'string' ? args.at : null);
+  const atMin = at && /^\d{1,2}:\d{2}$/.test(at) ? Number(at.split(':')[0]) * 60 + Number(at.split(':')[1]) : null;
+  const atMs = atMin == null ? null : ['-05:00', '-04:00'].map((z) => Date.parse(`${date}T${at.padStart(5, '0')}:00${z}`)).find((t) => etDate(t) === date && etMinutes(t) === atMin);
+  for (const league of LEAGUES.filter((l) => !onlyLeague || l === onlyLeague)) {
+    const first = await firstGameMs(league, date);
+    const usual = dartsStartMin(league, { env: process.env });
+    const start = dartsStartMin(league, { env: process.env, firstGameMs: first });
+    const gate = atMs == null ? '' : `; gate at ${at}: ${(await startReached(league, atMs)) ? 'OPEN, throws' : 'HOLDS, waits'}`;
+    console.log(`${date} ${league}: first game ${first ? etClock(first) : 'none on the list'}, usual start ${hhmm(usual)}, start ${hhmm(start)} ET${gate}`);
+  }
+  process.exit(0);
+}
+
 let failed = false;
-if (!scratchOnly && (force || etMinutes() >= START_MIN || date !== etDate())) {
-  for (const league of ['MLB', 'NFL', 'NBA'].filter((l) => !onlyLeague || l === onlyLeague)) {
-    try { await throwLeague(league); } catch (e) { failed = true; console.error(`${league} darts failed: ${e.message}`); }
+if (!scratchOnly) {
+  for (const league of LEAGUES.filter((l) => !onlyLeague || l === onlyLeague)) {
+    try { if (await startReached(league)) await throwLeague(league); } catch (e) { failed = true; console.error(`${league} darts failed: ${e.message}`); }
   }
 }
 try {
