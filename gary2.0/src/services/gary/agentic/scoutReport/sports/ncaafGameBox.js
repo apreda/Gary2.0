@@ -466,15 +466,33 @@ export function gameBoxFromSummary(summary, eventId) {
   // after the 1st quarter, Boise State's Cutforth in the 4th, and the row gave three stat lines in no order). Only when the
   // plays hold his box pass attempts within one (season: 1,475 of 1,533 passers in games with two or more).
   const passerSpans = {};
+  const passerPlays = new Map();
   for (const q of players.filter((x) => Number(x.stats?.passing?.passingAttempts) > 0 && x.last && x.first)) {
     const esc = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp(`(?:\\b${esc(q.first[0])}\\.\\s?|\\b${esc(q.first)}\\s)${esc(q.last)}(?!\\w)[^,;]{0,6}\\s(?:pass|sacked|scrambles?|rush|run)\\b`, 'i');
-    const mine = allPlays.filter((p) => String(p?.start?.team?.id ?? '') === q.teamId && re.test(String(p?.text || ''))
+    const mine = allPlays.map((p, k) => [p, k]).filter(([p]) => String(p?.start?.team?.id ?? '') === q.teamId && re.test(String(p?.text || ''))
       && !/kickoff|punt|field goal|extra point|two.?point|2pt/i.test(String(p?.type?.text || '')));
-    const passes = mine.filter((p) => /\bpass\b/i.test(p.text) && !/\bsacked\b|\bNO PLAY\b/i.test(p.text)).length;
+    const passes = mine.filter(([p]) => /\bpass\b/i.test(p.text) && !/\bsacked\b|\bNO PLAY\b/i.test(p.text)).length;
     if (!mine.length || Math.abs(passes - Number(q.stats.passing.passingAttempts)) > 1) continue;
-    const at = (p) => ({ period: Number(p?.period?.number) || null, clock: p?.clock?.displayValue || null });
-    passerSpans[q.id] = { first: at(mine[0]), last: at(mine.at(-1)) };
+    passerPlays.set(q, mine);
+  }
+  // One snap on its own, before another passer's last play when all the rest of his come after it (or after another
+  // passer's first when all the rest come before), is named apart, so it does not date his stretch (Nov 10 2026 college
+  // pass 3: Iowa State's Moberly read "Q2 12:49 to Q4 1:03" when 1 of his 27 plays came before Raynor's last at Q2 0:49,
+  // and LSU's Clark "Q3 6:16" with Leavitt in through Q3 1:41; 46 team-games).
+  // Only when the other passer ran two or more plays in between, so a one-play cameo leaves the starter's span as it was.
+  const at = ([p]) => ({ period: Number(p?.period?.number) || null, clock: p?.clock?.displayValue || null });
+  for (const [q, mine] of passerPlays) {
+    const others = [...passerPlays].filter(([x]) => x !== q && x.teamId === q.teamId).map(([, m]) => m.map(([, k]) => k));
+    const ks = mine.map(([, k]) => k), n = ks.length;
+    const between = (o, lo, hi) => o.filter((k) => k > lo && k < hi).length >= 2;
+    // ESPN's clock must agree with the order (a play logged late with an earlier clock is no lone snap).
+    const tm = ([p]) => { const [m, s] = String(p?.clock?.displayValue || '').split(':').map(Number); return (Number(p?.period?.number) || 0) * 1000 + 900 - (m * 60 + s); };
+    const inOrder = (a, b) => !(tm(a) > tm(b));
+    const early = n >= 4 && inOrder(mine[0], mine[1]) && others.some((o) => o.at(-1) > ks[0] && o.at(-1) < ks[1] && between(o, ks[0], ks[1]));
+    const late = n >= 4 && inOrder(mine[n - 2], mine[n - 1]) && others.some((o) => o[0] < ks[n - 1] && o[0] > ks[n - 2] && between(o, ks[n - 2], ks[n - 1]));
+    const main = mine.slice(early ? 1 : 0, late ? n - 1 : n);
+    passerSpans[q.id] = { first: at(main[0]), last: at(main.at(-1)), ...(early ? { loneFirst: at(mine[0]) } : {}), ...(late ? { loneLast: at(mine[n - 1]) } : {}) };
   }
   return { eventId: String(eventId), teams, players, defTotals, scoring, fieldGoals, drives, bigPlays, hurt, ejected, injuryText, earlyExits, starterQb, passerSpans, named: [...named], byScore, sacks: (summary?.drives?.previous || []).length ? sacks : null, turnovers: turnoverDetail(summary), fumbleTotals };
 }
@@ -702,7 +720,8 @@ export async function getNcaafGameBox(eventId, { fetchImpl = globalThis.fetch } 
   // v33 (Nov 10 2026 audit): a starting quarterback whose last name ends in "Jr." is found.
   // v34 (Nov 10 2026 review, round 4): each passer's first and last play (passerSpans).
   // v35 (Nov 10 2026 data round): a hurt player whose name ends in "Jr." is found on later plays.
-  return cachedResearch(`espn_cfb_box_v35:${eventId}`, async () => {
+  // v36 (Nov 10 2026 college pass 3): a passer's lone snap away from his stretch (passerSpans loneFirst, loneLast).
+  return cachedResearch(`espn_cfb_box_v36:${eventId}`, async () => {
     // A second try after a failure (Oct 27 2026 loop: on Oct 24, 30 of the 56 college sides read some game's player
     // lines "not on file", and the same boxes come back complete the next day; a failed fetch is never cached).
     try {
@@ -780,7 +799,8 @@ export function boxAddsUp(box, teamId, teamLine) {
 export function passerSpanText(span) {
   if (!span?.first || !span?.last) return null;
   const at = (x) => (x.period > 4 ? 'OT' : `Q${x.period}${x.clock ? ` ${x.clock}` : ''}`);
-  return `${at(span.first)} to ${at(span.last)}`;
+  // A lone snap away from his stretch reads apart: "one snap at Q2 12:49, then Q3 0:21 to Q4 1:03".
+  return `${span.loneFirst ? `one snap at ${at(span.loneFirst)}, then ` : ''}${at(span.first)} to ${at(span.last)}${span.loneLast ? `, then one snap at ${at(span.loneLast)}` : ''}`;
 }
 
 export function playerGameRows(box, teamId, gameId, positions = {}) {

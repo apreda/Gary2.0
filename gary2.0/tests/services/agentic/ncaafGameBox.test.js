@@ -234,6 +234,24 @@ describe('when each passer was in', () => {
     expect(passerSpanText(spans['9'])).toBe('Q3 13:40 to OT');
     expect(spans['7']).toBeUndefined();
   });
+
+  // Iowa State's Moberly read "Q2 12:49 to Q4 1:03" when 1 of his 27 plays came before Raynor's last (Nov 10 2026, pass 3).
+  it('names a lone early snap apart from his stretch, and leaves a one-play cameo inside the starter alone', () => {
+    const passer = (id, first, last, att) => ({ athlete: { id, firstName: first, lastName: last, displayName: `${first} ${last}` }, stats: [String(att)] });
+    const play = (who, period, clock) => ({ text: `${who} pass incomplete short left`, type: { text: 'Pass Incompletion' }, start: { team: { id: '1' } }, period: { number: period }, clock: { displayValue: clock } });
+    const summary = {
+      header: { competitions: [{ status: { type: { completed: true } }, competitors: [{ homeAway: 'away', score: '0', team: { id: '1' } }, { homeAway: 'home', score: '0', team: { id: '2' } }] }] },
+      boxscore: { players: [{ team: { id: '1' }, statistics: [{ name: 'passing', keys: ['passingAttempts'], athletes: [passer('8', 'Jaylen', 'Raynor', 4), passer('9', 'Connor', 'Moberly', 4), passer('7', 'Aiden', 'Flora', 1)] }] }] },
+      drives: { previous: [{ team: { id: '1' }, plays: [
+        play('J.Raynor', 1, '14:24'), play('A.Flora', 1, '10:00'), play('J.Raynor', 1, '9:00'), play('C.Moberly', 2, '12:49'),
+        play('J.Raynor', 2, '5:00'), play('J.Raynor', 2, '0:49'),
+        play('C.Moberly', 3, '0:21'), play('C.Moberly', 4, '9:00'), play('C.Moberly', 4, '1:03'),
+      ] }] },
+    };
+    const spans = gameBoxFromSummary(summary, '1').passerSpans;
+    expect(passerSpanText(spans['9'])).toBe('one snap at Q2 12:49, then Q3 0:21 to Q4 1:03');
+    expect(passerSpanText(spans['8'])).toBe('Q1 14:24 to Q2 0:49');
+  });
 });
 
 // "red zone 5 trips, 1 TD" left BYU's two end-zone interceptions at Utah unsaid (Nov 10 2026 college pass 2).
