@@ -8,6 +8,8 @@ import { makeRow, TONES } from '../shared.js';
 import { gamesWithRowsToday, runWithinBudget } from '../ncaafLaneLedger.js';
 import { quarterbackRecent } from '../quarterbackRecent.js';
 import { toTeamResults } from '../../../gary/agentic/tools/statRouters/footballTeamGames.js';
+import { getSeasonGames, seasonGameFor, cfbdTeamMatches } from '../../../providers/cfbdService.js';
+import { getNcaafGameBox } from '../../../gary/agentic/scoutReport/sports/ncaafGameBox.js';
 
 /** Minimum sample for a meaningful rate; identity does not depend on it. */
 export const MIN_ATTEMPTS = 15;
@@ -67,6 +69,43 @@ function gameFacts(r, schedule) {
   };
 }
 
+const plainName = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/\b(?:jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
+
+/**
+ * His games with ESPN's box numbers in place of BDL's (Nov 10 2026 college pass 3: BDL's rows drop plays, right in 100
+ * of 119 games against ESPN and 25 of 40 "last 3" sums; Bachmeier's Oct 24 row had 25 attempts to ESPN's 32). The game
+ * list stays BDL's; each game is found in the season's games (its id is ESPN's) and his row in that game's box, the
+ * same cached boxes the pick's desk reads. Null when any game cannot be read, so no BDL number stands in.
+ */
+export async function espnPasserRows(own, { name, team, schedule, season }, { seasonGames = getSeasonGames, gameBox = getNcaafGameBox } = {}) {
+  const thrown = own.filter((r) => (finite(r?.passing_attempts) ?? 0) > 0);
+  if (!thrown.length) return own;
+  const list = await seasonGames(season).catch(() => null);
+  if (!list || list.unavailable || !Array.isArray(list.rows)) return null;
+  const teamName = team?.full_name || team?.college || team?.name;
+  const out = [];
+  for (const r of thrown) {
+    const side = schedule.get(`${r.team?.id}:${r.game?.id}`);
+    const game = side?.opponent ? seasonGameFor(list, teamName, side.opponent, r.game?.date) : null;
+    if (!game?.id) return null;
+    const espnTeam = String(cfbdTeamMatches(game.homeTeam, teamName) ? game.homeId : game.awayId);
+    const box = await gameBox(game.id).catch(() => null);
+    if (!box || box.unavailable) return null;
+    const passers = (box.players || []).filter((p) => p.teamId === espnTeam && (finite(p.stats?.passing?.passingAttempts) ?? 0) > 0);
+    const last = (n) => plainName(String(n || '').split(/\s+/).filter((w) => !/^(?:jr|sr|ii|iii|iv|v)\.?$/i.test(w)).pop());
+    const same = passers.filter((p) => plainName(p.name) === plainName(name));
+    const byLast = passers.filter((p) => last(p.name) === last(name));
+    const p = same.length === 1 ? same[0] : byLast.length === 1 ? byLast[0] : null;
+    if (!p) return null;
+    const v = (group, key) => finite(p.stats?.[group]?.[key]) ?? (group === 'rushing' && !p.stats?.rushing ? 0 : null);
+    out.push({ ...r, passing_completions: v('passing', 'completions'), passing_attempts: v('passing', 'passingAttempts'),
+      passing_yards: v('passing', 'passingYards'), passing_touchdowns: v('passing', 'passingTouchdowns'), passing_interceptions: v('passing', 'interceptions'),
+      rushing_attempts: v('rushing', 'rushingAttempts'), rushing_yards: v('rushing', 'rushingYards'), rushing_touchdowns: v('rushing', 'rushingTouchdowns') });
+  }
+  return out;
+}
+
 /** THE QUARTERBACKS write-up for each game with both starters; the plain line stays when it can't be written. */
 export async function attachQuarterbackTakes(rows, write) {
   const byGame = new Map();
@@ -90,7 +129,7 @@ export async function attachQuarterbackTakes(rows, write) {
   return takes.size;
 }
 
-async function gameRows({ game, season, bdl, helpers, date }) {
+async function gameRows({ game, season, bdl, helpers, date, espn }) {
   const context = await getNcaafGameContext({ game, date, bdl });
   if (!context.sides) return [];
   const sides = ['away', 'home'].map(key => ({ key, team: key === 'home' ? game.home_team : game.away_team ?? game.visitor_team, evidence: context.sides[key] }));
@@ -104,12 +143,15 @@ async function gameRows({ game, season, bdl, helpers, date }) {
   for (const side of sides) {
     const qb = side.evidence?.quarterback;
     if (!qb) continue;
-    const own = current.filter(r => String(r.player.id) === String(qb.player_id) && String(r.team?.id) === String(side.team.id));
+    const bdlRows = current.filter(r => String(r.player.id) === String(qb.player_id) && String(r.team?.id) === String(side.team.id));
+    // ESPN's numbers for each of his games; when any game cannot be read from ESPN, no per-game line (never BDL's).
+    const espnRows = await espnPasserRows(bdlRows, { name: qb.name, team: side.team, schedule, season }, espn).catch(() => null);
+    const own = espnRows || bdlRows;
     // This season only (founder, Oct 23 2026): a transfer or a starter under the
     // floor shows no line, never last year's.
     const line = aggregate(own, season);
     const opponent = sides.find(s => s.key !== side.key)?.team;
-    const recent = quarterbackRecent(own.map(r => ({ ...gameFacts(r, schedule), date: r.game?.date })), {
+    const recent = !espnRows ? null : quarterbackRecent(own.map(r => ({ ...gameFacts(r, schedule), date: r.game?.date })), {
       kickoff: game.date || game.commence_time, opponentId: opponent?.id,
     });
     const abbr = teamAbbr(side.team), school = side.team.college || side.team.full_name || abbr;
@@ -142,7 +184,7 @@ export async function computeNcaafQbWatch(ctx) {
   const done = ctx.forceRefresh ? new Set() : await gamesWithRowsToday({ date, category: 'quarterback', source: 'ncaaf_game_context_v1', requireBothSides: true });
   const rows = await runWithinBudget({
     games, done, label: 'ncaafQbWatch',
-    work: (game) => gameRows({ game, season: Number(season), bdl, helpers, date }),
+    work: (game) => gameRows({ game, season: Number(season), bdl, helpers, date, espn: ctx.espn }),
   });
 
   const written = await attachQuarterbackTakes(rows);
