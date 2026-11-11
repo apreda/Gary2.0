@@ -347,6 +347,24 @@ export async function nextGameLine(team, tip, season = nbaSeason()) {
   return `${t.name}: next game ${when}, ${home ? 'at home vs' : 'at'} ${opp}${off <= 0 ? ' (tonight is the first night of a back-to-back)' : `, after ${off} day${off === 1 ? '' : 's'} off`}`;
 }
 
+// An opponent's other games, in the first line of each row (Nov 10 2026, founder: no noisy or duplicate data): each entry
+// is its result only, "W 119-80 @ CHA". The Out lists, possessions and box lines inside each entry were about half the
+// desk; of 84 answers since Oct 30 none used them, and who an opponent was missing is on the row's own Out lines.
+// NBA_OPP_GAMES_DETAIL=1 prints the full entries again.
+export const oppGamesDetail = () => process.env.NBA_OPP_GAMES_DETAIL === '1';
+const boxWords = (t) => `${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} rebounds (${t.oreb} offensive), ${t.turnover} turnovers`;
+/** One entry of team `teamId`'s list of its other games, from its stored summary `r`. With `detail`: who was out on each
+ * side (`outWords`) and how it played both ways (`box`, the game's team boxes); a game against `tonightId` is its result
+ * either way, since it is a full row in that team's list. */
+export function otherGameEntry(r, teamId, tonightId, { detail = false, box = null, outWords = null } = {}) {
+  const mine = String(r.summary.home.id) === String(teamId) ? 'home' : 'away', theirs = mine === 'home' ? 'away' : 'home';
+  const a = r.summary[mine].score, b = r.summary[theirs].score;
+  const score = `${a > b ? 'W' : 'L'} ${a}-${b}${r.summary.ot ? ' (OT)' : ''} ${mine === 'home' ? 'vs' : '@'} ${r.summary[theirs].abbr || r.summary[theirs].name}`;
+  if (!detail || String(r.summary[theirs].id) === String(tonightId)) return score;
+  const played = box?.[mine]?.fga != null && box?.[theirs]?.fga != null ? `; about ${box[mine].possessions} possessions; ${boxWords(box[mine])}; allowed ${boxWords(box[theirs])}` : '';
+  return `${score} (their out: ${outWords(r, mine, teamId)}; ${r.summary[theirs].abbr || r.summary[theirs].name} out: ${outWords(r, theirs, r.summary[theirs].id)}${played})`;
+}
+
 // `meetingUnder`: tonight's opponent, whose log is printed first; a game against it is printed there in full and here as its
 // score with a pointer (round 16: a meeting read twice, and Grimes's 3-5 threes in it read twice in two forms).
 // `meetingWith`: tonight's opponent and its season, for the list printed first (its meeting row is the full one).
@@ -439,20 +457,15 @@ export async function gameByGame(team, league, before = new Date(), { season = n
   // played both ways, so a result can be read against who was on the floor. A player counts as out only if he has played
   // for that team this season: someone who hasn't played yet is no change from what the team has been. Tonight's own
   // team keeps the bare score, since those games are full rows in its list.
-  const teamBoxes = byTeamSummaries ? await seasonTeamBoxes('NBA', season, asOfDay).catch(() => null) : null;
+  // Nov 10 2026 (founder: no noisy or duplicate data): each entry is its result only (otherGameEntry).
+  const detail = oppGamesDetail();
+  const teamBoxes = detail && byTeamSummaries ? await seasonTeamBoxes('NBA', season, asOfDay).catch(() => null) : null;
   const playedFor = (teamId) => [...new Set((byTeamSummaries?.get(String(teamId)) || []).flatMap((r) => r.summary.played?.[String(r.summary.home.id) === String(teamId) ? 'home' : 'away'] || []))];
   const outWords = (r, side, teamId) => (r.summary.listed?.[side] == null ? 'not on file' : outWhoHadPlayed(r.summary.out?.[side], playedFor(teamId)).join(', ') || 'nobody');
-  const boxWords = (t) => `${t.fgm}-${t.fga} FG, ${t.fg3m}-${t.fg3a} 3PT, ${t.ftm}-${t.fta} FT, ${t.reb} rebounds (${t.oreb} offensive), ${t.turnover} turnovers`;
   const otherGames = (teamId, gameId) => {
     if (!byTeamSummaries) return null;
     const list = (byTeamSummaries.get(String(teamId)) || []).filter((r) => String(r.game_id) !== String(gameId)).slice().reverse();
-    return list.map((r) => { const mine = String(r.summary.home.id) === String(teamId) ? 'home' : 'away', theirs = mine === 'home' ? 'away' : 'home';
-      const a = r.summary[mine].score, b = r.summary[theirs].score;
-      const score = `${a > b ? 'W' : 'L'} ${a}-${b}${r.summary.ot ? ' (OT)' : ''} ${mine === 'home' ? 'vs' : '@'} ${r.summary[theirs].abbr || r.summary[theirs].name}`;
-      if (String(r.summary[theirs].id) === String(ts.id)) return score;
-      const box = teamBoxes?.get(String(r.game_id));
-      const played = box?.[mine]?.fga != null && box?.[theirs]?.fga != null ? `; about ${box[mine].possessions} possessions; ${boxWords(box[mine])}; allowed ${boxWords(box[theirs])}` : '';
-      return `${score} (their out: ${outWords(r, mine, teamId)}; ${r.summary[theirs].abbr || r.summary[theirs].name} out: ${outWords(r, theirs, r.summary[theirs].id)}${played})`; }).join(', ');
+    return list.map((r) => otherGameEntry(r, teamId, ts.id, { detail, box: teamBoxes?.get(String(r.game_id)), outWords })).join(', ');
   };
   // Who came back and who joined the five, from the stored games before this one (Nov 10 2026 data round 4: of 40 ESPN
   // recaps, 8 named a return or a first game and 10 a change to the five, and the row said neither). A return is said
