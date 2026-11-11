@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
-import { opponentClause, firstStartThisSeason, usualStartersMissing, siteName, puntingText } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
+import { opponentClause, oppGamesEntry, firstStartThisSeason, usualStartersMissing, siteName, puntingText } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -102,6 +102,20 @@ North Carolina Tar Heels (5-3):
     expect(firstStartThisSeason([qb('Julian Sayin'), qb('Luke Fahey')], 'Luke Fahey')).toBe(false);
     expect(firstStartThisSeason([qb('Julian Sayin'), undefined], 'Luke Fahey')).toBe(false);
     expect(firstStartThisSeason([], 'Luke Fahey')).toBe(false);
+  });
+});
+
+// Nov 10 2026: an opponent's games keep who played quarterback that day and drop the figures after him.
+describe('oppGamesEntry', () => {
+  const full = 'QB Nate Bennett (started) and Edward Griffin; ran 223 on 40, passed for 333, sacked 1; allowed 36 rushing (including 4 sacks), 74 passing, 4 sacks made';
+  it('keeps the quarterback only, and nothing when no quarterback is named', () => {
+    expect(oppGamesEntry(full)).toBe('QB Nate Bennett (started) and Edward Griffin');
+    expect(oppGamesEntry('ran 120 on 30, passed for 310')).toBe(null);
+    expect(oppGamesEntry('units not on file')).toBe(null);
+  });
+  it('gives back the full entry with NCAAF_OPP_GAMES_DETAIL=1', () => {
+    process.env.NCAAF_OPP_GAMES_DETAIL = '1';
+    try { expect(oppGamesEntry(full)).toBe(full); } finally { delete process.env.NCAAF_OPP_GAMES_DETAIL; }
   });
 });
 

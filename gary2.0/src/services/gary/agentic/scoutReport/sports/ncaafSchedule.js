@@ -186,7 +186,7 @@ function siteLines(site, { homeTeam, awayTeam, game }) {
  * figures (founder GO, Oct 12 2026) ride on every game line; `full: false`
  * gives the short form for the one-line schedule behind the season totals.
  */
-function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, strength = null, full = true, exclude = null, when = null }) {
+function opponentLabel(opponentId, { teamsById, records, league = null, leagueGames = null, unitsOf = null, strength = null, full = true, exclude = null, when = null, entry = null }) {
   const team = teamsById.get(Number(opponentId));
   const conf = ncaafTeamConferenceId(team);   // 2026 membership, not BDL's stale directory (Oct 13 2026)
   const record = records.get(Number(opponentId));
@@ -196,7 +196,7 @@ function opponentLabel(opponentId, { teamsById, records, league = null, leagueGa
     // No record (Oct 31 2026, founder: "a team record doesn't matter for a spread"); its games follow.
     // A league table that did not load is said (round 15: every opponent's games went without a word).
     full && !league ? "its other games: not on file (the season's games could not be loaded)" : full ? opponentSeasonClause(league, opponentId, { neutral: (r) => (team && leagueGames ? seasonGameFor(leagueGames, team.full_name, r.opponent, r.date)?.neutralSite === true : null),
-      units: (r) => (team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null), exclude }) : null].filter(Boolean).join(', ');
+      units: (r) => { const u = team && unitsOf?.fn ? unitsOf.fn(team.full_name, r) : null; return entry && u ? entry(u) : u; }, exclude }) : null].filter(Boolean).join(', ');
 }
 
 /**
@@ -225,7 +225,7 @@ export async function opponentContext({ teams, resultLists, season, cutoff = nul
     }),
   ]);
   const strength = opponentStrengthTables(talent?.rows, polls?.rows);
-  return (opponentId, { full = true, exclude = null, when = null } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, strength, full, exclude, when });
+  return (opponentId, { full = true, exclude = null, when = null, entry = null } = {}) => opponentLabel(opponentId, { teamsById, records, league, leagueGames, unitsOf, strength, full, exclude, when, entry });
 }
 
 // HOW STRONG EACH OPPONENT WAS (founder GO, Nov 2 2026, reversing the Oct 29 "no ranks" call for this): on every
@@ -286,6 +286,18 @@ export function opponentClause(oppText, theirQb) {
     : gamesAt < 0 ? `${oppText} · ${qbThatDay}`
       : gamesAt === 0 ? `${qbThatDay} · ${oppText}`
         : `${oppText.slice(0, gamesAt)} · ${qbThatDay} · ${oppText.slice(gamesAt).replace(/^(?:[,;] | · )/, '')}`;
+}
+
+/**
+ * One entry's brackets in an opponent's games: who played quarterback for it that day, nothing after (Nov 10 2026: its
+ * runs, passing, sacks and what it allowed were most of the list, the desk's largest kind at 14.5%, and 5 of 63
+ * answers took a fact from them). Game rows only; the HOME AND ROAD lines keep their entries.
+ * NCAAF_OPP_GAMES_DETAIL=1 gives back the full entries and the "under X's game above" pointers.
+ */
+export const oppGamesDetail = () => process.env.NCAAF_OPP_GAMES_DETAIL === '1';
+export function oppGamesEntry(clause) {
+  if (oppGamesDetail()) return clause;
+  return String(clause || '').match(/^QB [^;]*/)?.[0] || null;
 }
 
 function splitLine(team, label, results, describe) {
@@ -1149,10 +1161,11 @@ ${(shownOpponents.clear(), sides).map((s, i) => `${s.team} (${record(s.results)}
       // Each opponent's games in full once, later rows pointing to them, and never the game the row is (round 16: an
       // opponent both teams played printed its season twice, and each list opened with the row's own score).
       const etDayOf = (x) => new Date(x).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-      const seen = shownOpponents.get(Number(r.opponentId));
+      // Every row prints its own list in full (Nov 10 2026: each pointer's list left out a different game than the row's).
+      const seen = oppGamesDetail() ? shownOpponents.get(Number(r.opponentId)) : null;
       const short = label(r.opponentId, { full: false, when: r.date });
       const oppText = seen ? `${short}${short ? ' · ' : ''}its games: under ${seen} above`
-        : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date });
+        : label(r.opponentId, { exclude: (x) => etDayOf(x.date) === etDayOf(r.date), when: r.date, entry: oppGamesEntry });
       if (!seen) shownOpponents.set(Number(r.opponentId), `${s.team}${/s$/.test(s.team) ? "'" : "'s"} ${etDay(r.date)} game`);
       const against = opponentClause(oppText, theirQb);
       return `  ${etDay(r.date)} · ${gameStoryLine(r.neutral ? { ...r, home: true, neutral: false, opponent: `${r.opponent} (neutral site)` } : r, { opponentContext: against ? `opponent: ${against}` : null, opponentFirst: true })}\n      ${checkedQuarterback(quarterbackOfGame(rows[i], r, played[i].onFile, starts[i].get(String(r.gameId)), r.week != null && Number(r.week) <= 1 ? null : s.results.filter((x) => new Date(x.date) < new Date(r.date)).map((x) => starts[i].get(String(x.gameId)))), rows[i], r, units)}\n${units.join('\n')}`
