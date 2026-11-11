@@ -511,7 +511,7 @@ function lineupChanges(d, code, gs) {
       return !limited.includes(id) && !benched(id) && !displaced(id) && name.get(id).pos !== 'QB' && posOf(id) !== 'QB' && of(g, id) > 0 && before.length >= 2 && of(g, id) <= Math.min(...before) - 0.3
         && ln !== undefined && !(ln && ln.q > 3) && !onHurtLine(id); }) : [];
     const droppedLabel = (id) => { const before = earlier(id), lo = Math.round(100 * Math.min(...before)), hi = Math.round(100 * Math.max(...before)), ln = lastNamedOf(id);
-      return label(g, id, true, `; ${lo === hi ? `${lo}% in each of his ${before.length} earlier games` : `${lo} to ${hi}% in his ${before.length} earlier games`}${ln ? `; last named on a play Q${ln.q}${ln.clock ? ` ${ln.clock}` : ''}` : ''}`); };
+      return label(g, id, true, `; ${lo === hi ? `${lo}% in each of his ${before.length} earlier games` : `${lo} to ${hi}% in his ${before.length} earlier games`}${ln ? `; last named on a play ${whenIn(ln)}` : ''}`); };
     const reserveRole = players.filter((id) => snapRegular(id) && displaced(id) && !gone(g, id));
     const reserved = players.filter((id) => !absent.includes(id) && !departed.includes(id) && onReserve(g, id) && !stillOnReserve(id) && of(g, id) === 0 && prior.some((e) => of(e, id) >= 0.25));
     // One back from a reserve list is said once, under "back" (round 16: Tyler Smith read under "back" and "first game at
@@ -847,6 +847,8 @@ function coverageLine(d, x, code) {
 // From the play ledger: every score in order with the score after it, the largest lead each way and when, lead
 // changes; each team's third downs with the distance of each, every fourth-down try with where and the score, time of
 // possession and penalties. Null when the ledger has no such game.
+// Overtime is the play-by-play's fifth quarter; it reads OT, as the scoring list does (NFL pass 2 round 4: the Lions' Wk 1
+// hurt line read "R.Ya-Sin (Q5 4:17; on a later play)").
 const whenIn = (e) => `${e.q > 4 ? 'OT' : `Q${e.q}`}${e.clock ? ` ${e.clock}` : ''}`;
 function flowLine(x, code) {
   const f = x.ledger?.flow;
@@ -953,9 +955,9 @@ function hurtLine(x, code, d = null) {
   const h = x.ledger?.hurt;
   if (!x.ledger || !Array.isArray(h)) return null;
   const ej = x.ledger.ejected || [];
-  const ejected = ej.length ? ` · ejected: ${ej.map((e) => `${nickname(e.team)} ${fullNameOf(d, e, x.week)} (Q${e.q}${e.clock ? ` ${e.clock}` : ''})`).join(', ')}` : '';
+  const ejected = ej.length ? ` · ejected: ${ej.map((e) => `${nickname(e.team)} ${fullNameOf(d, e, x.week)} (${whenIn(e)})`).join(', ')}` : '';
   if (!h.length) return `hurt during the game (play-by-play): nobody${ejected}`;
-  const one = (e) => `${nickname(e.team)} ${fullNameOf(d, e, x.week)} (Q${e.q}${e.clock ? ` ${e.clock}` : ''}; ${e.later ? 'on a later play' : 'not on a later play'})`;
+  const one = (e) => `${nickname(e.team)} ${fullNameOf(d, e, x.week)} (${whenIn(e)}; ${e.later ? 'on a later play' : 'not on a later play'})`;
   return `hurt during the game (play-by-play): ${[...h.filter((e) => e.team === code), ...h.filter((e) => e.team !== code)].map(one).join(', ')}${ejected}`;
 }
 

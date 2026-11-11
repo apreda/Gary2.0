@@ -114,3 +114,13 @@ describe('coverage before PFR has charted the game', () => {
     expect(rows.find((r) => r.startsWith('1 '))).toMatch(/coverage: Cowboys defenders thrown at: Trevon Diggs 3 of 5 for 40/);
   });
 });
+
+// NFL pass 2 round 4, Nov 10 2026: the Lions' Wk 1 hurt line read "R.Ya-Sin (Q5 4:17; on a later play)" for an overtime play.
+describe('the hurt line in overtime', () => {
+  it('reads OT, as the scoring list does, not Q5', () => {
+    const g = { game_id: 'g1', season: '2026', game_type: 'REG', week: '1', gameday: '2026-09-13', home_team: 'DET', away_team: 'NO', home_score: '31', away_score: '30' };
+    const d = { season: 2026, schedule: [g], teamWeek: [], playerWeek: [], rosterWeekly: [], snaps: [],
+      ledgerGames: new Map([['g1', { game_id: 'g1', hurt: [{ team: 'DET', who: 'R.Ya-Sin', q: 5, clock: '4:17', later: true }], ejected: [], lastNamed: {} }]]) };
+    expect(gameByGame(d, 'Detroit Lions', '2026-11-12')).toMatch(/hurt during the game \(play-by-play\): Lions R\.Ya-Sin \(OT 4:17; on a later play\)/);
+  });
+});
