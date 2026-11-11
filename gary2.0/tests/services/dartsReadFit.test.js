@@ -36,6 +36,12 @@ describe('game reads fit to one dart ask', () => {
     const long = (tag) => ['WHO IS PLAYING', `${tag} lineups`, '', 'THIS SEASON, GAME BY GAME', 'Team A (3-1), most recent first:', ...Array.from({ length: 40 }, (_, i) => `  Day ${i} · @ Somewhere\n      box: ${'x'.repeat(2000)}`)].join('\n');
     const blocks = new Map([['1', long('a')], ['2', long('b')]]);
     expect(() => fitBlocks(blocks, ['1', '2'], { target: 1000, most: 2000 })).toThrow(/could not be cut/);
+    // As short as an NBA read since Nov 10 2026 (about 47,000 characters) still stops; a block as long as an NFL read's
+    // part that is not game log (about 26,000) does not.
+    const nba = new Map([['1', long('a').slice(0, 45_000)], ['2', long('b').slice(0, 45_000)]]);
+    expect(() => fitBlocks(nba, ['1', '2'], { target: 1000, most: 2000 })).toThrow(/could not be cut/);
+    const rest = new Map([['1', 'x'.repeat(26_000)], ['2', 'y'.repeat(26_000)]]);
+    expect(fitBlocks(rest, ['1', '2'], { target: 1000, most: 2000 })).toBe(rest);
     // Whole reads that fit are sent as they are, and frames with no game log are never stopped.
     expect(fitBlocks(blocks, ['1', '2'], { target: 1e6, most: 1e6 })).toBe(blocks);
     const frames = new Map([['1', 'GAME 1 · a short frame'], ['2', 'GAME 2 · a short frame']]);

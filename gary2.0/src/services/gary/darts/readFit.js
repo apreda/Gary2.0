@@ -45,11 +45,13 @@ export function trimRead(text, keep) {
   return out.join('\n').replace(/\n+$/, '');
 }
 
-// A read this long is mostly game log: on Nov 10 2026 everything else was 9% of an NBA read and 24% of an NFL one (9,000
-// and 25,000 characters). One the cut takes next to nothing from has its game log in a layout this file no longer reads
-// (the section title, the "newest first:" team heads and the two-space game lines come from nbaRead.js, nbaBettorData.js
-// and nflRead.js).
-const LONG_READ_CHARS = 60_000;
+// A read this long is mostly game log. One the cut takes next to nothing from has its game log in a layout this file no
+// longer reads (the section title, the "newest first:" team heads and the two-space game lines come from nbaRead.js,
+// nbaBettorData.js and nflRead.js). Measured Nov 10 2026, after the NBA rows' lists of opponents' other games went to
+// results only: an NBA read with its news runs 47,000 to 56,000 characters (12 of Nov 9 and 10, 85,000 to 103,000
+// before), 6,500 to 9,200 of it not game log; an NFL read runs about 95,000 to 105,000, at most about 26,000 of it not
+// game log. Above the most that is not game log, below the shortest read, and 12 reads under it fit the ask's target.
+const LONG_READ_CHARS = 35_000;
 /** A long read whose game log the cut cannot find. */
 export const cutBlind = (text) => { const s = String(text || ''); return s.length > LONG_READ_CHARS && trimRead(s, 0).length > s.length * 0.8; };
 
