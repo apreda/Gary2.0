@@ -308,6 +308,24 @@ const passingLine = ({ row, result }) => `${etDay(result.date).replace(/^\w+, /,
  * 2026), and marks him.
  */
 /**
+ * A game's usual starters at quarterback and on the offensive line who did not start it: each started 60% or more of the
+ * team's earlier games with a lineup on file, and it takes two such games. `map` is game id -> that game's official
+ * starters. Some schools list the center "OC" (Nov 10 2026 college pass 3: 133 starts in 1,324 official boxes, Michigan
+ * State, Bowling Green, Navy, Marshall, Oregon State and others), and those centers were never named.
+ */
+const STEADY = /^(QB|OL|C|OC|G|T|OT|OG|LT|LG|RT|RG)$/i;
+export function usualStartersMissing(map, gameIds, gameId) {
+  const that = map?.get(String(gameId));
+  const earlier = gameIds.filter((id) => String(id) !== String(gameId) && map.has(String(id)));
+  if (!that || earlier.length < 2) return null;
+  const count = new Map();
+  for (const id of earlier) for (const p of map.get(String(id))) count.set(p.key, { p, n: (count.get(p.key)?.n || 0) + 1 });
+  const missing = [...count.values()].filter(({ n }) => n >= Math.ceil(earlier.length * 0.6)).map(({ p }) => p)
+    .filter((p) => STEADY.test(String(p.position || '')) && !startedIn(that, p.name, p.position));
+  return missing.length ? `${missing.map((p) => `${p.name} (${p.position})`).join(', ')} (each started most of their ${earlier.length} earlier games with a lineup on file)` : null;
+}
+
+/**
  * Whether a game's starting quarterback started none of the team's earlier games this season (round 4 of the Nov 10
  * 2026 college review: Ohio State's row at USC read "Luke Fahey (started)" and only the older rows showed Sayin had
  * started every game before). `earlier` holds each earlier game's starting lineup; with no earlier game, or any of them
@@ -1009,17 +1027,7 @@ export async function ncaafScheduleSections({ homeTeam, awayTeam, season, game, 
   // outside a conference report). A usual starter started 60% or more of the team's earlier games with a lineup on file;
   // it takes two such games. From the official boxes the starting lineups already come from. Quarterbacks and offensive
   // linemen only: who else "starts" follows the opening formation (a second tight end, a nickel back), not who played.
-  const STEADY = /^(QB|OL|C|G|T|OT|OG|LT|LG|RT|RG)$/i;
-  const usualMissing = (map, gameIds, gameId) => {
-    const that = map?.get(String(gameId));
-    const earlier = gameIds.filter((id) => String(id) !== String(gameId) && map.has(String(id)));
-    if (!that || earlier.length < 2) return null;
-    const count = new Map();
-    for (const id of earlier) for (const p of map.get(String(id))) count.set(p.key, { p, n: (count.get(p.key)?.n || 0) + 1 });
-    const missing = [...count.values()].filter(({ n }) => n >= Math.ceil(earlier.length * 0.6)).map(({ p }) => p)
-      .filter((p) => STEADY.test(String(p.position || '')) && !startedIn(that, p.name, p.position));
-    return missing.length ? `${missing.map((p) => `${p.name} (${p.position})`).join(', ')} (each started most of their ${earlier.length} earlier games with a lineup on file)` : null;
-  };
+  const usualMissing = usualStartersMissing;
   const ownMissing = sides.map((s, i) => new Map(s.results.map((r) => {
     const earlierIds = s.results.filter((x) => new Date(x.date) < new Date(r.date)).map((x) => x.gameId);
     return [String(r.gameId), usualMissing(starts[i], [...earlierIds, r.gameId], r.gameId)];

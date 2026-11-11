@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
-import { opponentClause, firstStartThisSeason } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
+import { opponentClause, firstStartThisSeason, usualStartersMissing } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -102,5 +102,18 @@ North Carolina Tar Heels (5-3):
     expect(firstStartThisSeason([qb('Julian Sayin'), qb('Luke Fahey')], 'Luke Fahey')).toBe(false);
     expect(firstStartThisSeason([qb('Julian Sayin'), undefined], 'Luke Fahey')).toBe(false);
     expect(firstStartThisSeason([], 'Luke Fahey')).toBe(false);
+  });
+});
+
+describe('usualStartersMissing', () => {
+  // Navy's official boxes list the center "OC": Toran Smith started Sep 5 to Oct 3 and was out of the Oct 10 lineup.
+  it('names a usual starting center the school lists as OC', () => {
+    const lineup = (names) => names.map(([name, position]) => ({ name, position, key: name.toLowerCase().replace(/[^a-z]/g, '') }));
+    const map = new Map([
+      ['1', lineup([['Toran Smith', 'OC'], ['Cam Nichols', 'OC'], ['Blake Horvath', 'QB']])],
+      ['2', lineup([['Toran Smith', 'OC'], ['Cam Nichols', 'OC'], ['Blake Horvath', 'QB']])],
+      ['3', lineup([['Matthew Tomaszewski', 'OG'], ['Cam Nichols', 'OC'], ['Blake Horvath', 'QB']])],
+    ]);
+    expect(usualStartersMissing(map, ['1', '2', '3'], '3')).toBe('Toran Smith (OC) (each started most of their 2 earlier games with a lineup on file)');
   });
 });
