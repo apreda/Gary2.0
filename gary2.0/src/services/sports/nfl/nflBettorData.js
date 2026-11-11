@@ -1069,8 +1069,9 @@ export function gameByGame(d, team, before, { meetingUnder = null, read = null }
 // ROSTER MOVES SINCE EACH TEAM'S LAST GAME (round 8, Oct 29 2026: the Titans traded Jeffery Simmons, 83-98% of their
 // defensive snaps, to the Bears on the Thursday before their game, and neither read said so; the weekly roster lags a
 // move made after a team's last game). ESPN's team roster is who is there now (it keeps injured reserve and drops a
-// player traded or released). Gone: a player with a quarter or more of a unit's snaps in either of the team's last two
-// games who is off its roster. New: a player on its roster who played a quarter or more for another club this season
+// player traded or released). Gone: a player with a quarter or more of a unit's snaps in the team's last game who is off
+// its roster (round 9 narrowed it from either of the last two, so "since its Wk N game" stays true: NFL pass 2 found 23
+// regulars of the game before who were gone, and 16 of them had no snap in the last game, most moved before it). New: a player on its roster who played a quarter or more for another club this season
 // and never for it. Null when ESPN's roster did not load.
 const espnRosters = new Map();
 async function espnRosterNames(team) {
