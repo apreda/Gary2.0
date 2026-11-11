@@ -143,7 +143,50 @@ const PROP_LABELS: Record<string, string> = {
 // header layout of Oct 6-8 averaged about 300. Images stay off X (image posts drew 138-245 views). The link
 // goes in the reply. The log row is claimed before the send so overlapping runs can never post it twice; a
 // failed send releases the claim.
-const LINK_REPLY = "The full breakdown is free in the app: betwithgary.ai/c/xpick";
+// THE REPLY (Nov 10 2026: back to the Aug 14 reply). Under each pick post in Aug and Sep sat one reply: "Gary's
+// Prop Bets" for that game, then a line sending people to the app through the bio. No web link, on purpose: a
+// link in the thread suppresses reach, and the "betwithgary.ai/c/xpick" reply that replaced it drew 19 clicks
+// in 51 posts. A game with no props gets the handoff line alone.
+const APP_HANDOFF = [
+  "The full read, and the rest of today's card, are in the app. Link in bio.",
+  "Rest of the reasoning and the full slate are in the app. Link in bio.",
+  "Tonight's other plays and the deeper look at this one are in the app. Link in bio.",
+];
+const handoffFor = (today: string) => APP_HANDOFF[Number(String(today).slice(8, 10)) % APP_HANDOFF.length];
+
+/** "Jayson Tatum OVER 6.5 assists": the bet, never the price. */
+function propLine(p: any): string {
+  const [type, line] = String(p?.prop ?? "").split(" ");
+  if (type === "home_runs") return `${p.player} ${PROP_LABELS.home_runs}`;
+  const label = PROP_LABELS[type] ?? String(type ?? "").replace(/_/g, " ");
+  return `${p.player} ${String(p?.bet ?? "").toUpperCase()} ${line} ${label}`;
+}
+
+export function propsReplyText(props: any[], handoff: string): string {
+  const seen = new Set<string>();
+  let lines: string[] = [];
+  for (const p of props ?? []) {
+    const key = `${p?.player}|${p?.prop}|${p?.bet}`;
+    if (!p?.player || seen.has(key)) continue;
+    seen.add(key);
+    const next = [...lines, propLine(p)];
+    if (`Gary's Prop Bets\n\n${next.join("\n")}\n\n${handoff}`.length > 270) break;
+    lines = next;
+  }
+  return lines.length ? `Gary's Prop Bets\n\n${lines.join("\n")}\n\n${handoff}` : handoff;
+}
+
+/** The reply under one pick post: Gary's other props on that game (never the posted pick itself), then the handoff. */
+async function replyFor(sp: any, today: string): Promise<string> {
+  const handoff = handoffFor(today);
+  try {
+    const { data } = await sb.from("winners_candidates")
+      .select("player:pick_snapshot->>player, prop:pick_snapshot->>prop, bet:pick_snapshot->>bet")
+      .eq("game_date", today).eq("kind", "prop").eq("pick_snapshot->>matchup", String(sp?.matchup ?? "")).order("id").limit(12);
+    const mine = (data ?? []).filter((p: any) => !(sp?.kind === "prop" && p.player === sp.player && p.prop === sp.prop));
+    return propsReplyText(mine, handoff);
+  } catch (_e) { return handoff; }
+}
 const WRITER_MODEL = Deno.env.get("SOCIAL_ANTHROPIC_MODEL") ?? "claude-opus-5-5";
 
 const lastWord = (team: string) => String(team ?? "").trim().split(/\s+/).pop() ?? "";
@@ -273,7 +316,7 @@ async function postTweetWithClip(text: string, videoPath: string): Promise<strin
 /** One pick post: the claim, the text, the post, the link reply. `claimKey` is the log row's pick_text. */
 async function postFreePick(sp: any, claimKey: string, today: string, nowMs: number, dryRun: boolean, opts: { slot?: string; reply?: string } = {}) {
   const slot = opts.slot ?? "free_pick";
-  const linkReply = opts.reply ?? LINK_REPLY;
+  const replyText = () => opts.reply ? Promise.resolve(opts.reply) : replyFor(sp, today);
   const leadMin = Math.round((new Date(sp.commence_time).getTime() - nowMs) / 60_000);
   if (!dryRun && leadMin < LEAD_MIN_MIN) return { posted: false, reason: `free pick's game starts in ${leadMin} min; too late to post` };
   const { data: already, error: logErr } = await sb.from("social_post_log")
@@ -299,7 +342,7 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
 
   if (dryRun) {
     const composed = await freePickText(sp);
-    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, ...composed, clip: hasClip ? clip : null, reply: linkReply };
+    return { posted: false, dry_run: true, pick: sp.pick_text, lead_min: leadMin, ...composed, clip: hasClip ? clip : null, reply: await replyText() };
   }
 
   const { error: claimErr } = await sb.from("social_post_log").insert({
@@ -323,7 +366,7 @@ async function postFreePick(sp: any, claimKey: string, today: string, nowMs: num
   }
   const threadUrl = `https://x.com/BetwithGary/status/${tweetId}`;
   let replyId: string | null = null;
-  try { replyId = await postTweet(linkReply, tweetId); } catch (e) { console.error("free pick link reply failed: " + String(e)); }
+  try { replyId = await postTweet(await replyText(), tweetId); } catch (e) { console.error("free pick reply failed: " + String(e)); }
   const { error: upErr } = await sb.from("social_post_log").update({
     hook_tweet_id: tweetId, cta_tweet_id: replyId, thread_url: threadUrl, posted_at: new Date().toISOString(), post_text: text,
     audience_selection: { format: "gary_call_v1", writer, clip: withClip ? `gary-call/${clip}` : null },
@@ -410,7 +453,7 @@ async function runGamePicks(today: string, nowMs: number, dryRun: boolean, previ
     if (!c.summary || !c.away || !c.home || !c.commence_time || !c.pick_text) continue;
     if (rankedLeagues.has(league) && !ranked.has(gameKey(c.league, c.away, c.home))) continue;
     const sp = { candidate_id: c.id, league: c.league, kind: "game", pick_text: c.pick_text, odds: c.odds, matchup: `${c.away} @ ${c.home}`, commence_time: c.commence_time };
-    const opts = { slot: "game_pick", reply: `The full breakdown on ${matchupWords(sp, "")} is free in the app: betwithgary.ai/c/xgame` };
+    const opts = { slot: "game_pick" };
     if (previewAll) { out.push(await postFreePick(sp, String(c.pick_text), today, nowMs, true, opts)); continue; }
     const leadMin = (new Date(c.commence_time).getTime() - nowMs) / 60_000;
     if (leadMin > GAME_LEAD_MAX_MIN || leadMin < LEAD_MIN_MIN) continue;

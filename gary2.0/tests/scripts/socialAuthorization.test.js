@@ -108,7 +108,8 @@ describe('authorized X operations retain their existing behavior against recordi
   // once, as text: a fact from Gary's published case, the exact ticket without its price, a second fact. The
   // writer supplies only the two facts; code places the ticket. A failed writer never drops the post. The
   // result goes out as a post quoting the pick once it is graded.
-  const LINK_REPLY = 'The full breakdown is free in the app: betwithgary.ai/c/xpick';
+  // The reply under the pick: Gary's props on that game, then the handoff to the app. No web link.
+  const HANDOFF = "The full read, and the rest of today's card, are in the app. Link in bio.";
   const day = '2026-10-12';
   const streakPick = { candidate_id: 'cand-1', league: 'MLB', kind: 'game', pick_text: 'Los Angeles Angels ML +120', odds: 120,
     matchup: 'Los Angeles Angels @ Milwaukee Brewers', commence_time: day + 'T19:05:00-04:00', player: null, prop: null, bet: null };
@@ -119,7 +120,7 @@ describe('authorized X operations retain their existing behavior against recordi
   const writerReply = input => Response.json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'write_hook', input }] });
   const expectedText = `${opening}\n\nLos Angeles Angels ML\n\n${closing}`;
   /** One free pick day's dependencies; an override answers its path ahead of the defaults. */
-  const freePickTransport = (overrides = {}, { today = day, pick = streakPick, source = rationale } = {}) => call => {
+  const freePickTransport = (overrides = {}, { today = day, pick = streakPick, source = rationale, props = [] } = {}) => call => {
     const path = call.url.pathname;
     if (overrides[path]) return overrides[path](call);
     switch (path) {
@@ -134,6 +135,7 @@ describe('authorized X operations retain their existing behavior against recordi
         expect(call.url.searchParams.get('pick_text')).toBe('eq.FREE PICK ' + today);
         return Response.json([]);
       case '/rest/v1/winners_candidates':
+        if (call.url.searchParams.get('kind') === 'eq.prop') { expect(call.url.searchParams.get('pick_snapshot->>matchup')).toBe('eq.' + pick.matchup); return Response.json(props); }
         expect(call.url.searchParams.get('id')).toBe('eq.' + pick.candidate_id);
         return Response.json([{ rationale: source }]);
       case '/v1/messages': return writerReply(written);
@@ -160,7 +162,7 @@ describe('authorized X operations retain their existing behavior against recordi
       },
     }, { source: scenario === 'empty-source' ? '' : rationale }) });
     const result = await f.internal('runFreePickMode')(day, Date.parse(day + 'T16:00:00-04:00'), true);
-    expect(result).toMatchObject({ posted: false, dry_run: true, pick: streakPick.pick_text, lead_min: 185, reply: LINK_REPLY });
+    expect(result).toMatchObject({ posted: false, dry_run: true, pick: streakPick.pick_text, lead_min: 185, reply: HANDOFF });
     expect(result.error).toBeUndefined();
     if (scenario === 'ok') expect(result).toMatchObject({ text: expectedText, writer: 'fact / pick / fact' });
     else {
@@ -203,10 +205,10 @@ describe('authorized X operations retain their existing behavior against recordi
       },
       '/functions/v1/post-reply-tweet': call => {
         expect(call.headers.get('Authorization')).toBe(`Bearer ${serviceKey}`);
-        expect(JSON.parse(call.body)).toEqual({ text: LINK_REPLY, replyToId: '777' });
+        expect(JSON.parse(call.body)).toEqual({ text: `Gary's Prop Bets\n\nMike Trout OVER 0.5 hits\n\n${HANDOFF}`, replyToId: '777' });
         return Response.json({ success: true, tweetId: '778' });
       },
-    }) });
+    }, { props: [{ player: 'Mike Trout', prop: 'hits 0.5', bet: 'over' }, { player: 'Mike Trout', prop: 'hits 0.5', bet: 'over' }] }) });
     const result = await f.internal('runFreePickMode')(day, Date.parse(day + 'T16:00:00-04:00'), false);
     const claim = f.calls.find(c => c.method === 'POST' && c.url.pathname === '/rest/v1/social_post_log');
     expect(JSON.parse(claim.body)).toEqual({ post_date: day, slot: 'free_pick', league: 'MLB', pick_text: 'FREE PICK ' + day, pick_id: 'cand-1', commence_time: streakPick.commence_time, thread_format: 'free_pick' });
