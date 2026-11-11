@@ -101,3 +101,16 @@ describe('the opponent\'s left early line, by the same rule', () => {
     expect(row).toMatch(/Cowboys regulars who left early or were limited: Jake Ferguson \(TE, 5% of snaps; 56 to 58% in his 2 earlier games; last named on a play Q1 9:02\)/);
   });
 });
+
+// NFL pass 2, Nov 10 2026: a game PFR had not charted read "defenders thrown at: none three times or more" for both sides.
+describe('coverage before PFR has charted the game', () => {
+  it('says not on file for an uncharted game and reads the charting for a charted one', () => {
+    const gm = (wk, day) => ({ game_id: `g${wk}`, season: '2026', game_type: 'REG', week: String(wk), gameday: `2026-10-${day}`, home_team: 'DAL', away_team: 'NYG', home_score: '20', away_score: '10' });
+    const games = [gm(1, '04'), gm(2, '11')];
+    const def = { game_id: 'g1', team: 'DAL', pfr_player_name: 'Trevon Diggs', def_targets: '5', def_completions_allowed: '3', def_yards_allowed: '40' };
+    const d = { season: 2026, schedule: games, teamWeek: [], playerWeek: [], rosterWeekly: [], snaps: [], pressure: { qbs: new Map(), rushers: new Map([['g1|DAL', [def]]]) } };
+    const rows = gameByGame(d, 'Dallas Cowboys', '2026-11-12').split(/\n  Wk /);
+    expect(rows.find((r) => r.startsWith('2 '))).toMatch(/coverage: not on file for this game/);
+    expect(rows.find((r) => r.startsWith('1 '))).toMatch(/coverage: Cowboys defenders thrown at: Trevon Diggs 3 of 5 for 40/);
+  });
+});

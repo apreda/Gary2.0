@@ -828,6 +828,10 @@ function contactLine(d, x, code) {
 // thrown at three times or more with what he allowed, and each quarterback's dropped passes and bad throws.
 function coverageLine(d, x, code) {
   if (!d.pressure) return null;
+  // A game PFR has not charted yet is said to be, as the pressure line says it (NFL pass 2: the Week 9 rows read "none
+  // three times or more" for both defenses before PFR's Week 9 charting was out).
+  const charted = (team) => (d.pressure.rushers.get(`${x.g.game_id}|${team}`) || []).length > 0;
+  if (!charted(code) && !charted(x.opp)) return 'coverage: not on file for this game';
   const cover = (team) => (d.pressure.rushers.get(`${x.g.game_id}|${team}`) || []).filter((r) => n(r.def_targets) >= 3)
     .sort((a, b) => n(b.def_targets) - n(a.def_targets)).slice(0, 5)
     .map((r) => `${r.pfr_player_name} ${n(r.def_completions_allowed)} of ${n(r.def_targets)} for ${n(r.def_yards_allowed)}${n(r.def_receiving_td_allowed) ? `, ${n(r.def_receiving_td_allowed)} TD` : ''}${n(r.def_missed_tackles) >= 2 ? `, ${n(r.def_missed_tackles)} missed tackles` : ''}`).join('; ');
