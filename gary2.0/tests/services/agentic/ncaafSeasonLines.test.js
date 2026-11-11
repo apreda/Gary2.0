@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
-import { opponentClause, firstStartThisSeason, usualStartersMissing, siteName } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
+import { opponentClause, firstStartThisSeason, usualStartersMissing, siteName, puntingText } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -123,5 +123,17 @@ describe('siteName', () => {
     expect(siteName({ name: 'Memorial Stadium (Norman, OK)', city: 'Norman', state: 'OK' })).toBe('Memorial Stadium');
     expect(siteName({ name: 'Tiger Stadium (LA)', city: 'Baton Rouge', state: 'LA' })).toBe('Tiger Stadium');
     expect(siteName({ name: 'Memorial Stadium (Lincoln)', city: 'Norman', state: 'OK' })).toBe('Memorial Stadium (Lincoln)');
+  });
+});
+
+// Missouri read "Reus 5 punts for 248 yds; 1 blocked" where its box has 6 for 257: the blocked one is ESPN's Team row.
+describe('puntingText', () => {
+  it('counts the Team row, a blocked one as blocked and any other as a team punt', () => {
+    const p = (name, punts, yds) => ({ teamId: '1', name, stats: { punting: { punts, puntYards: yds, puntsInside20: 3 } } });
+    const box = (players, blocked) => ({ players, drives: Array.from({ length: blocked }, () => ({ teamId: '1', result: 'BLOCKED PUNT' })) });
+    expect(puntingText(box([p('Brunno Reus', 5, 248), p(' Team', 1, 9)], 1), '1')).toBe('punting: Brunno Reus 5 punts for 248 yds, 3 inside the 20; and 1 blocked for 9 yds');
+    expect(puntingText(box([p('Jakob Anderson', 6, 280), p(' Team', 1, 33)], 0), '1')).toBe('punting: Jakob Anderson 6 punts for 280 yds, 3 inside the 20; and a team punt for 33 yds');
+    expect(puntingText(box([p('Jakob Anderson', 6, 280)], 1), '1')).toBe('punting: Jakob Anderson 6 punts for 280 yds, 3 inside the 20; 1 blocked');
+    expect(puntingText(box([], 0), '1')).toBe('no punts');
   });
 });

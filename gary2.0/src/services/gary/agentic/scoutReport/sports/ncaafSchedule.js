@@ -338,6 +338,24 @@ export function usualStartersMissing(map, gameIds, gameId) {
  * started every game before). `earlier` holds each earlier game's starting lineup; with no earlier game, or any of them
  * without a starting quarterback on file, it is not known and the row says nothing.
  */
+/** Punting from the box's punting group, as the second system and the NFL read have it (round 13): "punting: Brunno Reus
+ * 5 punts for 248 yds, 3 inside the 20; and 1 blocked for 9 yds", or "no punts". Blocked punts from the drives. */
+export function puntingText(box, teamId) {
+  const blocked = (box?.drives || []).filter((x) => x.teamId === String(teamId) && /^BLOCKED PUNT/.test(String(x.result || ''))).length;
+  const mine = (box?.players || []).filter((p) => p.teamId === String(teamId) && Number(p.stats?.punting?.punts) > 0);
+  const isTeam = (p) => /^\s*team\s*$/i.test(String(p.name || ''));
+  const punts = mine.filter((p) => !isTeam(p))
+    .map((p) => `${p.name} ${p.stats.punting.punts} punt${Number(p.stats.punting.punts) === 1 ? '' : 's'} for ${p.stats.punting.puntYards ?? '?'} yds, ${p.stats.punting.puntsInside20 || 0} inside the 20`);
+  // ESPN's "Team" row is no punter (round 14: a blocked punt read "Team 1 punt for 0 yds"), but its punts are the team's
+  // (Nov 10 2026 college pass 3: Missouri read "Reus 5 punts for 248 yds; 1 blocked" where the box has 6 for 257, the
+  // blocked one the 9-yard Team row). ESPN puts a blocked punt on that row: the ones the drives call blocked are said so.
+  const team = mine.find(isTeam), tn = Number(team?.stats?.punting?.punts) || 0, ty = team?.stats?.punting?.puntYards ?? '?';
+  const bt = Math.min(tn, blocked), rest = tn - bt;
+  if (tn) punts.push(`${punts.length ? 'and ' : ''}${[bt ? `${bt} blocked` : '', rest ? (rest === 1 ? 'a team punt' : `${rest} team punts`) : ''].filter(Boolean).join(' and ')} for ${ty} yds`);
+  const more = blocked - bt;
+  return punts.length ? `punting: ${punts.join('; ')}${more ? `; ${more} blocked` : ''}` : more ? `punting: ${more} blocked` : 'no punts';
+}
+
 export function firstStartThisSeason(earlier, name) {
   const qbsOf = (lineup) => (lineup || []).filter((x) => /^QB$/i.test(String(x.position || '')));
   if (!earlier?.length || earlier.some((lineup) => !qbsOf(lineup).length)) return false;
@@ -584,12 +602,7 @@ async function playerGames(sides, boxes) {
         // Who kicked the extra points, now that the scoring lines no longer credit each one (round 16).
         const xpRows = rs.filter((x) => Number(x.extra_point_attempts) > 0);
         const xpBy = xpRows.map((x) => `${String(x.player.first_name || '').charAt(0)}.${x.player.last_name}${xpRows.length > 1 ? ` ${x.extra_points_made}-of-${x.extra_point_attempts}` : ''}`).join(', ');
-        // Punting from the box's punting group, as the second system and the NFL read have it (round 13).
-        // ESPN's "Team" row is no punter (round 14: a blocked punt read "Team 1 punt for 0 yds"); blocked punts from the drives.
-        const blocked = (box.drives || []).filter((x) => x.teamId === String(teamId) && /^BLOCKED PUNT/.test(String(x.result || ''))).length;
-        const punts = (box.players || []).filter((p) => p.teamId === String(teamId) && Number(p.stats?.punting?.punts) > 0 && !/^\s*team\s*$/i.test(String(p.name || '')))
-          .map((p) => `${p.name} ${p.stats.punting.punts} punt${Number(p.stats.punting.punts) === 1 ? '' : 's'} for ${p.stats.punting.puntYards ?? '?'} yds, ${p.stats.punting.puntsInside20 || 0} inside the 20`).join('; ');
-        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}${xpBy ? ` (${xpBy})` : ''}` : 'no kicks'}${punts ? `; punting: ${punts}${blocked ? `; ${blocked} blocked` : ''}` : blocked ? `; punting: ${blocked} blocked` : '; no punts'}`;
+        return `${fga || xpa ? `${fga ? (byKicker ? `FG ${byKicker}` : `FG ${sum('field_goals_made')}-of-${fga}`) : 'no field goal tries'}, XP ${sum('extra_points_made')}-of-${xpa}${xpBy ? ` (${xpBy})` : ''}` : 'no kicks'}; ${puntingText(box, teamId)}`;
       };
       // How the drives ended, and the ones that began in the other team's half with how they ended.
       const driveLine = (teamId) => {
