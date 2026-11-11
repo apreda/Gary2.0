@@ -45,8 +45,10 @@ export async function ensureNbaRecords(season = nbaSeason()) {
   // days after its date, once each.
   // Again at 2 PM ET the day after: ESPN's box can still be settling in the morning (Oct 29 2026 hunt: Jalen Johnson's
   // blocks went 1 to 2 at 10:55 AM and back to 1 by noon, and the record kept the 2).
+  // And at 8 AM ET four days after (Nov 10 2026 data round: 6 numbers in 3 games of Nov 4 and Nov 6 moved after the
+  // day-2 rebuild and sat wrong on the Nov 9 desks until the day-7 one).
   const at = (ymd, days, hourUtc = 12) => Date.parse(`${String(ymd).slice(0, 10)}T00:00:00Z`) + days * 86_400_000 + hourUtc * 3_600_000;
-  const beforeCorrections = (s) => Boolean(s.builtAt) && [[1, 12], [1, 18], [2, 12], [7, 12]].some(([d, h]) => Date.parse(s.builtAt) < at(s.date, d, h) && Date.now() >= at(s.date, d, h));
+  const beforeCorrections = (s) => Boolean(s.builtAt) && [[1, 12], [1, 18], [2, 12], [4, 12], [7, 12]].some(([d, h]) => Date.parse(s.builtAt) < at(s.date, d, h) && Date.now() >= at(s.date, d, h));
   const missing = games.filter((g) => { const s = stored.get(String(g.id)); return !s || s.version !== NBA_RECORD_VERSION || beforeCorrections(s) || (String(s.date) >= recent && s.failed.some((c) => LATE.includes(c))); });
   const failed = [];
   // A correction rebuild that lost a part the stored record had (an ESPN call that failed this pass) keeps the stored
