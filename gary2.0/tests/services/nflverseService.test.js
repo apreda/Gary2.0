@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   parseCsv, nflverseCode, getPracticeReport, getSnapShare,
-  NFLVERSE_TEAM_CODES, _clearNflverseCache
+  NFLVERSE_TEAM_CODES, _clearNflverseCache, loadNflverseFile
 } from '../../src/services/providers/nflverseService.js';
+import { mkdtempSync, writeFileSync, utimesSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * The NFL's closest thing to MLB's confirmed-lineup gate.
@@ -123,5 +126,72 @@ describe('snap share — usage, not depth chart', () => {
     const r = await getSnapShare('Detroit Lions', 2026, { fetchImpl: fakeFetch({ snap_counts: 404 }) });
     expect(r.unavailable).toBe(true);
     expect(r.offense).toBeUndefined();
+  });
+});
+
+// Nov 8 2026: every download timed out at 5:30 AM and the copies on disk were from Thursday night.
+describe('a failed download and the copy on disk', () => {
+  const TEAM_HEADER = 'season,week,team,season_type,game_id,opponent_team,passing_yards';
+  const SCHEDULE = [
+    { game_id: '2026_09_CIN_ATL', season: '2026', home_team: 'ATL', away_team: 'CIN', home_score: '20', away_score: '17', gameday: '2026-11-08', gametime: '09:30' },
+    { game_id: '2026_09_TB_CHI', season: '2026', home_team: 'CHI', away_team: 'TB', home_score: '16', away_score: '0', gameday: '2026-11-08', gametime: '13:00' },
+    { game_id: '2026_10_NE_DET', season: '2026', home_team: 'DET', away_team: 'NE', home_score: '', away_score: '', gameday: '2026-11-15', gametime: '09:30' }
+  ];
+  const teamRow = (game, team, opp) => `2026,9,${team},REG,${game},${opp},200`;
+  const complete = [TEAM_HEADER, teamRow('2026_09_CIN_ATL', 'ATL', 'CIN'), teamRow('2026_09_CIN_ATL', 'CIN', 'ATL'),
+    teamRow('2026_09_TB_CHI', 'CHI', 'TB'), teamRow('2026_09_TB_CHI', 'TB', 'CHI')].join('\n');
+  const timeout = async () => { const e = new Error('The operation was aborted due to timeout'); e.name = 'TimeoutError'; throw e; };
+  const notFound = async () => ({ status: 404, ok: false });
+  const copyOnDisk = (asset, body, hoursOld) => {
+    const dir = mkdtempSync(join(tmpdir(), 'nflverse-copy-'));
+    const file = join(dir, `${asset}_2026.csv`);
+    writeFileSync(file, body);
+    const t = (Date.now() - hoursOld * 3600_000) / 1000; utimesSync(file, t, t);
+    return dir;
+  };
+  const opts = (diskDir, fetchImpl) => ({ fetchImpl, disk: true, diskDir, scheduleRows: SCHEDULE });
+
+  it('a timeout with a complete copy 54 hours old returns the copy', async () => {
+    const r = await loadNflverseFile('stats_team_week', 2026, opts(copyOnDisk('stats_team_week', complete, 54), timeout));
+    expect(r.unavailable).toBeUndefined();
+    expect(r.fromDisk).toBe(true);
+    expect(r.ageHours).toBe(54);
+    expect(r.rows).toHaveLength(4);
+  });
+
+  it('a timeout with a copy that lacks a finished game is a failed load', async () => {
+    const lacking = complete.split('\n').filter((l) => !l.includes('2026_09_TB_CHI,TB')).join('\n');
+    const r = await loadNflverseFile('stats_team_week', 2026, opts(copyOnDisk('stats_team_week', lacking, 54), timeout));
+    expect(r.unavailable).toBe(true);
+    expect(r.reason).toMatch(/^Could not reach nflverse for stats_team_week_2026\.csv/);
+  });
+
+  it('PFR charting stands in at any age; the injury file only under 12 hours', async () => {
+    const pfr = await loadNflverseFile('advstats_week_def', 2026, opts(copyOnDisk('advstats_week_def', 'game_id,team\n2026_09_CIN_ATL,ATL', 54), timeout));
+    expect(pfr.fromDisk).toBe(true);
+    const old = await loadNflverseFile('injuries', 2026, opts(copyOnDisk('injuries', 'season,team,week\n2026,ATL,9', 13), timeout));
+    expect(old.reason).toMatch(/^Could not reach nflverse/);
+    _clearNflverseCache();
+    const recent = await loadNflverseFile('injuries', 2026, opts(copyOnDisk('injuries', 'season,team,week\n2026,ATL,9', 11), timeout));
+    expect(recent.fromDisk).toBe(true);
+  });
+
+  it('a 404 with no copy on disk still reads "has not published"', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'nflverse-empty-'));
+    const r = await loadNflverseFile('stats_team_week', 2026, opts(dir, notFound));
+    expect(r.reason).toMatch(/has not published stats_team_week_2026\.csv/);
+  });
+
+  it('a good download is used, saved and kept as before; the copy on disk is not read', async () => {
+    const dir = copyOnDisk('stats_team_week', TEAM_HEADER, 54);
+    let asked = 0;
+    const good = async () => { asked += 1; return { status: 200, ok: true, text: async () => complete, headers: { get: () => 'Tue, 10 Nov 2026 17:04:20 GMT' } }; };
+    const r = await loadNflverseFile('stats_team_week', 2026, opts(dir, good));
+    expect(r.fromDisk).toBeUndefined();
+    expect(r.rows).toHaveLength(4);
+    expect(r.modified).toBe('Tue, 10 Nov 2026 17:04:20 GMT');
+    expect(existsSync(join(dir, 'stats_team_week_2026.csv.modified'))).toBe(true);
+    await loadNflverseFile('stats_team_week', 2026, opts(dir, good));
+    expect(asked).toBe(1);
   });
 });

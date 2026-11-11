@@ -31,8 +31,8 @@ import { homedir } from 'node:os';
 const RELEASE_BASE = 'https://github.com/nflverse/nflverse-data/releases/download';
 // The weekly player file is ~3 MB; on a slow connection it took 49 s against a 20 s limit, and its failure dropped
 // every NFL story back to the schedule's quarterback field (Oct 23 2026). Each file gets 90 s and one retry. The same
-// file downloaded within the last 12 hours stands in when both fail: the same source and the same data (the files
-// change after a game week), never another source's numbers.
+// file downloaded earlier stands in when both fail, when it is complete for what the reader needs (standInWhy below):
+// the same source and the same data, never another source's numbers.
 const REQUEST_TIMEOUT_MS = 90_000;
 const DISK_DIR = join(homedir(), '.cache', 'gary', 'nflverse');
 const DISK_MAX_AGE_MS = 12 * 3600 * 1000;
@@ -114,14 +114,67 @@ async function fetchRelease(url, fetchImpl) {
   }
 }
 
-async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk = fetchImpl === globalThis.fetch } = {}) {
+// WHICH COPY ON DISK MAY STAND IN, by what the file holds (Nov 10 2026: on Nov 8 every download timed out for 11 minutes
+// at 5:30 AM, the copies were from Thursday night, over 12 hours, and the Madrid game's read had no box scores).
+// One row per finished game: the copy stands in at any age when it has both teams' rows for every game the schedule
+// says has finished, and never when it lacks one (the load fails and the pick stops).
+const PER_GAME_FILES = new Set(['stats_team_week', 'stats_player_week', 'snap_counts']);
+// PFR's charting is posted days after a game, and a game without it already reads "not on file for this game".
+const POSTED_LATER_FILES = new Set(['advstats_week_pass', 'advstats_week_def', 'advstats_week_rush', 'advstats_week_rec']);
+// Everything else (injuries, roster, roster_weekly) says who is hurt or on the roster, which an old copy can get wrong:
+// only a copy under 12 hours old.
+
+// A schedule game's kickoff as an instant: the schedule gives the Eastern date and time.
+function kickoffMs(row) {
+  const [h] = String(row.gametime || '13:00').split(':').map(Number);
+  let t = Date.parse(`${row.gameday}T${String(row.gametime || '13:00').padStart(5, '0')}:00-05:00`);
+  const shown = Number(new Date(t).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })) % 24;
+  if (shown !== h) t -= 3_600_000; // daylight time
+  return t;
+}
+
+// Every game of the season the copy must hold: a final score in the schedule, or, when the schedule itself is an old
+// copy, a kickoff more than four and a half hours ago. Null when the schedule did not load: then nothing stands in.
+// The schedule is read without a download (its memo or its own copy), so this adds no waiting.
+async function finishedGames(season, scheduleRows) {
+  let rows = scheduleRows; let stale = false;
+  if (!rows) {
+    const { getNflSchedule } = await import('../sports/nfl/nflSchedule.js');
+    const s = await getNflSchedule({ fetchImpl: () => Promise.reject(new Error('no download here')) }).catch(() => null);
+    if (!s || s.unavailable || !Array.isArray(s.rows)) return null;
+    rows = s.rows; stale = s.stale !== false;
+  }
+  const now = Date.now();
+  return rows.filter((r) => String(r.season) === String(season)
+    && ((r.home_score !== '' && r.home_score != null && r.away_score !== '' && r.away_score != null)
+      || (stale && kickoffMs(r) + 4.5 * 3_600_000 < now)));
+}
+
+// Whether a copy on disk may stand in for a failed download, and why (for the run log), or null.
+async function standInWhy(asset, season, rows, ageMs, scheduleRows) {
+  if (POSTED_LATER_FILES.has(asset)) return 'PFR charting is posted days after a game, and a game without it reads not on file';
+  if (PER_GAME_FILES.has(asset)) {
+    const games = await finishedGames(season, scheduleRows);
+    if (!games) return null;
+    const have = new Set(rows.map((r) => `${r.game_id}|${r.team}`));
+    const missing = games.filter((g) => !have.has(`${g.game_id}|${g.home_team}`) || !have.has(`${g.game_id}|${g.away_team}`));
+    if (missing.length) {
+      console.warn(`[nflverse] ${asset}_${season}.csv: download failed and the copy on disk (${Math.round(ageMs / 3600000)} hours old) lacks ${missing.length} finished game${missing.length === 1 ? '' : 's'} (${missing.slice(0, 3).map((g) => g.game_id).join(', ')}), so it is not used`);
+      return null;
+    }
+    return `it has both teams' rows for all ${games.length} finished games in the schedule`;
+  }
+  return ageMs < DISK_MAX_AGE_MS ? 'it is under 12 hours old' : null;
+}
+
+async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk = fetchImpl === globalThis.fetch, diskDir = DISK_DIR, scheduleRows = null } = {}) {
   const key = `${asset}_${season}`;
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
 
   const tag = RELEASE_TAGS[asset] || asset;
   const url = `${RELEASE_BASE}/${tag}/${asset}_${season}.csv`;
-  const file = join(DISK_DIR, `${key}.csv`);
+  const file = join(diskDir, `${key}.csv`);
   let value; let lastError = null;
   for (let attempt = 0; attempt < 2 && !value; attempt++) {
     try {
@@ -133,20 +186,28 @@ async function loadRelease(asset, season, { fetchImpl = globalThis.fetch, disk =
         lastError = new Error(`HTTP ${r.status}`);
       } else {
         value = { rows: parseCsv(r.text), modified: r.modified || null, real: disk };
-        if (disk) { try { mkdirSync(DISK_DIR, { recursive: true }); writeFileSync(file, r.text); if (r.modified) writeFileSync(`${file}.modified`, r.modified); } catch { /* the copy is a convenience */ } }
+        if (disk) { try { mkdirSync(diskDir, { recursive: true }); writeFileSync(file, r.text); if (r.modified) writeFileSync(`${file}.modified`, r.modified); } catch { /* the copy is a convenience */ } }
       }
     } catch (error) {
       lastError = error;
     }
   }
   if (!value) {
-    // A failed fetch is NOT an empty result: the last good copy if it is recent, else the failure, said so.
+    // A failed fetch is NOT an empty result: the last good copy when it is complete for what the reader needs (above),
+    // else the failure, said so.
     try {
       const age = disk ? Date.now() - statSync(file).mtimeMs : Infinity;
       // The copy's publish time is the one saved with it; without it the practice words are not dated (round 11: the
       // download time stood in for it).
       let modified = null; try { modified = readFileSync(`${file}.modified`, 'utf8').trim() || null; } catch { /* not saved */ }
-      if (age < DISK_MAX_AGE_MS) return { rows: parseCsv(readFileSync(file, 'utf8')), fromDisk: true, ageHours: Math.round(age / 3600000), modified, real: true };
+      if (Number.isFinite(age) && (age < DISK_MAX_AGE_MS || PER_GAME_FILES.has(asset) || POSTED_LATER_FILES.has(asset))) {
+        const rows = parseCsv(readFileSync(file, 'utf8'));
+        const why = await standInWhy(asset, season, rows, age, scheduleRows);
+        if (why) {
+          console.warn(`[nflverse] ${asset}_${season}.csv: download failed (${lastError?.message || 'no answer'}); using the copy on disk from ${Math.round(age / 3600000)} hours ago, because ${why}`);
+          return { rows, fromDisk: true, ageHours: Math.round(age / 3600000), modified, real: true };
+        }
+      }
     } catch { /* no copy */ }
     return { unavailable: true, reason: `Could not reach nflverse for ${asset}_${season}.csv: ${lastError?.message || 'no answer'}` };
   }
