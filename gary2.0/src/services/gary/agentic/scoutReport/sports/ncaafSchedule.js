@@ -146,9 +146,16 @@ async function weatherLine(site, game) {
   return `Kickoff weather (forecast for the kickoff hour, issued about ${plural(weather.forecast_lead_hours, 'hour')} ahead): ${facts.join(', ')}${hours ? `; ${hours}` : ''}.`;
 }
 
+/** The stadium's name without a closing "(City, ST)" or "(ST)" the site line prints right after it (Nov 10 2026 college pass
+ * 3: "Memorial Stadium (Norman, OK), Norman, OK" on 3 of 17 desks). Any other parenthesis stays. */
+export function siteName(site) {
+  const here = [site?.city, site?.state].filter(Boolean).map((x) => String(x).trim().toLowerCase());
+  return String(site?.name || '').replace(/\s*\(([^()]*)\)\s*$/, (whole, inner) => (inner.split(/,\s*/).every((x) => here.includes(x.trim().toLowerCase())) ? '' : whole)) || null;
+}
+
 function siteLines(site, { homeTeam, awayTeam, game }) {
   if (!site || site.missing) return ['Site: the stadium for this game could not be resolved from the schedule provider.'];
-  const place = [site.name, site.city, site.state].filter(Boolean).join(', ');
+  const place = [siteName(site), site.city, site.state].filter(Boolean).join(', ');
   const facts = [site.capacity ? `capacity ${site.capacity.toLocaleString('en-US')}` : null, site.dome ? (retractable(site) ? 'retractable roof' : 'dome') : null,
     site.surface, Number.isFinite(site.elevationFt) ? `elevation ${site.elevationFt.toLocaleString('en-US')} ft` : null].filter(Boolean);
   const lines = [`Site: ${place}${facts.length ? ` (${facts.join(', ')})` : ''}.`

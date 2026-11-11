@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { seasonGames, seasonLines } from '../../../src/services/gary/agentic/orchestrator/ncaafRead.js';
-import { opponentClause, firstStartThisSeason, usualStartersMissing } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
+import { opponentClause, firstStartThisSeason, usualStartersMissing, siteName } from '../../../src/services/gary/agentic/scoutReport/sports/ncaafSchedule.js';
 
 // Oregon on Oct 17 2026: Dante Moore out, Brock Thomas starting, an 84-0 FCS win inside the season.
 const desk = `THIS SEASON GAME BY GAME (2026)
@@ -115,5 +115,13 @@ describe('usualStartersMissing', () => {
       ['3', lineup([['Matthew Tomaszewski', 'OG'], ['Cam Nichols', 'OC'], ['Blake Horvath', 'QB']])],
     ]);
     expect(usualStartersMissing(map, ['1', '2', '3'], '3')).toBe('Toran Smith (OC) (each started most of their 2 earlier games with a lineup on file)');
+  });
+});
+
+describe('siteName', () => {
+  it('drops a closing (City, ST) that the site line prints next', () => {
+    expect(siteName({ name: 'Memorial Stadium (Norman, OK)', city: 'Norman', state: 'OK' })).toBe('Memorial Stadium');
+    expect(siteName({ name: 'Tiger Stadium (LA)', city: 'Baton Rouge', state: 'LA' })).toBe('Tiger Stadium');
+    expect(siteName({ name: 'Memorial Stadium (Lincoln)', city: 'Norman', state: 'OK' })).toBe('Memorial Stadium (Lincoln)');
   });
 });
