@@ -260,11 +260,16 @@ function runsWithQb(g, side) {
   const y = qbs.reduce((a, r) => a + n(r.rushing_yards), 0), c = qbs.reduce((a, r) => a + n(r.carries), 0);
   return `${b.rushing} on ${b.carries}${c ? ` (QB ${y} on ${c})` : ''}`;
 }
-// `read`: the live read's memory across both teams' lists (round 16): an opponent's other games print once and later rows
-// point to them, and its games against tonight's two teams are bare results (each is a full row in that team's list).
-function opponentThatDay(d, before, x, read = null) {
+// `read`: the live read's memory across both teams' lists (round 16): its games against tonight's two teams are bare
+// results (each is a full row in that team's list).
+// `head`: the game row's head in THIS SEASON, GAME BY GAME, where each other game is its result, site, opponent and who
+// played quarterback, every row in full (NFL pass 2, Nov 10 2026: the per-game yards, sacks and giveaways were 12% of the
+// desk and one answer in 27 used them; the "under X above" pointer's list held this row's own game and not the earlier
+// one). NFL_OPP_GAMES_DETAIL=1 brings back the yards, sacks and giveaways and the pointers.
+function opponentThatDay(d, before, x, read = null, head = false) {
+  const detail = !head || process.env.NFL_OPP_GAMES_DETAIL === '1';
   const games = teamGames(d, x.opp, d.season, before);
-  const seen = read?.shown?.get(x.opp);
+  const seen = detail ? read?.shown?.get(x.opp) : null;
   // The starter who left early is named too (Oct 29 2026 hunt, round 7: the Patriots' Week 1 opponent read "Drew Lock at
   // QB that day", Sam Darnold's start and exit unsaid).
   const qbThat = x.oppPassers?.length ? `; ${qbsText(x.oppPassers, x.oppStartedQb)} at QB that day` : '';
@@ -273,9 +278,9 @@ function opponentThatDay(d, before, x, read = null) {
     // read: Dallas's 48 rushing against Green Bay was Dallas's usual output; only scores were shown).
     // With its sacks and turnovers both ways too (round 13: a pass rush's sacks could not be read against the lines it faced).
     .map((g) => { if (read?.tonight?.has(g.opp)) return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}`;
-      const u = g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sack${g.def.sacked === 1 ? '' : 's'} made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '';
-      return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}${g.passers?.length || u ? ` (${g.passers?.length ? qbsText(g.passers, g.startedQb, true) : 'QB not on file'}${u})` : ''}`; });
-  if (read?.shown && !seen) read.shown.set(x.opp, read.label);
+      const u = detail && g.off && g.def ? `; ran ${runsWithQb(g, 'off')}, passed for ${Math.round(g.off.yards - g.off.rushing)}, sacked ${g.off.sacked}, ${g.off.giveaways} giveaway${g.off.giveaways === 1 ? '' : 's'}; allowed ${runsWithQb(g, 'def')} rushing, ${Math.round(g.def.yards - g.def.rushing)} passing, ${g.def.sacked} sack${g.def.sacked === 1 ? '' : 's'} made, ${g.def.giveaways} takeaway${g.def.giveaways === 1 ? '' : 's'}` : '';
+      return `${g.won ? 'W' : g.tied ? 'T' : 'L'} ${g.pf}-${g.pa}${g.ot ? ' (OT)' : ''} ${versus(g, g.opp, true)}${g.passers?.length || (g.off && g.def) ? ` (${g.passers?.length ? qbsText(g.passers, g.startedQb, true) : 'QB not on file'}${u})` : ''}`; });
+  if (detail && read?.shown && !seen) read.shown.set(x.opp, read.label);
   // The meeting with tonight's other team: each of its other games is a full row in its own list, printed next (round 17:
   // about 1,000 characters of the Broncos' season again on the Chiefs' Week 1 row).
   const below = read?.tonight?.has(x.opp) && others.length ? `their other games: each a row in the ${teamName(x.opp)} list below` : null;
@@ -1068,7 +1073,7 @@ export function gameByGame(d, team, before, { meetingUnder = null, read = null }
     const weather = d.weather ? gameWeatherLine(x.g, d.weather.get(x.g.game_id)) : ['outdoors', 'open'].includes(x.g.roof) ? 'weather: not on file' : null;
     const detail = [without, boxLine(x, c, d), againstLine(d, x, c), pressureLine(d, x, c), coverageLine(d, x, c), contactLine(d, x, c), hurtLine(x, c, d), [scoring, kicking].filter(Boolean).join(' · ') || null, specialTeamsLine(d, x, c), flowLine(x, c), downsLine(x, c), bigPlaysLine(x, c), byScoreLine(x, c),
       d.ledgerGames && x.ledger ? driveLine(x, c) : null, weather, changes.get(x.g.game_id) || null].filter(Boolean);
-    return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x, read && { ...read, label: `${nickname(c)} Wk ${x.week}` })}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
+    return `  Wk ${x.week} · ${etDay(x.date)} · ${versus(x, teamName(x.opp))} (${opponentThatDay(d, before, x, read && { ...read, label: `${nickname(c)} Wk ${x.week}` }, true)}) · ${x.won ? 'W' : x.tied ? 'T' : 'L'} ${x.pf}-${x.pa}${ot}${qb}${detail.map((l) => `\n      ${l}`).join('')}`;
   })].join('\n');
 }
 

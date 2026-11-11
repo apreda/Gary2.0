@@ -115,6 +115,25 @@ describe('coverage before PFR has charted the game', () => {
   });
 });
 
+// NFL pass 2, Nov 10 2026: an opponent's other games in a game's head carried each one's yards, sacks and giveaways, 12% of
+// the desk, used once in 27 answers.
+describe('an opponent\'s other games in the game head', () => {
+  const games = [{ game_id: 'g1', season: '2026', game_type: 'REG', week: '1', gameday: '2026-09-13', home_team: 'NYG', away_team: 'PHI', home_score: '27', away_score: '30', overtime: '1' },
+    { game_id: 'g2', season: '2026', game_type: 'REG', week: '2', gameday: '2026-09-20', home_team: 'DAL', away_team: 'PHI', home_score: '20', away_score: '10' }];
+  const tw = ['NYG', 'PHI'].map((team) => ({ game_id: 'g1', team, rushing_yards: 100, carries: 25, passing_yards: 200, sacks_suffered: 2, passing_interceptions: 1 }));
+  const d = { season: 2026, schedule: games, teamWeek: tw, snaps: [], rosterWeekly: [],
+    playerWeek: [{ player_id: 'p1', player_display_name: 'Jalen Hurts', position: 'QB', team: 'PHI', game_id: 'g1', week: '1', season: '2026', attempts: 30, completions: 20 }] };
+  const head = () => gameByGame(d, 'Dallas Cowboys', '2026-11-12').split('\n').find((l) => /^  Wk 2 /.test(l));
+  it('gives each one as its result, site, opponent and quarterback only', () => {
+    expect(head()).toMatch(/their other games, newest first: W 30-27 \(OT\) @ NYG \(Hurts\)\) · W 20-10 · /);
+  });
+  it('gives the yards, sacks and giveaways again with NFL_OPP_GAMES_DETAIL=1', () => {
+    process.env.NFL_OPP_GAMES_DETAIL = '1';
+    try { expect(head()).toMatch(/@ NYG \(Hurts; ran 100 on 25, passed for 200, sacked 2, 1 giveaway; allowed 100 on 25 rushing, 200 passing, 2 sacks made, 1 takeaway\)/); }
+    finally { delete process.env.NFL_OPP_GAMES_DETAIL; }
+  });
+});
+
 // NFL pass 2 round 4, Nov 10 2026: the Lions' Wk 1 hurt line read "R.Ya-Sin (Q5 4:17; on a later play)" for an overtime play.
 describe('the hurt line in overtime', () => {
   it('reads OT, as the scoring list does, not Q5', () => {
