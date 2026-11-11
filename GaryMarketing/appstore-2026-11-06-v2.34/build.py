@@ -2,7 +2,8 @@
 """App Store 6.9" screenshots for Gary 2.34 (1320 x 2868). Real app captures and the app's own art only.
 The first three show in App Store search, so they lead with what nothing else in search has: Gary himself,
 then the two best-looking screens. Captures: the card is from the Sep 28 capture in brand-2026-09/captures;
-Home, Darts and Billfold are the Nov 5 captures on the website; Winners pack and scorebook are Oct 9.
+Home, Darts and Billfold are the Nov 5 captures on the website; the scorebook is Oct 9; Winners is the
+Nov 10 page (winners.png), which replaced the Oct 9 pack capture (pack.png).
 
   python3 build.py  ->  out/01-gary.png ... out/06-record.png
 """
@@ -78,7 +79,7 @@ BOARDS = [
     # 4. Ritual: the best plays arrive sealed and open like a pack.
     ("04-winners",
      copy("Winners", "Best plays,<br><em>sealed.</em>", "A few every day, sealed until you tap.")
-     + phone("pack.png", 1010)),
+     + phone("winners.png", 965)),
     # 5. Trust: the numbers behind a top play, circled by hand.
     ("05-his-work",
      copy("Every pick, explained", "He shows<br><em>his work.</em>", "The numbers behind each top play, and why they matter.")
