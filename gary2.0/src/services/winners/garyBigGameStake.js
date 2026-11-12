@@ -36,6 +36,7 @@ export function buildBigGameAsk({ league, ticket, bankroll }) {
     ticket.case_home ? `THE HOME SIDE'S CASE:\n${String(ticket.case_home).trim()}` : null,
     '',
     'How much goes on it, and why?',
+    'Your why is in words: no hit rates, no percentages, no probabilities, no break-even math, nothing about what a price asks for.',
     `Answer with JSON only: {"stake_dollars":${BET_MIN_DOLLARS},"why":"one or two sentences in your voice"}. No fact, number or name that is not in your case.`,
   ].filter((l) => l !== null).join('\n');
 }
