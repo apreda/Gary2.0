@@ -145,7 +145,7 @@ export async function reconcilePublished(client,date, {now=Date.now()}={}) {
 async function main() {
   if(!process.env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Winners worker requires the configured service-role credential');
   const watch=process.argv.includes('--watch');
-  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=the only game on, plus Gary's best from the games people care about (NFL 4, NBA 2, college 5; five a day at most); props=daily-props-v1; mode=${watch?'watch':'once'}`);
+  console.log(`[Winners] started ${new Date().toISOString()} pid=${process.pid} on ${STARTED_ON?.slice(0,8) || 'unknown commit'}; games=big games + boards (NFL 2, NBA 2, college 3); props=daily-props-v1; mode=${watch?'watch':'once'}`);
   if(!watch) {
     await reconcilePublished(supabase,todayET());
     await runPropsSelection(supabase,todayET());
@@ -208,15 +208,6 @@ async function main() {
       await sleep(LOOP_MS);
     }
   };
-  // THE RULE PICKS THE POOL, GARY PICKS FROM IT (founder, Nov 9 2026: "it needs to be a mix of relevant games and the
-  // biggest game but really only if there arent other games in that window and then dropping games nobody cares
-  // about either team"; "we want gary to sell picks like a normal person would"). Locked onto Winners: a game that
-  // has its window to itself (winners_big_games: NFL prime time and any other lone kickoff, a ranked college game
-  // alone in its window) and the NBA's national-TV games. Everything else is Gary's own best bets, and a board only
-  // shows him games people care about: for the NFL and NBA no game between two bottom-half teams and no game where
-  // his pick is on a bottom-third team (powerRatings.js); for college only games with a ranked team or on ABC, CBS,
-  // FOX or NBC (ncaafBoard.js). Up to four a day for the NFL, two for the NBA, five for college, and no league
-  // passes five game plays a day (SQL seat_*_board).
   // GARY'S NFL BOARD (Oct 19 2026, nflBoard.js): about 110 minutes before a slate's first kickoff he picks his bets
   // from the board fresh; his bets on the same side as the pick seat when the board names them (Oct 25 2026) (SQL
   // seat_nfl_board). The card no longer seats NFL. Its late-news checks run in the card loop above.

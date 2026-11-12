@@ -106,16 +106,6 @@ export function ncaafBigGameIds(slate = [], max = 2) {
   return [...both, ...one].slice(0, max).map((r) => r.id);
 }
 
-/**
- * THE ONLY GAME ON (founder, Nov 9 2026: the biggest game is locked onto Winners "really only if there arent other
- * games in that window"): the slate's games with no other game starting within `gapMinutes` of them. Thursday, Sunday
- * and Monday night football, a London morning game, a Saturday or holiday game, a lone late kickoff.
- */
-export function standaloneGames(slate = [], gapMinutes = 100) {
-  const rows = (slate || []).map((g) => ({ g, t: Date.parse(g?.commence_time || g?.gameTime || '') })).filter((r) => Number.isFinite(r.t));
-  return rows.filter((r) => !rows.some((o) => o !== r && Math.abs(o.t - r.t) < gapMinutes * 60_000)).map((r) => r.g);
-}
-
 /** NCAAF: the single biggest game (the first of ncaafBigGameIds), or null. */
 export function ncaafBigGameId(slate = []) {
   return ncaafBigGameIds(slate, 1)[0] ?? null;

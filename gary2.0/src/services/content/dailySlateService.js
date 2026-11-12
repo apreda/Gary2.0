@@ -306,7 +306,7 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
   // Oct 23 2026 (founder GO: Winners game bets are the big games only): college takes its top two, and the NBA
   // its national-TV games, up to two a night (nbaNationalGames.js).
   try {
-    const { standaloneGames, isBigGame, namedBigGame, loadBigGameOverrides } = await import('../winners/winnersRules.js');
+    const { ncaafBigGameIds, isBigGame, namedBigGame, loadBigGameOverrides } = await import('../winners/winnersRules.js');
     const { picksService } = await import('../gary/picksService.js');
     const list = Array.isArray(games) ? games : [];
     let bigs = [];
@@ -317,29 +317,35 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
     // FOX, NBC), and the NFL the best Sunday 1 PM and 4:05/4:25 games by ESPN's FPI, beside the prime-time games.
     const idOf = (g) => String(g?.bdl_game_id ?? g?.id);
     const reasonById = new Map();
-    // LOCKED ONLY WHEN IT IS THE ONLY GAME ON (founder, Nov 9 2026: "a mix of relevant games and the biggest game but
-    // really only if there arent other games in that window"). Every other Winners game is one Gary names himself from
-    // the games people care about (scripts/run-winners-board.js).
-    const isRanked = (g) => [g?.homeRanking, g?.awayRanking, g?.home_ranking, g?.away_ranking].some((r) => { const n = Number(r); return r != null && r !== '' && Number.isFinite(n) && n >= 1 && n <= 25; });
     if (sport.league === 'NCAAF') {
-      // College: a game with a ranked team that has its window to itself (a weeknight game, a lone late kickoff). On a
-      // full Saturday nothing is locked; the broadcast-network and ranked games are the pool Gary chooses from.
+      const ids = new Set(ncaafBigGameIds(list, 2));
       bigs = hasNamedGames ? list.filter(g => namedBigGame(overrides, etDateStr, sport.league, g))
-        : standaloneGames(list).filter(isRanked);
+        : list.filter((g) => ids.has(idOf(g)));
+      if (!hasNamedGames) {
+        const { fetchNationalNcaafGames } = await import('../winners/ncaafNationalGames.js');
+        // Up to three beyond the ranked games (Oct 24 2026: Ole Miss-Texas was both, and the day got two TV games, not three).
+        const national = await fetchNationalNcaafGames(etDateStr, list, { max: 20 }).catch((e) => { console.warn(`[Daily Slate] college national TV games unavailable: ${e.message}`); return []; });
+        let added = 0;
+        for (const { row, networks } of national) {
+          if (added >= 3 || bigs.some((b) => idOf(b) === idOf(row))) continue;
+          added++;
+          bigs.push(row);
+          reasonById.set(idOf(row), `national TV: ${networks.join(', ')}`);
+        }
+      }
     } else if (sport.league === 'NFL' || sport.league === 'MLB') {
       bigs = list.filter((g) => isBigGame({ league: sport.league, game: { ...g, id: g?.bdl_game_id ?? g?.id }, slate: [], dateEt: etDateStr, overrides }));
       if (sport.league === 'NFL') {
-        // Prime time is already here (Thursday, Sunday and Monday night). Any other game alone in its window joins it:
-        // a London morning game, a Saturday or holiday game. The best game of each Sunday afternoon window is no
-        // longer locked (it was, from Oct 23 2026); those windows are Gary's to choose from.
-        for (const row of standaloneGames(list)) {
-          if (bigs.some((b) => idOf(b) === idOf(row))) continue;
-          bigs.push(row);
-          reasonById.set(idOf(row), 'the only game in its window');
-        }
+        const { fetchPowerRatings, nflAfternoonBigGames } = await import('../winners/powerRatings.js');
+        try {
+          for (const { row, window } of nflAfternoonBigGames(list, await fetchPowerRatings('NFL'))) {
+            if (bigs.some((b) => idOf(b) === idOf(row))) continue;
+            bigs.push(row);
+            reasonById.set(idOf(row), `the best game of ${window} by ESPN's FPI`);
+          }
+        } catch (e) { console.warn(`[Daily Slate] NFL afternoon big games unavailable: ${e.message}`); }
       }
     } else if (sport.league === 'NBA') {
-      // The NBA keeps its national-TV games, up to two a night: the Darts Primetime page reads them from here.
       const { fetchNationalNbaGames } = await import('../winners/nbaNationalGames.js');
       for (const { row, networks } of await fetchNationalNbaGames(etDateStr, list)) {
         bigs.push(row);
@@ -360,7 +366,7 @@ export async function buildLeagueRows(sport, etDateStr, suppliedGames = null) {
         : sport.league === 'NBA' ? `national TV: ${(networksById.get(String(big.bdl_game_id ?? big.id)) || []).join(', ')}`
         : sport.league === 'NFL' ? 'prime time (TNF, SNF, MNF)' : playoff ? 'playoff game' : 'Sunday Night Baseball');
       const known = stored.some((r) => String(r.game_id) === gameId);
-      if (!known && /by ESPN's (FPI|BPI)$/.test(reason) && stored.some((r) => r.reason === reason)) continue;
+      if (!known && /by ESPN's FPI$/.test(reason) && stored.some((r) => r.reason === reason)) continue;
       if (!known && sport.league === 'NBA' && stored.filter((r) => /^national TV/.test(r.reason || '')).length >= 2) continue;
       await picksService.storeWinnersBigGame({
         game_date: etDateStr,

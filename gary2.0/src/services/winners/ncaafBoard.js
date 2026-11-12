@@ -1,7 +1,3 @@
-// THE GAMES THAT MATTER ONLY (founder, Nov 9 2026: "a mix of still some of the bigger games but not all of them ...
-// and then still trying to get garys best"). This board shows Gary only games with a ranked team or on ABC, CBS, FOX
-// or NBC, and his top bets from them seat, five game plays a day at most. Nothing is locked on a full Saturday; a
-// ranked game alone in its window is (dailySlateService.js).
 // GARY'S COLLEGE BOARD (Oct 22 2026, from Oct 23; founder: "college should work the same way the other sports do").
 // Gary picks every college game for the Picks page; that is his lean. His bets are a separate look, as for the NFL and
 // the NBA: about 110 minutes before the first kickoff he hasn't boarded (college picks run from T-240, Saturdays from
@@ -18,7 +14,6 @@ import { ncaafSystemPrompt, ncaafBoardMessage, NCAAF_BOARD_FORMAT_ONLY } from '.
 import { buildNcaafBoardEntry } from '../gary/agentic/orchestrator/ncaafRead.js';
 import { parseBoardBets, boardDecisions } from './nflBoard.js';
 import { offTheBoard } from './powerRatings.js';
-import { fetchNationalNcaafGames } from './ncaafNationalGames.js';
 
 export const NCAAF_BOARD_LEAD_MS = 110 * 60_000;   // board the next kickoffs this long before the first one
 const LAST_CALL_MS = 25 * 60_000;                  // a game this close to kickoff is past boarding
@@ -56,7 +51,7 @@ export async function runNcaafBoard(client, date, { now = new Date(), log = cons
   running = true;
   try {
     const { data: cands, error } = await client.from('winners_candidates')
-      .select('id,game_id,pick_text,commence_time,home:pick_snapshot->>homeTeam,away:pick_snapshot->>awayTeam,hr:pick_snapshot->>homeRanking,ar:pick_snapshot->>awayRanking')
+      .select('id,game_id,pick_text,commence_time,home:pick_snapshot->>homeTeam,away:pick_snapshot->>awayTeam')
       .eq('game_date', date).eq('league', 'NCAAF').eq('kind', 'game');
     if (error) throw error;
     if (!cands?.length) return 'no_games';
@@ -64,19 +59,11 @@ export async function runNcaafBoard(client, date, { now = new Date(), log = cons
     if (e2) throw e2;
     const done = new Set((boarded || []).map((b) => String(b.game_id)));
     // Off the board (Oct 23 2026, winners/powerRatings.js): the day's big games, which go on Winners as big games, and
-    // for the NFL and NBA the games nobody is watching. Worked out from the whole day's slate.
+    // for the NFL and NBA the slate's two worst matchups of bottom-third teams. Worked out from the whole day's slate.
     const slate = [...new Map(cands.filter((c) => c.home && c.away).map((c) => [String(c.game_id), { gameId: String(c.game_id), home: c.home, away: c.away }])).values()];
     const off = await offTheBoard(client, { date, league: 'NCAAF', slate, log });
     for (const [id, why] of off) if (!offLogged.has(`${date}|${id}`)) { offLogged.add(`${date}|${id}`); const g = slate.find((x) => x.gameId === id); if (g) log.log(`[NCAAF Board] ${g.away} @ ${g.home} stays off the board: ${why}`); }
-    // The pool: a ranked team, or a broadcast network. If the TV listing can't be read, the ranked games alone.
-    const isRanked = (c) => [c.hr, c.ar].some((r) => { const n = Number(r); return r != null && r !== '' && Number.isFinite(n) && n >= 1 && n <= 25; });
-    let onTv = new Set();
-    try {
-      const rows = slate.map((g) => ({ id: g.gameId, home_team: g.home, away_team: g.away, commence_time: cands.find((c) => String(c.game_id) === g.gameId)?.commence_time }));
-      onTv = new Set((await fetchNationalNcaafGames(date, rows, { max: 50 })).map(({ row }) => String(row.id)));
-    } catch (e) { log.warn(`[College Board] broadcast listing unavailable (${e?.message || e}); the pool is the ranked games`); }
-    const matters = (c) => isRanked(c) || onTv.has(String(c.game_id));
-    const open = cands.filter((c) => !done.has(String(c.game_id)) && !off.has(String(c.game_id)) && matters(c) && Date.parse(c.commence_time) > now.getTime() + LAST_CALL_MS && c.home && c.away);
+    const open = cands.filter((c) => !done.has(String(c.game_id)) && !off.has(String(c.game_id)) && Date.parse(c.commence_time) > now.getTime() + LAST_CALL_MS && c.home && c.away);
     // One row per game: a game picked twice (a re-run) boards once.
     const games = [...new Map(open.map((c) => [String(c.game_id), c])).values()];
     if (!games.length) return 'nothing_open';
