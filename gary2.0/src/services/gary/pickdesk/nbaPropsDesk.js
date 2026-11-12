@@ -58,7 +58,7 @@ export function nbaMenu(markets, { homeTeam, awayTeam } = {}) {
 // Oct 23) and the "what beats it" case went; the line, the odds and the reason stay for the card.
 export const NBA_PROPS_ASK = `Which two props from THE PROP BOARD would you bet, over or under, and why?
 
-For each card, give the line, the offered odds and your reason.
+For each card, give the line, the offered odds and your reason. Reasons are in words: no hit rates, percentages or probabilities.
 
 Output:
 
