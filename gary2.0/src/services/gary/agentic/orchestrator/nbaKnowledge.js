@@ -67,15 +67,39 @@ Today is ${today}. The scout report is current on rosters, injuries and every nu
 // Oct 31 2026 (founder: "Gary shouldn't be biased towards either side ... the whole point of Gary is to see which side
 // of the spread he is picking and thinks will hit"): "Who do you think covers this spread" became "Which side of this spread
 // would you bet": both tickets at the same number, his job to pick one. "Covers" is said of the favorite.
-export const nbaGameMessage = (story, news) => `## THE GAME
+const nbaDesk = (story, news) => `## THE GAME
 
 ${story}
 
 ## TODAY'S NEWS (gathered for this game)
 
-${news || 'Nothing beyond the scout report.'}
+${news || 'Nothing beyond the scout report.'}`;
 
-Which side of this spread would you bet, and why?`;
+export const NBA_PICK_QUESTION = 'Which side of this spread would you bet, and why?';
+
+export const nbaGameMessage = (story, news) => `${nbaDesk(story, news)}
+
+${NBA_PICK_QUESTION}`;
+
+// THE TWO CASES (Nov 13 2026, founder: "I forgot about the cases on both sides thing all that. Let's do that again now
+// for nba then so it's the same generally system as the winning one from last year"). Last season's first pass, back in
+// front of the pick: he reads the game and writes the case for each side before he is asked for one, then the one
+// question above, then the card. The words are April's buildNbaPass1 (passBuilders.js, the Feb 28 to Apr 12 run): the
+// "You are picking which side" line (its dashes as brackets), the two headings, home first, and the two lines after
+// them. Left where April had them: the line that the spread was set after the schedule and injuries were known (the
+// Oct 27 note above: reads opened on what the number had priced) and the tool rules of a brain that fetched stats.
+// The desk, the system prompt and the model are today's.
+export const nbaCasesMessage = (story, news, homeTeam, awayTeam) => `${nbaDesk(story, news)}
+
+You are picking which side of this spread to take. Investigate the game (the teams, the players taking the floor tonight, the stats, the injuries, the schedule, the recent context) and build your understanding of this specific matchup at this specific number.
+
+Before you pick, include BOTH sections:
+Case for ${homeTeam}
+Case for ${awayTeam}
+
+Each case should be 2-3 paragraphs explaining why that side is the right bet at this number tonight.
+
+Do NOT declare a final side, make a pick, or write your final analysis yet.`;
 
 // The card: his answer written for fans, with the ticket at THE LINE's exact price.
 export const nbaCardMessage = (line = '') => `Write your answer as Gary's Take for the pick card: the same reasons, about 250-400 words, opening with a sentence or two that sets the scene. Fans read it, so write only the Take and the JSON block, with nothing before or after them. Then add this JSON block with the same pick, at that ticket's exact price from THE LINE:

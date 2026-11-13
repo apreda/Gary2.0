@@ -45,9 +45,11 @@ const parseJson = (raw) => (Array.isArray(raw) ? raw : JSON.parse(raw || '[]'));
 function liveNews(dir, day, p) {
   const f = `${homedir()}/Library/Logs/${dir}/${fileName(day, p)}`;
   if (!existsSync(f)) return null;
-  const sect = (readFileSync(f, 'utf8').match(/## TODAY'S NEWS[^\n]*\n\n([\s\S]*?)\n\n########## ANSWERED/) || [])[1];
+  // The first user turn ends at the next section; the NBA's turn closes with its two-case ask (Nov 13 2026), the others
+  // with the question.
+  const sect = (readFileSync(f, 'utf8').match(/## TODAY'S NEWS[^\n]*\n\n([\s\S]*?)\n\n########## /) || [])[1];
   if (sect == null) return null;
-  const paras = sect.split('\n\n');
+  const paras = sect.split('\n\nYou are picking which side of this spread to take.')[0].split('\n\n');
   return (paras.length && /\?\s*$/.test(paras.at(-1)) ? paras.slice(0, -1) : paras).join('\n\n');
 }
 

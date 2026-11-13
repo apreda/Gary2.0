@@ -12,7 +12,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { homedir } from 'node:os';
-import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
+import { nbaSystemPrompt, nbaCasesMessage, NBA_PICK_QUESTION, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
@@ -947,13 +947,17 @@ export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, opt
 
     // A desk whose news search failed never reaches him (above); a report filtered to nothing says so (Oct 23 2026 source
     // audit: a failure read as a quiet day).
-    const read = await ask(nbaGameMessage(story, news || NEWS_NOTHING_NEW));
+    // THE TWO CASES, THEN THE PICK (founder, Nov 13 2026; nbaKnowledge.js): last season's first pass. He writes the case
+    // for each side before he is asked for one, then the one question, then the card.
+    const cases = await ask(nbaCasesMessage(story, news || NEWS_NOTHING_NEW, homeTeam, awayTeam));
+    console.log(`[NBA Read] ${session.modelName}: both cases (${cases.length} chars); asking for the pick`);
+    const read = await ask(NBA_PICK_QUESTION);
     console.log(`[NBA Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     try {
       const dir = `${homedir()}/Library/Logs/gary-nba-read`;
       mkdirSync(dir, { recursive: true });
       writeFileSync(`${dir}/${etDate(options.gameTime || asOf)}_${awayTeam.split(' ').pop()}_at_${homeTeam.split(' ').pop()}.md`,
-        `########## SYSTEM\n${system}\n\n########## ASKED\n${messages[1].content}\n\n########## ANSWERED\n${read}`);
+        `########## SYSTEM\n${system}\n\n########## ASKED\n${messages[1].content}\n\n########## CASES\n${cases}\n\n########## ASKED FOR THE PICK\n${NBA_PICK_QUESTION}\n\n########## ANSWERED\n${read}`);
     } catch (e) { console.warn(`[NBA Read] transcript not saved: ${e.message}`); }
     let answer = await ask(nbaCardMessage(line));
     let pick = parse(answer);
