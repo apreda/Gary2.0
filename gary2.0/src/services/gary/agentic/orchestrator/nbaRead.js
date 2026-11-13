@@ -16,7 +16,7 @@ import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
-import { assertEverythingLoaded } from '../../pickDataIntegrity.js';
+import { assertEverythingLoaded, assertNewsLoaded } from '../../pickDataIntegrity.js';
 import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { leagueRatingsAt, gameByGame, firstGameDate, teamSeason, nbaTeams, outLastGame, nextGameLine, inStandings, tonightCupLine, cupWords, reportClock } from '../../../sports/nba/nbaBettorData.js';
 import { latestOfficialReport, gameListing, playerKey, samePlayerIn } from '../../../providers/nbaOfficialInjuryReport.js';
@@ -32,7 +32,8 @@ import { buildMlCapRetryMessage } from './passBuilders.js';
 import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap } from './agentLoop.js';
 
-const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+// A search that returned a report whose every line was filtered out: it worked, and the pick goes ahead (Nov 12 2026).
+const NEWS_NOTHING_NEW = 'The news search found nothing new for this game.';
 
 
 /** THE LINE, held for the card: the spread, the moneylines and the tickets, from the desk's BETTING CONTEXT. */
@@ -334,6 +335,13 @@ async function situation(seasons, homeTeam, awayTeam, tip, asOf) {
 // orphaned. A paragraph, bullet or table row that fails leaves whole: dropping one sentence left the next one's numbers
 // under the wrong game (Oct 23 2026 data audit: a preseason "5-for-36" read as the opener).
 const NEWS_MARK = "--- TODAY'S GAME CONTEXT & NEWS ---";
+/** The desk's news search came back (Nov 12 2026). The scout report writes the mark and the report only when the search
+ * returned one (scoutReport/sports/nba.js); a failed search leaves neither. Raw, before newsForGary filters a line. */
+export function nbaNewsLoaded(desk) {
+  const state = sectionOf(desk, 'CURRENT STATE & CONTEXT');
+  const i = state.indexOf(NEWS_MARK);
+  return i >= 0 && Boolean(state.slice(i + NEWS_MARK.length).trim());
+}
 const plain = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’‘]/g, "'").replace(/\*+/g, '');
 
 // The news search still quotes last season and the preseason ("Last season it averaged 40.8 three-point attempts", Oct
@@ -898,7 +906,8 @@ export async function buildNbaReadStory(desk, { homeTeam, awayTeam, gameId, book
   // NO DATA, NO PICK (pickDataIntegrity.js, Nov 10 2026): the game records or the league's ratings not loading stops the
   // read, for the game pick and the props desk alike.
   assertEverythingLoaded(story, 'in the game read');
-  return { line, story, news: newsWithoutRecaps(newsForGary(desk, { facts, start: starts[0], asOf }), boxed) };
+  // newsLoaded: the news search's raw result, which the pick, the props and the darts check (assertNewsLoaded).
+  return { line, story, news: newsWithoutRecaps(newsForGary(desk, { facts, start: starts[0], asOf }), boxed), newsLoaded: nbaNewsLoaded(desk) };
 }
 
 export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
@@ -908,7 +917,9 @@ export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, opt
   try {
     const game = options.game || {};
     const asOf = new Date();
-    const { line, story, news } = await buildNbaReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, book: game.line_vendor, asOf });
+    const { line, story, news, newsLoaded } = await buildNbaReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, book: game.line_vendor, asOf });
+    // NO NEWS, NO PICK (founder, Nov 12 2026): a desk whose news search failed holds the pick before any ask.
+    assertNewsLoaded(newsLoaded, 'the news search did not load');
     console.log(`[NBA Read] the game as Gary reads it (${story.length} chars; news ${news.length} chars)`);
 
     const system = nbaSystemPrompt(today);
@@ -934,8 +945,9 @@ export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, opt
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    // A desk whose news search failed carries no news section; that says so (Oct 23 2026 source audit).
-    const read = await ask(nbaGameMessage(story, news || NEWS_NOT_ON_FILE));
+    // A desk whose news search failed never reaches him (above); a report filtered to nothing says so (Oct 23 2026 source
+    // audit: a failure read as a quiet day).
+    const read = await ask(nbaGameMessage(story, news || NEWS_NOTHING_NEW));
     console.log(`[NBA Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     try {
       const dir = `${homedir()}/Library/Logs/gary-nba-read`;

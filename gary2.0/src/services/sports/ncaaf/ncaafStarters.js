@@ -49,7 +49,12 @@ const SITES = {
   Wyoming: 'gowyo.com',
 };
 
-const get = (url, fetchImpl) => fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(25_000) }).then((r) => (r.ok ? r.text() : null)).catch(() => null);
+// A page that did not load (no answer, a timeout, a server error or a rate limit) is told apart from one the site does not
+// have (404 and the like): only the first is a failed fetch (Nov 12 2026, `{ failed: true }`); the second is null.
+const FAILED = Object.freeze({ failed: true });
+const get = (url, fetchImpl) => fetchImpl(url, { headers: HEADERS, signal: AbortSignal.timeout(25_000) })
+  .then((r) => (r.ok ? r.text() : r.status >= 500 || r.status === 429 ? FAILED : null)).catch(() => FAILED);
+const page = (x) => (typeof x === 'string' ? x : null);
 const decode = (s) => String(s).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
   .replace(/&amp;/g, '&').replace(/&apos;|&#39;/g, "'").replace(/&quot;/g, '"');
 const text = (html) => decode(String(html).replace(/<!--.*?-->/gs, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
@@ -131,27 +136,36 @@ function siteBoxes(college, season, fetchImpl) {
   const k = `${college}:${season}`;
   if (fetchImpl !== fetch) return readSite(college, season, fetchImpl);
   if (!inFlight.has(k)) {
-    inFlight.set(k, readSite(college, season, fetchImpl));
+    const read = readSite(college, season, fetchImpl);
+    inFlight.set(k, read);
+    // A read with a page that did not load is asked again by the next caller, never kept for the hour.
+    read.then((boxes) => { if (boxes.failed && inFlight.get(k) === read) inFlight.delete(k); });
     setTimeout(() => inFlight.delete(k), HOUR).unref?.();
   }
   return inFlight.get(k);
 }
+// `.failed` on the list: a page of this site did not load (the season's links or a box), so a game missing from it may be
+// one that did not load, not one the site never posted (Nov 12 2026).
 async function readSite(college, season, fetchImpl) {
   const domain = SITES[college];
   if (!domain) return [];
   const links = await cachedResearch(`cfb_official_box_links_v2:${domain}:${season}`, async () => {
     // The season stats page links every game's box; some schedule pages link none.
     const pages = await Promise.all(['stats', 'schedule'].map((p) => get(`https://${domain}/sports/football/${p}/${season}`, fetchImpl)));
-    if (!pages.some(Boolean)) return { unavailable: true };
+    const failed = pages.some((x) => x === FAILED);
+    if (!pages.some(page)) return { unavailable: true, failed };
     const pattern = new RegExp(`/sports/football/stats/${season}/[^"]*/boxscore/\\d+|/boxscore\\.aspx\\?id=\\d+`, 'g');
-    return { links: [...new Set(pages.flatMap((page) => String(page || '').match(pattern) || []))] };
-  }, { ttlMs: 6 * HOUR }).catch(() => null);
+    // A list with a page that did not load is used, never kept: the next read asks for both pages again.
+    return { links: [...new Set(pages.flatMap((x) => String(page(x) || '').match(pattern) || []))], failed };
+  }, { ttlMs: 6 * HOUR, valid: (v) => !v?.unavailable && !v?.failed }).catch(() => ({ unavailable: true, failed: true }));
   const boxes = await Promise.all((links?.links || []).map((path) => cachedResearch(`cfb_official_box_v3:${domain}${path}`, async () => {
-    const page = await get(`https://${domain}${path}`, fetchImpl);
-    const box = page ? startersFromBoxPage(page) : null;
-    return box ? { ...box, stats: teamStatsFromBoxPage(page), settled: Date.now() - Date.parse(`${box.date}T12:00:00Z`) > 3 * 24 * HOUR } : { unavailable: true };
-  }, { ttlMs: 30 * 24 * HOUR, valid: (v) => !v?.unavailable && v?.settled }).catch(() => null)));
-  return boxes.filter(Boolean);
+    const got = await get(`https://${domain}${path}`, fetchImpl);
+    const box = page(got) ? startersFromBoxPage(got) : null;
+    return box ? { ...box, stats: teamStatsFromBoxPage(got), settled: Date.now() - Date.parse(`${box.date}T12:00:00Z`) > 3 * 24 * HOUR } : { unavailable: true, failed: got === FAILED };
+  }, { ttlMs: 30 * 24 * HOUR, valid: (v) => !v?.unavailable && v?.settled }).catch(() => ({ unavailable: true, failed: true }))));
+  const out = boxes.filter((b) => b && !b.unavailable);
+  out.failed = Boolean(links?.failed || boxes.some((b) => b?.failed));
+  return out;
 }
 
 const sameDay = (iso, date) => {
@@ -172,15 +186,22 @@ const likeness = (label, school) => {
 /**
  * Each game's starters for one team: Map game id -> [{ name, key, jersey, position, unit }], only games an official box
  * was found for. `team` is { college, abbr }; `games` are [{ gameId, date, opponent: { college, abbr } }].
+ * `.missing` (Nov 12 2026): Map game id -> why a game has no lineup: 'no_site' (neither school's site posts its box in the
+ * format this reads), 'not_loaded' (a page of a school's site did not load) or 'not_posted' (the sites were read and
+ * neither has the game's box).
  */
 export async function teamStarters(team, games, season, { fetchImpl = fetch } = {}) {
   const out = new Map();
+  out.missing = new Map();
   if (!games?.length) return out;
   const boxesOf = (school) => siteBoxes(school, season, fetchImpl);
   for (const g of games) {
-    for (const school of [team.college, g.opponent?.college]) {
-      if (!SITES[school]) continue;
-      for (const box of (await boxesOf(school)).filter((b) => sameDay(g.date, b.date))) {
+    const schools = [team.college, g.opponent?.college].filter((school) => SITES[school]);
+    let failed = false;
+    for (const school of schools) {
+      const boxes = await boxesOf(school);
+      failed ||= Boolean(boxes.failed);
+      for (const box of boxes.filter((b) => sameDay(g.date, b.date))) {
         // This team's table: the one that names it better, else the one that names the opponent less.
         const [a, b] = box.teams;
         const [ma, mb, oa, ob] = [likeness(a.label, team), likeness(b.label, team), likeness(a.label, g.opponent || {}), likeness(b.label, g.opponent || {})];
@@ -191,6 +212,7 @@ export async function teamStarters(team, games, season, { fetchImpl = fetch } = 
       }
       if (out.has(String(g.gameId))) break;
     }
+    if (!out.has(String(g.gameId))) out.missing.set(String(g.gameId), !schools.length ? 'no_site' : failed ? 'not_loaded' : 'not_posted');
   }
   return out;
 }

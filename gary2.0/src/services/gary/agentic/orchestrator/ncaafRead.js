@@ -16,7 +16,7 @@ import { etDate } from '../../../sports/nfl/nflBettorData.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
 import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
-import { withOptionalData, assertEverythingLoaded } from '../../pickDataIntegrity.js';
+import { withOptionalData, assertEverythingLoaded, assertNewsLoaded } from '../../pickDataIntegrity.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
@@ -27,6 +27,8 @@ import { rosterAndPoll } from './ncaafRosterAndPoll.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
 const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+// A search that returned a report whose every line was filtered out: it worked, and the pick goes ahead (Nov 12 2026).
+const NEWS_NOTHING_NEW = 'The news search found nothing new for this game.';
 
 
 // A sentence that carries a betting line (a spread, an opening number, a book's odds) never reaches him from an
@@ -377,7 +379,11 @@ export async function buildNcaafReadStory(desk, { homeTeam, awayTeam, asOf = new
     // Oct 23 2026 data audit: the regulars who had no stat row in the last game, and who carried and caught the ball
     // game by game (Duke's Nate Sheppard, 20 carries and 11 catches against North Carolina, was nowhere in the story).
     ['REGULARS WITH NO STAT ROW IN THE LAST GAME', afterIntro(sectionOf(desk, 'REGULARS WITH NO STAT ROW IN THE LAST GAME'))],
-    ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm)", gameLog(desk)],
+    // The hurt line once, in the title (Nov 12 2026: "hurt during the game: not on file (this game's play-by-play logs no
+    // injuries)" read 270 times on Nov 7's 31 desks, about nine a desk); a game whose play-by-play names who was hurt keeps
+    // its line.
+    ["THIS SEASON, GAME BY GAME (a game's weather line appears only for rain, snow, a storm, wind of 15 mph or more, or freezing; a game without one was indoors or dry and calm; a game's \"hurt during the game\" line appears only when its play-by-play names who was hurt, and many play-by-plays log no injuries)",
+      gameLog(desk).replace(/^[ \t]*hurt during the game: not on file \(this game's play-by-play logs no injuries\)\n?/gm, '')],
     // Oct 31 2026: this season's roster talent and AP poll, both teams (ncaafRosterAndPoll.js).
     ['ROSTER TALENT AND THE AP POLL', strength],
     ['CARRIES AND CATCHES, GAME BY GAME', afterIntro(sectionOf(desk, 'CARRIES AND CATCHES, GAME BY GAME'))],
@@ -410,9 +416,10 @@ export async function buildNcaafBoardEntry(desk, news, { homeTeam, awayTeam, gam
 }
 
 // The news desk's latest on who plays (nflResearchPrompts.js, college's items), from the game as Gary reads it.
-// Optional: a failed or timed-out search leaves TODAY'S NEWS as "Nothing beyond the scout report."
+// `searched` is the raw result before any filter: true when a report came back, false when every desk failed or timed
+// out (that holds the pick, assertNewsLoaded), null when the researcher is switched off.
 async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker) {
-  if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off') return { news: null, model: null };
+  if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off') return { news: null, model: null, searched: null };
   const timeoutMs = researchBudgetMs({
     configuredMs: Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
     deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
@@ -429,10 +436,10 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
     onFailure: (researchModel, err, hasNext) => console.warn(`[NCAAF Read] ⚠️ News desk ${researchModel} failed (${err.message})${hasNext ? ' — trying the next' : ''}`),
   }));
   const news = typeof research.result === 'string' ? research.result : research.result?.briefing;
-  if (!news) console.warn(`[NCAAF Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
+  if (!news) console.warn(`[NCAAF Read] No news desk report; the pick waits for the next tier (${research.failures.join(' | ')})`);
   // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
   // the market (founder, Oct 23 2026).
-  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null };
+  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null, searched: Boolean(news) };
 }
 
 export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
@@ -445,6 +452,8 @@ export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, o
     const { line, story } = await buildNcaafReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, book: game.line_vendor, asOf });
     console.log(`[NCAAF Read] the game as Gary reads it (${story.length} chars)`);
     const research = await latestNews(story, sport, homeTeam, awayTeam, options, costTracker);
+    // NO NEWS, NO PICK (founder, Nov 12 2026): a news search that failed holds the pick before any ask.
+    assertNewsLoaded(research.searched, 'the news search did not load');
     if (research.news) console.log(`[NCAAF Read] News desk report ready (${research.news.length} chars, ${research.model})`);
 
     const system = ncaafSystemPrompt(today);
@@ -470,8 +479,9 @@ export async function runNcaafRead({ desk, today }, sport, homeTeam, awayTeam, o
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    // A failed news search says so (Oct 23 2026 source audit: a failure read as a quiet day).
-    const read = await ask(ncaafGameMessage(story, research.news || NEWS_NOT_ON_FILE));
+    // A failed news search never reaches him (above); a report filtered to nothing says so (Oct 23 2026 source audit: a
+    // failure read as a quiet day).
+    const read = await ask(ncaafGameMessage(story, research.news || (research.searched ? NEWS_NOTHING_NEW : NEWS_NOT_ON_FILE)));
     console.log(`[NCAAF Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     try {
       const dir = `${homedir()}/Library/Logs/gary-ncaaf-read`;

@@ -35,6 +35,9 @@ async function buildPacket(frame) {
   if (!desk) throw new Error('the scout report rendered empty');
   const read = await buildNbaReadStory(desk, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: frame.gameId });
   if (!read?.story) throw new Error('the game read rendered empty');
+  // The desk's news search failed: no packet, as with any load that failed (Nov 12 2026). The game pick and the props
+  // hold on the same check (assertNewsLoaded).
+  if (!read.newsLoaded) throw new Error("today's news did not load");
   return { story: read.story, news: read.news || null };
 }
 

@@ -441,7 +441,8 @@ async function analyzeFootballPropsDeskWithData(game, playerProps, options = {})
     const sheetPlayers = sheetsOk ? new Set(board.markets.map((m) => keyOf(m.player))) : null;
     const { story } = await buildNflReadStory(scoutText, { homeTeam: game.home_team, awayTeam: game.away_team, gameId: game.bdl_game_id ?? game.id,
       gameDate: game.commence_time ? etDate(game.commence_time) : null, sheetPlayers });
-    const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time }).catch(() => null);
+    // A news search that failed throws PickDataError (nflNewsFor, Nov 12 2026): this game's props wait for the next tier.
+    const news = await nflNewsFor(story, sportKey, game.home_team, game.away_team, { game, gameId: game.id, gameTime: game.commence_time });
     deskText = `${story}\n\nTODAY'S NEWS\n${news || NFL_NEWS_NOT_ON_FILE}`;
   }
 

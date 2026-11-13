@@ -21,7 +21,7 @@ import { nflSeason } from '../../../../utils/dateUtils.js';
 import { GAME_PICK_MODEL, GAME_RESEARCH_MODEL, GAME_RESEARCH_FALLBACK_MODEL, GAME_RESEARCH_BRIDGE_MODEL } from './orchestratorConfig.js';
 import { buildResearchBriefing } from './researchBriefing.js';
 import { researchBudgetMs, runResearchOnce } from './optionalResearch.js';
-import { withOptionalData, assertEverythingLoaded } from '../../pickDataIntegrity.js';
+import { withOptionalData, assertEverythingLoaded, assertNewsLoaded } from '../../pickDataIntegrity.js';
 import { createModelSession, sendToSessionWithRetry } from './sessionManager.js';
 import { createCostTracker } from './costTracker.js';
 import { parseGaryResponse } from './responseParser.js';
@@ -31,6 +31,9 @@ import { gameMarketUnavailable } from './mlbCaseMenu.js';
 import { moneylinePastCap, smallDogConversion, convertedTicketOk } from './agentLoop.js';
 
 export const NEWS_NOT_ON_FILE = "The news search did not return a report for this game; today's news is not on file.";
+// A search that returned a report whose every line was filtered out (recaps, betting lines, last season): it worked, and
+// the pick goes ahead with this in TODAY'S NEWS (Nov 12 2026).
+export const NEWS_NOTHING_NEW = 'The news search found nothing new for this game.';
 
 
 // Regulars who missed or left the last game and are not on this week's report, under it (nflBettorData notOnReport).
@@ -113,10 +116,11 @@ export async function buildNflBoardEntry(desk, news, { homeTeam, awayTeam, gameI
     footballNews(news) ? `\nThe news desk:\n${footballNews(news)}` : ''].join('\n');
 }
 
-// The news desk's latest on who plays (nflResearchPrompts.js), from the game as Gary reads it. Optional: a failed or
-// timed-out search leaves TODAY'S NEWS as "Nothing beyond the scout report."
+// The news desk's latest on who plays (nflResearchPrompts.js), from the game as Gary reads it. `searched` is the raw
+// result before any filter: true when a report came back, false when every desk failed or timed out (that holds the pick,
+// assertNewsLoaded), null when the researcher is switched off.
 async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker) {
-  if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off') return { news: null, model: null };
+  if (String(process.env.GARY_RESEARCHER || 'on').toLowerCase() === 'off') return { news: null, model: null, searched: null };
   const timeoutMs = researchBudgetMs({
     configuredMs: Number(options.timeoutMs) || Number(process.env.GARY_RESEARCH_TIMEOUT_MS) || 20 * 60 * 1000,
     deadlineAt: process.env.GARY_CHILD_DEADLINE_AT,
@@ -133,17 +137,27 @@ async function latestNews(story, sport, homeTeam, awayTeam, options, costTracker
     onFailure: (researchModel, err, hasNext) => console.warn(`[NFL Read] ⚠️ News desk ${researchModel} failed (${err.message})${hasNext ? ' — trying the next' : ''}`),
   }));
   const news = typeof research.result === 'string' ? research.result : research.result?.briefing;
-  if (!news) console.warn(`[NFL Read] No news desk report; TODAY'S NEWS reads "Nothing beyond the scout report." (${research.failures.join(' | ')})`);
+  if (!news) console.warn(`[NFL Read] No news desk report; the pick waits for the next tier (${research.failures.join(' | ')})`);
   // Betting lines, odds and line moves are cut from the report too: Gary reads the spread he bets and the football, not
   // the market (founder, Oct 23 2026).
-  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null };
+  return { news: news ? footballNews(withoutBettingLines(String(news).trim())) || null : null, model: news ? research.model : null, searched: Boolean(news) };
 }
 
+// What TODAY'S NEWS reads once the search has been checked: the report, or a report filtered to nothing, or (researcher
+// off) not on file.
+const newsOrNote = (research) => research.news || (research.searched ? NEWS_NOTHING_NEW : NEWS_NOT_ON_FILE);
+
 /** The news desk's report for the props desk, from the same story (Oct 29 2026 hunt: NFL props read no news, so a
- * game-day downgrade or inactive never reached them; NBA props read the desk's news). Null when nothing came back. */
+ * game-day downgrade or inactive never reached them; NBA props read the desk's news). A search that failed throws
+ * PickDataError, as in the game read (Nov 12 2026); a report filtered to nothing reads NEWS_NOTHING_NEW; null only when
+ * the researcher is switched off. */
 export async function nflNewsFor(story, sport, homeTeam, awayTeam, options = {}) {
   const costTracker = createCostTracker(`NFL props news: ${awayTeam} @ ${homeTeam} (${sport})`);
-  try { return (await latestNews(story, sport, homeTeam, awayTeam, options, costTracker)).news; } finally { costTracker.logSummary(); }
+  try {
+    const research = await latestNews(story, sport, homeTeam, awayTeam, options, costTracker);
+    assertNewsLoaded(research.searched, 'the news search did not load');
+    return research.searched ? newsOrNote(research) : null;
+  } finally { costTracker.logSummary(); }
 }
 
 export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, options = {}) {
@@ -155,6 +169,8 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
     const { line, story } = await buildNflReadStory(desk, { homeTeam, awayTeam, gameId: game.id ?? options.gameId, gameDate: game.commence_time ? etDate(game.commence_time) : null, book: game.line_vendor });
     console.log(`[NFL Read] the game as Gary reads it (${story.length} chars)`);
     const research = await latestNews(story, sport, homeTeam, awayTeam, options, costTracker);
+    // NO NEWS, NO PICK (founder, Nov 12 2026): a news search that failed holds the pick before any ask.
+    assertNewsLoaded(research.searched, 'the news search did not load');
     if (research.news) console.log(`[NFL Read] News desk report ready (${research.news.length} chars, ${research.model})`);
 
     const system = nflSystemPrompt(today);
@@ -180,9 +196,9 @@ export async function runNflRead({ desk, today }, sport, homeTeam, awayTeam, opt
     };
     const parse = (text) => parseGaryResponse(text, homeTeam, awayTeam, sport, game);
 
-    // A failed news search says so; "Nothing beyond the scout report" is kept for a search that found nothing (Oct 23
-    // 2026 source audit: a failure read as a quiet day).
-    const read = await ask(nflGameMessage(story, research.news || NEWS_NOT_ON_FILE));
+    // A failed news search never reaches him (above); a report filtered to nothing says so (Oct 23 2026 source audit: a
+    // failure read as a quiet day).
+    const read = await ask(nflGameMessage(story, newsOrNote(research)));
     console.log(`[NFL Read] ${session.modelName}: read (${read.length} chars); asking for the card`);
     // What he was asked and answered, as college and the NBA keep it: the morning data check reads it (Oct 23 2026).
     try {

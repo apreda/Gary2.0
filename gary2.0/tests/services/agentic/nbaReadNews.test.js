@@ -2,7 +2,8 @@
 // played reached Gary through its exhibitions, "Jokić 7-for-8" and "Evan was elite", and Gary's Spurs and Nuggets reads
 // leaned on "with Lu Dort and Isaiah Joe having departed").
 import { describe, expect, it } from 'vitest';
-import { newsForGary, newsFacts } from '../../../src/services/gary/agentic/orchestrator/nbaRead.js';
+import { newsForGary, newsFacts, nbaNewsLoaded } from '../../../src/services/gary/agentic/orchestrator/nbaRead.js';
+import { assertNewsLoaded, PickDataError } from '../../../src/services/gary/pickDataIntegrity.js';
 
 const RULE = '━'.repeat(40);
 const deskWith = (news) => `CURRENT STATE & CONTEXT\n${RULE}\n--- TODAY'S GAME CONTEXT & NEWS ---\n${news}\n${RULE}\n`;
@@ -79,5 +80,22 @@ describe('the NBA news Gary reads', () => {
     expect(out).toContain('Sabonis is listed probable');
     expect(out).toContain('Murray (hamstring) has been ruled out');
     expect(out).not.toMatch(/two-way|cutoff|supplied|as requested|minutes limit was found|search result/);
+  });
+});
+
+// NO NEWS, NO PICK (founder, Nov 12 2026): the desk's search failing holds the pick; a report filtered to nothing does not.
+describe('whether the desk news search came back', () => {
+  it('is the raw search, before the filters', () => {
+    const desk = deskWith('Last season the Thunder won the title.');
+    expect(read('Last season the Thunder won the title.')).toBe('');
+    expect(nbaNewsLoaded(desk)).toBe(true);
+    expect(() => assertNewsLoaded(nbaNewsLoaded(desk), 'x')).not.toThrow();
+  });
+  it('holds the pick when the desk has no news search', () => {
+    const noNews = `CURRENT STATE & CONTEXT\n${RULE}\nInjury notes only.\n${RULE}\n`;
+    expect(nbaNewsLoaded(noNews)).toBe(false);
+    expect(nbaNewsLoaded(deskWith('  '))).toBe(false);
+    expect(() => assertNewsLoaded(nbaNewsLoaded(noNews), 'the news search did not load')).toThrow(PickDataError);
+    expect(() => assertNewsLoaded(null, 'researcher off')).not.toThrow();
   });
 });

@@ -42,6 +42,23 @@ describe('official box starters', () => {
     expect(got.get('7')[0].name).toBe('GSU Player0');
   });
 
+  // Nov 12 2026: a game with no lineup says why, so a page that did not load holds the pick and a box never posted does not.
+  it('says why a game has no lineup: no readable site, a page that did not load, or no box of it', async () => {
+    const game = (opponent) => [{ gameId: 8, date: '2026-10-31T23:00:00Z', opponent }];
+    const none = await teamStarters({ college: 'Purdue' }, game({ college: 'Penn State' }), 2026, { fetchImpl: async () => { throw new Error('never asked'); } });
+    expect(none.missing.get('8')).toBe('no_site');
+    const down = await teamStarters({ college: 'Georgia State' }, game({ college: 'Purdue' }), 2026, { fetchImpl: async () => { throw new Error('ETIMEDOUT'); } });
+    expect(down.missing.get('8')).toBe('not_loaded');
+    const busy = await teamStarters({ college: 'Georgia State' }, game({ college: 'Purdue' }), 2026, { fetchImpl: async () => ({ ok: false, status: 503 }) });
+    expect(busy.missing.get('8')).toBe('not_loaded');
+    const html = older('09/12/2026', ['GSU', 'KSU']);
+    const fetchImpl = async (url) => ({ ok: true, text: async () => (url.includes('/boxscore') ? html : '<a href="/sports/football/stats/2026/georgia-state/boxscore/14829">') });
+    const other = await teamStarters({ college: 'Georgia State', abbr: 'GAST' }, game({ college: 'Purdue' }), 2026, { fetchImpl });
+    expect(other.missing.get('8')).toBe('not_posted');
+    const gone = await teamStarters({ college: 'Georgia State' }, game({ college: 'Purdue' }), 2026, { fetchImpl: async () => ({ ok: false, status: 404 }) });
+    expect(gone.missing.get('8')).toBe('not_posted');
+  });
+
   it('matches a starter by name, or by last name and first initial', () => {
     const starters = [{ name: 'Michael Hawkins Jr.', key: 'michaelhawkins' }, { name: 'Matt Sieg', key: 'mattsieg' }];
     expect(startedIn(starters, 'Michael Hawkins')).toBe(true);

@@ -22,6 +22,16 @@ export function assertEverythingLoaded(text, where) {
   if (holes.length) throw new PickDataError(holes.map((source) => ({ source, code: where })));
 }
 
+/**
+ * TODAY'S NEWS (founder, Nov 12 2026: "Gary shouldn't be picking when data doesn't load"). `searched` is the news
+ * search's raw result, before any filter: false when it failed or came back with no report, which stops the pick like
+ * any source that did not load; the game's next tier searches again. A report whose lines were all filtered out (recaps,
+ * betting lines, last season) is a search that worked and goes ahead.
+ */
+export function assertNewsLoaded(searched, where) {
+  if (searched === false) throw new PickDataError([{ source: "today's news for this game", code: where }]);
+}
+
 // Record terminal source failures before legacy readers can catch them and
 // return []/null. Never retain request headers, tokens, URLs or response bodies.
 export function recordPickDataFailure(source, error) {
@@ -31,13 +41,17 @@ export function recordPickDataFailure(source, error) {
   if (!run.failures.some(f => f.source === source && f.code === code)) run.failures.push({ source, code });
 }
 
-// A web search that could not run is a gap in the reporting, not a failed pick
-// (founder, Sep 25 2026: "if it doesn't work then we need to know that, but
-// the picks probably can resume"). Search rides the same two subscription
-// accounts as the models, so it goes down when both hit their limits (Sep 20:
-// Commanders @ Cowboys failed its T-240 slot on this alone). The desk's
-// required data (market, injury feed, starting QBs, provider stats) still
-// fails closed; the gap is printed where the scheduler log shows it.
+// One web search that could not run is recorded here as a gap, not a failed
+// pick: the searches a desk or a tool makes along the way (an MLB press
+// search, Gary's own lookup) ride the same subscription accounts as the models
+// and go down when those hit their limits. A GAME'S NEWS IS NOT ONE OF THEM
+// (founder, Nov 12 2026: "Gary shouldn't be picking when data doesn't load";
+// this replaces the Sep 25 2026 call that picks could resume without it): the
+// read decides on the news desk's own result (assertNewsLoaded), so a search
+// that failed or came back empty holds the pick for the next tier, and only a
+// search that returned a report goes ahead, even when every line of it was
+// then filtered out. The desk's other required data (market, injury feed,
+// starting QBs, provider stats) fails closed as before.
 const NON_BLOCKING = new Set(['current_reporting']);
 
 export function assertPickDataIntegrity() {

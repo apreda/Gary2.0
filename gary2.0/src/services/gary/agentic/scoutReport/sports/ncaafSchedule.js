@@ -905,6 +905,13 @@ function offenseLines(team, reported, rows, results, onFile, core, exempt = []) 
   return [`${team}${notOnFile(results, onFile)}`, ...(lines.length ? lines : ['  no carries or catches by anyone but the quarterbacks'])];
 }
 
+// The last game's starting lineup, when none is on file, by why (teamStarters' `.missing`).
+const LINEUP_MISSING = {
+  not_loaded: "did not load (a page of a school's official site did not load)",
+  no_site: 'not on file (neither school posts its official box in a form the desk can read)',
+  not_posted: "not on file (neither school's official site has the box of that game)",
+};
+
 /**
  * The team's regulars with no stat row in its last game (Oct 23 2026 data audit: a starter who sat the last game
  * changes what that game's lines say, and the report may not list him). Regulars are the box score's lineup in the
@@ -946,7 +953,11 @@ export function regularsLines(team, reported, rows, results, onFile, core, plays
   const lineup = [];
   const lastLineup = starts.get(String(last.gameId));
   const earlierLineups = games.slice(0, -1).filter((r) => starts.has(String(r.gameId)));
-  if (starts.size && !lastLineup) lineup.push("  the last game's starting lineup: not on file");
+  // Why the last game has none (teamStarters' `.missing`, Nov 12 2026): a page that did not load says so, which holds the
+  // pick for the next tier (assertEverythingLoaded); a box neither school's site has is said in plain words, and the read
+  // goes on (Nov 7: all nine desks with the line were games between two schools whose sites this does not read).
+  const lastMissing = starts.missing?.get(String(last.gameId));
+  if (!lastLineup && (starts.size || lastMissing === 'not_loaded')) lineup.push(`  the last game's starting lineup: ${LINEUP_MISSING[lastMissing] || 'not on file'}`);
   else if (lastLineup && earlierLineups.length >= 2) {
     const byStarter = new Map();
     for (const r of earlierLineups) for (const x of starts.get(String(r.gameId))) {

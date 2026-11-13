@@ -292,8 +292,10 @@ async function throwLeague(league) {
       const newsQueue = [...board.frames];
       await Promise.all(Array.from({ length: Math.min(NEWS_AT_ONCE, newsQueue.length) }, async () => {
         for (let f = newsQueue.shift(); f; f = newsQueue.shift()) {
+          // A news search that failed stops this league's run like any load that did not load (Nov 12 2026; the game pick
+          // and the props hold on the same search); the next run tries again.
           const news = await nflNewsFor(f.packet || nflGameBlock(f, injuries, weeksByName, snaps), 'americanfootball_nfl', f.homeFull, f.awayFull,
-            { gameId: f.gameId, gameTime: f.commence, timeoutMs: 8 * 60 * 1000 }).catch(() => null);
+            { gameId: f.gameId, gameTime: f.commence, timeoutMs: 8 * 60 * 1000 }).catch(() => { throw new DartsDataMissing([`today's news for ${f.matchup} did not load`]); });
           f.news = news || NFL_NEWS_NOT_ON_FILE;
           f.extra = [...(f.extra || []), `Today's news:\n${f.news}`];
         }

@@ -19,7 +19,7 @@ import { normalizePropBetDirection } from '../agentic/propsSharedUtils.js';
 import { noDashes } from '../../../../supabase/functions/_shared/noDashes.js';
 import { nbaSeason } from '../../../utils/dateUtils.js';
 import { buildNbaReadStory } from '../agentic/orchestrator/nbaRead.js';
-import { assertEverythingLoaded } from '../pickDataIntegrity.js';
+import { assertEverythingLoaded, assertNewsLoaded, PickDataError } from '../pickDataIntegrity.js';
 import { teamRecords, seasonSummaries } from '../../gamebygame/gameRecordStore.js';
 import { nbaGameRows } from '../darts/nbaDartsBoard.js';
 import { summariesByTeam } from '../../sports/nba/nbaGameRecordText.js';
@@ -117,6 +117,28 @@ export async function playerSheet(player, markets, asOf) {
 }
 
 /**
+ * Each board player's sheet (Nov 12 2026). One that fails on its own takes that player off the board for this run: a
+ * console line names him and the error, and the others go ahead. More than half failing (or all of them) is a failed
+ * load: PickDataError holds the game's props for the next tier. Returns { text, dropped: Map(key -> error) }.
+ */
+export async function nbaSheetsOrHold(players, sheetOf, { log = console.warn } = {}) {
+  const settled = await Promise.allSettled(players.map((p) => sheetOf(p)));
+  const text = [];
+  const dropped = new Map();
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled') { text.push(r.value); return; }
+    dropped.set(norm(players[i].player), r.reason?.message || String(r.reason));
+  });
+  if (dropped.size && dropped.size * 2 > players.length) {
+    throw new PickDataError([{ source: `the prop sheets of ${dropped.size} of ${players.length} players`, code: 'did not load' }]);
+  }
+  for (const [i, r] of settled.entries()) {
+    if (r.status === 'rejected') log(`   [NBA Props] ${players[i].player} (${players[i].team}) is off the board this run: his sheet failed (${dropped.get(norm(players[i].player))})`);
+  }
+  return { text, dropped };
+}
+
+/**
  * The NBA props brain, in the props CLI's mapping shape ({ picks, explicitPass, validatedPlayers, boardProps,
  * winnersEvidence }); the CLI's gates, odds reconciliation and storage are shared with MLB and NFL.
  */
@@ -126,9 +148,10 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   const menu = nbaMenu(playerProps, { homeTeam, awayTeam });
   if (!menu.length) throw new Error('NBA props board has no main player with a priced over/under market');
 
-  const board = buildPropBoardV2(menu, { headerLabel: `today's live prop prices`, excludedNote: '' });
+  const boardOf = (rows) => buildPropBoardV2(rows, { headerLabel: `today's live prop prices`, excludedNote: '' });
+  let board = boardOf(menu);
   if (!board.players.size) throw new Error('NBA props board rendered empty');
-  const boardMarkets = board.markets || menu;
+  let boardMarkets = board.markets || menu;
 
   // givenDesk: a test's stand-in when the game's desk can't be built yet (the night before, lineups don't exist).
   const scoutText = givenDesk || (!nocache && await publishedDesk(game)) || await (async () => {
@@ -140,6 +163,8 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   // fallback to the full desk, which carries what the story filters out (founder, Oct 23 2026: no fallback that gives
   // different data); a story that fails fails the props run, and the scheduler's next window tries again.
   const read = await buildNbaReadStory(scoutText, { homeTeam, awayTeam });
+  // NO NEWS, NO PICK (founder, Nov 12 2026): a desk whose news search failed holds this game's props, as it holds the pick.
+  assertNewsLoaded(read.newsLoaded, 'the news search did not load');
   const deskText = `${read.story}${read.news ? `\n\nTODAY'S NEWS\n${read.news}` : ''}`;
   console.log(`   [NBA Props] desk ${deskText.length} chars · board ${board.players.size} players, ${boardMarkets.length} markets`);
 
@@ -152,13 +177,19 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
     byPlayer.get(k).markets.push(m);
   }
   const asOf = new Date(game.commence_time);
-  // A sheet that fails says so under the player's name (Oct 28 2026 sweep: it dropped him from the sheets while his
-  // markets stayed on the board).
-  const sheets = await Promise.all([...byPlayer.values()].map((p) => playerSheet(p, p.markets, asOf)
-    .catch((e) => `${p.player} (${p.team})\n  This season's games are not on file (${e.message}).`)));
+  const sheets = await nbaSheetsOrHold([...byPlayer.values()], (p) => playerSheet(p, p.markets, asOf));
   // NO DATA, NO PICK (pickDataIntegrity.js, Nov 10 2026): the game records not loading stops this game's props.
-  assertEverythingLoaded(sheets.join('\n'), 'in the prop sheets');
-  const sheetsBlock = sheets.length ? `\n\n═══ THE PLAYERS — each one's own games, for the stats his markets settle on ═══\n${sheets.join('\n\n')}` : '';
+  assertEverythingLoaded(sheets.text.join('\n'), 'in the prop sheets');
+  // A player whose own sheet failed is off the board Gary picks from in this run (Nov 12 2026; on Oct 28 his markets
+  // stayed on the board under "not on file", and Gary could bet a player he had no games for): his markets leave the
+  // board text, the markets the picks are priced against and the players they are checked against.
+  if (sheets.dropped.size) {
+    for (const k of sheets.dropped.keys()) byPlayer.delete(k);
+    board = boardOf(menu.filter((m) => !sheets.dropped.has(norm(m.player))));
+    if (!board.players.size) throw new PickDataError([{ source: "the players' games for the prop sheets", code: 'did not load' }]);
+    boardMarkets = board.markets || menu.filter((m) => !sheets.dropped.has(norm(m.player)));
+  }
+  const sheetsBlock = sheets.text.length ? `\n\n═══ THE PLAYERS — each one's own games, for the stats his markets settle on ═══\n${sheets.text.join('\n\n')}` : '';
 
   // Gary's published game pick no longer rides the desk (Oct 27 2026, founder GO; see footballPropsDesk.js).
 
