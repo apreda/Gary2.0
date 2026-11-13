@@ -69,25 +69,8 @@ Output:
 bet is "over" or "under".
 confidence_score (0.50–1.00): your conviction in this bet at its price — the bet, not the outcome.`;
 
-// Nov 12 2026 (founder: "it's game and prop ... you are the boss now"). Two additions to the NBA props system prompt,
-// tested that night by replaying the 14 stored props reads of Nov 11 and 12 and grading every pick on the box score
-// (nothing stored or published). Points props stood 58-76 on the season and ran backwards: on his overs the player
-// landed 2.0 under the line on average, on his unders 2.3 over, the mark of betting a hot or cold run to continue.
-// HOW A PAST LINE READS: the game read's passage (nbaKnowledge.js NBA_PAST_SCORES, his Nov 10 reasons) for a player's
-// games. Reasons led by a count of past games against the line went from 18 of 28 to 0 of 28; the replayed picks went
-// 16-12 where the live ones went 11-17 and the same prompt run again without it went 10-18 (28 picks: a count, not a
-// rate).
-// THE BET STANDS: April's questionable line with its reason (see NBA_PICK_STANDS): the card publishes when he answers.
-export const NBA_PROPS_PAST_LINES = `A past stat line is one game. It came against that defense, in those minutes, next to the teammates who played that night, and a player's points swing ten on one hot or cold shooting night. Past lines counted against tonight's number were made against other opponents, often in a different role or lineup than tonight's, and added into an average they are still those same games. Any game log cut enough ways (the last five, at home, as a starter, in wins) shows a count that fits the side you already like, and a neat 6 of 8 feels like proof when it is a coin flip. Extremes drift back: betting that a hot or cold run continues is betting on it when it is most likely to end. A past game says something about tonight when the reason it went that way is still true tonight.`;
-
-export const NBA_PROPS_BET_STANDS = `Each prop you take is published now and stands as it is, whatever a later injury report says: a player listed questionable is assumed to play at full strength, and his possible absence is not a reason for a bet.`;
-
-export const nbaPropsSystemPrompt = (dateLong) => `${buildGaryPropsSystemPrompt(dateLong)}
-
-${NBA_PROPS_PAST_LINES} ${NBA_PROPS_BET_STANDS}`;
-
 export const NBA_PROPS_PROMPT_SHA = createHash('sha256')
-  .update(nbaPropsSystemPrompt('{date}') + NBA_PROPS_ASK + nbaMenu.toString() + JSON.stringify([MAIN_LINE, MARKET_FLOOR]))
+  .update(buildGaryPropsSystemPrompt('{date}') + NBA_PROPS_ASK + nbaMenu.toString() + JSON.stringify([MAIN_LINE, MARKET_FLOOR]))
   .digest('hex').slice(0, 12);
 
 const CALL_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
@@ -214,7 +197,7 @@ export async function analyzeNbaPropsDesk(game, playerProps, { nocache = false, 
   const winnersEvidence = { deskText: `${deskText}\n${board.text}${sheetsBlock}`, observedAt: new Date().toISOString(), homeTeam, awayTeam };
 
   const { parsed, audits, usage, explicitPass, respondingModel } = await runPropsDeskBrain({
-    systemPrompt: nbaPropsSystemPrompt(todayLong()),
+    systemPrompt: buildGaryPropsSystemPrompt(todayLong()),
     userMessage,
     corpus: [{ content: `${deskText}\n${board.text}${sheetsBlock}` }],
     recentScores: null,

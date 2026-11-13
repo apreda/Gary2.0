@@ -12,7 +12,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { nbaSeason } from '../../../../utils/dateUtils.js';
 import { homedir } from 'node:os';
-import { nbaReadSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
+import { nbaSystemPrompt, nbaGameMessage, nbaCardMessage, NBA_FORMAT_ONLY } from './nbaKnowledge.js';
 import { esc, sectionOf, matchupHeader, spreadInWords } from './footballDeskText.js';
 import { withoutBettingLines, withoutSentences } from './ncaafRead.js';
 import { newsWithoutRecaps } from './newsWithoutRecaps.js';
@@ -922,7 +922,7 @@ export async function runNbaRead({ desk, today }, sport, homeTeam, awayTeam, opt
     assertNewsLoaded(newsLoaded, 'the news search did not load');
     console.log(`[NBA Read] the game as Gary reads it (${story.length} chars; news ${news.length} chars)`);
 
-    const system = nbaReadSystemPrompt(today);
+    const system = nbaSystemPrompt(today);
     const session = await createModelSession({
       _costTracker: costTracker,
       modelName: options.modelOverride || GAME_PICK_MODEL,

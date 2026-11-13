@@ -47,42 +47,17 @@
 // spread is for NFL, I don't think we should do it for NBA either"): every sport reads the same words but its name. The
 // two-sides line left NBA and college, and college's schedule line left too (each game's opponent is described in
 // the data). "Players have changed teams since" is in all three.
+// Nov 13 2026 (founder: "I really don't think prompting is the reason it worked ... don't add in things that weve
+// deliberately not done in the past"): a passage on how a past score reads, "the pick stands, a questionable player is
+// assumed to play" and "do not predict your own margin" went into the game read and NBA props late on Nov 12 (b94fb86e)
+// and came out the next morning before any slate ran on them. They told him how much a past score is worth, which is
+// what the Oct 25 and Oct 27 cuts above took out. NBA sides lost under every wording this season (57-62 through Nov 5,
+// 23-24 Nov 6 to 11), so the words were not the cause.
 export const NBA_KNOWLEDGE = `You are Gary. You read NBA games the way a sharp bettor does before putting money down.`;
 
-const nbaToday = (today) => `Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
-
-// The Winners board (nbaBoard.js) reads this one, as it has since Oct 22.
 export const nbaSystemPrompt = (today) => `${NBA_KNOWLEDGE}
 
-${nbaToday(today)}`;
-
-// Nov 12 2026 (founder: "these picks for nba suck ... just fix please or work on it whatever you think is best", then
-// "nba worked well last year so maybe some things to learn ... you are the boss now"). Three additions to the game read
-// only, tested that night by replaying seven played games from their stored asks (nothing stored or published).
-// HOW A PAST SCORE READS: the reasons he confirmed on Nov 10 ("yes all this is correct") for why counting past margins
-// against tonight's number loses, written as how a score reads and not as a rule for a side. Since the Oct 27 prompt,
-// past margins led about half the reads. With this passage none of seven opened on them; the same prompt without it
-// did in two of three. His point 4 ("the line already knows every one of those scores") is left out: with it the reads
-// went back to guessing what the number had priced in and calling the line stale (Hornets at Suns).
-// THE PICK STANDS: April's line ("Questionable players in the lineup = assume they play at full strength",
-// nbaWinningEra.js) with the reason it is true here: the card publishes when he answers. 31 of 114 reads since Oct 28
-// hung the bet on a status still to come ("only once Towns is confirmed active"), and the pick went out either way.
-// NO MARGIN OF HIS OWN: April's line, word for word ("Do NOT predict your own margin or final score"). With the two
-// above alone, one read in seven still built a number of his own from the last meeting ("that lands Detroit somewhere
-// around 8 or 9, short of 10.5"); with this, none did.
-// April's five lines, tried alone on the same games, did not stop the margin counting (Bucks, Bulls, Raptors reads).
-export const NBA_PAST_SCORES = `A past score is one game. It came against that opponent, with the players who were on the floor that night, and NBA margins swing ten points on garbage time, late fouling or one hot shooting night. Past margins lined up against tonight's spread were made against other opponents and other numbers, often by a different lineup than the one playing tonight, and added into an average or a point differential they are still those same games. Any schedule cut enough ways (home, road, the last five, against winning teams) shows a split that fits the side you already like, and a neat 5 of 6 feels like proof when it is a coin flip. Extremes drift back: betting that a run continues is betting on it when it is most likely to end. A past game says something about tonight when the reason it went that way is still true tonight.`;
-
-export const NBA_PICK_STANDS = `The pick you give is published now and stands as it is, whatever a later injury report says: a player listed questionable is assumed to play at full strength, and his possible absence is not a reason for a pick.`;
-
-export const NBA_NO_OWN_MARGIN = `Do not predict your own margin or final score.`;
-
-// The game read's own system prompt (nbaRead.js).
-export const nbaReadSystemPrompt = (today) => `${NBA_KNOWLEDGE}
-
-${NBA_PAST_SCORES} ${NBA_PICK_STANDS} ${NBA_NO_OWN_MARGIN}
-
-${nbaToday(today)}`;
+Today is ${today}. The scout report is current on rosters, injuries and every number; your memory of those may be out of date, and players have changed teams since. Only mention players the scout report names, and never write a number, score or record that isn't in the scout report or the news, or worked out from them.`;
 
 // The question, in a bettor's order, as the NFL asks it.
 // Oct 25 2026 (founder: "the only question should be THE question ... if he's asked multiple questions that's silly, the
